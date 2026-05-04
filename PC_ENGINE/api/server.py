@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import os
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 
+from PC_ENGINE.api.dashboard import DASHBOARD_HTML
 from PC_ENGINE.core.config import env_value
 from PC_ENGINE.core.engine import SovereignEngine
 
@@ -20,10 +20,20 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def handle_unauthorized(_: PermissionError):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
+    @app.get("/")
+    @app.get("/dashboard")
+    def dashboard():
+        return Response(DASHBOARD_HTML, mimetype="text/html")
+
     @app.get("/status")
     def status():
         require_token()
         return jsonify(engine.snapshot())
+
+    @app.post("/preflight")
+    def preflight():
+        require_token()
+        return jsonify(engine.run_preflight())
 
     @app.post("/start")
     def start():
