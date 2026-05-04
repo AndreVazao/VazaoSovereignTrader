@@ -1,0 +1,59 @@
+{
+  "mode": "PAPER",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8765,
+    "local_control_token_env": "VST_LOCAL_TOKEN"
+  },
+  "engine": {
+    "cycle_seconds": 20,
+    "quote_currency": "USDT",
+    "max_open_positions": 2,
+    "max_total_exposure_pct": 0.35,
+    "paper_starting_balance": 1000.0
+  },
+  "risk": {
+    "risk_per_trade_pct": 0.005,
+    "max_daily_loss_pct": -0.02,
+    "max_weekly_loss_pct": -0.06,
+    "max_symbol_loss_streak": 3,
+    "cooldown_after_loss_seconds": 3600,
+    "kill_cooldown_seconds": 86400
+  },
+  "symbols": [
+    "BTC/USDT",
+    "ETH/USDT",
+    "BNB/USDT",
+    "SOL/USDT",
+    "DOGE/USDT"
+  ],
+  "symbol_limits": {
+    "BTC/USDT": {"max_exposure_pct": 0.25},
+    "ETH/USDT": {"max_exposure_pct": 0.20},
+    "BNB/USDT": {"max_exposure_pct": 0.20},
+    "SOL/USDT": {"max_exposure_pct": 0.20},
+    "DOGE/USDT": {"max_exposure_pct": 0.10}
+  },
+  "exchanges": {
+    "binance": {"enabled": true, "key_env": "BINANCE_KEY", "private_env": "BINANCE_PRIVATE"},
+    "bingx": {"enabled": false, "key_env": "BINGX_KEY", "private_env": "BINGX_PRIVATE"}
+  },
+  "strategy": {
+    "timeframe": "1m",
+    "candles_limit": 120,
+    "ema_short": 9,
+    "ema_long": 21,
+    "atr_period": 14,
+    "vwap_period": 30,
+    "atr_pct_min": 0.001,
+    "slope_threshold": 0.00025,
+    "stop_atr_mult": 1.5,
+    "take_profit_atr_mult": 2.2,
+    "spread_max_pct": 0.0015
+  },
+  "ai_council": {
+    "enabled": false,
+    "provider": "disabled",
+    "notes": "Future optional TradingAgents adapter. It must never execute orders directly."
+  }
+}
