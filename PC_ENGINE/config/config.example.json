@@ -10,7 +10,8 @@
     "quote_currency": "USDT",
     "max_open_positions": 2,
     "max_total_exposure_pct": 0.35,
-    "paper_starting_balance": 1000.0
+    "paper_starting_balance": 1000.0,
+    "preflight_required": true
   },
   "risk": {
     "risk_per_trade_pct": 0.005,
@@ -19,6 +20,15 @@
     "max_symbol_loss_streak": 3,
     "cooldown_after_loss_seconds": 3600,
     "kill_cooldown_seconds": 86400
+  },
+  "paper": {
+    "fee_pct": 0.001,
+    "slippage_pct": 0.0005,
+    "reject_probability": 0.0
+  },
+  "watchdog": {
+    "enabled": true,
+    "internet_check_interval_cycles": 3
   },
   "symbols": [
     "BTC/USDT",
@@ -51,9 +61,13 @@
     "take_profit_atr_mult": 2.2,
     "spread_max_pct": 0.0015
   },
+  "reports": {
+    "weekly_enabled": true
+  },
   "ai_council": {
     "enabled": false,
     "provider": "disabled",
+    "max_score_delta": 5.0,
     "notes": "Future optional TradingAgents adapter. It must never execute orders directly."
   }
 }
