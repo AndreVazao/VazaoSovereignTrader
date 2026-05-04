@@ -5,10 +5,18 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
+from PC_ENGINE.ai_council.stub import DisabledAICouncil
 from PC_ENGINE.core.allocator import CapitalAllocator
+from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
+from PC_ENGINE.core.order_manager import OrderManager
+from PC_ENGINE.core.paper_broker import PaperBroker
+from PC_ENGINE.core.preflight import PreflightChecker
+from PC_ENGINE.core.recovery import RecoveryManager
 from PC_ENGINE.core.risk import RiskEngine
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
+from PC_ENGINE.learning.champion_challenger import ChampionChallenger
+from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.storage.ledger import Ledger
 
 
@@ -21,6 +29,7 @@ class Position:
     stop: float
     take_profit: float
     opened_ts: float
+    entry_fee: float = 0.0
 
 
 @dataclass
@@ -35,6 +44,9 @@ class RuntimeState:
     open_positions: Dict[str, Position] = field(default_factory=dict)
     asset_scores: Dict[str, float] = field(default_factory=dict)
     regimes: Dict[str, str] = field(default_factory=dict)
+    watchdog: Dict[str, str | bool | int] = field(default_factory=dict)
+    preflight: Dict[str, object] = field(default_factory=dict)
+    champion_challenger: Dict[str, object] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
 
 
@@ -45,6 +57,18 @@ class SovereignEngine:
         self.paper = self.mode != "REAL"
         self.state = RuntimeState(mode=self.mode)
         self.ledger = Ledger()
+        self.rules = ExchangeRulesEngine()
+        paper_cfg = config.get("paper", {})
+        self.paper_broker = PaperBroker(
+            fee_pct=float(paper_cfg.get("fee_pct", 0.001)),
+            slippage_pct=float(paper_cfg.get("slippage_pct", 0.0005)),
+            reject_probability=float(paper_cfg.get("reject_probability", 0.0)),
+        )
+        self.order_manager = OrderManager(self.rules, self.paper_broker)
+        self.recovery = RecoveryManager()
+        self.watchdog = Watchdog()
+        self.ai_council = DisabledAICouncil()
+        self.champion = ChampionChallenger()
         self.risk = RiskEngine(config["risk"])
         self.strategy = TrendEmaAtrStrategy(config["strategy"])
         self.allocator = CapitalAllocator(config["engine"], config.get("symbol_limits", {}))
@@ -52,6 +76,9 @@ class SovereignEngine:
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
+        self.cycle_count = 0
+        self.preflight_done = False
+        self._load_recovery_state()
 
     def _build_exchanges(self) -> dict[str, CcxtExchangeClient]:
         out: dict[str, CcxtExchangeClient] = {}
@@ -66,6 +93,18 @@ class SovereignEngine:
             )
         return out
 
+    def _load_recovery_state(self) -> None:
+        raw_positions = self.recovery.load_positions()
+        recovered = {}
+        for symbol, data in raw_positions.items():
+            try:
+                recovered[symbol] = Position(**data)
+            except Exception:
+                continue
+        if recovered:
+            self.state.open_positions.update(recovered)
+            self.log("RECOVERY_POSITIONS_LOADED", {"symbols": list(recovered.keys())})
+
     def log(self, message: str, data: dict | None = None) -> None:
         row = message if data is None else f"{message}: {data}"
         with self.lock:
@@ -77,11 +116,26 @@ class SovereignEngine:
         if self.thread and self.thread.is_alive():
             self.pause(False)
             return
+        preflight = self.run_preflight()
+        if self.config.get("engine", {}).get("preflight_required", True) and not preflight["ok"]:
+            self.state.status = "SAFE_MODE"
+            self.log("PREFLIGHT_BLOCKED_START", preflight)
+            return
         self.stop_event.clear()
         self.state.status = "RUNNING"
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
         self.log("ENGINE_STARTED", {"mode": self.mode})
+
+    def run_preflight(self) -> dict:
+        checker = PreflightChecker(self.config, self.rules)
+        result = checker.run(self.exchanges)
+        payload = {"ok": result.ok, "errors": result.errors, "warnings": result.warnings}
+        with self.lock:
+            self.state.preflight = payload
+        self.preflight_done = result.ok
+        self.log("PREFLIGHT_DONE", payload)
+        return payload
 
     def pause(self, paused: bool = True) -> None:
         with self.lock:
@@ -92,6 +146,7 @@ class SovereignEngine:
         self.stop_event.set()
         with self.lock:
             self.state.status = "OFF"
+        self.recovery.save_positions(self.state.open_positions)
         self.log("ENGINE_STOPPED")
 
     def set_mode(self, mode: str) -> None:
@@ -103,6 +158,7 @@ class SovereignEngine:
         self.mode = mode
         self.paper = mode != "REAL"
         self.state.mode = mode
+        self.exchanges = self._build_exchanges()
         self.log("MODE_CHANGED", {"mode": mode})
 
     def snapshot(self) -> dict:
@@ -124,18 +180,43 @@ class SovereignEngine:
             except Exception as exc:
                 self.state.status = "SAFE_MODE"
                 self.log("ENGINE_ERROR_SAFE_MODE", {"error": str(exc)})
+                self.recovery.save_positions(self.state.open_positions)
                 time.sleep(15)
                 self.state.status = "RUNNING"
             time.sleep(float(self.config["engine"].get("cycle_seconds", 20)))
+
+    def _watchdog_gate(self, exchange: CcxtExchangeClient) -> bool:
+        self.cycle_count += 1
+        interval = int(self.config.get("watchdog", {}).get("internet_check_interval_cycles", 3))
+        if self.config.get("watchdog", {}).get("enabled", True) and self.cycle_count % max(1, interval) == 0:
+            status = self.watchdog.check_internet()
+            self.state.watchdog = asdict(status)
+            if not status.ok:
+                self.state.status = "SAFE_MODE"
+                self.log("WATCHDOG_BLOCK", asdict(status))
+                return False
+            symbol = self.config["symbols"][0]
+            ex_status = self.watchdog.check_exchange(exchange, symbol)
+            self.state.watchdog = asdict(ex_status)
+            if not ex_status.ok:
+                self.state.status = "SAFE_MODE"
+                self.log("WATCHDOG_EXCHANGE_BLOCK", asdict(ex_status))
+                return False
+        return True
 
     def cycle(self) -> None:
         exchange = self._main_exchange()
         if exchange is None:
             self.log("NO_EXCHANGE_ENABLED")
             return
+        if not self._watchdog_gate(exchange):
+            return
+        if self.state.status == "SAFE_MODE":
+            self.state.status = "RUNNING"
+
         balance = exchange.free_quote_balance(self.config["engine"].get("quote_currency", "USDT"))
         if self.paper:
-            balance = float(self.config["engine"].get("paper_starting_balance", 1000.0))
+            balance = float(self.config["engine"].get("paper_starting_balance", 1000.0)) + self.risk.state.pnl_today_pct * float(self.config["engine"].get("paper_starting_balance", 1000.0))
         equity = balance
         with self.lock:
             self.state.balance = balance
@@ -144,19 +225,25 @@ class SovereignEngine:
         global_ok, global_reason = self.risk.can_trade_global()
         if not global_ok:
             self.state.status = "KILL_SWITCH"
+            self.recovery.save_positions(self.state.open_positions)
             self.log("GLOBAL_RISK_BLOCK", {"reason": global_reason})
             return
 
         scores: dict[str, float] = {}
         signals = {}
+        spreads: dict[str, float] = {}
         for symbol in self.config["symbols"]:
             try:
                 ohlcv = exchange.fetch_ohlcv(symbol, self.config["strategy"]["timeframe"], int(self.config["strategy"]["candles_limit"]))
                 spread_pct = exchange.fetch_spread_pct(symbol)
+                spreads[symbol] = spread_pct
                 signal = self.strategy.analyse(symbol, ohlcv, spread_pct)
                 signals[symbol] = signal
                 score = signal.strength * 100 if signal.action == "BUY" else 0.0
-                scores[symbol] = score
+                opinion = self.ai_council.analyse(symbol, {"signal": asdict(signal)})
+                max_delta = float(self.config.get("ai_council", {}).get("max_score_delta", 5.0))
+                score += max(-max_delta, min(max_delta, opinion.score_delta))
+                scores[symbol] = max(0.0, score)
                 self.state.regimes[symbol] = signal.regime
             except Exception as exc:
                 scores[symbol] = 0.0
@@ -168,6 +255,7 @@ class SovereignEngine:
             self.state.drawdown_pct = self.risk.state.drawdown_pct
             self.state.pnl_today_pct = self.risk.state.pnl_today_pct
             self.state.pnl_week_pct = self.risk.state.pnl_week_pct
+            self.state.champion_challenger = self.champion.recommendation()
 
         # manage exits first
         for symbol, position in list(self.state.open_positions.items()):
@@ -175,7 +263,7 @@ class SovereignEngine:
             price = float(ticker.get("last") or 0.0)
             signal = signals.get(symbol)
             if price <= position.stop or price >= position.take_profit or (signal and signal.action == "SELL"):
-                self._close_position(exchange, position, price, signal.reason if signal else "stop/take-profit")
+                self._close_position(exchange, position, price, signal.reason if signal else "stop/take-profit", spreads.get(symbol, 0.0))
 
         # open only best candidates if slots available
         for decision in allocations:
@@ -199,27 +287,40 @@ class SovereignEngine:
             if notional <= 0:
                 continue
             qty = notional / price
-            self._open_position(exchange, symbol, price, qty, signal.stop_pct, signal.take_profit_pct, signal.reason)
+            self._open_position(exchange, symbol, price, qty, signal.stop_pct, signal.take_profit_pct, signal.reason, spreads.get(symbol, 0.0))
 
-    def _open_position(self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float, stop_pct: float, tp_pct: float, reason: str) -> None:
-        exchange.market_buy(symbol, qty)
+        self.recovery.save_positions(self.state.open_positions)
+
+    def _open_position(self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float, stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0) -> None:
+        result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct)
+        if not result.ok:
+            self.log("ORDER_REJECTED", {"symbol": symbol, "side": "buy", "reason": result.reason})
+            return
         position = Position(
             exchange=exchange.name,
             symbol=symbol,
-            entry=price,
-            qty=qty,
-            stop=price * (1 - stop_pct),
-            take_profit=price * (1 + tp_pct),
+            entry=result.price,
+            qty=result.qty,
+            stop=result.price * (1 - stop_pct),
+            take_profit=result.price * (1 + tp_pct),
             opened_ts=time.time(),
+            entry_fee=result.fee,
         )
         with self.lock:
             self.state.open_positions[symbol] = position
-        self.log("POSITION_OPENED", {"symbol": symbol, "price": price, "qty": qty, "reason": reason})
+        self.log("POSITION_OPENED", {"symbol": symbol, "price": result.price, "qty": result.qty, "fee": result.fee, "reason": reason})
 
-    def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str) -> None:
-        exchange.market_sell(position.symbol, position.qty)
-        pnl_pct = (price - position.entry) / position.entry if position.entry else 0.0
+    def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
+        result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct)
+        if not result.ok:
+            self.log("ORDER_REJECTED", {"symbol": position.symbol, "side": "sell", "reason": result.reason})
+            return
+        pnl_pct = (result.price - position.entry) / position.entry if position.entry else 0.0
+        notional = result.price * position.qty
+        fee_pct_equiv = (position.entry_fee + result.fee) / notional if notional > 0 else 0.0
+        pnl_pct -= fee_pct_equiv
         self.risk.record_trade_result(position.symbol, pnl_pct)
+        self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
         with self.lock:
             self.state.open_positions.pop(position.symbol, None)
         self.ledger.trade({
@@ -228,8 +329,9 @@ class SovereignEngine:
             "side": "close",
             "qty": position.qty,
             "entry": position.entry,
-            "exit": price,
+            "exit": result.price,
+            "fees": position.entry_fee + result.fee,
             "pnl_pct": pnl_pct,
             "reason": reason,
         })
-        self.log("POSITION_CLOSED", {"symbol": position.symbol, "pnl_pct": pnl_pct, "reason": reason})
+        self.log("POSITION_CLOSED", {"symbol": position.symbol, "pnl_pct": pnl_pct, "fee": position.entry_fee + result.fee, "reason": reason})
