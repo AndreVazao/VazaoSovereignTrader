@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local secrets and runtime files
+.env
+*.env
+**/config.local.json
+**/api_keys.json
+**/secret*.json
+**/data/
+**/logs/
+**/*.db
+**/*.sqlite
+**/*.jsonl
+*.keystore
+*.jks
+key.bin
+
+# Build artifacts
+dist/
+build/
+*.spec.tmp
+*.apk
+*.aab
+*.exe
+*.msi
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
