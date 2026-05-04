@@ -1,0 +1,5 @@
+ccxt>=4.4.0
+flask>=3.0.0
+pydantic>=2.7.0
+python-dotenv>=1.0.1
+requests>=2.32.0
