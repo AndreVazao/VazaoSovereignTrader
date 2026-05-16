@@ -61,4 +61,5 @@ VazaoSovereignTrader/
 ├─ .gitignore
 ├─ README.md
 ├─ requirements-mobile.txt
-└─ requirements-pc.txt
+├─ requirements-pc.txt
+└─ Soverwign_TREE.txt
