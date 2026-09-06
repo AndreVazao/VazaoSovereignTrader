@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from .candlestick_patterns import CandlestickPatternEngine
 from .indicators import atr, ema, slope, vwap
 
 Action = Literal["BUY", "SELL", "HOLD"]
@@ -17,12 +18,15 @@ class Signal:
     reason: str
     stop_pct: float
     take_profit_pct: float
+    pattern_bias: float = 0.0
+    patterns: tuple[str, ...] = ()
 
 
 class TrendEmaAtrStrategy:
     def __init__(self, settings: dict):
         self.settings = settings
         self.last_ema_long: dict[str, float] = {}
+        self.patterns = CandlestickPatternEngine(settings.get("candlestick_patterns", {}))
 
     def analyse(self, symbol: str, ohlcv: list[list[float]], spread_pct: float = 0.0) -> Signal:
         cfg = self.settings
@@ -56,10 +60,30 @@ class TrendEmaAtrStrategy:
         tp_pct = atr_pct * float(cfg["take_profit_atr_mult"])
         trend_strength = min(1.0, max(0.0, abs(slp) / (slope_th * 4)))
         volatility_quality = min(1.0, max(0.0, atr_pct / (float(cfg["atr_pct_min"]) * 4)))
-        strength = round((trend_strength * 0.65) + (volatility_quality * 0.35), 4)
+        base_strength = (trend_strength * 0.65) + (volatility_quality * 0.35)
 
+        pattern_bias, pattern_names, _ = self.patterns.evaluate(ohlcv)
+        pattern_weight = float(cfg.get("candlestick_patterns", {}).get("score_weight", 0.20))
+        pattern_confirmation = float(cfg.get("candlestick_patterns", {}).get("confirmation_threshold", 0.25))
+
+        # Candlesticks refine the trend signal. They cannot create a trade by themselves.
+        strength = base_strength
         if slp > 0 and ema_s > ema_l and price >= vw:
-            return Signal("BUY", "TREND_UP", strength, "trend up + price above vwap", stop_pct, tp_pct)
+            if pattern_bias <= -pattern_confirmation:
+                return Signal(
+                    "HOLD", "TREND_UP", round(max(0.0, base_strength * (1.0 + pattern_bias * pattern_weight)), 4),
+                    "trend up but bearish candlestick confirmation", stop_pct, tp_pct, pattern_bias, tuple(pattern_names)
+                )
+            strength = base_strength * (1.0 + max(0.0, pattern_bias) * pattern_weight)
+            reason = "trend up + price above vwap"
+            if pattern_names:
+                reason += " + " + ", ".join(pattern_names)
+            return Signal("BUY", "TREND_UP", round(min(1.0, strength), 4), reason, stop_pct, tp_pct, pattern_bias, tuple(pattern_names))
+
         if ema_s < ema_l or slp < -slope_th:
-            return Signal("SELL", "TREND_DOWN", strength, "trend weakened", stop_pct, tp_pct)
-        return Signal("HOLD", "RANGE", strength, "conditions incomplete", stop_pct, tp_pct)
+            strength = base_strength * (1.0 + max(0.0, -pattern_bias) * pattern_weight)
+            reason = "trend weakened"
+            if pattern_names:
+                reason += " + " + ", ".join(pattern_names)
+            return Signal("SELL", "TREND_DOWN", round(min(1.0, strength), 4), reason, stop_pct, tp_pct, pattern_bias, tuple(pattern_names))
+        return Signal("HOLD", "RANGE", round(base_strength, 4), "conditions incomplete", stop_pct, tp_pct, pattern_bias, tuple(pattern_names))
