@@ -44,8 +44,8 @@ class CandlestickPatternTests(unittest.TestCase):
         self.assertLess(bias, 0)
 
     def test_hammer_and_hanging_man_depend_on_context(self) -> None:
-        downtrend = [candle(110, 111, 109, 109.5), candle(105, 106, 104, 104.5), candle(100, 101, 90, 100)]
-        uptrend = [candle(90, 91, 89, 90.5), candle(95, 96, 94, 95.5), candle(100, 101, 90, 100)]
+        downtrend = [candle(110, 111, 109, 109.5), candle(105, 106, 104, 104.5), candle(99, 100, 89, 100)]
+        uptrend = [candle(90, 91, 89, 90.5), candle(95, 96, 94, 95.5), candle(99, 100, 89, 100)]
         down_names = [x.name for x in self.engine.detect(downtrend)]
         up_names = [x.name for x in self.engine.detect(uptrend)]
         self.assertIn("hammer", down_names)
