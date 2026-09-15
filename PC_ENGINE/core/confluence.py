@@ -8,7 +8,6 @@ from PC_ENGINE.radar.regime_engine import MarketRegime
 
 Action = Literal["BUY", "SELL", "HOLD"]
 
-
 @dataclass(frozen=True)
 class ConfluenceScore:
     symbol: str
@@ -22,23 +21,20 @@ class ConfluenceScore:
     radar_score: float
     lead_lag_score: float
     regime_score: float
+    momentum_score: float = 0.0
+    mean_reversion_score: float = 0.0
     paper_only: bool = True
 
-
 class ConfluenceEngine:
-    """Combines independent evidence without authorizing orders.
-
-    The engine is deliberately conservative: a single evidence source cannot
-    create a BUY/SELL decision. It produces a descriptive score for the Risk
-    Engine and PAPER analysis only.
-    """
-
+    """Combines independent evidence without authorizing orders."""
     DEFAULT_WEIGHTS = {
-        "technical": 0.40,
-        "candlestick": 0.15,
-        "radar": 0.15,
-        "lead_lag": 0.20,
+        "technical": 0.32,
+        "candlestick": 0.12,
+        "radar": 0.10,
+        "lead_lag": 0.16,
         "regime": 0.10,
+        "momentum": 0.12,
+        "mean_reversion": 0.08,
     }
 
     def __init__(self, settings: dict | None = None):
@@ -75,11 +71,14 @@ class ConfluenceEngine:
         radar_pressure: float = 0.0,
         lead_lag_signals: list[PaperLeadLagSignal] | None = None,
         regime: MarketRegime | None = None,
+        momentum_score: float = 0.0,
+        mean_reversion_score: float = 0.0,
     ) -> ConfluenceScore:
         technical_score = self._clamp(technical_strength if technical_action == "BUY" else -technical_strength if technical_action == "SELL" else 0.0)
         candlestick_score = self._clamp(pattern_bias)
         radar_score = self._clamp(radar_pressure)
-
+        momentum_score = self._clamp(momentum_score)
+        mean_reversion_score = self._clamp(mean_reversion_score)
         lead_lag_score = 0.0
         if lead_lag_signals:
             values: list[float] = []
@@ -90,23 +89,22 @@ class ConfluenceEngine:
                 values.append(direction * min(1.0, max(0.0, signal.confidence)))
             if values:
                 lead_lag_score = self._clamp(sum(values) / len(values))
-
         regime_score = 0.0
         if regime is not None:
             if regime.trend == "UP":
                 regime_score = min(1.0, regime.confidence)
             elif regime.trend == "DOWN":
                 regime_score = -min(1.0, regime.confidence)
-
         components = {
             "technical": technical_score,
             "candlestick": candlestick_score,
             "radar": radar_score,
             "lead_lag": lead_lag_score,
             "regime": regime_score,
+            "momentum": momentum_score,
+            "mean_reversion": mean_reversion_score,
         }
         weighted = sum(self.weights[key] * value for key, value in components.items())
-
         directions = {key: self._direction(value) for key, value in components.items()}
         positive = sum(1 for value in directions.values() if value > 0)
         negative = sum(1 for value in directions.values() if value < 0)
@@ -114,14 +112,11 @@ class ConfluenceEngine:
         if positive and negative:
             contradiction_count = min(positive, negative)
             weighted *= max(0.0, 1.0 - self.contradiction_penalty * contradiction_count)
-            contradictions.append(f"evidencias conflitantes: {positive} bullish vs {negative} bearish")
-
-        evidence: list[str] = []
+            contradictions.append(f"evidências conflitantes: {positive} bullish vs {negative} bearish")
+        evidence = []
         for key, value in components.items():
             if abs(value) >= 0.10:
-                side = "bullish" if value > 0 else "bearish"
-                evidence.append(f"{key}={side}:{value:.2f}")
-
+                evidence.append(f"{key}={'bullish' if value > 0 else 'bearish'}:{value:.2f}")
         aligned_count = max(positive, negative)
         if aligned_count < self.minimum_independent_evidence:
             action: Action = "HOLD"
@@ -131,23 +126,13 @@ class ConfluenceEngine:
             action = "SELL"
         else:
             action = "HOLD"
-
-        active_components = [abs(value) for value in components.values() if abs(value) >= 0.10]
         evidence_confidence = min(1.0, aligned_count / len(components)) if components else 0.0
-        magnitude_confidence = min(1.0, abs(weighted))
-        confidence = round((evidence_confidence * 0.55) + (magnitude_confidence * 0.45), 4)
-
+        confidence = round((evidence_confidence * 0.55) + (min(1.0, abs(weighted)) * 0.45), 4)
         return ConfluenceScore(
-            symbol=symbol,
-            action=action,
-            score=round(self._clamp(weighted), 4),
-            confidence=confidence,
-            evidence=tuple(evidence),
-            contradictions=tuple(contradictions),
-            technical_score=round(technical_score, 4),
-            candlestick_score=round(candlestick_score, 4),
-            radar_score=round(radar_score, 4),
-            lead_lag_score=round(lead_lag_score, 4),
-            regime_score=round(regime_score, 4),
-            paper_only=True,
+            symbol=symbol, action=action, score=round(self._clamp(weighted), 4), confidence=confidence,
+            evidence=tuple(evidence), contradictions=tuple(contradictions),
+            technical_score=round(technical_score, 4), candlestick_score=round(candlestick_score, 4),
+            radar_score=round(radar_score, 4), lead_lag_score=round(lead_lag_score, 4),
+            regime_score=round(regime_score, 4), momentum_score=round(momentum_score, 4),
+            mean_reversion_score=round(mean_reversion_score, 4), paper_only=True,
         )
