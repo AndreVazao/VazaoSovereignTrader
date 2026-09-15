@@ -16,6 +16,7 @@ from PC_ENGINE.core.risk import RiskEngine
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
+from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.storage.ledger import Ledger
 
@@ -47,6 +48,7 @@ class RuntimeState:
     watchdog: Dict[str, str | bool | int] = field(default_factory=dict)
     preflight: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
+    paper_collector: Dict[str, object] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
 
 
@@ -73,6 +75,8 @@ class SovereignEngine:
         self.strategy = TrendEmaAtrStrategy(config["strategy"])
         self.allocator = CapitalAllocator(config["engine"], config.get("symbol_limits", {}))
         self.exchanges = self._build_exchanges()
+        self.paper_collector: PaperMarketCollector | None = None
+        self._build_paper_collector()
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
@@ -92,6 +96,32 @@ class SovereignEngine:
                 paper=self.paper,
             )
         return out
+
+    def _build_paper_collector(self) -> None:
+        radar_cfg = self.config.get("radar", {})
+        enabled = bool(radar_cfg.get("enabled", True)) and bool(radar_cfg.get("observational_only", True))
+        if not self.paper or not enabled:
+            self.paper_collector = None
+            return
+        collector_cfg = dict(radar_cfg)
+        collector_cfg["confluence"] = self.config.get("confluence", {})
+        collector_cfg["candlestick"] = self.config.get("candlestick", {})
+        collector_cfg["timeframe"] = self.config.get("strategy", {}).get("timeframe", "1m")
+        collector_cfg["candles_limit"] = self.config.get("strategy", {}).get("candles_limit", 120)
+        collector_cfg["data_dir"] = self.config.get("confluence", {}).get("data_dir", "PC_ENGINE/data/radar")
+        self.paper_collector = PaperMarketCollector(
+            settings=collector_cfg,
+            symbols=self.config.get("symbols", []),
+            ohlcv_fetcher=self._fetch_ohlcv_for_collector,
+            strategy=self.strategy,
+            on_error=self.log,
+        )
+
+    def _fetch_ohlcv_for_collector(self, symbol: str, timeframe: str, limit: int) -> list[list[float]]:
+        exchange = self._main_exchange()
+        if exchange is None:
+            return []
+        return exchange.fetch_ohlcv(symbol, timeframe, limit)
 
     def _load_recovery_state(self) -> None:
         raw_positions = self.recovery.load_positions()
@@ -123,6 +153,8 @@ class SovereignEngine:
             return
         self.stop_event.clear()
         self.state.status = "RUNNING"
+        if self.paper and self.paper_collector is not None:
+            self.paper_collector.start()
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
         self.log("ENGINE_STARTED", {"mode": self.mode})
@@ -144,8 +176,11 @@ class SovereignEngine:
 
     def stop(self) -> None:
         self.stop_event.set()
+        if self.paper_collector is not None:
+            self.paper_collector.stop()
         with self.lock:
             self.state.status = "OFF"
+            self.state.paper_collector = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
         self.recovery.save_positions(self.state.open_positions)
         self.log("ENGINE_STOPPED")
 
@@ -155,16 +190,23 @@ class SovereignEngine:
             raise ValueError("mode must be PAPER or REAL")
         if mode == "REAL" and self.state.status == "RUNNING":
             raise RuntimeError("Stop the engine before switching to REAL")
+        if mode == "REAL" and self.paper_collector is not None:
+            self.paper_collector.stop()
         self.mode = mode
         self.paper = mode != "REAL"
         self.state.mode = mode
         self.exchanges = self._build_exchanges()
+        if self.paper:
+            self._build_paper_collector()
+        else:
+            self.paper_collector = None
         self.log("MODE_CHANGED", {"mode": mode})
 
     def snapshot(self) -> dict:
         with self.lock:
             data = asdict(self.state)
             data["open_positions"] = {k: asdict(v) for k, v in self.state.open_positions.items()}
+            data["paper_collector"] = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
             return data
 
     def _main_exchange(self) -> CcxtExchangeClient | None:
@@ -257,7 +299,6 @@ class SovereignEngine:
             self.state.pnl_week_pct = self.risk.state.pnl_week_pct
             self.state.champion_challenger = self.champion.recommendation()
 
-        # manage exits first
         for symbol, position in list(self.state.open_positions.items()):
             ticker = exchange.fetch_ticker(symbol)
             price = float(ticker.get("last") or 0.0)
@@ -265,7 +306,6 @@ class SovereignEngine:
             if price <= position.stop or price >= position.take_profit or (signal and signal.action == "SELL"):
                 self._close_position(exchange, position, price, signal.reason if signal else "stop/take-profit", spreads.get(symbol, 0.0))
 
-        # open only best candidates if slots available
         for decision in allocations:
             symbol = decision.symbol
             if symbol in self.state.open_positions:
