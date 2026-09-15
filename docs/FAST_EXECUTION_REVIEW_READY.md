@@ -1,0 +1,1 @@
+Review ready: no direct exchange order path is enabled. The router requires an explicit executor and can be used in PAPER for latency validation.
