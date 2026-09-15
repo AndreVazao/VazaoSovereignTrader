@@ -2,7 +2,7 @@ name: Python tests
 
 on:
   push:
-    branches: [main, 'refactor/**']
+    branches: [main, 'refactor/**', 'feat/**']
   pull_request:
     branches: [main]
 
@@ -22,8 +22,11 @@ jobs:
           - tests/test_order_flow_breakout.py
           - tests/test_paper_confluence_tracker.py
           - tests/test_performance_gate.py
+          - tests/test_real_mode_guard.py
+          - tests/test_real_readiness.py
           - tests/test_regime_engine.py
           - tests/test_regime_validation.py
+          - tests/test_state_outcomes.py
           - tests/test_websocket_persistence.py
           - tests/test_websocket_radar.py
           - tests/test_walk_forward.py
