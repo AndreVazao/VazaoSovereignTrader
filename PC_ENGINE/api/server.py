@@ -7,6 +7,7 @@ from PC_ENGINE.core.config import env_value
 from PC_ENGINE.core.engine import SovereignEngine
 from PC_ENGINE.core.real_mode_guard import RealModeGuard
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
+from PC_ENGINE.tools.run_readiness_pipeline import run as run_readiness_pipeline
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -41,6 +42,17 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def real_readiness():
         require_token()
         return jsonify(readiness.collect(engine))
+
+    @app.post("/readiness/run")
+    def readiness_run():
+        require_token()
+        if engine.mode.upper() != "PAPER":
+            return jsonify({"ok": False, "error": "readiness_pipeline_requires_paper_mode"}), 409
+        try:
+            result = run_readiness_pipeline()
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"readiness_pipeline_failed: {exc}"}), 500
+        return jsonify({"ok": True, "result": result, "readiness": readiness.collect(engine)})
 
     @app.post("/real/arm")
     def real_arm():
