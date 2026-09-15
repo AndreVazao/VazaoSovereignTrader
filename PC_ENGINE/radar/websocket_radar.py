@@ -20,6 +20,7 @@ class MarketEvent:
     exchange_ts_ms: int
     local_ts_ms: int
     local_receive_latency_ms: int
+    price_before: float | None = None
 
 
 @dataclass(frozen=True)
@@ -34,17 +35,15 @@ class LeadLagEvent:
     leader_receive_ts_ms: int
     follower_receive_ts_ms: int
     receive_lag_ms: int
+    leader_move_bps: float
+    follower_move_bps: float
 
 
 class WebSocketMarketRadar:
     """Low-latency public trade collector for the radar observation phase.
 
-    This component is deliberately observation-only: it never authenticates,
-    creates orders, or touches private account data. It uses native public
-    WebSocket feeds where stable endpoints are available and persists raw
-    normalized events for later statistical lead/lag analysis.
-
-    Current adapters: Binance, Coinbase and OKX spot public trades.
+    Observation-only: no authentication, private account data or orders.
+    Current native public adapters are Binance, Coinbase and OKX spot trades.
     """
 
     ENDPOINTS = {
@@ -53,15 +52,10 @@ class WebSocketMarketRadar:
         "okx": "wss://ws.okx.com:8443/ws/v5/public",
     }
 
-    def __init__(
-        self,
-        symbols: list[str],
-        exchanges: list[str] | None = None,
-        data_dir: str | Path = "PC_ENGINE/data/radar",
-        min_move_bps: float = 5.0,
-        lead_window_ms: int = 750,
-        callback: Callable[[MarketEvent], None] | None = None,
-    ) -> None:
+    def __init__(self, symbols: list[str], exchanges: list[str] | None = None,
+                 data_dir: str | Path = "PC_ENGINE/data/radar",
+                 min_move_bps: float = 5.0, lead_window_ms: int = 750,
+                 callback: Callable[[MarketEvent], None] | None = None) -> None:
         self.symbols = list(dict.fromkeys(symbols))
         wanted = exchanges or ["binance", "coinbase", "okx"]
         self.exchanges = [x for x in dict.fromkeys(wanted) if x in self.ENDPOINTS]
@@ -104,98 +98,87 @@ class WebSocketMarketRadar:
     def _emit(self, event: MarketEvent) -> None:
         key = (event.exchange, event.symbol)
         with self._lock:
-            self._last_price[key] = event.price
             previous_moves = list(self._last_move.items())
-            self._last_move[key] = event
+            self._last_price[key] = event.price
+            if event.price_before is not None:
+                move = (event.price - event.price_before) / event.price_before if event.price_before else 0.0
+                if abs(move) >= self.min_move:
+                    self._last_move[key] = event
 
-        leads: list[LeadLagEvent] = []
-        for (exchange, symbol), previous in previous_moves:
-            if symbol != event.symbol or exchange == event.exchange:
-                continue
-            if event.exchange_ts_ms < previous.exchange_ts_ms:
-                continue
-            if event.side == previous.side and event.side not in {"BUY", "SELL"}:
-                continue
-            lag = event.exchange_ts_ms - previous.exchange_ts_ms
-            receive_lag = event.local_ts_ms - previous.local_ts_ms
-            if 0 <= lag <= self.lead_window_ms:
-                direction = "UP" if event.price > previous.price else "DOWN" if event.price < previous.price else "FLAT"
-                if direction != "FLAT":
-                    leads.append(
-                        LeadLagEvent(
-                            symbol=event.symbol,
-                            leader=previous.exchange,
-                            follower=event.exchange,
-                            direction=direction,
-                            leader_exchange_ts_ms=previous.exchange_ts_ms,
-                            follower_exchange_ts_ms=event.exchange_ts_ms,
-                            exchange_lag_ms=lag,
-                            leader_receive_ts_ms=previous.local_ts_ms,
-                            follower_receive_ts_ms=event.local_ts_ms,
-                            receive_lag_ms=receive_lag,
-                        )
-                    )
-
-        self._persist(event, leads)
+        self._match_candidate(event, previous_moves)
+        self._persist(event)
         if self.callback:
             self.callback(event)
 
-    def _persist(self, event: MarketEvent, leads: list[LeadLagEvent]) -> None:
+    def _match_candidate(self, event: MarketEvent, previous_moves: list[tuple[tuple[str, str], MarketEvent]]) -> None:
+        if event.price_before is None or event.price_before <= 0:
+            return
+        follower_move = (event.price - event.price_before) / event.price_before
+        if abs(follower_move) < self.min_move:
+            return
+        for (exchange, symbol), leader in previous_moves:
+            if symbol != event.symbol or exchange == event.exchange or leader.price_before is None or leader.price_before <= 0:
+                continue
+            lag = event.exchange_ts_ms - leader.exchange_ts_ms
+            receive_lag = event.local_ts_ms - leader.local_ts_ms
+            if lag < 0 or lag > self.lead_window_ms:
+                continue
+            leader_move = (leader.price - leader.price_before) / leader.price_before
+            if abs(leader_move) < self.min_move or leader_move * follower_move <= 0:
+                continue
+            self._persist_lead_lag(LeadLagEvent(
+                symbol=event.symbol,
+                leader=leader.exchange,
+                follower=event.exchange,
+                direction="UP" if leader_move > 0 else "DOWN",
+                leader_exchange_ts_ms=leader.exchange_ts_ms,
+                follower_exchange_ts_ms=event.exchange_ts_ms,
+                exchange_lag_ms=lag,
+                leader_receive_ts_ms=leader.local_ts_ms,
+                follower_receive_ts_ms=event.local_ts_ms,
+                receive_lag_ms=receive_lag,
+                leader_move_bps=round(leader_move * 10000, 3),
+                follower_move_bps=round(follower_move * 10000, 3),
+            ))
+
+    def _persist(self, event: MarketEvent) -> None:
         path = self.data_dir / "websocket_events.jsonl"
-        row = {
-            "event": asdict(event),
-            "lead_lag_candidates": [asdict(item) for item in leads],
-        }
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            handle.write(json.dumps({"event": asdict(event)}, ensure_ascii=False) + "\n")
+
+    def _persist_lead_lag(self, lead: LeadLagEvent) -> None:
+        path = self.data_dir / "websocket_lead_lag.jsonl"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(lead), ensure_ascii=False) + "\n")
 
     def _run_binance(self) -> None:
         streams = "/".join(f"{self.normalize_symbol(s)[0].lower()}{self.normalize_symbol(s)[1].lower()}@trade" for s in self.symbols)
-        url = self.ENDPOINTS["binance"].format(streams=streams)
-        self._run_with_reconnect(url, self._parse_binance, "binance")
+        self._run_with_reconnect(self.ENDPOINTS["binance"].format(streams=streams), self._parse_binance, "binance")
 
     def _run_coinbase(self) -> None:
         def on_open(ws: websocket.WebSocketApp) -> None:
             products = [f"{self.normalize_symbol(s)[0]}-{self.normalize_symbol(s)[1]}" for s in self.symbols]
             ws.send(json.dumps({"type": "subscribe", "product_ids": products, "channel": "market_trades"}))
-
-        self._run_with_reconnect(
-            self.ENDPOINTS["coinbase"],
-            self._parse_coinbase,
-            "coinbase",
-            on_open=on_open,
-        )
+        self._run_with_reconnect(self.ENDPOINTS["coinbase"], self._parse_coinbase, "coinbase", on_open)
 
     def _run_okx(self) -> None:
         def on_open(ws: websocket.WebSocketApp) -> None:
             args = [{"channel": "trades", "instId": s.replace("/", "-").upper()} for s in self.symbols]
             ws.send(json.dumps({"op": "subscribe", "args": args}))
+        self._run_with_reconnect(self.ENDPOINTS["okx"], self._parse_okx, "okx", on_open)
 
-        self._run_with_reconnect(self.ENDPOINTS["okx"], self._parse_okx, "okx", on_open=on_open)
-
-    def _run_with_reconnect(
-        self,
-        url: str,
-        parser: Callable[[dict, int], list[MarketEvent]],
-        exchange: str,
-        on_open: Callable[[websocket.WebSocketApp], None] | None = None,
-    ) -> None:
+    def _run_with_reconnect(self, url: str, parser: Callable[[dict, int], list[MarketEvent]],
+                            exchange: str, on_open: Callable[[websocket.WebSocketApp], None] | None = None) -> None:
         delay = 1.0
         while not self._stop.is_set():
             def handle_message(_ws: websocket.WebSocketApp, raw: str) -> None:
                 receive_ts = self._now_ms()
                 try:
-                    payload = json.loads(raw)
-                    for event in parser(payload, receive_ts):
+                    for event in parser(json.loads(raw), receive_ts):
                         self._emit(event)
                 except Exception:
                     return
-
-            app = websocket.WebSocketApp(
-                url,
-                on_open=on_open,
-                on_message=handle_message,
-            )
+            app = websocket.WebSocketApp(url, on_open=on_open, on_message=handle_message)
             try:
                 app.run_forever(ping_interval=20, ping_timeout=10)
                 delay = 1.0
@@ -204,6 +187,12 @@ class WebSocketMarketRadar:
             if not self._stop.is_set():
                 self._stop.wait(delay)
 
+    def _make_event(self, exchange: str, symbol: str, price: float, quantity: float,
+                    side: str, exchange_ts: int, receive_ts: int) -> MarketEvent:
+        previous = self._last_price.get((exchange, symbol))
+        return MarketEvent(exchange, symbol, price, quantity, side, exchange_ts,
+                           receive_ts, max(0, receive_ts - exchange_ts), previous)
+
     def _parse_binance(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         data = payload.get("data", payload)
         if data.get("e") != "trade":
@@ -211,11 +200,8 @@ class WebSocketMarketRadar:
         symbol = self._to_symbol(data.get("s", ""))
         if not symbol:
             return []
-        exchange_ts = int(data.get("T") or data.get("E") or receive_ts)
-        price = float(data["p"])
-        qty = float(data["q"])
-        side = "SELL" if bool(data.get("m")) else "BUY"
-        return [MarketEvent("binance", symbol, price, qty, side, exchange_ts, receive_ts, max(0, receive_ts - exchange_ts))]
+        ts = int(data.get("T") or data.get("E") or receive_ts)
+        return [self._make_event("binance", symbol, float(data["p"]), float(data["q"]), "SELL" if bool(data.get("m")) else "BUY", ts, receive_ts)]
 
     def _parse_coinbase(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         if payload.get("channel") != "market_trades":
@@ -224,13 +210,9 @@ class WebSocketMarketRadar:
         for item in payload.get("events", []):
             for trade in item.get("trades", []):
                 symbol = self._to_symbol(trade.get("product_id", "").replace("-", "/"))
-                if not symbol:
-                    continue
-                exchange_ts = self._parse_iso_ms(trade.get("time"), receive_ts)
-                price = float(trade["price"])
-                qty = float(trade["size"])
-                side = str(trade.get("side", "")).upper()
-                events.append(MarketEvent("coinbase", symbol, price, qty, side, exchange_ts, receive_ts, max(0, receive_ts - exchange_ts)))
+                if symbol:
+                    ts = self._parse_iso_ms(trade.get("time"), receive_ts)
+                    events.append(self._make_event("coinbase", symbol, float(trade["price"]), float(trade["size"]), str(trade.get("side", "")).upper(), ts, receive_ts))
         return events
 
     def _parse_okx(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
@@ -239,13 +221,9 @@ class WebSocketMarketRadar:
         events: list[MarketEvent] = []
         for trade in payload.get("data", []):
             symbol = self._to_symbol(str(trade.get("instId", "")).replace("-", "/"))
-            if not symbol:
-                continue
-            exchange_ts = int(trade.get("ts") or receive_ts)
-            price = float(trade["px"])
-            qty = float(trade["sz"])
-            side = str(trade.get("side", "")).upper()
-            events.append(MarketEvent("okx", symbol, price, qty, side, exchange_ts, receive_ts, max(0, receive_ts - exchange_ts)))
+            if symbol:
+                ts = int(trade.get("ts") or receive_ts)
+                events.append(self._make_event("okx", symbol, float(trade["px"]), float(trade["sz"]), str(trade.get("side", "")).upper(), ts, receive_ts))
         return events
 
     def _to_symbol(self, symbol: str) -> str | None:
