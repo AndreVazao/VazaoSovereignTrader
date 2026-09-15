@@ -21,9 +21,11 @@ class OutcomeStat:
 
 
 class StateOutcomeEngine:
-    """Measure future MarketState returns after round-trip costs.
+    """Evaluate historical MarketState observations without creating orders.
 
-    PAPER-only descriptive learning. It never creates or authorizes orders.
+    Outcomes are measured from future market-state prices and are net of a
+    configurable round-trip cost. This is a descriptive PAPER learning layer;
+    it is deliberately not a live trading gate.
     """
 
     def __init__(self, cost_bps: float = 28.0, min_samples: int = 30,
@@ -34,48 +36,56 @@ class StateOutcomeEngine:
         self.min_win_rate = float(min_win_rate)
 
     @staticmethod
-    def _median(values: list[float]) -> float:
+    def _percentile(values: list[float], p: float) -> float:
         if not values:
             return 0.0
-        ordered = sorted(values)
-        mid = len(ordered) // 2
-        return ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
+        values = sorted(values)
+        index = (len(values) - 1) * p
+        lo, hi = int(index), min(int(index) + 1, len(values) - 1)
+        frac = index - lo
+        return values[lo] + (values[hi] - values[lo]) * frac
+
+    @staticmethod
+    def _mean(values: list[float]) -> float:
+        return sum(values) / len(values) if values else 0.0
 
     def evaluate(self, states: list[dict], horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000, 300000)) -> list[OutcomeStat]:
-        by_symbol: dict[str, list[dict]] = {}
-        for state in states:
-            if state.get("action") not in {"BUY", "SELL"} or float(state.get("price", 0)) <= 0:
-                continue
-            by_symbol.setdefault(str(state["symbol"]), []).append(state)
-        observations: list[OutcomeStat] = []
-        for symbol, rows in by_symbol.items():
-            rows.sort(key=lambda row: int(row.get("timestamp_ms", 0)))
-            for index, state in enumerate(rows):
-                t0 = int(state["timestamp_ms"])
-                p0 = float(state["price"])
-                for horizon in horizons_ms:
-                    target = t0 + int(horizon)
-                    future = next((row for row in rows[index + 1:] if int(row.get("timestamp_ms", 0)) >= target and float(row.get("price", 0)) > 0), None)
-                    if future is None:
-                        continue
-                    gross_bps = (float(future["price"]) / p0 - 1.0) * 10000.0
-                    signed_bps = gross_bps if state["action"] == "BUY" else -gross_bps
-                    net_bps = signed_bps - self.cost_bps
-                    observations.append(OutcomeStat(symbol, str(state["action"]), str(state.get("regime", "UNKNOWN")), int(horizon), 1, int(net_bps > 0), float(net_bps > 0), net_bps, net_bps, net_bps, False))
-        return self.aggregate(observations)
+        ordered = sorted(
+            (s for s in states if float(s.get("price", 0)) > 0 and s.get("action") in {"BUY", "SELL"}),
+            key=lambda s: int(s.get("timestamp_ms", 0)),
+        )
+        results: list[OutcomeStat] = []
+        for i, state in enumerate(ordered):
+            action = str(state["action"])
+            symbol = str(state["symbol"])
+            regime = str(state.get("regime", "UNKNOWN"))
+            t0 = int(state["timestamp_ms"])
+            p0 = float(state["price"])
+            for horizon in horizons_ms:
+                target = t0 + int(horizon)
+                future = next((x for x in ordered[i + 1:] if x["symbol"] == symbol and int(x["timestamp_ms"]) >= target and float(x.get("price", 0)) > 0), None)
+                if future is None:
+                    continue
+                p1 = float(future["price"])
+                gross_bps = ((p1 / p0) - 1.0) * 10000.0
+                signed_bps = gross_bps if action == "BUY" else -gross_bps
+                net_bps = signed_bps - self.cost_bps
+                results.append(OutcomeStat(symbol, action, regime, int(horizon), 1, int(net_bps > 0), float(net_bps > 0), net_bps, net_bps, net_bps, False))
+        return self.aggregate(results)
 
     def aggregate(self, observations: list[OutcomeStat]) -> list[OutcomeStat]:
-        groups: dict[tuple[str, str, str, int], list[float]] = {}
+        groups: dict[tuple[str, str, str, int], list[OutcomeStat]] = {}
         for row in observations:
-            groups.setdefault((row.symbol, row.action, row.regime, row.horizon_ms), []).append(row.mean_net_bps)
+            groups.setdefault((row.symbol, row.action, row.regime, row.horizon_ms), []).append(row)
         output: list[OutcomeStat] = []
-        for (symbol, action, regime, horizon), values in sorted(groups.items()):
+        for (symbol, action, regime, horizon), rows in sorted(groups.items()):
+            values = [r.mean_net_bps for r in rows]
             samples = len(values)
-            wins = sum(value > 0 for value in values)
+            wins = sum(1 for v in values if v > 0)
             win_rate = wins / samples if samples else 0.0
-            mean = sum(values) / samples if samples else 0.0
-            median = self._median(values)
-            variance = sum((value - mean) ** 2 for value in values) / samples if samples else 0.0
+            mean = self._mean(values)
+            median = self._percentile(values, 0.50)
+            variance = self._mean([(v - mean) ** 2 for v in values]) if samples else 0.0
             se = (variance ** 0.5) / (samples ** 0.5) if samples > 1 else 0.0
             lower = mean - 1.96 * se
             eligible = samples >= self.min_samples and mean > self.min_mean_net_bps and win_rate >= self.min_win_rate and lower > 0
