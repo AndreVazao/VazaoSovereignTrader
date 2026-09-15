@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import json
 import time
 from dataclasses import asdict, dataclass
@@ -22,12 +23,7 @@ class ConfluenceObservation:
 
 
 class PaperConfluenceTracker:
-    """Records confluence observations and later scores their realized outcome.
-
-    This is deliberately separate from order execution. It lets the project
-    measure whether stronger confluence actually predicts future movement
-    after estimated round-trip costs.
-    """
+    """Records PAPER confluence and resolves outcomes from websocket events."""
 
     def __init__(self, data_dir: str | Path = "PC_ENGINE/data/radar", horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000)):
         self.data_dir = Path(data_dir)
@@ -62,6 +58,12 @@ class PaperConfluenceTracker:
     def observations(self) -> list[dict[str, Any]]:
         return self._read(self.observation_path)
 
+    def _outcome_keys(self) -> set[tuple[int, str, int, str]]:
+        return {
+            (int(row.get("ts_ms", 0)), str(row.get("symbol", "")), int(row.get("horizon_ms", 0)), str(row.get("action", "HOLD")))
+            for row in self._read(self.outcome_path)
+        }
+
     def record_outcome(self, observation: dict[str, Any], future_price: float, fee_bps_round_trip: float = 28.0) -> dict[str, Any] | None:
         if future_price <= 0 or float(observation.get("price", 0.0)) <= 0:
             return None
@@ -82,6 +84,58 @@ class PaperConfluenceTracker:
         with self.outcome_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(outcome, ensure_ascii=False) + "\n")
         return outcome
+
+    def resolve_from_websocket_events(self, fee_bps_round_trip: float = 28.0) -> int:
+        """Resolve completed observations using the recorded public websocket tape."""
+        event_path = self.data_dir / "websocket_events.jsonl"
+        events = self._read(event_path)
+        if not events:
+            return 0
+
+        index: dict[tuple[str, str], list[tuple[int, float]]] = {}
+        for event in events:
+            try:
+                exchange = str(event.get("exchange", ""))
+                symbol = str(event.get("symbol", ""))
+                ts = int(event.get("exchange_ts_ms") or event.get("local_ts_ms"))
+                price = float(event.get("price", 0.0))
+                if exchange and symbol and ts > 0 and price > 0:
+                    index.setdefault((exchange, symbol), []).append((ts, price))
+            except (TypeError, ValueError):
+                continue
+        for values in index.values():
+            values.sort(key=lambda item: item[0])
+
+        outcomes = self._outcome_keys()
+        resolved = 0
+        now = int(time.time() * 1000)
+        for observation in self.observations():
+            action = str(observation.get("action", "HOLD"))
+            if action not in {"BUY", "SELL"}:
+                continue
+            ts = int(observation.get("ts_ms", 0))
+            symbol = str(observation.get("symbol", ""))
+            horizon = int(observation.get("horizon_ms", 0))
+            key = (ts, symbol, horizon, action)
+            if key in outcomes or ts + horizon > now:
+                continue
+
+            # Prefer Binance tape for the confluence observation; fall back to any venue.
+            candidates = [k for k in index if k[1] == symbol]
+            preferred = [k for k in candidates if k[0] == "binance"] + [k for k in candidates if k[0] != "binance"]
+            future_price = None
+            for event_key in preferred:
+                values = index[event_key]
+                target = ts + horizon
+                pos = bisect.bisect_left(values, (target, 0.0))
+                if pos < len(values):
+                    future_price = values[pos][1]
+                    break
+            if future_price is not None:
+                self.record_outcome(observation, future_price, fee_bps_round_trip)
+                outcomes.add(key)
+                resolved += 1
+        return resolved
 
     def summary(self) -> dict[str, Any]:
         rows = self._read(self.outcome_path)
