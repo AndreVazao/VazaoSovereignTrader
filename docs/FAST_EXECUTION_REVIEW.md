@@ -1,0 +1,1 @@
+Review target: verify that future executor integration continues to enforce Risk Engine, RealModeGuard, Order Manager and normal exchange rules.
