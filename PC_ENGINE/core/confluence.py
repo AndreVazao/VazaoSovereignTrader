@@ -23,18 +23,22 @@ class ConfluenceScore:
     regime_score: float
     momentum_score: float = 0.0
     mean_reversion_score: float = 0.0
+    order_flow_score: float = 0.0
+    breakout_score: float = 0.0
     paper_only: bool = True
 
 class ConfluenceEngine:
     """Combines independent evidence without authorizing orders."""
     DEFAULT_WEIGHTS = {
-        "technical": 0.32,
-        "candlestick": 0.12,
+        "technical": 0.25,
+        "candlestick": 0.10,
         "radar": 0.10,
-        "lead_lag": 0.16,
-        "regime": 0.10,
-        "momentum": 0.12,
-        "mean_reversion": 0.08,
+        "lead_lag": 0.14,
+        "regime": 0.08,
+        "momentum": 0.10,
+        "mean_reversion": 0.06,
+        "order_flow": 0.10,
+        "breakout": 0.07,
     }
 
     def __init__(self, settings: dict | None = None):
@@ -73,12 +77,16 @@ class ConfluenceEngine:
         regime: MarketRegime | None = None,
         momentum_score: float = 0.0,
         mean_reversion_score: float = 0.0,
+        order_flow_score: float = 0.0,
+        breakout_score: float = 0.0,
     ) -> ConfluenceScore:
         technical_score = self._clamp(technical_strength if technical_action == "BUY" else -technical_strength if technical_action == "SELL" else 0.0)
         candlestick_score = self._clamp(pattern_bias)
         radar_score = self._clamp(radar_pressure)
         momentum_score = self._clamp(momentum_score)
         mean_reversion_score = self._clamp(mean_reversion_score)
+        order_flow_score = self._clamp(order_flow_score)
+        breakout_score = self._clamp(breakout_score)
         lead_lag_score = 0.0
         if lead_lag_signals:
             values: list[float] = []
@@ -103,6 +111,8 @@ class ConfluenceEngine:
             "regime": regime_score,
             "momentum": momentum_score,
             "mean_reversion": mean_reversion_score,
+            "order_flow": order_flow_score,
+            "breakout": breakout_score,
         }
         weighted = sum(self.weights[key] * value for key, value in components.items())
         directions = {key: self._direction(value) for key, value in components.items()}
@@ -134,5 +144,6 @@ class ConfluenceEngine:
             technical_score=round(technical_score, 4), candlestick_score=round(candlestick_score, 4),
             radar_score=round(radar_score, 4), lead_lag_score=round(lead_lag_score, 4),
             regime_score=round(regime_score, 4), momentum_score=round(momentum_score, 4),
-            mean_reversion_score=round(mean_reversion_score, 4), paper_only=True,
+            mean_reversion_score=round(mean_reversion_score, 4), order_flow_score=round(order_flow_score, 4),
+            breakout_score=round(breakout_score, 4), paper_only=True,
         )
