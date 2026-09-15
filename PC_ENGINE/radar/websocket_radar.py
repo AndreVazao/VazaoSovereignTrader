@@ -144,7 +144,7 @@ class WebSocketMarketRadar:
     def _persist(self, event: MarketEvent) -> None:
         path = self.data_dir / "websocket_events.jsonl"
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({"event": asdict(event)}, ensure_ascii=False) + "\n")
+            handle.write(json.dumps(asdict(event), ensure_ascii=False) + "\n")
 
     def _persist_lead_lag(self, lead: LeadLagEvent) -> None:
         path = self.data_dir / "websocket_lead_lag.jsonl"
