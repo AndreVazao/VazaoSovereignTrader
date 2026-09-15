@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Lock
 
 
@@ -16,9 +16,10 @@ class FastPathMetrics:
     execution_failures: int = 0
     total_evaluation_ns: int = 0
     total_execution_ns: int = 0
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def record_decision(self, accepted: bool, reason: str, latency_ns: int) -> None:
-        with LockContext(self):
+        with self._lock:
             self.evaluated += 1
             self.accepted += int(accepted)
             self.rejected += int(not accepted)
@@ -27,14 +28,14 @@ class FastPathMetrics:
             self.total_evaluation_ns += max(0, int(latency_ns))
 
     def record_execution(self, success: bool, latency_ns: int) -> None:
-        with LockContext(self):
+        with self._lock:
             self.execution_attempts += 1
             self.execution_successes += int(success)
             self.execution_failures += int(not success)
             self.total_execution_ns += max(0, int(latency_ns))
 
     def snapshot(self) -> dict[str, float | int]:
-        with LockContext(self):
+        with self._lock:
             return {
                 "evaluated": self.evaluated,
                 "accepted": self.accepted,
@@ -47,20 +48,3 @@ class FastPathMetrics:
                 "avg_evaluation_us": self.total_evaluation_ns / self.evaluated / 1000 if self.evaluated else 0.0,
                 "avg_execution_us": self.total_execution_ns / self.execution_attempts / 1000 if self.execution_attempts else 0.0,
             }
-
-
-class LockContext:
-    """Tiny lock wrapper; the metrics object is intentionally self-contained."""
-
-    def __init__(self, metrics: FastPathMetrics) -> None:
-        self.metrics = metrics
-        if not hasattr(metrics, "_lock"):
-            metrics._lock = Lock()  # type: ignore[attr-defined]
-
-    def __enter__(self):
-        self.metrics._lock.acquire()  # type: ignore[attr-defined]
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        self.metrics._lock.release()  # type: ignore[attr-defined]
-        return False
