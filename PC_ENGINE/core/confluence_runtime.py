@@ -9,6 +9,7 @@ from PC_ENGINE.core.mean_reversion_strategy import MeanReversionStrategy
 from PC_ENGINE.core.momentum_strategy import MultiTimeframeMomentumStrategy
 from PC_ENGINE.core.order_flow_strategy import OrderFlowStrategy
 from PC_ENGINE.core.paper_confluence_tracker import PaperConfluenceTracker
+from PC_ENGINE.radar.derivatives_radar import DerivativesRadar
 from PC_ENGINE.radar.lead_lag_signal import LeadLagSignalEngine
 from PC_ENGINE.radar.regime_engine import MarketRegimeEngine
 from PC_ENGINE.radar.trade_event_store import WebSocketTradeEventStore
@@ -34,6 +35,13 @@ class PaperConfluenceRuntime:
         self.mean_reversion = MeanReversionStrategy(settings.get("mean_reversion", {}))
         self.order_flow = OrderFlowStrategy(settings.get("order_flow", {}))
         self.breakout = BreakoutVolumeStrategy(settings.get("breakout", {}))
+        derivatives_settings = settings.get("derivatives", {})
+        self.derivatives = DerivativesRadar(
+            exchanges=derivatives_settings.get("exchanges", ["binance", "bingx", "okx", "bybit"]),
+            data_dir=self.data_dir,
+            cache_seconds=float(derivatives_settings.get("cache_seconds", 10.0)),
+        )
+        self.derivatives_enabled = bool(derivatives_settings.get("enabled", True)) and bool(derivatives_settings.get("observational_only", True))
         self.trade_store = WebSocketTradeEventStore(
             self.data_dir,
             max_tail_bytes=int(settings.get("trade_event_tail_bytes", 2_000_000)),
@@ -61,11 +69,14 @@ class PaperConfluenceRuntime:
         events = trade_events if trade_events is not None else self.trade_store.recent(symbol, self.trade_window_ms, self.trade_max_events)
         order_flow = self.order_flow.analyse(events).score
         breakout = self.breakout.analyse(ohlcv).score
+        derivatives_score = 0.0
+        if self.derivatives_enabled:
+            derivatives_score = self.derivatives.evidence(symbol, price).score
         score = self.engine.evaluate(
             symbol=symbol, technical_action=technical_action, technical_strength=technical_strength,
             pattern_bias=pattern_bias, radar_pressure=radar_pressure, lead_lag_signals=learned,
             regime=regime, momentum_score=momentum, mean_reversion_score=mean_rev,
-            order_flow_score=order_flow, breakout_score=breakout,
+            order_flow_score=order_flow, breakout_score=breakout, derivatives_score=derivatives_score,
         )
         self.tracker.record(symbol, price, score, regime=regime.name)
         return ConfluenceRuntimeResult(score=score, recorded=True)
