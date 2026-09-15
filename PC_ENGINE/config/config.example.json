@@ -34,10 +34,13 @@
     "enabled": true,
     "observational_only": true,
     "interval_seconds": 5,
-    "exchanges": ["binance", "bingx", "okx", "bybit", "coinbase"],
-    "symbols": ["BTC/USDT", "ETH/USDT"],
-    "min_move_pct": 0.0005,
-    "notes": "First phase only collects public data. Radar cannot create or execute orders."
+    "polling_exchanges": ["binance", "bingx", "okx", "bybit", "coinbase"],
+    "websocket_enabled": true,
+    "websocket_exchanges": ["binance", "coinbase", "okx"],
+    "websocket_symbols": ["BTC/USDT", "ETH/USDT"],
+    "min_move_bps": 5.0,
+    "lead_window_ms": 750,
+    "notes": "Phase 1/1.5 only collects public data. Radar cannot create or execute orders."
   },
   "symbols": [
     "BTC/USDT",
