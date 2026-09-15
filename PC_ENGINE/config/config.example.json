@@ -42,6 +42,23 @@
     "lead_window_ms": 750,
     "notes": "Phase 1/1.5 only collects public data. Radar cannot create or execute orders."
   },
+  "confluence": {
+    "enabled": true,
+    "weights": {
+      "technical": 0.40,
+      "candlestick": 0.15,
+      "radar": 0.15,
+      "lead_lag": 0.20,
+      "regime": 0.10
+    },
+    "action_threshold": 0.35,
+    "minimum_independent_evidence": 2,
+    "contradiction_penalty": 0.25,
+    "min_lead_lag_confidence": 0.75,
+    "data_dir": "PC_ENGINE/data/radar",
+    "horizons_ms": [1000, 5000, 15000, 60000],
+    "paper_only": true
+  },
   "symbols": [
     "BTC/USDT",
     "ETH/USDT",
