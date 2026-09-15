@@ -30,6 +30,15 @@
     "enabled": true,
     "internet_check_interval_cycles": 3
   },
+  "radar": {
+    "enabled": true,
+    "observational_only": true,
+    "interval_seconds": 5,
+    "exchanges": ["binance", "bingx", "okx", "bybit", "coinbase"],
+    "symbols": ["BTC/USDT", "ETH/USDT"],
+    "min_move_pct": 0.0005,
+    "notes": "First phase only collects public data. Radar cannot create or execute orders."
+  },
   "symbols": [
     "BTC/USDT",
     "ETH/USDT",
