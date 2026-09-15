@@ -13,6 +13,19 @@
     "paper_starting_balance": 1000.0,
     "preflight_required": true
   },
+  "real_readiness": {
+    "data_dir": "PC_ENGINE/data/radar",
+    "min_state_samples": 1000,
+    "min_outcome_samples": 1000,
+    "min_eligible_outcomes": 1,
+    "notes": "Missing validation artifacts block protected REAL review. This section never authorizes orders."
+  },
+  "real_mode_guard": {
+    "enabled": true,
+    "confirmation_phrase": "EU ACEITO O RISCO",
+    "arm_seconds": 300,
+    "notes": "Temporary operator authorization. One-time consumption is required to request REAL mode."
+  },
   "risk": {
     "risk_per_trade_pct": 0.005,
     "max_daily_loss_pct": -0.02,
@@ -71,13 +84,7 @@
     "horizons_ms": [1000, 5000, 15000, 60000],
     "paper_only": true
   },
-  "symbols": [
-    "BTC/USDT",
-    "ETH/USDT",
-    "BNB/USDT",
-    "SOL/USDT",
-    "DOGE/USDT"
-  ],
+  "symbols": ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "DOGE/USDT"],
   "symbol_limits": {
     "BTC/USDT": {"max_exposure_pct": 0.25},
     "ETH/USDT": {"max_exposure_pct": 0.20},
@@ -102,9 +109,7 @@
     "take_profit_atr_mult": 2.2,
     "spread_max_pct": 0.0015
   },
-  "reports": {
-    "weekly_enabled": true
-  },
+  "reports": {"weekly_enabled": true},
   "ai_council": {
     "enabled": false,
     "provider": "disabled",
