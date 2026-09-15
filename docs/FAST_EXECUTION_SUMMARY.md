@@ -1,0 +1,1 @@
+FastExecutionRouter now supports an explicit executor boundary and FastExecutionMetrics. Tests cover stale signals, risk rejection, executor behavior and metrics.
