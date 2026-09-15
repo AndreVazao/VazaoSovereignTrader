@@ -11,11 +11,19 @@ if str(REPO_ROOT) not in sys.path:
 from PC_ENGINE.api.server import create_app
 from PC_ENGINE.core.config import load_config
 from PC_ENGINE.core.engine import SovereignEngine
+from PC_ENGINE.core.paper_confluence_engine import PaperConfluenceEngine
 
 
 def main() -> None:
     config = load_config()
-    engine = SovereignEngine(config)
+    mode = str(config.get("mode", "PAPER")).upper()
+    confluence_enabled = bool(config.get("confluence", {}).get("enabled", True))
+    if mode == "PAPER" and confluence_enabled:
+        engine = PaperConfluenceEngine(config)
+        print("PAPER Confluence gate: ENABLED")
+    else:
+        engine = SovereignEngine(config)
+        print("PAPER Confluence gate: DISABLED")
     app = create_app(engine, config.get("server", {}).get("local_control_token_env", "VST_LOCAL_TOKEN"))
     host = config.get("server", {}).get("host", "0.0.0.0")
     port = int(config.get("server", {}).get("port", 8765))
