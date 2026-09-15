@@ -1,0 +1,1 @@
+Gate before future REAL integration: CI green, PAPER validation, explicit Risk Engine authorization, RealModeGuard authorization, exchange rules and order manager preserved.
