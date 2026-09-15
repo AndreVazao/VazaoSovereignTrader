@@ -9,6 +9,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_file:
+          - tests/test_candlestick_patterns.py
+          - tests/test_confluence.py
+          - tests/test_derivatives_radar.py
+          - tests/test_lead_lag_learning.py
+          - tests/test_market_radar.py
+          - tests/test_multi_strategy.py
+          - tests/test_order_flow_breakout.py
+          - tests/test_paper_confluence_tracker.py
+          - tests/test_performance_gate.py
+          - tests/test_regime_engine.py
+          - tests/test_regime_validation.py
+          - tests/test_websocket_persistence.py
+          - tests/test_websocket_radar.py
+          - tests/test_walk_forward.py
+      
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,5 +35,5 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r requirements-pc.txt pytest
-      - name: Run tests
-        run: pytest -q
+      - name: Run ${{ matrix.test_file }}
+        run: pytest -q ${{ matrix.test_file }}
