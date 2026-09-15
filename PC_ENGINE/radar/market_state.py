@@ -48,11 +48,11 @@ class MarketStateStore:
         if not self.path.exists():
             return []
         rows: list[dict] = []
-        with self.path.open("r", encoding="utf-8") as handle:
-            for line in handle:
+        with self.path.open("rb") as handle:
+            for raw in handle.readlines()[-max(limit * 3, 1000):]:
                 try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
+                    row = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
                     continue
                 if symbol is not None and row.get("symbol") != symbol:
                     continue
