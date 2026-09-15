@@ -21,11 +21,43 @@ Esta versão entrega uma base funcional e segura:
 - Alocação dinâmica de capital por score.
 - Risk engine com limites por trade, dia, semana e exposição total.
 - Estratégia trend EMA/ATR/VWAP com regime filter.
+- Camada de confirmação por padrões de candlestick.
 - Modo PAPER obrigatório por defeito.
 - Ledger local JSONL para auditoria.
 - Mobile Kivy como controlo remoto.
 - Preparado para Binance e BingX via CCXT.
 - Integração futura com TradingAgents como conselho opcional, não executor.
+- **Sovereign Market Radar** documentado como próxima camada de inteligência multi-fonte e lead/lag.
+
+## Sovereign Market Radar
+
+O projeto prevê uma camada central de inteligência própria para combinar dados de múltiplas exchanges e fontes em tempo real.
+
+Objetivos:
+
+- observar Binance, BingX, OKX, Bybit, Coinbase e outras fontes elegíveis;
+- privilegiar WebSockets/streams oficiais quando disponíveis;
+- medir lead/lag em vez de assumir que uma plataforma é sempre mais rápida;
+- estudar order flow, liquidez, volume e microestrutura;
+- incorporar open interest, funding, basis e liquidações quando disponíveis;
+- usar notícias e eventos apenas como contexto confirmado pelo mercado;
+- produzir um **Market Pressure Score**;
+- aprender por símbolo, timeframe e regime;
+- validar qualquer vantagem depois de fees, spread, slippage e latência.
+
+O Radar **não é uma bola de cristal e não executa ordens**. A arquitetura mantém a separação:
+
+```text
+Radar -> evidência
+Strategy -> sinal candidato
+AI Council -> conselho opcional
+Risk Engine -> autoriza/bloqueia
+Executor -> executa
+```
+
+A implementação do Radar e do Lead/Lag Engine será primeiro observacional/PAPER. Nenhuma suposta vantagem de latência será considerada válida sem validação estatística e out-of-sample.
+
+Arquitetura detalhada: `docs/SOVEREIGN_MARKET_RADAR.md`.
 
 ## Aviso
 
