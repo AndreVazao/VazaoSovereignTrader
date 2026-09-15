@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-O **Sovereign Market Radar (SMR)** será a camada central de inteligência de mercado do VazaoSovereignTrader.
+O **Sovereign Market Radar (SMR)** é a camada central de observação e futura inteligência de mercado do VazaoSovereignTrader.
 
 A finalidade não é tentar prever o futuro com certeza nem encontrar uma plataforma que saiba antecipadamente se o preço vai subir ou descer. A finalidade é construir uma visão própria do mercado, combinando várias fontes em tempo real e aprendendo quais sinais tendem a antecipar movimentos com vantagem estatística.
 
@@ -13,7 +13,56 @@ Mais informação + melhor contexto + menor latência + validação estatística
                  != previsão garantida
 ```
 
-O SMR deve procurar **probabilidade e vantagem estatística**, não certezas.
+O SMR procura **probabilidade e vantagem estatística**, não certezas.
+
+## Estado atual — Fase 1
+
+A primeira implementação observacional já existe em:
+
+- `PC_ENGINE/radar/market_radar.py`
+- `PC_ENGINE/tools/run_market_radar.py`
+- `tests/test_market_radar.py`
+
+Nesta fase o radar:
+
+- consulta dados públicos através do CCXT;
+- recolhe preço, bid, ask, volume e timestamps;
+- regista timestamp local e timestamp fornecido pela exchange quando disponível;
+- calcula uma medida descritiva de pressão cross-exchange;
+- deteta **eventos candidatos** de lead/lag entre venues;
+- guarda as observações em `PC_ENGINE/data/radar/observations.jsonl`;
+- não possui qualquer caminho para enviar ordens;
+- não altera o sinal da estratégia principal.
+
+### Limitação importante da Fase 1
+
+Esta versão usa polling REST através do CCXT para evitar introduzir uma dependência adicional antes da validação do modelo de dados. Os eventos de lead/lag são, portanto, **candidatos de investigação**, não prova de latência negociável.
+
+O timestamp local mede quando a resposta foi recebida pelo PC. O timestamp da exchange pode representar uma origem diferente dependendo da API. Não se deve tratar a diferença entre ambos como latência exata do matching engine.
+
+A próxima evolução de baixa latência deverá usar streams/WebSockets oficiais e sincronização de relógio adequada.
+
+## Arranque do radar
+
+A partir da raiz do projeto:
+
+```bash
+python PC_ENGINE/tools/run_market_radar.py --cycles 20
+```
+
+Execução contínua:
+
+```bash
+python PC_ENGINE/tools/run_market_radar.py
+```
+
+Exemplo com uma única fonte e ativo para diagnóstico:
+
+```bash
+python PC_ENGINE/tools/run_market_radar.py --exchanges binance --symbols BTC/USDT --interval 2 --cycles 30
+```
+
+O runner imprime um resumo JSON por ciclo. Os dados completos ficam no JSONL local e devem permanecer fora do Git através do `.gitignore`.
 
 ## Arquitetura alvo
 
@@ -174,6 +223,8 @@ Confidence            78%
 
 O score não é uma previsão garantida. É uma representação compacta da evidência disponível naquele instante.
 
+Na Fase 1, o score de pressão é **descritivo** e limitado aos movimentos observados entre snapshots. Ainda não é um input de trading.
+
 ## Multi-timeframe
 
 A arquitetura alvo deve separar função por horizonte:
@@ -298,13 +349,20 @@ Mesmo uma diferença observada entre timestamps não é automaticamente arbitrag
 
 ## Fases de implementação
 
-### Fase 1 — Observação
+### Fase 1 — Observação — EM IMPLEMENTAÇÃO
 
-- streams de mercado;
-- normalização de timestamps;
-- armazenamento de eventos;
-- dashboard de saúde e latência;
-- zero impacto nas decisões.
+- [x] modelo de snapshots;
+- [x] recolha pública via CCXT;
+- [x] timestamps locais e da fonte;
+- [x] persistência JSONL;
+- [x] eventos candidatos de lead/lag;
+- [x] pressão descritiva;
+- [x] runner CLI;
+- [x] testes unitários do detector;
+- [ ] WebSockets/streams de baixa latência;
+- [ ] sincronização/medição de relógio robusta;
+- [ ] dashboard de saúde e latência;
+- [ ] agregação estatística histórica.
 
 ### Fase 2 — Lead/Lag PAPER
 
