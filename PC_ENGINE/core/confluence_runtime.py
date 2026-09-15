@@ -11,6 +11,7 @@ from PC_ENGINE.core.order_flow_strategy import OrderFlowStrategy
 from PC_ENGINE.core.paper_confluence_tracker import PaperConfluenceTracker
 from PC_ENGINE.radar.derivatives_radar import DerivativesRadar
 from PC_ENGINE.radar.lead_lag_signal import LeadLagSignalEngine
+from PC_ENGINE.radar.market_state import MarketStateStore, build_market_state
 from PC_ENGINE.radar.regime_engine import MarketRegimeEngine
 from PC_ENGINE.radar.trade_event_store import WebSocketTradeEventStore
 
@@ -20,7 +21,7 @@ class ConfluenceRuntimeResult:
     recorded: bool
 
 class PaperConfluenceRuntime:
-    """PAPER-only bridge for independent strategy evidence collection."""
+    """PAPER-only bridge for independent strategy evidence and unified state collection."""
     def __init__(self, settings: dict | None = None):
         settings = settings or {}
         self.data_dir = settings.get("data_dir", "PC_ENGINE/data/radar")
@@ -29,6 +30,7 @@ class PaperConfluenceRuntime:
             data_dir=self.data_dir,
             horizons_ms=tuple(settings.get("horizons_ms", (1000, 5000, 15000, 60000))),
         )
+        self.state_store = MarketStateStore(self.data_dir)
         self.lead_lag = LeadLagSignalEngine(self.data_dir)
         self.regime = MarketRegimeEngine()
         self.momentum = MultiTimeframeMomentumStrategy(settings.get("momentum", {}))
@@ -79,6 +81,16 @@ class PaperConfluenceRuntime:
             order_flow_score=order_flow, breakout_score=breakout, derivatives_score=derivatives_score,
         )
         self.tracker.record(symbol, price, score, regime=regime.name)
+        state = build_market_state(
+            symbol=symbol, price=price, regime=regime,
+            technical_score=technical_strength if technical_action == "BUY" else -technical_strength if technical_action == "SELL" else 0.0,
+            candlestick_bias=pattern_bias, radar_pressure=radar_pressure,
+            lead_lag_score=sum(s.score for s in learned) / len(learned) if learned else 0.0,
+            momentum_score=momentum, mean_reversion_score=mean_rev,
+            order_flow_score=order_flow, breakout_score=breakout,
+            derivatives_score=derivatives_score, confluence=score,
+        )
+        self.state_store.append(state)
         return ConfluenceRuntimeResult(score=score, recorded=True)
 
     def resolve_outcomes(self, fee_bps_round_trip: float = 28.0) -> int:
@@ -86,3 +98,6 @@ class PaperConfluenceRuntime:
 
     def summary(self) -> dict[str, Any]:
         return self.tracker.summary()
+
+    def latest_state(self, symbol: str) -> dict | None:
+        return self.state_store.snapshot(symbol)
