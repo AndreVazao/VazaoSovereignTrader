@@ -27,7 +27,7 @@ jobs:
           - tests/test_websocket_persistence.py
           - tests/test_websocket_radar.py
           - tests/test_walk_forward.py
-      
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,4 +36,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-pc.txt pytest
       - name: Run ${{ matrix.test_file }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: pytest -q ${{ matrix.test_file }}
