@@ -19,6 +19,7 @@ class ConfluenceObservation:
     score: float
     confidence: float
     horizon_ms: int
+    regime: str = "UNKNOWN"
     paper_only: bool = True
 
 
@@ -32,13 +33,13 @@ class PaperConfluenceTracker:
         self.observation_path = self.data_dir / "confluence_observations.jsonl"
         self.outcome_path = self.data_dir / "confluence_outcomes.jsonl"
 
-    def record(self, symbol: str, price: float, score: ConfluenceScore) -> None:
+    def record(self, symbol: str, price: float, score: ConfluenceScore, regime: str = "UNKNOWN") -> None:
         if price <= 0:
             return
         now = int(time.time() * 1000)
         with self.observation_path.open("a", encoding="utf-8") as handle:
             for horizon in self.horizons_ms:
-                row = ConfluenceObservation(now, symbol, float(price), score.action, score.score, score.confidence, horizon)
+                row = ConfluenceObservation(now, symbol, float(price), score.action, score.score, score.confidence, horizon, str(regime))
                 handle.write(json.dumps(asdict(row), ensure_ascii=False) + "\n")
 
     @staticmethod
@@ -86,12 +87,10 @@ class PaperConfluenceTracker:
         return outcome
 
     def resolve_from_websocket_events(self, fee_bps_round_trip: float = 28.0) -> int:
-        """Resolve completed observations using the recorded public websocket tape."""
         event_path = self.data_dir / "websocket_events.jsonl"
         events = self._read(event_path)
         if not events:
             return 0
-
         index: dict[tuple[str, str], list[tuple[int, float]]] = {}
         for event in events:
             try:
@@ -105,7 +104,6 @@ class PaperConfluenceTracker:
                 continue
         for values in index.values():
             values.sort(key=lambda item: item[0])
-
         outcomes = self._outcome_keys()
         resolved = 0
         now = int(time.time() * 1000)
@@ -119,8 +117,6 @@ class PaperConfluenceTracker:
             key = (ts, symbol, horizon, action)
             if key in outcomes or ts + horizon > now:
                 continue
-
-            # Prefer Binance tape for the confluence observation; fall back to any venue.
             candidates = [k for k in index if k[1] == symbol]
             preferred = [k for k in candidates if k[0] == "binance"] + [k for k in candidates if k[0] != "binance"]
             future_price = None
@@ -139,12 +135,12 @@ class PaperConfluenceTracker:
 
     def summary(self) -> dict[str, Any]:
         rows = self._read(self.outcome_path)
-        grouped: dict[tuple[str, int, str], list[dict[str, Any]]] = {}
+        grouped: dict[tuple[str, int, str, str], list[dict[str, Any]]] = {}
         for row in rows:
-            key = (str(row.get("symbol", "")), int(row.get("horizon_ms", 0)), str(row.get("action", "HOLD")))
+            key = (str(row.get("symbol", "")), int(row.get("horizon_ms", 0)), str(row.get("action", "HOLD")), str(row.get("regime", "UNKNOWN")))
             grouped.setdefault(key, []).append(row)
         stats = []
-        for (symbol, horizon, action), values in grouped.items():
+        for (symbol, horizon, action, regime), values in grouped.items():
             nets = [float(x.get("net_bps", 0.0)) for x in values]
             wins = sum(1 for x in values if x.get("profitable_after_costs"))
             mean_net = sum(nets) / len(nets) if nets else 0.0
@@ -152,6 +148,7 @@ class PaperConfluenceTracker:
                 "symbol": symbol,
                 "horizon_ms": horizon,
                 "action": action,
+                "regime": regime,
                 "samples": len(values),
                 "wins": wins,
                 "win_rate": round(wins / len(values), 4) if values else 0.0,
