@@ -42,16 +42,28 @@
     "lead_window_ms": 750,
     "notes": "Phase 1/1.5 only collects public data. Radar cannot create or execute orders."
   },
+  "derivatives": {
+    "enabled": true,
+    "observational_only": true,
+    "exchanges": ["binance", "bingx", "okx", "bybit"],
+    "cache_seconds": 10,
+    "notes": "Public perpetual/swap funding, open interest and basis evidence only. No derivatives orders, leverage or liquidation automation."
+  },
   "confluence": {
     "enabled": true,
     "weights": {
-      "technical": 0.40,
-      "candlestick": 0.15,
-      "radar": 0.15,
-      "lead_lag": 0.20,
-      "regime": 0.10
+      "technical": 0.23,
+      "candlestick": 0.09,
+      "radar": 0.09,
+      "lead_lag": 0.13,
+      "regime": 0.08,
+      "momentum": 0.10,
+      "mean_reversion": 0.06,
+      "order_flow": 0.09,
+      "breakout": 0.06,
+      "derivatives": 0.07
     },
-    "action_threshold": 0.35,
+    "action_threshold": 0.30,
     "minimum_independent_evidence": 2,
     "contradiction_penalty": 0.25,
     "min_lead_lag_confidence": 0.75,
