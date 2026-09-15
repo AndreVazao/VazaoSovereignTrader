@@ -28,6 +28,31 @@ Esta versão entrega uma base funcional e segura:
 - Preparado para Binance e BingX via CCXT.
 - Integração futura com TradingAgents como conselho opcional, não executor.
 - **Sovereign Market Radar** em Fase 1 observacional, com recolha cross-exchange e deteção de eventos candidatos de lead/lag.
+- **Market State** unificado em PAPER, agregando evidência e estado de regime.
+- **State Outcome Engine** para medir expectancy líquida por horizonte/regime.
+- **Real Readiness Gate** que mantém REAL bloqueado até existirem evidências operacionais e estatísticas suficientes.
+
+## Pipeline de segurança
+
+```text
+Market Data
+    ↓
+Market State
+    ↓
+State Outcomes
+    ↓
+Readiness Gate
+    ↓
+Risk Engine
+    ↓
+RealModeGuard
+    ↓
+Order Manager
+    ↓
+Exchange
+```
+
+O `Readiness Gate` é apenas avaliador. Mesmo quando aprovado, não ativa REAL, não altera limites, não manipula API keys e não envia ordens.
 
 ## Sovereign Market Radar
 
@@ -47,31 +72,23 @@ python PC_ENGINE/tools/run_market_radar.py --cycles 20
 
 Os dados são guardados localmente em `PC_ENGINE/data/radar/observations.jsonl`.
 
-Objetivos do Radar:
+Arquitetura detalhada: `docs/SOVEREIGN_MARKET_RADAR.md`.
 
-- observar Binance, BingX, OKX, Bybit, Coinbase e outras fontes elegíveis;
-- privilegiar WebSockets/streams oficiais quando disponíveis nas fases seguintes;
-- medir lead/lag em vez de assumir que uma plataforma é sempre mais rápida;
-- estudar order flow, liquidez, volume e microestrutura;
-- incorporar open interest, funding, basis e liquidações quando disponíveis;
-- usar notícias e eventos apenas como contexto confirmado pelo mercado;
-- produzir um **Market Pressure Score**;
-- aprender por símbolo, timeframe e regime;
-- validar qualquer vantagem depois de fees, spread, slippage e latência.
+## State Outcomes
 
-O Radar **não é uma bola de cristal e não executa ordens**. A arquitetura mantém a separação:
-
-```text
-Radar -> evidência
-Strategy -> sinal candidato
-AI Council -> conselho opcional
-Risk Engine -> autoriza/bloqueia
-Executor -> executa
+```bash
+python PC_ENGINE/tools/run_state_outcomes.py
 ```
 
-Os eventos de lead/lag da Fase 1 são apenas candidatos de investigação porque a recolha inicial usa polling CCXT. Não tratamos timestamps de resposta como prova de vantagem negociável. A próxima fase deve migrar a recolha crítica para streams/WebSockets e depois medir a vantagem em PAPER/out-of-sample.
+A avaliação usa por defeito os horizontes 1s, 5s, 15s, 1m e 5m e desconta custo round-trip configurado. Não executa ordens.
 
-Arquitetura detalhada: `docs/SOVEREIGN_MARKET_RADAR.md`.
+## Readiness Gate
+
+```bash
+python PC_ENGINE/tools/run_real_readiness.py --help
+```
+
+O resultado possível é `LOCKED` ou `READY_FOR_PROTECTED_REAL_REVIEW`. O segundo estado ainda exige `RealModeGuard` e confirmação explícita do operador.
 
 ## Aviso
 
