@@ -1,0 +1,1 @@
+The fast execution branch is intentionally limited to the safe decision/executor boundary and telemetry. It does not grant REAL authorization.
