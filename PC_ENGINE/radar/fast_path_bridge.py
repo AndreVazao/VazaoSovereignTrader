@@ -17,13 +17,7 @@ class FastPathBridgeResult:
 
 
 class FastPathWebSocketBridge:
-    """Connect public WebSocket events to the deterministic fast path.
-
-    The bridge only routes events. Risk and order callbacks remain injected by
-    the engine, so the bridge cannot bypass the Risk Engine or Order Manager.
-    The default mode is PAPER and REAL is rejected unless the router/executor
-    is explicitly configured for a separate reviewed policy.
-    """
+    """Connect public WebSocket events to the deterministic fast path."""
 
     def __init__(
         self,
@@ -65,8 +59,13 @@ class FastPathWebSocketBridge:
         return self._signals
 
     @staticmethod
-    def _event_mapping(event: MarketEvent) -> dict[str, object]:
-        direction = "UP" if event.price_before is not None and event.price > event.price_before else "DOWN"
+    def _event_mapping(event: MarketEvent) -> dict[str, object] | None:
+        if event.price_before is None or event.price_before <= 0:
+            return None
+        move = event.price - event.price_before
+        direction = "UP" if move > 0 else "DOWN" if move < 0 else ""
+        if not direction:
+            return None
         return {
             "exchange": event.exchange,
             "symbol": event.symbol,
@@ -86,6 +85,11 @@ class FastPathWebSocketBridge:
             return result
 
         payload = self._event_mapping(event)
+        if payload is None:
+            result = FastPathBridgeResult(False, None)
+            self.last_result = result
+            return result
+
         result = self.router.route(
             payload,
             self.load_signals(),
