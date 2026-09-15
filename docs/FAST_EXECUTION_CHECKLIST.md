@@ -1,0 +1,9 @@
+- [x] deterministic fast decision
+- [x] stale event rejection
+- [x] confidence/expectancy thresholds
+- [x] explicit risk callback
+- [x] explicit executor boundary
+- [x] latency metrics
+- [x] tests
+- [ ] direct exchange execution integration
+- [ ] REAL fast-path authorization
