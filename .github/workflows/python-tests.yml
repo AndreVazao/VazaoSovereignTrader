@@ -22,6 +22,7 @@ jobs:
           - tests/test_order_flow_breakout.py
           - tests/test_paper_confluence_tracker.py
           - tests/test_performance_gate.py
+          - tests/test_real_mode_guard.py
           - tests/test_real_readiness.py
           - tests/test_regime_engine.py
           - tests/test_regime_validation.py
