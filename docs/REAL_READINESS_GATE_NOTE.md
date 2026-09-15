@@ -1,0 +1,1 @@
+Readiness is a review signal only. It is never an exchange permission, credential unlock, or order authorization.
