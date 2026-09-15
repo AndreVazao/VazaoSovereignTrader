@@ -8,6 +8,7 @@ from PC_ENGINE.radar.regime_engine import MarketRegime
 
 Action = Literal["BUY", "SELL", "HOLD"]
 
+
 @dataclass(frozen=True)
 class ConfluenceScore:
     symbol: str
@@ -28,8 +29,10 @@ class ConfluenceScore:
     derivatives_score: float = 0.0
     paper_only: bool = True
 
+
 class ConfluenceEngine:
     """Combines independent evidence without authorizing orders."""
+
     DEFAULT_WEIGHTS = {
         "technical": 0.23,
         "candlestick": 0.09,
@@ -52,7 +55,9 @@ class ConfluenceEngine:
                 self.weights[key] = max(0.0, float(configured[key]))
         total = sum(self.weights.values()) or 1.0
         self.weights = {key: value / total for key, value in self.weights.items()}
-        self.action_threshold = abs(float(settings.get("action_threshold", 0.35)))
+        # Keep the action threshold compatible with the original evidence
+        # mix after adding new optional evidence sources.
+        self.action_threshold = abs(float(settings.get("action_threshold", 0.30)))
         self.minimum_independent_evidence = max(1, int(settings.get("minimum_independent_evidence", 2)))
         self.contradiction_penalty = min(1.0, max(0.0, float(settings.get("contradiction_penalty", 0.25))))
 
