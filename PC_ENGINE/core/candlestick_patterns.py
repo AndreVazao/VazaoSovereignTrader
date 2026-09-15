@@ -78,8 +78,6 @@ class CandlestickPatternEngine:
         rng, body, upper, lower, _ = self._parts(last)
         trend = self._trend([float(c[4]) for c in ohlcv])
 
-        # Single-candle patterns. A small-body doji can coexist with a
-        # context-specific hammer/hanging-man classification.
         if body <= rng * 0.10:
             if upper <= rng * 0.15 and lower >= rng * 0.60:
                 matches.append(PatternMatch("dragonfly_doji", "BULLISH", 0.86))
@@ -96,19 +94,16 @@ class CandlestickPatternEngine:
                 elif trend > 0:
                     matches.append(PatternMatch("hanging_man", "BEARISH", 0.82))
 
-        # Detect the most recent completed engulfing pair. This also supports
-        # callers that provide one or more candles after the pattern so the
-        # detector can be used as a confirmation engine rather than only on
-        # the exact formation candle.
-        for pair_index in (-1, -2):
-            if abs(pair_index) + 1 > len(ohlcv) - 1:
-                continue
-            pair = self._engulfing(ohlcv[pair_index - 1], ohlcv[pair_index])
+        # Scan the two most recent completed pairs. A formation may be followed
+        # by one confirmation candle, so requiring the last candle to be part
+        # of the engulfing pair would incorrectly discard a valid signal.
+        pair_count = min(2, len(ohlcv) - 1)
+        for offset in range(1, pair_count + 1):
+            pair = self._engulfing(ohlcv[-offset - 1], ohlcv[-offset])
             if pair is not None:
                 matches.append(pair)
                 break
 
-        # Three-candle reversal/continuation patterns on the latest window.
         o1, h1, l1, c1 = self._candle(prev2)
         o2, h2, l2, c2 = self._candle(prev)
         o3, h3, l3, c3 = self._candle(last)
