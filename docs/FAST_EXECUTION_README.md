@@ -1,1 +1,0 @@
-Fast execution is an optimization layer over validated lead/lag signals. It never replaces risk controls.

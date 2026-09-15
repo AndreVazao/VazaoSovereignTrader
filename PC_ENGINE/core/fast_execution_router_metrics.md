@@ -1,1 +1,0 @@
-Fast execution telemetry is implemented by FastExecutionMetrics and attached to FastExecutionRouter.

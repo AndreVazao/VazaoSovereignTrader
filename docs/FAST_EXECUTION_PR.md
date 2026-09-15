@@ -1,1 +1,0 @@
-PR scope: guarded fast execution boundary, latency metrics, tests, and documentation. Direct exchange execution remains disabled.

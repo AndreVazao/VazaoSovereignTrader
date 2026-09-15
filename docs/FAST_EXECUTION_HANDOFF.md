@@ -1,1 +1,0 @@
-Handoff: next implementation may connect an explicit executor after PAPER latency validation and protected REAL checks. Do not bypass Risk Engine or RealModeGuard.

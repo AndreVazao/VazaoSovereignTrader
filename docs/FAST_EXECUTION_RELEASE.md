@@ -1,1 +1,0 @@
-Release note: fast path is ready for CI and review; no direct REAL execution is enabled.

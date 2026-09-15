@@ -1,1 +1,0 @@
-Implemented components: FastPathEngine, FastExecutionRouter, FastExecutionMetrics and unit coverage. Direct exchange execution remains a separate protected step.

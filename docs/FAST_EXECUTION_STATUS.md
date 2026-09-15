@@ -1,1 +1,0 @@
-Status: boundary and tests implemented. Direct exchange execution remains intentionally disabled in this branch until the protected executor integration is reviewed.

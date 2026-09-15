@@ -1,1 +1,0 @@
-Fast path + guarded executor boundary + metrics + tests; no direct REAL order path.

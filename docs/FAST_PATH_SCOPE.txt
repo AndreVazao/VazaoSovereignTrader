@@ -1,1 +1,0 @@
-Scope of this branch: guarded Fast Path primitives, metrics, configuration and tests. No automatic REAL trading authority is enabled. WebSocket-to-order wiring is deliberately the next controlled change.

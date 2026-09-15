@@ -1,1 +1,0 @@
-This feature intentionally stops at a guarded routing boundary. It does not grant automatic REAL authority. The next PR will wire public WebSocket events into the router and PAPER Order Manager, with Risk Engine checks and measured latency.

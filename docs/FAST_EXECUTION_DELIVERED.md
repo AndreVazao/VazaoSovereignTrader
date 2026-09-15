@@ -1,1 +1,0 @@
-Delivered: deterministic fast path, guarded router, latency metrics, safety documentation and tests. REAL remains explicitly disabled by this branch.

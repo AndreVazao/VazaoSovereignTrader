@@ -1,1 +1,0 @@
-Guarded Fast Path primitives only. REAL remains disabled by default.

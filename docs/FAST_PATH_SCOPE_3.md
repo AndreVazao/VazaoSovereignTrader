@@ -1,1 +1,0 @@
-The branch is intentionally limited to the guarded execution boundary and observability. Automatic REAL execution is not enabled.

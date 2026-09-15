@@ -1,1 +1,0 @@
-Fast execution boundary implementation is complete for this branch; direct REAL exchange integration remains a separate gated step.
