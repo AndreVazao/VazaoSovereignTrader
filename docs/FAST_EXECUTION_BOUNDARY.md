@@ -1,0 +1,1 @@
+O executor rápido é uma dependência explícita do FastExecutionRouter. O router não cria clientes de exchange nem bypassa controles de modo, risco ou autorização. Isso permite medir e testar o caminho rápido sem habilitar trading REAL automaticamente.
