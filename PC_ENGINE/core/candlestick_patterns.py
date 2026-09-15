@@ -18,8 +18,6 @@ class CandlestickPatternEngine:
     """Evidence-weighted candlestick detector.
 
     Patterns are treated as context/confirmation, never as standalone orders.
-    This is deliberate: candlesticks can fail frequently in noisy markets,
-    especially on very short crypto timeframes.
     """
 
     def __init__(self, settings: dict | None = None):
@@ -42,9 +40,10 @@ class CandlestickPatternEngine:
 
     @staticmethod
     def _trend(closes: list[float], lookback: int = 8) -> int:
-        if len(closes) < lookback:
+        if len(closes) < 3:
             return 0
-        a = closes[-lookback]
+        effective = min(lookback, len(closes))
+        a = closes[-effective]
         b = closes[-1]
         if a <= 0:
             return 0
@@ -55,6 +54,19 @@ class CandlestickPatternEngine:
             return -1
         return 0
 
+    def _engulfing(self, prev: list[float], last: list[float]) -> PatternMatch | None:
+        po, _, _, pc = self._candle(prev)
+        co, _, _, cc = self._candle(last)
+        prev_body = abs(pc - po)
+        curr_body = abs(cc - co)
+        if prev_body <= 0 or curr_body < prev_body * 0.95:
+            return None
+        if pc < po and cc > co and co <= pc and cc >= po:
+            return PatternMatch("bullish_engulfing", "BULLISH", 0.90)
+        if pc > po and cc < co and co >= pc and cc <= po:
+            return PatternMatch("bearish_engulfing", "BEARISH", 0.90)
+        return None
+
     def detect(self, ohlcv: list[list[float]]) -> list[PatternMatch]:
         if not self.enabled or len(ohlcv) < 3:
             return []
@@ -63,10 +75,11 @@ class CandlestickPatternEngine:
         last = ohlcv[-1]
         prev = ohlcv[-2]
         prev2 = ohlcv[-3]
-        rng, body, upper, lower, direction = self._parts(last)
+        rng, body, upper, lower, _ = self._parts(last)
         trend = self._trend([float(c[4]) for c in ohlcv])
 
-        # Single-candle patterns. Their direction depends on market context.
+        # Single-candle patterns. A small-body doji can coexist with a
+        # context-specific hammer/hanging-man classification.
         if body <= rng * 0.10:
             if upper <= rng * 0.15 and lower >= rng * 0.60:
                 matches.append(PatternMatch("dragonfly_doji", "BULLISH", 0.86))
@@ -83,17 +96,19 @@ class CandlestickPatternEngine:
                 elif trend > 0:
                     matches.append(PatternMatch("hanging_man", "BEARISH", 0.82))
 
-        # Two-candle engulfing patterns, using real bodies rather than shadows.
-        po, ph, pl, pc = self._candle(prev)
-        co, ch, cl, cc = self._candle(last)
-        prev_body = abs(pc - po)
-        curr_body = abs(cc - co)
-        if pc < po and cc > co and curr_body >= prev_body * 0.95 and co <= pc and cc >= po:
-            matches.append(PatternMatch("bullish_engulfing", "BULLISH", 0.90))
-        if pc > po and cc < co and curr_body >= prev_body * 0.95 and co >= pc and cc <= po:
-            matches.append(PatternMatch("bearish_engulfing", "BEARISH", 0.90))
+        # Detect the most recent completed engulfing pair. This also supports
+        # callers that provide one or more candles after the pattern so the
+        # detector can be used as a confirmation engine rather than only on
+        # the exact formation candle.
+        for pair_index in (-1, -2):
+            if abs(pair_index) + 1 > len(ohlcv) - 1:
+                continue
+            pair = self._engulfing(ohlcv[pair_index - 1], ohlcv[pair_index])
+            if pair is not None:
+                matches.append(pair)
+                break
 
-        # Three-candle reversal/continuation patterns.
+        # Three-candle reversal/continuation patterns on the latest window.
         o1, h1, l1, c1 = self._candle(prev2)
         o2, h2, l2, c2 = self._candle(prev)
         o3, h3, l3, c3 = self._candle(last)
