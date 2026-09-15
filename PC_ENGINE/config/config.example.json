@@ -53,7 +53,12 @@
     "websocket_symbols": ["BTC/USDT", "ETH/USDT"],
     "min_move_bps": 5.0,
     "lead_window_ms": 750,
-    "notes": "Phase 1/1.5 only collects public data. Radar cannot create or execute orders."
+    "notes": "The PAPER collector continuously records public market states. Radar remains observational-only and cannot create or execute orders."
+  },
+  "candlestick": {
+    "enabled": true,
+    "min_confidence": 0.70,
+    "notes": "Candlestick patterns are evidence/confirmation only; they never create standalone orders."
   },
   "derivatives": {
     "enabled": true,
