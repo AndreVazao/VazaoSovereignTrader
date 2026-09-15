@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from bisect import bisect_left
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -23,9 +24,9 @@ class OutcomeStat:
 class StateOutcomeEngine:
     """Evaluate historical MarketState observations without creating orders.
 
-    Outcomes are measured from future market-state prices and are net of a
-    configurable round-trip cost. This is a descriptive PAPER learning layer;
-    it is deliberately not a live trading gate.
+    Outcomes are measured from the first future observation for the same symbol
+    at or after each target horizon. Results are net of a configurable
+    round-trip cost and are descriptive PAPER-learning evidence only.
     """
 
     def __init__(self, cost_bps: float = 28.0, min_samples: int = 30,
@@ -49,29 +50,54 @@ class StateOutcomeEngine:
     def _mean(values: list[float]) -> float:
         return sum(values) / len(values) if values else 0.0
 
+    @staticmethod
+    def _index_by_symbol(states: list[dict]) -> dict[str, tuple[list[int], list[float]]]:
+        grouped: dict[str, list[tuple[int, float]]] = {}
+        for state in states:
+            symbol = str(state.get("symbol", ""))
+            timestamp = int(state.get("timestamp_ms", 0))
+            price = float(state.get("price", 0))
+            if symbol and timestamp > 0 and price > 0:
+                grouped.setdefault(symbol, []).append((timestamp, price))
+        return {
+            symbol: (
+                [item[0] for item in ordered],
+                [item[1] for item in ordered],
+            )
+            for symbol, values in grouped.items()
+            for ordered in [sorted(values)]
+        }
+
     def evaluate(self, states: list[dict], horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000, 300000)) -> list[OutcomeStat]:
         ordered = sorted(
             (s for s in states if float(s.get("price", 0)) > 0 and s.get("action") in {"BUY", "SELL"}),
             key=lambda s: int(s.get("timestamp_ms", 0)),
         )
-        results: list[OutcomeStat] = []
-        for i, state in enumerate(ordered):
+        index = self._index_by_symbol(states)
+        observations: list[OutcomeStat] = []
+        for state in ordered:
             action = str(state["action"])
             symbol = str(state["symbol"])
             regime = str(state.get("regime", "UNKNOWN"))
             t0 = int(state["timestamp_ms"])
             p0 = float(state["price"])
+            timestamps, prices = index.get(symbol, ([], []))
+            if not timestamps:
+                continue
             for horizon in horizons_ms:
-                target = t0 + int(horizon)
-                future = next((x for x in ordered[i + 1:] if x["symbol"] == symbol and int(x["timestamp_ms"]) >= target and float(x.get("price", 0)) > 0), None)
-                if future is None:
+                pos = bisect_left(timestamps, t0 + int(horizon))
+                if pos >= len(timestamps):
                     continue
-                p1 = float(future["price"])
+                p1 = prices[pos]
                 gross_bps = ((p1 / p0) - 1.0) * 10000.0
                 signed_bps = gross_bps if action == "BUY" else -gross_bps
                 net_bps = signed_bps - self.cost_bps
-                results.append(OutcomeStat(symbol, action, regime, int(horizon), 1, int(net_bps > 0), float(net_bps > 0), net_bps, net_bps, net_bps, False))
-        return self.aggregate(results)
+                observations.append(OutcomeStat(
+                    symbol, action, regime, int(horizon), 1,
+                    int(net_bps > 0), float(net_bps > 0),
+                    net_bps, net_bps, net_bps, False,
+                ))
+        return self.aggregate(observations)
 
     def aggregate(self, observations: list[OutcomeStat]) -> list[OutcomeStat]:
         groups: dict[tuple[str, str, str, int], list[OutcomeStat]] = {}
@@ -85,7 +111,6 @@ class StateOutcomeEngine:
             win_rate = wins / samples if samples else 0.0
             mean = self._mean(values)
             median = self._percentile(values, 0.50)
-            # Conservative normal approximation for a descriptive 95% lower bound.
             variance = self._mean([(v - mean) ** 2 for v in values]) if samples else 0.0
             se = (variance ** 0.5) / (samples ** 0.5) if samples > 1 else 0.0
             lower = mean - 1.96 * se
