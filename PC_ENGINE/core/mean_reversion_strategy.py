@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from .indicators import atr, ema, vwap
+from .indicators import atr, vwap
 
 Action = Literal["BUY", "SELL", "HOLD"]
 
@@ -28,8 +28,12 @@ class MeanReversionStrategy:
     def analyse(self, ohlcv: list[list[float]], regime: str | None = None) -> StrategyEvidence:
         if len(ohlcv) < max(self.vwap_period, self.atr_period) + 2:
             return StrategyEvidence("HOLD", 0.0, 0.0, "warmup mean reversion")
-        if regime and regime not in {"RANGE", "LOW_VOL", "FLAT", "NORMAL"}:
-            return StrategyEvidence("HOLD", 0.0, 0.0, f"regime {regime} desfavorável à reversão")
+        if regime:
+            normalized = regime.upper()
+            if not normalized.startswith("FLAT") and normalized not in {"RANGE", "LOW_VOL", "NORMAL"}:
+                return StrategyEvidence("HOLD", 0.0, 0.0, f"regime {regime} desfavorável à reversão")
+            if "HIGH" in normalized:
+                return StrategyEvidence("HOLD", 0.0, 0.0, f"regime {regime} demasiado volátil")
         price = float(ohlcv[-1][4])
         vw = vwap(ohlcv, self.vwap_period)
         a = atr(ohlcv, self.atr_period)
