@@ -1,0 +1,1 @@
+The first readiness layer is implemented on the feature branch. The next stage is dashboard/API integration and a separate operator-controlled RealModeGuard.
