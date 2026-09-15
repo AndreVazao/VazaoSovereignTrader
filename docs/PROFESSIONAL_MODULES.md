@@ -1,6 +1,6 @@
 # Módulos profissionais adicionados
 
-Estes módulos existem para preparar o VazaoSovereignTrader para operação real com menos risco operacional.
+Estes módulos existem para preparar o VazaoSovereignTrader para operação real com menos risco operacional e melhor qualidade de decisão.
 
 ## 1. Pre-flight checker
 
@@ -125,11 +125,48 @@ Risk Engine decide.
 Executor age.
 ```
 
+## 11. Sovereign Market Radar — arquitetura definida
+
+Documento principal: `docs/SOVEREIGN_MARKET_RADAR.md`
+
+O **Sovereign Market Radar (SMR)** será a camada central de inteligência de mercado. O objetivo é combinar dados de várias fontes em tempo real, estudar microestrutura e aprender relações de **lead/lag** entre mercados, sem assumir que uma exchange é sempre mais rápida que outra.
+
+A arquitetura prevista inclui:
+
+- streams/WebSockets oficiais quando disponíveis;
+- cross-exchange intelligence;
+- order flow e desequilíbrio de book;
+- volume, spread e liquidez;
+- open interest, funding, basis e liquidações quando disponíveis;
+- notícias/eventos como contexto, nunca como ordem direta;
+- análise multi-timeframe;
+- Market Pressure Score;
+- aprendizagem por símbolo e regime;
+- medição de latência e qualidade dos timestamps;
+- validação com fees, spread e slippage;
+- out-of-sample e Champion/Challenger antes de qualquer influência em REAL.
+
+O SMR **não executa ordens**. A cadeia continua:
+
+```text
+Market Radar -> evidência
+Strategy     -> sinal candidato
+AI Council  -> conselho opcional
+Risk Engine -> autoriza/bloqueia
+Executor    -> executa
+```
+
+Importante: uma diferença temporal entre exchanges não constitui automaticamente uma oportunidade. A vantagem só é considerada válida se sobreviver a latência, spread, fees, slippage, concorrência e testes fora da amostra.
+
 ## Estado atual
 
 Os módulos 1–6 já estão integrados no `PC_ENGINE/core/engine.py`.
 
 Backtest, weekly reporter, champion/challenger e AI council já existem como blocos preparados. Champion/challenger e AI council stub já são referenciados pelo motor.
+
+O módulo de candlesticks também foi integrado como camada de confirmação da estratégia; os padrões não criam entradas isoladamente.
+
+O **Sovereign Market Radar está documentado como arquitetura alvo**, mas **a implementação do radar, streams multi-exchange e Lead/Lag Engine ainda não deve ser considerada concluída**.
 
 ## Próximo passo técnico
 
@@ -139,4 +176,5 @@ Antes de REAL:
 2. Corrigir imports/path se necessário.
 3. Rodar PAPER por 14 dias.
 4. Validar relatórios.
-5. Só depois preparar confirmação dupla para REAL.
+5. Implementar e medir o Sovereign Market Radar primeiro em modo observacional/PAPER.
+6. Só depois preparar confirmação dupla para REAL.
