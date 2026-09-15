@@ -1,0 +1,1 @@
+Current implementation is PAPER-only. Readiness is LOCKED by default and cannot authorize REAL execution.
