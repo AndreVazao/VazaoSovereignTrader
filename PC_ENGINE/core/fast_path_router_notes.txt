@@ -1,1 +1,0 @@
-Fast Path integration boundary: WebSocket callbacks can feed FastPathRouter. The router remains synchronous and bounded. Real execution stays disabled by configuration until a separately reviewed risk/execution policy is merged.
