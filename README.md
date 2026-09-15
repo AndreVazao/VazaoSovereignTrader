@@ -27,16 +27,30 @@ Esta versão entrega uma base funcional e segura:
 - Mobile Kivy como controlo remoto.
 - Preparado para Binance e BingX via CCXT.
 - Integração futura com TradingAgents como conselho opcional, não executor.
-- **Sovereign Market Radar** documentado como próxima camada de inteligência multi-fonte e lead/lag.
+- **Sovereign Market Radar** em Fase 1 observacional, com recolha cross-exchange e deteção de eventos candidatos de lead/lag.
 
 ## Sovereign Market Radar
 
-O projeto prevê uma camada central de inteligência própria para combinar dados de múltiplas exchanges e fontes em tempo real.
+O Radar é uma camada central de observação que combina dados públicos de múltiplas exchanges e, futuramente, derivados, order flow e fontes externas.
 
-Objetivos:
+Na Fase 1 já existe:
+
+- `PC_ENGINE/radar/market_radar.py`
+- `PC_ENGINE/tools/run_market_radar.py`
+- `tests/test_market_radar.py`
+
+Para executar a recolha observacional:
+
+```bash
+python PC_ENGINE/tools/run_market_radar.py --cycles 20
+```
+
+Os dados são guardados localmente em `PC_ENGINE/data/radar/observations.jsonl`.
+
+Objetivos do Radar:
 
 - observar Binance, BingX, OKX, Bybit, Coinbase e outras fontes elegíveis;
-- privilegiar WebSockets/streams oficiais quando disponíveis;
+- privilegiar WebSockets/streams oficiais quando disponíveis nas fases seguintes;
 - medir lead/lag em vez de assumir que uma plataforma é sempre mais rápida;
 - estudar order flow, liquidez, volume e microestrutura;
 - incorporar open interest, funding, basis e liquidações quando disponíveis;
@@ -55,7 +69,7 @@ Risk Engine -> autoriza/bloqueia
 Executor -> executa
 ```
 
-A implementação do Radar e do Lead/Lag Engine será primeiro observacional/PAPER. Nenhuma suposta vantagem de latência será considerada válida sem validação estatística e out-of-sample.
+Os eventos de lead/lag da Fase 1 são apenas candidatos de investigação porque a recolha inicial usa polling CCXT. Não tratamos timestamps de resposta como prova de vantagem negociável. A próxima fase deve migrar a recolha crítica para streams/WebSockets e depois medir a vantagem em PAPER/out-of-sample.
 
 Arquitetura detalhada: `docs/SOVEREIGN_MARKET_RADAR.md`.
 
