@@ -52,6 +52,7 @@ class MarketRadar:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.clients: dict[str, Any] = {}
         self.previous: dict[tuple[str, str], VenueSnapshot] = {}
+        self.last_pressure: dict[str, float] = {}
         self._build_clients()
 
     def _build_clients(self) -> None:
@@ -77,8 +78,8 @@ class MarketRadar:
     def snapshot(self) -> tuple[list[VenueSnapshot], list[LeadLagObservation]]:
         snapshots: list[VenueSnapshot] = []
         for exchange_name, client in self.clients.items():
-            request_start_ms = int(time.time() * 1000)
             for symbol in self.symbols:
+                request_start_ms = int(time.time() * 1000)
                 try:
                     ticker = client.fetch_ticker(symbol)
                     local_ts_ms = int(time.time() * 1000)
@@ -95,11 +96,23 @@ class MarketRadar:
                 except Exception:
                     continue
 
+        self.last_pressure = self._pressure_from_previous(snapshots)
         leads = self._detect_leads(snapshots)
         self._persist(snapshots, leads)
         for snap in snapshots:
             self.previous[(snap.exchange, snap.symbol)] = snap
         return snapshots, leads
+
+    def _pressure_from_previous(self, snapshots: list[VenueSnapshot]) -> dict[str, float]:
+        grouped: dict[str, list[float]] = {}
+        for snap in snapshots:
+            prev = self.previous.get((snap.exchange, snap.symbol))
+            if prev and prev.price > 0:
+                grouped.setdefault(snap.symbol, []).append((snap.price - prev.price) / prev.price)
+        return {
+            symbol: round(max(-1.0, min(1.0, sum(values) / max(1, len(values)) / 0.002)), 4)
+            for symbol, values in grouped.items()
+        }
 
     def _detect_leads(self, current: list[VenueSnapshot]) -> list[LeadLagObservation]:
         by_symbol: dict[str, list[VenueSnapshot]] = {}
@@ -140,17 +153,11 @@ class MarketRadar:
                     )
         return observations
 
-    def pressure(self, snapshots: list[VenueSnapshot]) -> dict[str, float]:
-        """Return a descriptive cross-venue pressure score, not an order signal."""
-        grouped: dict[str, list[float]] = {}
-        for snap in snapshots:
-            prev = self.previous.get((snap.exchange, snap.symbol))
-            if prev and prev.price > 0:
-                grouped.setdefault(snap.symbol, []).append((snap.price - prev.price) / prev.price)
-        return {
-            symbol: round(max(-1.0, min(1.0, sum(values) / max(1, len(values)) / 0.002)), 4)
-            for symbol, values in grouped.items()
-        }
+    def pressure(self, snapshots: list[VenueSnapshot] | None = None) -> dict[str, float]:
+        """Return the latest descriptive pressure score, never an order signal."""
+        if snapshots is None:
+            return dict(self.last_pressure)
+        return self._pressure_from_previous(snapshots)
 
     def _persist(self, snapshots: list[VenueSnapshot], leads: list[LeadLagObservation]) -> None:
         path = self.data_dir / "observations.jsonl"
@@ -158,6 +165,7 @@ class MarketRadar:
             "local_ts_ms": int(time.time() * 1000),
             "snapshots": [asdict(x) for x in snapshots],
             "lead_lag": [asdict(x) for x in leads],
+            "pressure": dict(self.last_pressure),
         }
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
