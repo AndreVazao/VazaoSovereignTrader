@@ -1,0 +1,1 @@
+Fast path remains a controlled optimization layer. It does not predict markets by itself and it does not replace the Risk Engine.
