@@ -228,7 +228,14 @@ class WebSocketMarketRadar:
 
     def _to_symbol(self, symbol: str) -> str | None:
         normalized = symbol.upper().replace("-", "/")
-        return normalized if normalized in {s.upper() for s in self.symbols} else None
+        wanted = {s.upper() for s in self.symbols}
+        if normalized in wanted:
+            return normalized
+        compact = normalized.replace("/", "")
+        for configured in wanted:
+            if compact == configured.replace("/", ""):
+                return configured
+        return None
 
     @staticmethod
     def _parse_iso_ms(value: str | None, fallback: int) -> int:
