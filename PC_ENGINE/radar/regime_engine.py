@@ -28,7 +28,10 @@ class MarketRegimeEngine:
         if not returns:
             return MarketRegime("UNKNOWN", "FLAT", "UNKNOWN", 0.0)
         mean_return = fmean(returns)
-        volatility = (fmean([(x - mean_return) ** 2 for x in returns])) ** 0.5
+        # For return series, use RMS magnitude as the realized movement level.
+        # Unlike dispersion around the mean, this still marks a consistently
+        # directional high-magnitude regime as HIGH volatility.
+        volatility = (fmean([x * x for x in returns])) ** 0.5
         if mean_return > self.trend_threshold:
             trend = "UP"
         elif mean_return < -self.trend_threshold:
