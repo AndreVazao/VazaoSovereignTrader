@@ -21,7 +21,7 @@ class PaperConfluenceEngine(SovereignEngine):
 
         def analyse_with_confluence(symbol: str, ohlcv: list[list[float]], spread_pct: float = 0.0) -> Signal:
             signal = original_analyse(symbol, ohlcv, spread_pct)
-            if signal.action != "BUY" or not ohlcv:
+            if not ohlcv or signal.regime == "WARMUP":
                 return signal
             price = float(ohlcv[-1][4]) if len(ohlcv[-1]) >= 5 else 0.0
             if price <= 0:
@@ -43,7 +43,7 @@ class PaperConfluenceEngine(SovereignEngine):
                 "evidence": result.score.evidence,
                 "contradictions": result.score.contradictions,
             })
-            if result.score.action != "BUY":
+            if signal.action == "BUY" and result.score.action != "BUY":
                 return Signal(
                     "HOLD",
                     signal.regime,
