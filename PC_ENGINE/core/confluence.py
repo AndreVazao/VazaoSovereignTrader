@@ -8,6 +8,7 @@ from PC_ENGINE.radar.regime_engine import MarketRegime
 
 Action = Literal["BUY", "SELL", "HOLD"]
 
+
 @dataclass(frozen=True)
 class ConfluenceScore:
     symbol: str
@@ -25,20 +26,24 @@ class ConfluenceScore:
     mean_reversion_score: float = 0.0
     order_flow_score: float = 0.0
     breakout_score: float = 0.0
+    derivatives_score: float = 0.0
     paper_only: bool = True
+
 
 class ConfluenceEngine:
     """Combines independent evidence without authorizing orders."""
+
     DEFAULT_WEIGHTS = {
-        "technical": 0.25,
-        "candlestick": 0.10,
-        "radar": 0.10,
-        "lead_lag": 0.14,
+        "technical": 0.23,
+        "candlestick": 0.09,
+        "radar": 0.09,
+        "lead_lag": 0.13,
         "regime": 0.08,
         "momentum": 0.10,
         "mean_reversion": 0.06,
-        "order_flow": 0.10,
-        "breakout": 0.07,
+        "order_flow": 0.09,
+        "breakout": 0.06,
+        "derivatives": 0.07,
     }
 
     def __init__(self, settings: dict | None = None):
@@ -50,7 +55,9 @@ class ConfluenceEngine:
                 self.weights[key] = max(0.0, float(configured[key]))
         total = sum(self.weights.values()) or 1.0
         self.weights = {key: value / total for key, value in self.weights.items()}
-        self.action_threshold = abs(float(settings.get("action_threshold", 0.35)))
+        # Keep the action threshold compatible with the original evidence
+        # mix after adding new optional evidence sources.
+        self.action_threshold = abs(float(settings.get("action_threshold", 0.30)))
         self.minimum_independent_evidence = max(1, int(settings.get("minimum_independent_evidence", 2)))
         self.contradiction_penalty = min(1.0, max(0.0, float(settings.get("contradiction_penalty", 0.25))))
 
@@ -79,6 +86,7 @@ class ConfluenceEngine:
         mean_reversion_score: float = 0.0,
         order_flow_score: float = 0.0,
         breakout_score: float = 0.0,
+        derivatives_score: float = 0.0,
     ) -> ConfluenceScore:
         technical_score = self._clamp(technical_strength if technical_action == "BUY" else -technical_strength if technical_action == "SELL" else 0.0)
         candlestick_score = self._clamp(pattern_bias)
@@ -87,6 +95,7 @@ class ConfluenceEngine:
         mean_reversion_score = self._clamp(mean_reversion_score)
         order_flow_score = self._clamp(order_flow_score)
         breakout_score = self._clamp(breakout_score)
+        derivatives_score = self._clamp(derivatives_score)
         lead_lag_score = 0.0
         if lead_lag_signals:
             values: list[float] = []
@@ -104,15 +113,10 @@ class ConfluenceEngine:
             elif regime.trend == "DOWN":
                 regime_score = -min(1.0, regime.confidence)
         components = {
-            "technical": technical_score,
-            "candlestick": candlestick_score,
-            "radar": radar_score,
-            "lead_lag": lead_lag_score,
-            "regime": regime_score,
-            "momentum": momentum_score,
-            "mean_reversion": mean_reversion_score,
-            "order_flow": order_flow_score,
-            "breakout": breakout_score,
+            "technical": technical_score, "candlestick": candlestick_score, "radar": radar_score,
+            "lead_lag": lead_lag_score, "regime": regime_score, "momentum": momentum_score,
+            "mean_reversion": mean_reversion_score, "order_flow": order_flow_score,
+            "breakout": breakout_score, "derivatives": derivatives_score,
         }
         weighted = sum(self.weights[key] * value for key, value in components.items())
         directions = {key: self._direction(value) for key, value in components.items()}
@@ -123,10 +127,7 @@ class ConfluenceEngine:
             contradiction_count = min(positive, negative)
             weighted *= max(0.0, 1.0 - self.contradiction_penalty * contradiction_count)
             contradictions.append(f"evidências conflitantes: {positive} bullish vs {negative} bearish")
-        evidence = []
-        for key, value in components.items():
-            if abs(value) >= 0.10:
-                evidence.append(f"{key}={'bullish' if value > 0 else 'bearish'}:{value:.2f}")
+        evidence = [f"{key}={'bullish' if value > 0 else 'bearish'}:{value:.2f}" for key, value in components.items() if abs(value) >= 0.10]
         aligned_count = max(positive, negative)
         if aligned_count < self.minimum_independent_evidence:
             action: Action = "HOLD"
@@ -145,5 +146,5 @@ class ConfluenceEngine:
             radar_score=round(radar_score, 4), lead_lag_score=round(lead_lag_score, 4),
             regime_score=round(regime_score, 4), momentum_score=round(momentum_score, 4),
             mean_reversion_score=round(mean_reversion_score, 4), order_flow_score=round(order_flow_score, 4),
-            breakout_score=round(breakout_score, 4), paper_only=True,
+            breakout_score=round(breakout_score, 4), derivatives_score=round(derivatives_score, 4), paper_only=True,
         )

@@ -144,7 +144,7 @@ class WebSocketMarketRadar:
     def _persist(self, event: MarketEvent) -> None:
         path = self.data_dir / "websocket_events.jsonl"
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({"event": asdict(event)}, ensure_ascii=False) + "\n")
+            handle.write(json.dumps(asdict(event), ensure_ascii=False) + "\n")
 
     def _persist_lead_lag(self, lead: LeadLagEvent) -> None:
         path = self.data_dir / "websocket_lead_lag.jsonl"
@@ -228,7 +228,14 @@ class WebSocketMarketRadar:
 
     def _to_symbol(self, symbol: str) -> str | None:
         normalized = symbol.upper().replace("-", "/")
-        return normalized if normalized in {s.upper() for s in self.symbols} else None
+        wanted = {s.upper() for s in self.symbols}
+        if normalized in wanted:
+            return normalized
+        compact = normalized.replace("/", "")
+        for configured in wanted:
+            if compact == configured.replace("/", ""):
+                return configured
+        return None
 
     @staticmethod
     def _parse_iso_ms(value: str | None, fallback: int) -> int:

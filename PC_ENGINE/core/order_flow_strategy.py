@@ -58,9 +58,11 @@ class OrderFlowStrategy:
             return OrderFlowEvidence("HOLD", 0.0, 0.0, buy, sell, 0.0, trades, "order flow insuficiente")
 
         imbalance = (buy - sell) / total
-        if abs(imbalance) < self.min_imbalance or abs(imbalance) > self.max_imbalance:
-            return OrderFlowEvidence("HOLD", 0.0, 0.0, buy, sell, imbalance, trades, "imbalance fora da faixa útil")
+        if abs(imbalance) < self.min_imbalance:
+            return OrderFlowEvidence("HOLD", 0.0, 0.0, buy, sell, imbalance, trades, "imbalance abaixo do mínimo")
 
+        # max_imbalance is a score saturation point, not a rejection boundary:
+        # an extreme imbalance is stronger evidence, not invalid evidence.
         score = max(-1.0, min(1.0, imbalance / self.max_imbalance))
         action: Action = "BUY" if score >= self.min_imbalance / self.max_imbalance else "SELL" if score <= -self.min_imbalance / self.max_imbalance else "HOLD"
         confidence = min(1.0, 0.5 * abs(score) + 0.5 * min(1.0, trades / (self.min_trades * 4)))
