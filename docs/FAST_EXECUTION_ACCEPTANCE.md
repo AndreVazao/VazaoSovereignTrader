@@ -1,0 +1,1 @@
+Acceptance criteria: fast path must remain deterministic, bounded, risk-gated, observable and incapable of placing an order without an explicitly supplied executor.

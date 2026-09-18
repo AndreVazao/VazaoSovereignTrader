@@ -1,0 +1,1 @@
+Scope of this branch: fast decision and safe executor boundary only. No automatic REAL authorization and no direct exchange credentials are added.

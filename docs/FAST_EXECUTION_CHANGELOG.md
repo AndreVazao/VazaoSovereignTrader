@@ -1,0 +1,1 @@
+2026-09-15: added guarded fast execution router, latency metrics, safety boundary and tests.

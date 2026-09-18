@@ -1,0 +1,1 @@
+The fast execution boundary is validated with unit tests for fresh signals, stale events, risk rejection, explicit executor behavior, and metrics.

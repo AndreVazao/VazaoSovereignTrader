@@ -13,6 +13,14 @@
     "paper_starting_balance": 1000.0,
     "preflight_required": true
   },
+  "fast_path": {
+    "enabled": false,
+    "allow_real": false,
+    "min_confidence": 0.75,
+    "min_expectancy_bps": 2.0,
+    "max_signal_age_ms": 1000,
+    "notes": "Fast Path is disabled by default. It never bypasses Risk Engine or Order Manager. REAL requires a separate reviewed execution policy."
+  },
   "real_readiness": {
     "data_dir": "PC_ENGINE/data/radar",
     "min_state_samples": 1000,

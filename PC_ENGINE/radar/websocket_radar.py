@@ -44,6 +44,9 @@ class WebSocketMarketRadar:
 
     Observation-only: no authentication, private account data or orders.
     Current native public adapters are Binance, Coinbase and OKX spot trades.
+
+    The optional callback is deliberately invoked before disk persistence so
+    the Fast Path is not delayed by JSONL I/O on the opportunity tick.
     """
 
     ENDPOINTS = {
@@ -106,9 +109,13 @@ class WebSocketMarketRadar:
                     self._last_move[key] = event
 
         self._match_candidate(event, previous_moves)
-        self._persist(event)
         if self.callback:
-            self.callback(event)
+            try:
+                self.callback(event)
+            except Exception:
+                # A consumer must never kill the public market-data loop.
+                pass
+        self._persist(event)
 
     def _match_candidate(self, event: MarketEvent, previous_moves: list[tuple[tuple[str, str], MarketEvent]]) -> None:
         if event.price_before is None or event.price_before <= 0:

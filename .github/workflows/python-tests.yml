@@ -16,6 +16,13 @@ jobs:
           - tests/test_candlestick_patterns.py
           - tests/test_confluence.py
           - tests/test_derivatives_radar.py
+          - tests/test_fast_path_bridge.py
+          - tests/test_fast_path_config.py
+          - tests/test_fast_path_executor.py
+          - tests/test_fast_path_metrics.py
+          - tests/test_fast_path_metrics_smoke.py
+          - tests/test_fast_path_router.py
+          - tests/test_fast_path_router_smoke.py
           - tests/test_lead_lag_learning.py
           - tests/test_market_radar.py
           - tests/test_multi_strategy.py
@@ -27,6 +34,7 @@ jobs:
           - tests/test_regime_engine.py
           - tests/test_regime_validation.py
           - tests/test_state_outcomes.py
+          - tests/test_state_outcomes_performance.py
           - tests/test_websocket_persistence.py
           - tests/test_websocket_radar.py
           - tests/test_walk_forward.py

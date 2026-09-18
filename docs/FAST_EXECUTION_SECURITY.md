@@ -1,0 +1,1 @@
+Security rule: FastExecutionRouter cannot send an order unless an executor is explicitly supplied by the caller. The caller is responsible for normal Risk Engine, operating mode and RealModeGuard authorization.
