@@ -10,10 +10,9 @@ from typing import Any
 class MarketEvent:
     """Normalized market event with an explicit timing chain.
 
-    Timestamps are integer nanoseconds from the local monotonic clock except
-    provider/exchange timestamps, which preserve the venue's reported epoch
-    milliseconds. Browser/render time is intentionally optional and never
-    treated as authoritative market time.
+    Local elapsed timing uses the monotonic clock. Venue/provider timestamps
+    remain epoch milliseconds. Local wall-clock receive time bridges those
+    domains for calibration and is never treated as authoritative market time.
     """
 
     event_id: str
@@ -24,6 +23,7 @@ class MarketEvent:
     provider_ts_ms: int | None
     exchange_ts_ms: int | None
     local_receive_ns: int
+    local_receive_wall_ns: int
     local_process_ns: int
     browser_render_ns: int | None
     price: float | None
@@ -59,9 +59,11 @@ class MarketEventFactory:
         raw_source: str = "api",
         browser_render_ns: int | None = None,
         receive_ns: int | None = None,
+        receive_wall_ns: int | None = None,
         process_ns: int | None = None,
     ) -> MarketEvent:
         receive = time.monotonic_ns() if receive_ns is None else receive_ns
+        receive_wall = time.time_ns() if receive_wall_ns is None else receive_wall_ns
         process = time.monotonic_ns() if process_ns is None else process_ns
         if process < receive:
             raise ValueError("process_ns cannot be earlier than receive_ns")
@@ -74,6 +76,7 @@ class MarketEventFactory:
             provider_ts_ms=provider_ts_ms,
             exchange_ts_ms=exchange_ts_ms,
             local_receive_ns=receive,
+            local_receive_wall_ns=receive_wall,
             local_process_ns=process,
             browser_render_ns=browser_render_ns,
             price=price,
