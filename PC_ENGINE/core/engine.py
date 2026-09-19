@@ -165,7 +165,9 @@ class SovereignEngine:
         self.log("ENGINE_STARTED", {"mode": self.mode})
 
     def run_preflight(self) -> dict:
-        checker = PreflightChecker(self.config, self.rules)
+        runtime_config = dict(self.config)
+        runtime_config["mode"] = self.mode
+        checker = PreflightChecker(runtime_config, self.rules)
         result = checker.run(self.exchanges)
         payload = {"ok": result.ok, "errors": result.errors, "warnings": result.warnings}
         with self.lock:
