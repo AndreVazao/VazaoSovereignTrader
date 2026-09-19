@@ -23,6 +23,26 @@ jobs:
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --paths . PC_ENGINE/main.py
+      - name: EXE smoke test
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force test-runtime\config | Out-Null
+          Copy-Item PC_ENGINE\config\config.example.json test-runtime\config\config.example.json
+          $proc = Start-Process -FilePath dist\VazaoSovereignTrader.exe -WorkingDirectory (Resolve-Path test-runtime) -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/health -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch {}
+            }
+            if (-not $ready) { throw "EXE health endpoint did not become ready" }
+          } finally {
+            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+
       - name: Package
         shell: pwsh
         run: |
@@ -31,6 +51,7 @@ jobs:
           New-Item -ItemType Directory -Force release\config | Out-Null
           Copy-Item PC_ENGINE\config\config.example.json release\config\
           Copy-Item README.md release\
+          Copy-Item scripts\windows_run_paper_dashboard.bat release\
           Compress-Archive -Path release\* -DestinationPath VazaoSovereignTrader-Windows.zip -Force
       - uses: actions/upload-artifact@v4
         with:
