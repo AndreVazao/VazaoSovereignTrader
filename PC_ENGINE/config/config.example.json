@@ -26,8 +26,6 @@
     "min_state_samples": 1000,
     "min_outcome_samples": 1000,
     "min_eligible_outcomes": 1,
-    "min_state_samples": 1000,
-    "min_outcome_samples": 1000,
     "notes": "Missing validation artifacts block protected REAL review. This section never authorizes orders."
   },
   "real_mode_guard": {
@@ -78,7 +76,11 @@
     "lead_window_ms": 750,
     "learning_interval_cycles": 12,
     "learning_state_limit": 5000,
-    "learning_horizons_ms": [5000, 15000, 60000],
+    "learning_horizons_ms": [
+      5000,
+      15000,
+      60000
+    ],
     "learning_min_samples": 30,
     "learning_cost_bps": 28,
     "learning_path": "PC_ENGINE/data/radar/state_signature_learning.jsonl",
@@ -201,5 +203,13 @@
     "consensus_max_bonus": 0.06,
     "consensus_min_outcome_samples": 30,
     "notes": "PAPER advisory ranking only. Learning never bypasses Risk Engine, RealModeGuard or Order Manager."
+  },
+  "browser": {
+    "enabled": false,
+    "headless": false,
+    "profile_dir": "PC_ENGINE/data/browser/profiles",
+    "timeout_ms": 15000,
+    "platforms": {},
+    "notes": "Browser execution is disabled by default. Add platform-specific selectors only to config.local.json. Never commit sessions, cookies, credentials or live selectors."
   }
 }
