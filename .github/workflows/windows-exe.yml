@@ -2,6 +2,8 @@ name: Windows EXE
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "pc-v*"
 jobs:
