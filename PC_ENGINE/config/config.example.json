@@ -80,6 +80,7 @@
     "learning_min_samples": 30,
     "learning_cost_bps": 28,
     "learning_path": "PC_ENGINE/data/radar/state_signature_learning.jsonl",
+    "outcome_path": "PC_ENGINE/data/radar/state_outcomes.jsonl",
     "notes": "The PAPER collector continuously records public market states and refreshes descriptive signature learning. Radar remains observational-only and cannot create or execute orders."
   },
   "candlestick": {

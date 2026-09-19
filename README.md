@@ -123,6 +123,8 @@ O motor PAPER inclui assinaturas hierárquicas de Market State para aprender pad
 
 O artefacto é `PC_ENGINE/data/radar/state_signature_learning.jsonl`.
 
+A mesma recolha também produz `PC_ENGINE/data/radar/state_outcomes.jsonl`, com resultados por símbolo, ação e regime depois de custos. Este segundo artefacto serve como validação independente da aprendizagem por assinatura e ajuda a detetar divergências entre padrões de estado e resultado agregado.
+
 ## CI
 
 A suíte passou de 25 jobs por ficheiro para um job único que executa todos os testes. Isto reduz ruído e emails quando existe falha de infraestrutura. Runs antigos da mesma branch são cancelados automaticamente.
