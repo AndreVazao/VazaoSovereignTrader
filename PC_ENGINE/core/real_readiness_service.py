@@ -13,6 +13,9 @@ class RealReadinessService:
         readiness = config.get("real_readiness", {})
         self.data_dir = Path(readiness.get("data_dir", "PC_ENGINE/data/radar"))
         self.gate = RealReadinessGate()
+        self.min_state_samples = max(1, int(readiness.get("min_state_samples", 1000)))
+        self.min_outcome_samples = max(1, int(readiness.get("min_outcome_samples", 1000)))
+        self.min_eligible_outcomes = max(1, int(readiness.get("min_eligible_outcomes", 1)))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -63,6 +66,9 @@ class RealReadinessService:
             recovery_ok=recovery_ok,
             execution_test_ok=self._validation_status(validation_dir / "execution_test.json"),
             critical_errors=critical_errors,
+            min_state_samples=self.min_state_samples,
+            min_outcome_samples=self.min_outcome_samples,
+            min_eligible_outcomes=self.min_eligible_outcomes,
         )
         payload = report.to_dict()
         payload["evidence"] = {
@@ -70,9 +76,9 @@ class RealReadinessService:
             "outcome_rows": len(outcomes),
             "outcome_samples": outcome_samples,
             "eligible_outcomes": eligible,
-            "required_market_state_rows": 1000,
-            "required_outcome_samples": 1000,
-            "required_eligible_outcomes": 1,
+            "required_market_state_rows": self.min_state_samples,
+            "required_outcome_samples": self.min_outcome_samples,
+            "required_eligible_outcomes": self.min_eligible_outcomes,
             "data_dir": str(self.data_dir),
         }
         return payload
