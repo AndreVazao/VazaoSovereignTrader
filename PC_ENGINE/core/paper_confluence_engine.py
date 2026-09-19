@@ -32,6 +32,13 @@ class PaperConfluenceEngine(SovereignEngine):
             price = float(ohlcv[-1][4]) if len(ohlcv[-1]) >= 5 else 0.0
             if price <= 0:
                 return signal
+
+            # The continuous PAPER collector is the canonical MarketState writer.
+            # Keep the execution-time confluence calculation, but avoid recording
+            # a second identical state in the learning store.
+            collector_running = bool(
+                self.paper_collector and self.paper_collector.snapshot().get("running")
+            )
             result = self.confluence_runtime.evaluate_and_record(
                 symbol=symbol,
                 price=price,
@@ -40,6 +47,7 @@ class PaperConfluenceEngine(SovereignEngine):
                 technical_strength=signal.strength,
                 pattern_bias=signal.pattern_bias,
                 radar_pressure=0.0,
+                record_state=not collector_running,
             )
             self.log("CONFLUENCE_PAPER", {
                 "symbol": symbol,
@@ -48,6 +56,7 @@ class PaperConfluenceEngine(SovereignEngine):
                 "confidence": result.score.confidence,
                 "evidence": result.score.evidence,
                 "contradictions": result.score.contradictions,
+                "state_recorded": result.recorded,
             })
             if signal.action == "BUY" and result.score.action != "BUY":
                 return Signal(
