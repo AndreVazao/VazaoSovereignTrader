@@ -4,12 +4,12 @@ package.name = vazaosovereigntrader
 package.domain = pt.andrevazao
 source.dir = .
 source.include_exts = py,json,png
-version = 0.1.0
+version = 0.2.0
 requirements = python3,kivy,requests
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET
-android.api = 33
+android.api = 35
 android.minapi = 24
 android.archs = arm64-v8a
 
