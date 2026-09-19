@@ -167,8 +167,8 @@ class L2MicrostructureReplay:
             sell_full_fills=sum(s.sell_filled_qty >= s.sell_requested_qty for s in samples),
             sell_partials=sum(0 < s.sell_filled_qty < s.sell_requested_qty for s in samples),
             average_spread_bps=avg([s.spread_bps for s in samples if s.spread_bps is not None]),
-            average_buy_impact_bps=avg([s for s in [x.buy_vwap for x in samples] if s is not None]),
-            average_sell_impact_bps=avg([s for s in [x.sell_vwap for x in samples] if s is not None]),
+            average_buy_impact_bps=avg([(x.buy_vwap / x.mid_price - 1.0) * 10_000.0 for x in samples if x.buy_vwap is not None and x.mid_price is not None]),
+            average_sell_impact_bps=avg([(1.0 - x.sell_vwap / x.mid_price) * 10_000.0 for x in samples if x.sell_vwap is not None and x.mid_price is not None]),
             started_at=started,
             finished_at=time.time(),
             notes=[
