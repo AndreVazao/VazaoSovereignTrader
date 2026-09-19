@@ -113,3 +113,16 @@ Nas exchanges, cria API keys com:
 - Futures/leverage: desligado no início
 
 Nunca faças commit de `config.local.json`, `.env`, `*.keystore`, `data/`, `logs/` ou ficheiros com secrets.
+
+
+## State Signature Learning
+
+O motor PAPER inclui assinaturas hierárquicas de Market State para aprender padrões sem explosão combinatória. A aprendizagem é descritiva e nunca autoriza REAL.
+
+`python PC_ENGINE/tools/run_state_signature_learning.py`
+
+O artefacto é `PC_ENGINE/data/radar/state_signature_learning.jsonl`.
+
+## CI
+
+A suíte passou de 25 jobs por ficheiro para um job único que executa todos os testes. Isto reduz ruído e emails quando existe falha de infraestrutura. Runs antigos da mesma branch são cancelados automaticamente.
