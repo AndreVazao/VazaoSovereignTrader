@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_DIR = ROOT / "config"
-DATA_DIR = ROOT / "data"
+# Frozen EXE runs with its writable runtime beside the executable; source mode uses PC_ENGINE.
+RUNTIME_ROOT = Path(os.path.dirname(os.path.abspath(sys.executable))) if getattr(sys, "frozen", False) else ROOT
+CONFIG_DIR = RUNTIME_ROOT / "config"
+DATA_DIR = RUNTIME_ROOT / "data"
 LOG_DIR = DATA_DIR / "logs"
 CONFIG_LOCAL = CONFIG_DIR / "config.local.json"
 CONFIG_EXAMPLE = CONFIG_DIR / "config.example.json"
