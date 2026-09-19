@@ -148,3 +148,20 @@ O cockpit Android inclui:
 - estado, equity, P&L, drawdown, watchdog e logs.
 
 O workflow .github/workflows/android-apk.yml cria um APK debug como artefacto quando executado manualmente ou quando é criado um tag mobile-v*.
+
+
+## Prontidão PC + móvel
+
+A camada de aprendizagem PAPER agora cruza dois sinais independentes: assinatura hierárquica do Market State e outcomes agregados por símbolo/regime/ação. O consenso só acrescenta um pequeno bónus descritivo quando ambos confirmam o mesmo contexto.
+
+Para preparar um PC Windows novo:
+
+```powershell
+.scriptssetup_windows.ps1
+.scriptsconfigure_windows_secrets.ps1
+# abrir uma nova PowerShell
+.scriptserify_pc_install.ps1
+.scriptsinstall_windows_autostart.ps1
+```
+
+O cockpit Android usa a mesma API autenticada, testa a ligação, mostra readiness e permite controlar o PC à distância. A ligação remota recomendada é Tailscale; a porta 8765 não deve ser exposta por port-forward.
