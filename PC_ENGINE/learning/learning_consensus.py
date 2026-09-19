@@ -29,8 +29,8 @@ class PaperLearningConsensus:
         self.learning_path = Path(settings.get("learning_path", str(data_dir / "state_signature_learning.jsonl")))
         self.outcome_path = Path(settings.get("outcome_path", str(data_dir / "state_outcomes.jsonl")))
         self.horizon_ms = max(1000, int(settings.get("horizon_ms", 5000)))
-        self.max_bonus = max(0.0, min(0.10, float(settings.get("max_bonus", 0.06))))
-        self.min_outcome_samples = max(1, int(settings.get("min_outcome_samples", 30)))
+        self.max_bonus = max(0.0, min(0.10, float(settings.get("consensus_max_bonus", settings.get("max_bonus", 0.06)))))
+        self.min_outcome_samples = max(1, int(settings.get("consensus_min_outcome_samples", settings.get("min_outcome_samples", 30))))
         self._learning_mtime = -1.0
         self._outcome_mtime = -1.0
         self._learning: list[SignatureStat] = []
