@@ -40,6 +40,12 @@ class OrderBookBuilderTests(unittest.TestCase):
         self.assertEqual(book.bids[0].quantity, 1)
         self.assertEqual(book.asks[0].quantity, 2)
 
+    def test_sequence_gap_stales_book(self) -> None:
+        builder = OrderBookBuilder("test", "BTC/USDT")
+        builder.apply(self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),)))
+        self.assertIsNone(builder.apply(self.event("delta", 12, bids=(OrderBookLevel(101, 1),))))
+        self.assertTrue(builder.stale)
+
     def test_old_sequence_stales_book(self) -> None:
         builder = OrderBookBuilder("test", "BTC/USDT")
         builder.apply(self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),)))
