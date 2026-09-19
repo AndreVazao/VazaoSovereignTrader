@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import asdict
 
 from PC_ENGINE.replay.microstructure_replay import MicrostructureReplay, MicrostructureReplayConfig
 
