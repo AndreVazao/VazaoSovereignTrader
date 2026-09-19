@@ -23,6 +23,8 @@ class HumanInteractionRequest:
     updated_at: float
 
 class HumanInteractionBridge:
+    _RAM_RESPONSES: dict[str, dict[str, Any]] = {}
+    _RAM_LOCK = threading.RLock()
     """Durable control-plane for human web interactions.
 
     Request metadata is persisted so PC/mobile can disconnect independently.
@@ -32,7 +34,6 @@ class HumanInteractionBridge:
         self.root = Path(data_dir)
         self.root.mkdir(parents=True, exist_ok=True)
         self.requests_path = self.root / "requests.jsonl"
-        self._responses: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
 
     def create_request(self, platform: str, kind: str, title: str, message: str, *, url: str | None = None, screenshot_path: str | None = None, fields: list[dict[str, Any]] | None = None) -> HumanInteractionRequest:
@@ -56,12 +57,13 @@ class HumanInteractionBridge:
             item.updated_at = time.time()
             self._append(item)
             # Sensitive values are intentionally RAM-only.
-            self._responses[request_id] = {"action": action, "values": values, "received_at": item.updated_at}
+            with self._RAM_LOCK:
+                self._RAM_RESPONSES[self._response_key(request_id)] = {"action": action, "values": values, "received_at": item.updated_at}
             return True
 
     def consume_response(self, request_id: str) -> dict[str, Any] | None:
-        with self._lock:
-            return self._responses.pop(request_id, None)
+        with self._RAM_LOCK:
+            return self._RAM_RESPONSES.pop(self._response_key(request_id), None)
 
     def cancel(self, request_id: str) -> bool:
         with self._lock:
@@ -75,7 +77,10 @@ class HumanInteractionBridge:
 
     def snapshot(self) -> dict[str, Any]:
         latest = self._latest()
-        return {"pending": sum(x.status == "PENDING" for x in latest.values()), "responded_waiting_pc": len(self._responses), "requests": [asdict(x) for x in latest.values() if x.status in {"PENDING", "RESPONDED"}]}
+        return {"pending": sum(x.status == "PENDING" for x in latest.values()), "responded_waiting_pc": sum(1 for k in self._RAM_RESPONSES if k.startswith(str(self.root.resolve()) + ":")), "requests": [asdict(x) for x in latest.values() if x.status in {"PENDING", "RESPONDED"}]}
+
+    def _response_key(self, request_id: str) -> str:
+        return f"{self.root.resolve()}:{request_id}"
 
     def _append(self, item: HumanInteractionRequest) -> None:
         with self.requests_path.open("a", encoding="utf-8") as handle:
