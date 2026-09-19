@@ -18,7 +18,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     guard = RealModeGuard(engine.config.get("real_mode_guard", {}))
 
     def require_token() -> None:
-        expected = env_value(token_env, "change-this-local-token")
+        expected = env_value(token_env, "")
         provided = request.headers.get("X-Token", "")
         if not expected or not hmac.compare_digest(provided, expected):
             raise PermissionError("unauthorized")
