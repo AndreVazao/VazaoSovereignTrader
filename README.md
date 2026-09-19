@@ -164,3 +164,27 @@ Para preparar um PC Windows novo:
 ```
 
 O cockpit Android usa a mesma API autenticada, testa a ligação, mostra readiness e permite controlar o PC à distância. A ligação remota recomendada é Tailscale; a porta 8765 não deve ser exposta por port-forward.
+
+
+## Browser Execution
+
+O Trader inclui agora uma camada isolada para plataformas que só funcionam por browser.
+
+- Chromium/Playwright com perfil persistente por plataforma.
+- Login inicial manual e reutilização da sessão local.
+- Dry-run: prepara a ordem sem a submeter.
+- Live browser trading bloqueado por defeito.
+- Confirmação explícita para permitir envio real.
+- Auditoria JSONL de todas as tentativas.
+- Screenshot de evidência em erros.
+- Configuração específica da plataforma fica fora do código do motor.
+
+Documentação: `docs/BROWSER_AUTOMATION.md`.
+
+Instalação do runtime Chromium:
+
+```
+python -m playwright install chromium
+```
+
+A camada browser não contorna CAPTCHA, 2FA, anti-bot ou outros mecanismos de segurança da plataforma.
