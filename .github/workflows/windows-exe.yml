@@ -28,7 +28,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item dist\VazaoSovereignTrader.exe release\
-          Copy-Item PC_ENGINE\config\config.example.json release\
+          New-Item -ItemType Directory -Force release\config | Out-Null
+          Copy-Item PC_ENGINE\config\config.example.json release\config\
           Copy-Item README.md release\
           Compress-Archive -Path release\* -DestinationPath VazaoSovereignTrader-Windows.zip -Force
       - uses: actions/upload-artifact@v4
