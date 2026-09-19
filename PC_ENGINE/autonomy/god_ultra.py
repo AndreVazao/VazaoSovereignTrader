@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from time import monotonic_ns
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 
 @dataclass(frozen=True)
@@ -47,11 +47,9 @@ class ExecutionIntent:
 
 
 class GodUltraEngine:
-    """Fast-path opportunity selector.
+    """Fast-path opportunity selector with executable-L2 safety gates.
 
-    This layer deliberately produces execution intents, not exchange orders.
-    A real executor must consume the intents only after the project's existing
-    Risk Engine and Real Mode Guard approve the operation.
+    Produces intents only. It never sends exchange orders.
     """
 
     def __init__(
@@ -60,6 +58,9 @@ class GodUltraEngine:
         min_confidence: float = 0.75,
         min_expectancy_bps: float = 2.0,
         max_signal_age_ms: float = 250.0,
+        max_execution_impact_bps: float = 50.0,
+        min_fill_ratio: float = 0.95,
+        max_book_age_ms: float = 250.0,
         max_parallel_orders: int = 4,
         reserve_cash_pct: float = 0.20,
         max_single_opportunity_pct: float = 0.10,
@@ -67,11 +68,17 @@ class GodUltraEngine:
         self.min_confidence = min_confidence
         self.min_expectancy_bps = min_expectancy_bps
         self.max_signal_age_ms = max_signal_age_ms
+        self.max_execution_impact_bps = max_execution_impact_bps
+        self.min_fill_ratio = min(1.0, max(0.0, min_fill_ratio))
+        self.max_book_age_ms = max(0.0, max_book_age_ms)
         self.max_parallel_orders = max_parallel_orders
         self.reserve_cash_pct = reserve_cash_pct
         self.max_single_opportunity_pct = max_single_opportunity_pct
 
     def eligible(self, opportunity: Opportunity) -> bool:
+        impact = opportunity.metadata.get("execution_impact_bps")
+        fill_ratio = opportunity.metadata.get("fill_ratio")
+        book_age = opportunity.metadata.get("book_age_ms")
         return (
             opportunity.expected_edge_bps >= self.min_expectancy_bps
             and opportunity.confidence >= self.min_confidence
@@ -82,6 +89,9 @@ class GodUltraEngine:
             and opportunity.out_of_sample
             and opportunity.required_capital > 0
             and opportunity.liquidity_capital > 0
+            and (impact is None or float(impact) <= self.max_execution_impact_bps)
+            and (fill_ratio is None or float(fill_ratio) >= self.min_fill_ratio)
+            and (book_age is None or float(book_age) <= self.max_book_age_ms)
         )
 
     def select(self, opportunities: Iterable[Opportunity], risk: RiskSnapshot) -> List[ExecutionIntent]:
@@ -93,8 +103,6 @@ class GodUltraEngine:
             return []
 
         eligible = [o for o in opportunities if self.eligible(o)]
-        # Highest expected edge per unit of capital first, while keeping the
-        # execution set diversified across independent opportunity groups.
         eligible.sort(
             key=lambda o: (o.expected_edge_bps / max(o.required_capital, 1e-9), o.confidence),
             reverse=True,
