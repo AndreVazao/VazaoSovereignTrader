@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hmac
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, send_file
 
 from PC_ENGINE.api.dashboard import DASHBOARD_HTML
 from PC_ENGINE.core.config import env_value
@@ -10,12 +10,14 @@ from PC_ENGINE.core.engine import SovereignEngine
 from PC_ENGINE.core.real_mode_guard import RealModeGuard
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
 from PC_ENGINE.tools.run_readiness_pipeline import run as run_readiness_pipeline
+from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
     app = Flask(__name__)
     readiness = RealReadinessService(engine.config)
     guard = RealModeGuard(engine.config.get("real_mode_guard", {}))
+    human_bridge = HumanInteractionBridge(engine.config.get("human_bridge", {}).get("data_dir", "PC_ENGINE/data/human_bridge"))
 
     def require_token() -> None:
         expected = env_value(token_env, "")
@@ -59,6 +61,56 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         except Exception as exc:
             return jsonify({"ok": False, "error": f"readiness_pipeline_failed: {exc}"}), 500
         return jsonify({"ok": True, "result": result, "readiness": readiness.collect(engine)})
+
+    @app.get("/human-interaction/pending")
+    def human_interaction_pending():
+        require_token()
+        return jsonify(human_bridge.snapshot())
+
+    @app.post("/human-interaction/request")
+    def human_interaction_request():
+        require_token()
+        payload = request.get_json(force=True) or {}
+        item = human_bridge.create_request(
+            str(payload.get("platform", "browser")),
+            str(payload.get("kind", "CUSTOM")),
+            str(payload.get("title", "Intervenção necessária")),
+            str(payload.get("message", "")),
+            url=payload.get("url"),
+            screenshot_path=payload.get("screenshot_path"),
+            fields=payload.get("fields") or [],
+        )
+        return jsonify({"ok": True, "request": item.__dict__})
+
+    @app.post("/human-interaction/respond")
+    def human_interaction_respond():
+        require_token()
+        payload = request.get_json(force=True) or {}
+        request_id = str(payload.get("request_id", ""))
+        values = payload.get("values") or {}
+        if not isinstance(values, dict):
+            return jsonify({"ok": False, "error": "values_must_be_object"}), 400
+        ok = human_bridge.respond(request_id, action=str(payload.get("action", "fill")), values=values)
+        return jsonify({"ok": ok}), (200 if ok else 404)
+
+    @app.post("/human-interaction/cancel")
+    def human_interaction_cancel():
+        require_token()
+        request_id = str((request.get_json(force=True) or {}).get("request_id", ""))
+        ok = human_bridge.cancel(request_id)
+        return jsonify({"ok": ok}), (200 if ok else 404)
+
+    @app.get("/human-interaction/screenshot/<request_id>")
+    def human_interaction_screenshot(request_id: str):
+        require_token()
+        item = next((x for x in human_bridge.pending() if x.get("request_id") == request_id), None)
+        if not item or not item.get("screenshot_path"):
+            return jsonify({"ok": False, "error": "screenshot_not_available"}), 404
+        path = item["screenshot_path"]
+        try:
+            return send_file(path, mimetype="image/png", max_age=0)
+        except (OSError, ValueError):
+            return jsonify({"ok": False, "error": "screenshot_unavailable"}), 404
 
     @app.post("/real/arm")
     def real_arm():
