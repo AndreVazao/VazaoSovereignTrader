@@ -28,3 +28,10 @@ O telefone não guarda chaves de exchange nem executa trades; é cockpit de coma
 ## Regras de operação
 
 PAPER primeiro. REAL só depois de validação estatística, replay/PAPER e revisão do Risk Engine.
+
+
+## Ponte de intervenção humana
+
+O PC e o telefone são independentes. Se o PC encontrar um login, 2FA/OTP, CAPTCHA ou outra barreira humana, cria um pedido persistente no Human Interaction Bridge. Quando o telefone estiver disponível através da Tailscale, mostra o pedido e envia a intervenção de volta ao PC.
+
+A fila de pedidos é persistente, mas dados sensíveis não são: passwords, OTPs e outros segredos enviados pelo telefone ficam apenas em RAM no processo do PC até serem consumidos. O browser mantém a sessão local no PC. CAPTCHA/2FA são sempre intervenção humana normal, sem bypass.

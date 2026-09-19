@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .manager import BrowserManager
+from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
 
 
 @dataclass
@@ -43,6 +44,7 @@ class BrowserTradingConnector:
             f"PC_ENGINE/data/browser/{platform}_actions.jsonl",
         ))
         self.actions_path.parent.mkdir(parents=True, exist_ok=True)
+        self.human_bridge = HumanInteractionBridge(config.get("human_bridge_data_dir", "PC_ENGINE/data/human_bridge"))
 
     def open(self) -> dict[str, Any]:
         if not self.enabled:
@@ -51,6 +53,9 @@ class BrowserTradingConnector:
         if not url:
             raise RuntimeError(f"missing trading_url/login_url for {self.platform}")
         page = self.manager.page(self.platform, url)
+        interaction = self._detect_human_gate(page)
+        if interaction:
+            return {"ok": False, "status": "human_action_required", "request": interaction}
         return {"ok": True, "url": page.url, "title": page.title()}
 
     def market_buy(self, symbol: str, quantity: float, *, confirmation: str = "", live: bool = False) -> dict[str, Any]:
@@ -67,6 +72,9 @@ class BrowserTradingConnector:
 
         page = self.manager.page(self.platform, self.config.get("trading_url"))
         selectors = self.config.get("selectors", {})
+        interaction = self._detect_human_gate(page)
+        if interaction:
+            return self._finish(action_id, side, symbol, quantity, "human_action_required", f"human interaction request {interaction['request_id']}")
         try:
             self._fill_symbol(page, selectors, symbol)
             self._fill_quantity(page, selectors, quantity)
@@ -86,6 +94,60 @@ class BrowserTradingConnector:
         except Exception as exc:
             self._capture(page, action_id)
             return self._finish(action_id, side, symbol, quantity, "error", str(exc))
+
+    def resume_human_interaction(self, request_id: str) -> dict[str, Any]:
+        response = self.human_bridge.consume_response(request_id)
+        if not response:
+            return {"ok": False, "status": "waiting"}
+        page = self.manager.page(self.platform, self.config.get("trading_url"))
+        action = response.get("action", "fill")
+        values = response.get("values", {})
+        selectors = self.config.get("selectors", {})
+        if action == "click":
+            page.mouse.click(float(values["x"]), float(values["y"]))
+        elif action == "type":
+            page.keyboard.type(str(values.get("text", "")))
+        elif action == "press":
+            page.keyboard.press(str(values.get("key", "Enter")))
+        else:
+            for name, value in values.items():
+                selector = selectors.get(f"{name}_input") or selectors.get(name)
+                if selector:
+                    page.locator(str(selector)).first.fill(str(value))
+        return {"ok": True, "status": "applied", "action": action}
+
+    def _detect_human_gate(self, page: Any) -> dict[str, Any] | None:
+        settings = self.config.get("human_interaction", {})
+        if not bool(settings.get("enabled", True)):
+            return None
+        url = (page.url or "").lower()
+        try:
+            text = page.locator("body").inner_text(timeout=1000).lower()
+        except Exception:
+            text = ""
+        captcha = any(x in text or x in url for x in ("captcha", "verify you are human", "robot check"))
+        otp = any(x in text or x in url for x in ("two-factor", "2fa", "one-time password", "verification code", "security code"))
+        login = any(x in url for x in ("/login", "/signin", "/sign-in", "/auth"))
+        if not (captcha or otp or login):
+            return None
+        kind = "CAPTCHA" if captcha else ("OTP" if otp else "LOGIN")
+        title = {"CAPTCHA": "CAPTCHA / verificação humana", "OTP": "Código de segurança / 2FA", "LOGIN": "Login necessário"}[kind]
+        fields = settings.get("fields", [])
+        if not fields:
+            fields = ([{"name": "username", "type": "text", "label": "Utilizador"}, {"name": "password", "type": "secret", "label": "Password"}] if kind == "LOGIN" else ([{"name": "otp", "type": "secret", "label": "Código"}] if kind == "OTP" else []))
+        screenshot_dir = Path(self.config.get("evidence_dir", "PC_ENGINE/data/browser/evidence"))
+        screenshot_dir.mkdir(parents=True, exist_ok=True)
+        path = screenshot_dir / f"{self.platform}_human_{int(time.time()*1000)}.png"
+        try:
+            page.screenshot(path=str(path), full_page=False)
+        except Exception:
+            path = None
+        request = self.human_bridge.create_request(
+            self.platform, kind, title,
+            "O PC precisa de uma intervenção humana. Faz a operação no telefone e envia-a; o browser continua nesta sessão.",
+            url=page.url, screenshot_path=str(path) if path else None, fields=fields,
+        )
+        return request.__dict__
 
     def _require_live_authorization(self, live: bool, confirmation: str) -> None:
         if not live:

@@ -22,3 +22,13 @@ Cockpit Android para controlar o PC_ENGINE à distância.
 ## Build
 
 O workflow android-apk.yml gera o APK como artefacto do GitHub Actions. Também é possível compilar localmente com Buildozer.
+
+
+## Intervenção humana remota
+
+Quando o PC encontrar login, 2FA/OTP, CAPTCHA ou outra interação humana, o pedido aparece automaticamente no cockpit do telefone quando a ligação Tailscale estiver disponível. O navegador continua aberto no PC e a intervenção é aplicada nessa sessão.
+
+- O pedido é persistente no PC, por isso não se perde se o telefone estiver offline.
+- O telefone não precisa de estar ligado quando o pedido é criado.
+- Passwords/OTP introduzidos no telefone são enviados apenas para a intervenção atual e não são gravados pelo Human Interaction Bridge.
+- CAPTCHA é resolvido manualmente pelo utilizador; não existe bypass.
