@@ -24,30 +24,34 @@ class ReadinessReport:
 
 
 class RealReadinessGate:
-    """Evaluate whether protected REAL may be reviewed.
+    """Evaluate protected REAL prerequisites without authorizing orders."""
 
-    A PASS never changes mode, unlocks credentials, changes risk, or submits
-    an order. A separate operator-controlled guard is required downstream.
-    """
-
-    def evaluate(self, *, mode: str, preflight_ok: bool, state_samples: int,
-                 outcome_samples: int, eligible_outcomes: int,
-                 walk_forward_ok: bool, regime_validation_ok: bool,
-                 watchdog_ok: bool, recovery_ok: bool,
-                 execution_test_ok: bool, critical_errors: int = 0,
-                 min_state_samples: int = 1000, min_outcome_samples: int = 1000,
-                 min_eligible_outcomes: int = 1) -> ReadinessReport:
+    def evaluate(
+        self, *, mode: str, preflight_ok: bool, state_samples: int,
+        outcome_samples: int, eligible_outcomes: int,
+        walk_forward_ok: bool, regime_validation_ok: bool,
+        watchdog_ok: bool, recovery_ok: bool, execution_test_ok: bool,
+        critical_errors: int = 0, credentials_ok: bool = True,
+        credentials_detail: str = "not required", l2_oos_ok: bool = True,
+        l2_oos_detail: str = "not required", reconciliation_ok: bool = True,
+        reconciliation_detail: str = "not required",
+        min_state_samples: int = 1000, min_outcome_samples: int = 1000,
+        min_eligible_outcomes: int = 1,
+    ) -> ReadinessReport:
         checks = (
-            GateCheck("MODE_PAPER", mode.upper() == "PAPER", f"mode={mode}"),
+            GateCheck("MODE_SUPPORTED", mode.upper() in {"PAPER", "REAL"}, f"mode={mode}"),
             GateCheck("PREFLIGHT", bool(preflight_ok), "exchange/config preflight"),
             GateCheck("MARKET_STATE_DATA", state_samples >= min_state_samples, f"samples={state_samples}/{min_state_samples}"),
             GateCheck("STATE_OUTCOMES", outcome_samples >= min_outcome_samples, f"outcomes={outcome_samples}/{min_outcome_samples}"),
             GateCheck("ELIGIBLE_OUTCOMES", eligible_outcomes >= min_eligible_outcomes, f"eligible={eligible_outcomes}/{min_eligible_outcomes}"),
             GateCheck("WALK_FORWARD", bool(walk_forward_ok), "chronological validation"),
             GateCheck("REGIME_VALIDATION", bool(regime_validation_ok), "regime validation"),
+            GateCheck("L2_OOS", bool(l2_oos_ok), l2_oos_detail),
+            GateCheck("PAPER_RECONCILIATION", bool(reconciliation_ok), reconciliation_detail),
             GateCheck("WATCHDOG", bool(watchdog_ok), "watchdog healthy"),
             GateCheck("RECOVERY", bool(recovery_ok), "recovery healthy"),
             GateCheck("EXECUTION_TEST", bool(execution_test_ok), "paper execution/rejection/recovery tests"),
+            GateCheck("LIVE_CREDENTIALS", bool(credentials_ok), credentials_detail),
             GateCheck("CRITICAL_ERRORS", int(critical_errors) == 0, f"critical_errors={critical_errors}"),
         )
         blockers = tuple(check.name for check in checks if not check.passed)
