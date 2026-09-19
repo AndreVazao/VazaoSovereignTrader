@@ -14,6 +14,7 @@ class NormalizedMarketEventTests(unittest.TestCase):
             provider_ts_ms=1000,
             exchange_ts_ms=1000,
             receive_ns=2_000_000_000,
+            receive_wall_ns=1_700_000_000_000_000_000,
             process_ns=2_000_250_000,
             browser_render_ns=2_010_000_000,
             price=100.5,
@@ -22,6 +23,7 @@ class NormalizedMarketEventTests(unittest.TestCase):
         self.assertEqual(event.provider_ts_ms, 1000)
         self.assertEqual(event.exchange_ts_ms, 1000)
         self.assertEqual(event.processing_delay_ns, 250_000)
+        self.assertEqual(event.local_receive_wall_ns, 1_700_000_000_000_000_000)
         self.assertEqual(event.browser_render_ns, 2_010_000_000)
         self.assertNotEqual(event.local_receive_ns, event.browser_render_ns)
 
