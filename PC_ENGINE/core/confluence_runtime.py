@@ -15,13 +15,16 @@ from PC_ENGINE.radar.market_state import MarketStateStore, build_market_state
 from PC_ENGINE.radar.regime_engine import MarketRegimeEngine
 from PC_ENGINE.radar.trade_event_store import WebSocketTradeEventStore
 
+
 @dataclass(frozen=True)
 class ConfluenceRuntimeResult:
     score: ConfluenceScore
     recorded: bool
 
+
 class PaperConfluenceRuntime:
     """PAPER-only bridge for independent strategy evidence and unified state collection."""
+
     def __init__(self, settings: dict | None = None):
         settings = settings or {}
         self.data_dir = settings.get("data_dir", "PC_ENGINE/data/radar")
@@ -59,10 +62,17 @@ class PaperConfluenceRuntime:
         return [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
 
     def evaluate_and_record(
-        self, symbol: str, price: float, ohlcv: list[list[float]], technical_action: str,
-        technical_strength: float, pattern_bias: float, radar_pressure: float = 0.0,
+        self,
+        symbol: str,
+        price: float,
+        ohlcv: list[list[float]],
+        technical_action: str,
+        technical_strength: float,
+        pattern_bias: float,
+        radar_pressure: float = 0.0,
         timeframes: dict[str, list[list[float]]] | None = None,
         trade_events: list[dict] | None = None,
+        record_state: bool = True,
     ) -> ConfluenceRuntimeResult:
         learned = [s for s in self.lead_lag.signals(self.min_lead_lag_confidence) if s.symbol == symbol]
         regime = self.regime.classify(self._returns(ohlcv))
@@ -75,23 +85,38 @@ class PaperConfluenceRuntime:
         if self.derivatives_enabled:
             derivatives_score = self.derivatives.evidence(symbol, price).score
         score = self.engine.evaluate(
-            symbol=symbol, technical_action=technical_action, technical_strength=technical_strength,
-            pattern_bias=pattern_bias, radar_pressure=radar_pressure, lead_lag_signals=learned,
-            regime=regime, momentum_score=momentum, mean_reversion_score=mean_rev,
-            order_flow_score=order_flow, breakout_score=breakout, derivatives_score=derivatives_score,
+            symbol=symbol,
+            technical_action=technical_action,
+            technical_strength=technical_strength,
+            pattern_bias=pattern_bias,
+            radar_pressure=radar_pressure,
+            lead_lag_signals=learned,
+            regime=regime,
+            momentum_score=momentum,
+            mean_reversion_score=mean_rev,
+            order_flow_score=order_flow,
+            breakout_score=breakout,
+            derivatives_score=derivatives_score,
         )
         self.tracker.record(symbol, price, score, regime=regime.name)
-        state = build_market_state(
-            symbol=symbol, price=price, regime=regime,
-            technical_score=technical_strength if technical_action == "BUY" else -technical_strength if technical_action == "SELL" else 0.0,
-            candlestick_bias=pattern_bias, radar_pressure=radar_pressure,
-            lead_lag_score=sum(s.score for s in learned) / len(learned) if learned else 0.0,
-            momentum_score=momentum, mean_reversion_score=mean_rev,
-            order_flow_score=order_flow, breakout_score=breakout,
-            derivatives_score=derivatives_score, confluence=score,
-        )
-        self.state_store.append(state)
-        return ConfluenceRuntimeResult(score=score, recorded=True)
+        if record_state:
+            state = build_market_state(
+                symbol=symbol,
+                price=price,
+                regime=regime,
+                technical_score=technical_strength if technical_action == "BUY" else -technical_strength if technical_action == "SELL" else 0.0,
+                candlestick_bias=pattern_bias,
+                radar_pressure=radar_pressure,
+                lead_lag_score=sum(s.score for s in learned) / len(learned) if learned else 0.0,
+                momentum_score=momentum,
+                mean_reversion_score=mean_rev,
+                order_flow_score=order_flow,
+                breakout_score=breakout,
+                derivatives_score=derivatives_score,
+                confluence=score,
+            )
+            self.state_store.append(state)
+        return ConfluenceRuntimeResult(score=score, recorded=record_state)
 
     def resolve_outcomes(self, fee_bps_round_trip: float = 28.0) -> int:
         return self.tracker.resolve_from_websocket_events(fee_bps_round_trip)
