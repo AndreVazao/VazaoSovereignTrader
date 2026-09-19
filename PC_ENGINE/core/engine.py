@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from PC_ENGINE.ai_council.stub import DisabledAICouncil
 from PC_ENGINE.core.allocator import CapitalAllocator
+from PC_ENGINE.core.opportunity import PaperOpportunityEngine
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.order_manager import OrderManager
 from PC_ENGINE.core.paper_broker import PaperBroker
@@ -18,6 +19,7 @@ from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
 from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
+from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.storage.ledger import Ledger
 
 
@@ -44,6 +46,7 @@ class RuntimeState:
     pnl_week_pct: float = 0.0
     open_positions: Dict[str, Position] = field(default_factory=dict)
     asset_scores: Dict[str, float] = field(default_factory=dict)
+    opportunities: Dict[str, dict] = field(default_factory=dict)
     regimes: Dict[str, str] = field(default_factory=dict)
     watchdog: Dict[str, str | bool | int] = field(default_factory=dict)
     preflight: Dict[str, object] = field(default_factory=dict)
@@ -74,6 +77,8 @@ class SovereignEngine:
         self.risk = RiskEngine(config["risk"])
         self.strategy = TrendEmaAtrStrategy(config["strategy"])
         self.allocator = CapitalAllocator(config["engine"], config.get("symbol_limits", {}))
+        self.opportunity = PaperOpportunityEngine(config.get("opportunity", {}))
+        self.market_states = MarketStateStore(config.get("opportunity", {}).get("data_dir", "PC_ENGINE/data/radar"))
         self.exchanges = self._build_exchanges()
         self.paper_collector: PaperMarketCollector | None = None
         self._build_paper_collector()
@@ -281,12 +286,22 @@ class SovereignEngine:
                 spreads[symbol] = spread_pct
                 signal = self.strategy.analyse(symbol, ohlcv, spread_pct)
                 signals[symbol] = signal
-                score = signal.strength * 100 if signal.action == "BUY" else 0.0
-                opinion = self.ai_council.analyse(symbol, {"signal": asdict(signal)})
+                market_state = self.market_states.snapshot(symbol) if self.paper else None
+                opportunity = self.opportunity.score(
+                    symbol=symbol,
+                    strategy_score=float(signal.strength),
+                    action=str(signal.action),
+                    spread_pct=spread_pct,
+                    state=market_state,
+                )
+                score = opportunity.score * 100.0
+                opinion = self.ai_council.analyse(symbol, {"signal": asdict(signal), "opportunity": asdict(opportunity)})
                 max_delta = float(self.config.get("ai_council", {}).get("max_score_delta", 5.0))
                 score += max(-max_delta, min(max_delta, opinion.score_delta))
                 scores[symbol] = max(0.0, score)
                 self.state.regimes[symbol] = signal.regime
+                with self.lock:
+                    self.state.opportunities[symbol] = asdict(opportunity)
             except Exception as exc:
                 scores[symbol] = 0.0
                 self.log("SYMBOL_ANALYSIS_ERROR", {"symbol": symbol, "error": str(exc)})

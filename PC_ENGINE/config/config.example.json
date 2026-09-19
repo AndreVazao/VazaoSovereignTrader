@@ -10,14 +10,14 @@
     "quote_currency": "USDT",
     "max_open_positions": 2,
     "max_total_exposure_pct": 0.35,
-    "paper_starting_balance": 1000.0,
+    "paper_starting_balance": 1000,
     "preflight_required": true
   },
   "fast_path": {
     "enabled": false,
     "allow_real": false,
     "min_confidence": 0.75,
-    "min_expectancy_bps": 2.0,
+    "min_expectancy_bps": 2,
     "max_signal_age_ms": 1000,
     "notes": "Fast Path is disabled by default. It never bypasses Risk Engine or Order Manager. REAL requires a separate reviewed execution policy."
   },
@@ -45,7 +45,7 @@
   "paper": {
     "fee_pct": 0.001,
     "slippage_pct": 0.0005,
-    "reject_probability": 0.0
+    "reject_probability": 0
   },
   "watchdog": {
     "enabled": true,
@@ -55,23 +55,41 @@
     "enabled": true,
     "observational_only": true,
     "interval_seconds": 5,
-    "polling_exchanges": ["binance", "bingx", "okx", "bybit", "coinbase"],
+    "polling_exchanges": [
+      "binance",
+      "bingx",
+      "okx",
+      "bybit",
+      "coinbase"
+    ],
     "websocket_enabled": true,
-    "websocket_exchanges": ["binance", "coinbase", "okx"],
-    "websocket_symbols": ["BTC/USDT", "ETH/USDT"],
-    "min_move_bps": 5.0,
+    "websocket_exchanges": [
+      "binance",
+      "coinbase",
+      "okx"
+    ],
+    "websocket_symbols": [
+      "BTC/USDT",
+      "ETH/USDT"
+    ],
+    "min_move_bps": 5,
     "lead_window_ms": 750,
     "notes": "The PAPER collector continuously records public market states. Radar remains observational-only and cannot create or execute orders."
   },
   "candlestick": {
     "enabled": true,
-    "min_confidence": 0.70,
+    "min_confidence": 0.7,
     "notes": "Candlestick patterns are evidence/confirmation only; they never create standalone orders."
   },
   "derivatives": {
     "enabled": true,
     "observational_only": true,
-    "exchanges": ["binance", "bingx", "okx", "bybit"],
+    "exchanges": [
+      "binance",
+      "bingx",
+      "okx",
+      "bybit"
+    ],
     "cache_seconds": 10,
     "notes": "Public perpetual/swap funding, open interest and basis evidence only. No derivatives orders, leverage or liquidation automation."
   },
@@ -83,31 +101,60 @@
       "radar": 0.09,
       "lead_lag": 0.13,
       "regime": 0.08,
-      "momentum": 0.10,
+      "momentum": 0.1,
       "mean_reversion": 0.06,
       "order_flow": 0.09,
       "breakout": 0.06,
       "derivatives": 0.07
     },
-    "action_threshold": 0.30,
+    "action_threshold": 0.3,
     "minimum_independent_evidence": 2,
     "contradiction_penalty": 0.25,
     "min_lead_lag_confidence": 0.75,
     "data_dir": "PC_ENGINE/data/radar",
-    "horizons_ms": [1000, 5000, 15000, 60000],
+    "horizons_ms": [
+      1000,
+      5000,
+      15000,
+      60000
+    ],
     "paper_only": true
   },
-  "symbols": ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "DOGE/USDT"],
+  "symbols": [
+    "BTC/USDT",
+    "ETH/USDT",
+    "BNB/USDT",
+    "SOL/USDT",
+    "DOGE/USDT"
+  ],
   "symbol_limits": {
-    "BTC/USDT": {"max_exposure_pct": 0.25},
-    "ETH/USDT": {"max_exposure_pct": 0.20},
-    "BNB/USDT": {"max_exposure_pct": 0.20},
-    "SOL/USDT": {"max_exposure_pct": 0.20},
-    "DOGE/USDT": {"max_exposure_pct": 0.10}
+    "BTC/USDT": {
+      "max_exposure_pct": 0.25
+    },
+    "ETH/USDT": {
+      "max_exposure_pct": 0.2
+    },
+    "BNB/USDT": {
+      "max_exposure_pct": 0.2
+    },
+    "SOL/USDT": {
+      "max_exposure_pct": 0.2
+    },
+    "DOGE/USDT": {
+      "max_exposure_pct": 0.1
+    }
   },
   "exchanges": {
-    "binance": {"enabled": true, "key_env": "BINANCE_KEY", "private_env": "BINANCE_PRIVATE"},
-    "bingx": {"enabled": false, "key_env": "BINGX_KEY", "private_env": "BINGX_PRIVATE"}
+    "binance": {
+      "enabled": true,
+      "key_env": "BINANCE_KEY",
+      "private_env": "BINANCE_PRIVATE"
+    },
+    "bingx": {
+      "enabled": false,
+      "key_env": "BINGX_KEY",
+      "private_env": "BINGX_PRIVATE"
+    }
   },
   "strategy": {
     "timeframe": "1m",
@@ -122,11 +169,23 @@
     "take_profit_atr_mult": 2.2,
     "spread_max_pct": 0.0015
   },
-  "reports": {"weekly_enabled": true},
+  "reports": {
+    "weekly_enabled": true
+  },
   "ai_council": {
     "enabled": false,
     "provider": "disabled",
-    "max_score_delta": 5.0,
+    "max_score_delta": 5,
     "notes": "Future optional TradingAgents adapter. It must never execute orders directly."
+  },
+  "opportunity": {
+    "enabled": true,
+    "learning_weight": 0.25,
+    "cost_weight": 0.15,
+    "stale_after_seconds": 120,
+    "horizon_ms": 5000,
+    "data_dir": "PC_ENGINE/data/radar",
+    "learning_path": "PC_ENGINE/data/radar/state_signature_learning.jsonl",
+    "notes": "PAPER advisory ranking only. Learning never bypasses Risk Engine, RealModeGuard or Order Manager."
   }
 }
