@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PC_ENGINE.learning.state_signature import SignatureStat, StateSignature, StateSignatureLearningEngine
+from PC_ENGINE.learning.learning_consensus import PaperLearningConsensus
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,8 @@ class OpportunityScore:
     cost_penalty: float
     freshness: float
     reason: str
+    consensus_bonus: float = 0.0
+    consensus: bool = False
 
 
 class PaperOpportunityEngine:
@@ -43,6 +46,7 @@ class PaperOpportunityEngine:
         )
         self._stats_mtime = 0.0
         self._stats: list[SignatureStat] = []
+        self.consensus = PaperLearningConsensus(settings)
 
     def _load_stats(self) -> None:
         try:
@@ -88,6 +92,8 @@ class PaperOpportunityEngine:
         cost_penalty = max(0.0, min(0.50, float(spread_pct) * self.cost_weight * 100.0))
 
         learning_bonus = 0.0
+        consensus_bonus = 0.0
+        consensus_ok = False
         learning_reason = "sem aprendizagem elegível"
         if state:
             timestamp_ms = int(state.get("timestamp_ms", 0))
@@ -107,12 +113,17 @@ class PaperOpportunityEngine:
                         f"assinatura {learned.samples} amostras, "
                         f"CI95 inferior {learned.lower_ci_bps:.2f} bps"
                     )
+                consensus = self.consensus.evaluate(state)
+                consensus_bonus = consensus.bonus * freshness
+                consensus_ok = consensus.agreement
+                if consensus_ok:
+                    learning_reason += "; " + consensus.reason
             else:
                 freshness = 0.0
         else:
             freshness = 0.0
 
-        final = max(0.0, min(1.0, base + learning_bonus - cost_penalty))
+        final = max(0.0, min(1.0, base + learning_bonus + consensus_bonus - cost_penalty))
         confidence = max(0.0, min(1.0, 0.65 * base + 0.35 * (1.0 if learning_bonus > 0 else 0.0)))
         reason = f"estratégia={base:.3f}; {learning_reason}; custo/spread={cost_penalty:.3f}"
         return OpportunityScore(
@@ -125,4 +136,6 @@ class PaperOpportunityEngine:
             cost_penalty=round(cost_penalty, 6),
             freshness=round(freshness, 6),
             reason=reason,
+            consensus_bonus=round(consensus_bonus, 6),
+            consensus=consensus_ok,
         )
