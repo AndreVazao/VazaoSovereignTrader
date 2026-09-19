@@ -2,6 +2,14 @@
 setlocal
 cd /d "%~dp0.."
 
+rem Prefer the packaged Windows EXE when this launcher ships beside it.
+if exist "VazaoSovereignTrader.exe" (
+  start "" "VazaoSovereignTrader.exe"
+  timeout /t 5 /nobreak >nul
+  start "" "http://127.0.0.1:8765/dashboard"
+  exit /b 0
+)
+
 set "PYTHONW="
 if exist "PC_ENGINE\.venv\Scripts\pythonw.exe" set "PYTHONW=PC_ENGINE\.venv\Scripts\pythonw.exe"
 if not defined PYTHONW if exist ".venv\Scripts\pythonw.exe" set "PYTHONW=.venv\Scripts\pythonw.exe"
