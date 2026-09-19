@@ -21,6 +21,7 @@ class OrderBookEvent:
     symbol: str
     event_type: str
     sequence: int | None
+    sequence_start: int | None
     provider_ts_ms: int | None
     exchange_ts_ms: int | None
     local_receive_ns: int
