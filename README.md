@@ -9,7 +9,6 @@ Sistema privado, local-first, para trading automatizado com controlo de risco.
 - **shared** contém contratos comuns entre PC e APK.
 - Tudo começa em **PAPER** por defeito.
 - Nenhuma chave de API deve ser colocada no GitHub.
-- Nada de scraping, automação de missões, cliques ou abuso de plataformas.
 
 ## Estado inicial
 
