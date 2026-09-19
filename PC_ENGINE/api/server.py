@@ -81,8 +81,15 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.post("/start")
     def start():
         require_token()
+        if engine.mode.upper() == "REAL":
+            report = readiness.collect(engine)
+            if not report.get("ready", False):
+                return jsonify({"ok": False, "error": "real_readiness_blocked", "readiness": report}), 409
+            authorized, reason = guard.consume()
+            if not authorized:
+                return jsonify({"ok": False, "error": "real_start_not_authorized", "reason": reason, "guard": guard.snapshot()}), 403
         engine.start()
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "mode": engine.mode})
 
     @app.post("/pause")
     def pause():
@@ -110,10 +117,12 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         requested = str(payload.get("mode", "PAPER")).upper()
 
         if requested == "REAL":
+            if engine.state.open_positions:
+                return jsonify({"ok": False, "error": "real_mode_requires_manual_position_reconciliation", "positions": list(engine.state.open_positions)}), 409
             report = readiness.collect(engine)
             if not report.get("ready", False):
                 return jsonify({"ok": False, "error": "real_readiness_blocked", "readiness": report, "guard": guard.snapshot()}), 409
-            authorized, reason = guard.consume()
+            authorized, reason = guard.can_enable_real()
             if not authorized:
                 return jsonify({"ok": False, "error": "real_mode_not_authorized", "reason": reason, "guard": guard.snapshot()}), 403
 

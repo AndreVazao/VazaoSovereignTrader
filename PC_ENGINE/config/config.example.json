@@ -26,6 +26,8 @@
     "min_state_samples": 1000,
     "min_outcome_samples": 1000,
     "min_eligible_outcomes": 1,
+    "min_state_samples": 1000,
+    "min_outcome_samples": 1000,
     "notes": "Missing validation artifacts block protected REAL review. This section never authorizes orders."
   },
   "real_mode_guard": {
@@ -80,6 +82,8 @@
     "learning_min_samples": 30,
     "learning_cost_bps": 28,
     "learning_path": "PC_ENGINE/data/radar/state_signature_learning.jsonl",
+    "consensus_max_bonus": 0.06,
+    "consensus_min_outcome_samples": 30,
     "outcome_path": "PC_ENGINE/data/radar/state_outcomes.jsonl",
     "notes": "The PAPER collector continuously records public market states and refreshes descriptive signature learning. Radar remains observational-only and cannot create or execute orders."
   },
@@ -193,6 +197,9 @@
     "horizon_ms": 5000,
     "data_dir": "PC_ENGINE/data/radar",
     "learning_path": "PC_ENGINE/data/radar/state_signature_learning.jsonl",
+    "outcome_path": "PC_ENGINE/data/radar/state_outcomes.jsonl",
+    "consensus_max_bonus": 0.06,
+    "consensus_min_outcome_samples": 30,
     "notes": "PAPER advisory ranking only. Learning never bypasses Risk Engine, RealModeGuard or Order Manager."
   }
 }
