@@ -1,0 +1,38 @@
+name: Windows EXE
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "pc-v*"
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-pc.txt
+          pip install pyinstaller
+      - name: Build EXE
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --paths . PC_ENGINE/main.py
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item dist\VazaoSovereignTrader.exe release\
+          Copy-Item PC_ENGINE\config\config.example.json release\
+          Copy-Item README.md release\
+          Compress-Archive -Path release\* -DestinationPath VazaoSovereignTrader-Windows.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vazaosovereigntrader-windows
+          path: VazaoSovereignTrader-Windows.zip
+          if-no-files-found: error
