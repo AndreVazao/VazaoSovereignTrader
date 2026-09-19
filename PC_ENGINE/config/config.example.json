@@ -211,5 +211,93 @@
     "timeout_ms": 15000,
     "platforms": {},
     "notes": "Browser execution is disabled by default. Add platform-specific selectors only to config.local.json. Never commit sessions, cookies, credentials or live selectors."
+  },
+  "market_universe": {
+    "enabled": true,
+    "research_first": true,
+    "assets": {
+      "crypto_spot": {
+        "enabled": true,
+        "venues": [
+          "binance",
+          "coinbase",
+          "okx",
+          "bybit",
+          "kraken"
+        ],
+        "symbols": [
+          "BTC/USDT",
+          "ETH/USDT",
+          "SOL/USDT",
+          "BNB/USDT",
+          "DOGE/USDT"
+        ],
+        "priority": "high"
+      },
+      "crypto_derivatives": {
+        "enabled": true,
+        "venues": [
+          "binance",
+          "okx",
+          "bybit"
+        ],
+        "symbols": [
+          "BTC/USDT",
+          "ETH/USDT",
+          "SOL/USDT"
+        ],
+        "priority": "high",
+        "observational_only": true
+      },
+      "equities": {
+        "enabled": true,
+        "venues": [],
+        "watchlist": [
+          "SPY",
+          "QQQ",
+          "NVDA",
+          "AAPL",
+          "MSFT",
+          "TSLA"
+        ],
+        "priority": "research",
+        "notes": "Enable after a compliant public market-data connector is configured."
+      },
+      "nft": {
+        "enabled": true,
+        "venues": [],
+        "watchlist": [],
+        "priority": "research",
+        "notes": "Start with collection-level sales, listings and volume observations before execution."
+      },
+      "yield_apy": {
+        "enabled": true,
+        "providers": [
+          "defillama"
+        ],
+        "priority": "research",
+        "notes": "APY is not guaranteed. Track TVL, liquidity, lockup, protocol/contract risk and reward-token volatility."
+      }
+    },
+    "premium_data": {
+      "enabled": false,
+      "providers": [],
+      "approval_required": true,
+      "promotion_rule": "Consider paid data only when measured coverage/latency improvement is expected to exceed recurring cost."
+    }
+  },
+  "capital_opportunity": {
+    "enabled": true,
+    "min_samples": 30,
+    "max_lag_ms": 2000,
+    "min_net_edge_bps": 2,
+    "default_required_capital": 100,
+    "cost_model": {
+      "fee_bps": 10,
+      "spread_bps": 4,
+      "slippage_bps": 5,
+      "latency_buffer_bps": 3
+    },
+    "notes": "Research ranking only. Candidate status never authorizes live trading."
   }
 }
