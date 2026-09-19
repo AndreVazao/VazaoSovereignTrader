@@ -87,7 +87,13 @@
     "consensus_max_bonus": 0.06,
     "consensus_min_outcome_samples": 30,
     "outcome_path": "PC_ENGINE/data/radar/state_outcomes.jsonl",
-    "notes": "The PAPER collector continuously records public market states and refreshes descriptive signature learning. Radar remains observational-only and cannot create or execute orders."
+    "notes": "The PAPER collector continuously records public market states and refreshes descriptive signature learning. Radar remains observational-only and cannot create or execute orders.",
+    "data_dir": "PC_ENGINE/data/radar",
+    "lead_lag_min_samples": 100,
+    "lead_lag_fee_bps_per_side": 10,
+    "lead_lag_slippage_bps_per_side": 4,
+    "lead_lag_response_threshold_bps": 2,
+    "collector_learning_minutes": 5
   },
   "candlestick": {
     "enabled": true,
