@@ -185,8 +185,7 @@ class MobileCockpit(App):
                 f" | {guard.get('remaining_seconds', 0)}s"
             )
             logs = data.get("logs", [])[-5:]
-            self.logs.text = "
-".join(logs) if logs else "Sem logs"
+            self.logs.text = "\\n".join(logs) if logs else "Sem logs"
         except Exception as exc:
             self.status.text = "PC: offline"
             self.logs.text = f"Erro status: {exc}"
