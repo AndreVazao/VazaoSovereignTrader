@@ -34,13 +34,15 @@ class RealReadinessGate:
                  outcome_samples: int, eligible_outcomes: int,
                  walk_forward_ok: bool, regime_validation_ok: bool,
                  watchdog_ok: bool, recovery_ok: bool,
-                 execution_test_ok: bool, critical_errors: int = 0) -> ReadinessReport:
+                 execution_test_ok: bool, critical_errors: int = 0,
+                 min_state_samples: int = 1000, min_outcome_samples: int = 1000,
+                 min_eligible_outcomes: int = 1) -> ReadinessReport:
         checks = (
             GateCheck("MODE_PAPER", mode.upper() == "PAPER", f"mode={mode}"),
             GateCheck("PREFLIGHT", bool(preflight_ok), "exchange/config preflight"),
-            GateCheck("MARKET_STATE_DATA", state_samples >= 1000, f"samples={state_samples}"),
-            GateCheck("STATE_OUTCOMES", outcome_samples >= 1000, f"outcomes={outcome_samples}"),
-            GateCheck("ELIGIBLE_OUTCOMES", eligible_outcomes >= 1, f"eligible={eligible_outcomes}"),
+            GateCheck("MARKET_STATE_DATA", state_samples >= min_state_samples, f"samples={state_samples}/{min_state_samples}"),
+            GateCheck("STATE_OUTCOMES", outcome_samples >= min_outcome_samples, f"outcomes={outcome_samples}/{min_outcome_samples}"),
+            GateCheck("ELIGIBLE_OUTCOMES", eligible_outcomes >= min_eligible_outcomes, f"eligible={eligible_outcomes}/{min_eligible_outcomes}"),
             GateCheck("WALK_FORWARD", bool(walk_forward_ok), "chronological validation"),
             GateCheck("REGIME_VALIDATION", bool(regime_validation_ok), "regime validation"),
             GateCheck("WATCHDOG", bool(watchdog_ok), "watchdog healthy"),
