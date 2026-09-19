@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+
 from flask import Flask, Response, jsonify, request
 
 from PC_ENGINE.api.dashboard import DASHBOARD_HTML
@@ -18,7 +20,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def require_token() -> None:
         expected = env_value(token_env, "change-this-local-token")
         provided = request.headers.get("X-Token", "")
-        if expected and provided != expected:
+        if not expected or not hmac.compare_digest(provided, expected):
             raise PermissionError("unauthorized")
 
     @app.errorhandler(PermissionError)
@@ -29,6 +31,10 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.get("/dashboard")
     def dashboard():
         return Response(DASHBOARD_HTML, mimetype="text/html")
+
+    @app.get("/health")
+    def health():
+        return jsonify({"ok": True, "service": "VazaoSovereignTrader", "mode": engine.mode})
 
     @app.get("/status")
     def status():
