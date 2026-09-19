@@ -299,5 +299,38 @@
       "latency_buffer_bps": 3
     },
     "notes": "Research ranking only. Candidate status never authorizes live trading."
+  },
+  "autonomous_execution": {
+    "enabled": true,
+    "decision_mode": "BOT_AUTONOMOUS",
+    "multi_venue": true,
+    "multi_opportunity": true,
+    "simultaneous_execution": true,
+    "max_parallel_orders": 4,
+    "require_all_prerequisites": true,
+    "allow_real": false,
+    "capital_allocation": {
+      "mode": "DYNAMIC_EFFICIENCY",
+      "max_total_exposure_pct": 0.35,
+      "reserve_cash_pct": 0.2,
+      "max_single_opportunity_pct": 0.1
+    },
+    "execution_gates": {
+      "validated_lead_lag": true,
+      "out_of_sample_validation": true,
+      "positive_net_edge_after_costs": true,
+      "fresh_signal_required": true,
+      "venue_health_required": true,
+      "clock_sync_required": true,
+      "liquidity_required": true,
+      "risk_engine_approval_required": true,
+      "real_mode_guard_required": true
+    },
+    "latency": {
+      "max_signal_age_ms": 250,
+      "max_execution_round_trip_ms": 500,
+      "stale_market_action": "CANCEL"
+    },
+    "notes": "The bot, not the operator, selects eligible opportunities and allocates capital when every gate is satisfied. Multi-venue execution is coordinated, but orders are never assumed to be atomic across venues. This does not guarantee profit or maximize returns mathematically; it maximizes adherence to the measured edge and configured risk constraints."
   }
 }
