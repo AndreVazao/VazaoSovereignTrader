@@ -52,18 +52,29 @@ class OrderManager:
             raw = exchange.market_buy(symbol, normalized_qty) if side == "buy" else exchange.market_sell(symbol, normalized_qty)
             filled_qty = float(raw.get("filled") or raw.get("amount") or normalized_qty)
             fill_price = float(raw.get("average") or raw.get("price") or price)
-            fee = self._extract_fee(raw)
+            fee = self._extract_fee(raw, symbol, fill_price)
             return OrderResult(True, side, symbol, filled_qty, fill_price, fee, str(raw.get("id", "")), "exchange accepted")
         except Exception as exc:
             self.last_client_order.pop(fingerprint, None)
             return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", f"exchange error: {exc}")
 
     @staticmethod
-    def _extract_fee(raw: dict) -> float:
+    def _extract_fee(raw: dict, symbol: str, fill_price: float) -> float:
+        base, quote = symbol.split("/", 1)
+        items = []
         fee = raw.get("fee")
         if isinstance(fee, dict):
-            return float(fee.get("cost") or 0.0)
+            items.append(fee)
         fees = raw.get("fees")
         if isinstance(fees, list):
-            return sum(float(item.get("cost") or 0.0) for item in fees if isinstance(item, dict))
-        return 0.0
+            items.extend(item for item in fees if isinstance(item, dict))
+        total = 0.0
+        for item in items:
+            cost = float(item.get("cost") or 0.0)
+            currency = str(item.get("currency") or "")
+            if currency == base:
+                cost *= fill_price
+            elif currency and currency != quote:
+                continue
+            total += cost
+        return total
