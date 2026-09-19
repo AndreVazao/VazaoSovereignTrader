@@ -7,6 +7,10 @@ from typing import Callable
 from PC_ENGINE.core.candlestick_patterns import CandlestickPatternEngine
 from PC_ENGINE.core.confluence_runtime import PaperConfluenceRuntime
 from PC_ENGINE.radar.market_radar import MarketRadar
+from PC_ENGINE.learning.state_signature import StateSignatureLearningEngine
+from PC_ENGINE.radar.market_state import MarketStateStore
+import json
+from pathlib import Path
 
 
 class PaperMarketCollector:
@@ -48,6 +52,14 @@ class PaperMarketCollector:
         self.last_cycle_ms = 0
         self.cycles = 0
         self.errors = 0
+        self.learning_interval_cycles = max(1, int(settings.get("learning_interval_cycles", 12)))
+        self.learning_state_limit = max(100, int(settings.get("learning_state_limit", 5000)))
+        self.learning_horizons_ms = tuple(int(x) for x in settings.get("learning_horizons_ms", (5000, 15000, 60000)))
+        self.learning_min_samples = max(1, int(settings.get("learning_min_samples", 30)))
+        self.learning_cost_bps = max(0.0, float(settings.get("learning_cost_bps", 28.0)))
+        self.learning_path = Path(settings.get("learning_path", "PC_ENGINE/data/radar/state_signature_learning.jsonl"))
+        self.state_store = MarketStateStore(settings.get("data_dir", "PC_ENGINE/data/radar"))
+        self.learning_cycles = 0
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -71,6 +83,9 @@ class PaperMarketCollector:
             "errors": self.errors,
             "last_cycle_ms": self.last_cycle_ms,
             "data_dir": str(self.confluence.data_dir),
+            "learning_cycles": self.learning_cycles,
+            "learning_interval_cycles": self.learning_interval_cycles,
+            "learning_path": str(self.learning_path),
         }
 
     def _report_error(self, message: str, data: dict) -> None:
@@ -122,5 +137,26 @@ class PaperMarketCollector:
 
         self.confluence.resolve_outcomes()
         self.cycles += 1
+        if self.cycles % self.learning_interval_cycles == 0:
+            self._refresh_learning()
         self.last_cycle_ms = int(time.time() * 1000)
         return recorded
+
+    def _refresh_learning(self) -> int:
+        """Refresh descriptive PAPER signature statistics from recent states."""
+        states = self.state_store.recent(limit=self.learning_state_limit)
+        if len(states) < self.learning_min_samples:
+            return 0
+        engine = StateSignatureLearningEngine(
+            cost_bps=self.learning_cost_bps,
+            min_samples=self.learning_min_samples,
+        )
+        stats = engine.evaluate(states, horizons_ms=self.learning_horizons_ms)
+        self.learning_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.learning_path.with_suffix(self.learning_path.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as handle:
+            for stat in stats:
+                handle.write(json.dumps(stat.__dict__, separators=(",", ":"), sort_keys=True) + "\n")
+        tmp.replace(self.learning_path)
+        self.learning_cycles += 1
+        return len(stats)
