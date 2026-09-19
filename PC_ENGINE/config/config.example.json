@@ -74,7 +74,13 @@
     ],
     "min_move_bps": 5,
     "lead_window_ms": 750,
-    "notes": "The PAPER collector continuously records public market states. Radar remains observational-only and cannot create or execute orders."
+    "learning_interval_cycles": 12,
+    "learning_state_limit": 5000,
+    "learning_horizons_ms": [5000, 15000, 60000],
+    "learning_min_samples": 30,
+    "learning_cost_bps": 28,
+    "learning_path": "PC_ENGINE/data/radar/state_signature_learning.jsonl",
+    "notes": "The PAPER collector continuously records public market states and refreshes descriptive signature learning. Radar remains observational-only and cannot create or execute orders."
   },
   "candlestick": {
     "enabled": true,
