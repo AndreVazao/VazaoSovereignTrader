@@ -58,3 +58,15 @@ Antes de ativar REAL:
 - Futures/leverage desligado.
 
 Nunca abra a porta 8765 no router com port-forward.
+
+
+## Fluxo remoto operacional
+
+1. PC: executar setup, configurar `VST_LOCAL_TOKEN` e verificar a instalação.
+2. PC: instalar Tailscale e obter o IP `100.x.y.z`.
+3. Android: instalar Tailscale e o APK.
+4. Android: introduzir `http://100.x.y.z:8765` e o mesmo token.
+5. Testar ligação; depois PAPER, preflight e validação.
+6. REAL continua bloqueado até readiness e autorização temporária.
+
+O botão ARM REAL é uma ação explícita do operador. O botão INICIAR em REAL exige nova autorização válida no momento do arranque. Parar o engine desarma REAL.
