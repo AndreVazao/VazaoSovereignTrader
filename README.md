@@ -128,3 +128,23 @@ A mesma recolha também produz `PC_ENGINE/data/radar/state_outcomes.jsonl`, com 
 ## CI
 
 A suíte passou de 25 jobs por ficheiro para um job único que executa todos os testes. Isto reduz ruído e emails quando existe falha de infraestrutura. Runs antigos da mesma branch são cancelados automaticamente.
+
+
+## PC 24/7 + controlo remoto
+
+- scripts/setup_windows.ps1 prepara o ambiente Windows.
+- scripts/install_windows_autostart.ps1 cria arranque automático e reinício após falhas.
+- docs/REMOTE_MOBILE_SETUP.md descreve o acesso remoto pelo Android.
+- O acesso remoto recomendado usa Tailscale; não fazer port-forward da porta 8765.
+- A API exige VST_LOCAL_TOKEN; não existe token de fallback.
+- GET /health é apenas health-check; comandos e /status exigem o token.
+
+## APK Android
+
+O cockpit Android inclui:
+- INICIAR / PAUSAR / RETOMAR / PARAR;
+- PAPER;
+- ARM REAL / REAL / DESARMAR;
+- estado, equity, P&L, drawdown, watchdog e logs.
+
+O workflow .github/workflows/android-apk.yml cria um APK debug como artefacto quando executado manualmente ou quando é criado um tag mobile-v*.
