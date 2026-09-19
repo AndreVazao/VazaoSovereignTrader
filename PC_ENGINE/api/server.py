@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import base64
 
 from flask import Flask, Response, jsonify, request, send_file
 
@@ -81,6 +82,28 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             fields=payload.get("fields") or [],
         )
         return jsonify({"ok": True, "request": item.__dict__})
+
+    @app.get("/human-interaction/screenshot-data/<request_id>")
+    def human_interaction_screenshot_data(request_id: str):
+        require_token()
+        item = next((x for x in human_bridge.pending() if x.get("request_id") == request_id), None)
+        if not item or not item.get("screenshot_path"):
+            return jsonify({"ok": False, "error": "screenshot_not_available"}), 404
+        try:
+            with open(item["screenshot_path"], "rb") as handle:
+                encoded = base64.b64encode(handle.read()).decode("ascii")
+            return jsonify({"ok": True, "mime": "image/png", "data": encoded})
+        except (OSError, ValueError):
+            return jsonify({"ok": False, "error": "screenshot_unavailable"}), 404
+
+    @app.post("/human-interaction/browser-action")
+    def human_interaction_browser_action():
+        require_token()
+        payload = request.get_json(force=True) or {}
+        request_id = str(payload.get("request_id", ""))
+        # The browser connector consumes the RAM-only response and reproduces the action locally.
+        ok = human_bridge.respond(request_id, action=str(payload.get("action", "click")), values=payload.get("values") or {})
+        return jsonify({"ok": ok}), (200 if ok else 404)
 
     @app.post("/human-interaction/respond")
     def human_interaction_respond():
