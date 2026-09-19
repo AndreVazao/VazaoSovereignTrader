@@ -72,6 +72,20 @@ Os eventos de lead/lag da Fase 1 são apenas candidatos de investigação porque
 
 Arquitetura detalhada: `docs/SOVEREIGN_MARKET_RADAR.md`.
 
+## Capital Opportunity Engine
+
+O Trader agora possui uma camada separada para transformar evidência histórica do Radar em candidatos de oportunidade com foco em eficiência de capital.
+
+Ela mede atraso observado, consistência, movimento bruto, custos estimados, edge líquido e capital requerido. Uma oportunidade só aparece como CANDIDATE depois de ultrapassar os mínimos configurados; isso não autoriza REAL.
+
+```bash
+python PC_ENGINE/tools/run_capital_opportunities.py
+```
+
+Saída: PC_ENGINE/data/radar/capital_opportunities.jsonl.
+
+Documentação: docs/CAPITAL_OPPORTUNITY_ENGINE.md.
+
 ## Aviso
 
 Isto não é aconselhamento financeiro e não garante lucro. Usa apenas APIs oficiais das exchanges, sem withdraw permission, e começa sempre em PAPER.
