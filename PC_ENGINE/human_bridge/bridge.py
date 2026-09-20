@@ -61,6 +61,26 @@ class HumanInteractionBridge:
                 self._RAM_RESPONSES[self._response_key(request_id)] = {"action": action, "values": values, "received_at": item.updated_at}
             return True
 
+    def mark_applied(self, request_id: str) -> bool:
+        with self._lock:
+            item = self._latest().get(request_id)
+            if item is None or item.status != "RESPONDED":
+                return False
+            item.status = "APPLIED"
+            item.updated_at = time.time()
+            self._append(item)
+            return True
+
+    def mark_completed(self, request_id: str) -> bool:
+        with self._lock:
+            item = self._latest().get(request_id)
+            if item is None or item.status != "APPLIED":
+                return False
+            item.status = "COMPLETED"
+            item.updated_at = time.time()
+            self._append(item)
+            return True
+
     def consume_response(self, request_id: str) -> dict[str, Any] | None:
         with self._RAM_LOCK:
             return self._RAM_RESPONSES.pop(self._response_key(request_id), None)
@@ -77,7 +97,7 @@ class HumanInteractionBridge:
 
     def snapshot(self) -> dict[str, Any]:
         latest = self._latest()
-        return {"pending": sum(x.status == "PENDING" for x in latest.values()), "responded_waiting_pc": sum(1 for k in self._RAM_RESPONSES if k.startswith(str(self.root.resolve()) + ":")), "requests": [asdict(x) for x in latest.values() if x.status in {"PENDING", "RESPONDED"}]}
+        return {"pending": sum(x.status == "PENDING" for x in latest.values()), "responded_waiting_pc": sum(x.status == "RESPONDED" for x in latest.values()), "applied": sum(x.status == "APPLIED" for x in latest.values()), "requests": [asdict(x) for x in latest.values() if x.status in {"PENDING", "RESPONDED", "APPLIED"}]}
 
     def _response_key(self, request_id: str) -> str:
         return f"{self.root.resolve()}:{request_id}"
