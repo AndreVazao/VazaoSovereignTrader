@@ -152,6 +152,7 @@ class SovereignEngine:
         raw_positions = raw_state.get("positions", {})
         pending = raw_state.get("pending_orders", {})
         self.state.pending_orders.update(pending)
+        self.order_manager.restore_order_guards(raw_state.get("order_guards", {}))
         if pending:
             self.state.status = "SAFE_MODE"
             self.log("RECOVERY_PENDING_ORDERS", {"order_ids": list(pending)})
@@ -166,7 +167,7 @@ class SovereignEngine:
             self.log("RECOVERY_POSITIONS_LOADED", {"symbols": list(recovered.keys())})
 
     def _persist_recovery(self) -> None:
-        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders)
+        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards())
 
     def reconcile_account_state(self) -> dict:
         """Verify local positions and open orders against the live exchange."""
