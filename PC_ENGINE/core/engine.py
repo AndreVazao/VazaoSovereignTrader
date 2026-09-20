@@ -759,7 +759,10 @@ class SovereignEngine:
                         self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
-                        self.ledger.trade({
+                        self._persist_recovery()
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
+        self.ledger.trade({
                             "exchange": position.exchange, "symbol": symbol, "side": "close", "qty": delta,
                             "entry": position.entry, "exit": fill_price,
                             "fees": allocated_entry_fee + fee_delta, "pnl_pct": pnl_pct,
@@ -929,8 +932,6 @@ class SovereignEngine:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
             raise
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
         if result.status == "PENDING_OR_PARTIAL":
             self.state.status = "SAFE_MODE"
             self.log("ORDER_FILL_UNCONFIRMED", {
@@ -959,6 +960,10 @@ class SovereignEngine:
                 "take_profit_pct": tp_pct,
                 "reason": reason,
             }
+            if result.qty > 0:
+                self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
+            self._persist_recovery()
+            self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
             if result.qty <= 0:
                 return
@@ -1001,8 +1006,6 @@ class SovereignEngine:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
             raise
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
         if result.status == "PENDING_OR_PARTIAL":
             self.state.status = "SAFE_MODE"
             self.log("EXIT_FILL_UNCONFIRMED", {
@@ -1027,6 +1030,10 @@ class SovereignEngine:
                 "known_quote_notional": float(result.qty) * float(result.price),
                 "created_ts": time.time(),
             }
+            if result.qty > 0:
+                self._record_financial_fill("sell", position.symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
+            self._persist_recovery()
+            self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
             if result.qty <= 0:
                 return
