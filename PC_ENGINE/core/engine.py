@@ -424,6 +424,9 @@ class SovereignEngine:
                             "created_ts": float(intent.get("created_ts") or time.time()),
                             "recovered_from_intent": intent_id,
                             "client_order_id": client_order_id,
+                            "stop_pct": float(intent.get("stop_pct") or 0.0),
+                            "take_profit_pct": float(intent.get("take_profit_pct") or 0.0),
+                            "reason": str(intent.get("reason") or "recovered_execution_intent"),
                         }
                         self.state.execution_intents.pop(intent_id, None)
                         self.log("EXECUTION_INTENT_RECOVERED_HISTORICAL_ORDER", {
@@ -456,6 +459,9 @@ class SovereignEngine:
                 "created_ts": float(intent.get("created_ts") or time.time()),
                 "recovered_from_intent": intent_id,
                 "client_order_id": client_order_id,
+                "stop_pct": float(intent.get("stop_pct") or 0.0),
+                "take_profit_pct": float(intent.get("take_profit_pct") or 0.0),
+                "reason": str(intent.get("reason") or "recovered_execution_intent"),
             }
             self.state.execution_intents.pop(intent_id, None)
             self.log("EXECUTION_INTENT_RECOVERED_OPEN_ORDER", {"intent_id": intent_id, "order_id": order_id, "symbol": symbol, "side": side})
@@ -488,7 +494,7 @@ class SovereignEngine:
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
                     fill_price = float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0)
-                    if position is None or fill_price <= 0:
+                    if fill_price <= 0:
                         self.state.status = "SAFE_MODE"
                         self.log("MANUAL_RECONCILIATION_REQUIRED", {
                             "order_id": order_id, "symbol": symbol, "side": side,
@@ -503,11 +509,37 @@ class SovereignEngine:
                     else:
                         fee_value = float(fee_raw or 0.0)
                     if side == "buy":
-                        old_qty = position.qty
-                        old_cost = position.entry * old_qty
-                        position.qty = old_qty + delta
-                        position.entry = (old_cost + fill_price * delta) / position.qty
-                        position.entry_fee += fee_value
+                        if position is None:
+                            stop_pct = float(item.get("stop_pct") or 0.0)
+                            tp_pct = float(item.get("take_profit_pct") or 0.0)
+                            if stop_pct <= 0 or tp_pct <= 0:
+                                self.state.status = "SAFE_MODE"
+                                self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                                    "order_id": order_id, "symbol": symbol,
+                                    "reason": "missing_buy_recovery_risk_metadata",
+                                })
+                                continue
+                            position = Position(
+                                exchange=exchange.name,
+                                symbol=symbol,
+                                entry=fill_price,
+                                qty=delta,
+                                stop=fill_price * (1 - stop_pct),
+                                take_profit=fill_price * (1 + tp_pct),
+                                opened_ts=float(item.get("created_ts") or time.time()),
+                                entry_fee=fee_value,
+                            )
+                            self.state.open_positions[symbol] = position
+                            self.log("POSITION_RECOVERED_FROM_PENDING_BUY", {
+                                "order_id": order_id, "symbol": symbol, "qty": delta,
+                                "entry": fill_price,
+                            })
+                        else:
+                            old_qty = position.qty
+                            old_cost = position.entry * old_qty
+                            position.qty = old_qty + delta
+                            position.entry = (old_cost + fill_price * delta) / position.qty
+                            position.entry_fee += fee_value
                     elif side == "sell":
                         if delta > position.qty + 1e-12:
                             self.state.status = "SAFE_MODE"
@@ -675,6 +707,9 @@ class SovereignEngine:
             "exchange": exchange.name, "symbol": symbol, "side": "buy",
             "requested_qty": float(qty), "reference_price": float(price),
             "client_order_id": client_order_id,
+            "stop_pct": float(stop_pct),
+            "take_profit_pct": float(tp_pct),
+            "reason": reason,
             "created_ts": time.time(),
         }
         self._persist_recovery()
@@ -709,6 +744,9 @@ class SovereignEngine:
                 "known_fee": result.fee,
                 "created_ts": time.time(),
                 "client_order_id": client_order_id,
+                "stop_pct": stop_pct,
+                "take_profit_pct": tp_pct,
+                "reason": reason,
             }
             self._persist_recovery()
             if result.qty <= 0:
@@ -737,6 +775,7 @@ class SovereignEngine:
             "exchange": exchange.name, "symbol": position.symbol, "side": "sell",
             "requested_qty": float(position.qty), "reference_price": float(price),
             "client_order_id": client_order_id,
+            "reason": reason,
             "created_ts": time.time(),
         }
         self._persist_recovery()
