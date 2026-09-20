@@ -99,6 +99,8 @@ class BrowserTradingConnector:
         response = self.human_bridge.consume_response(request_id)
         if not response:
             return {"ok": False, "status": "waiting"}
+        if not self.human_bridge.mark_applied(request_id):
+            return {"ok": False, "status": "invalid_request_state"}
         page = self.manager.page(self.platform, self.config.get("trading_url"))
         action = response.get("action", "fill")
         values = response.get("values", {})
@@ -114,7 +116,8 @@ class BrowserTradingConnector:
                 selector = selectors.get(f"{name}_input") or selectors.get(name)
                 if selector:
                     page.locator(str(selector)).first.fill(str(value))
-        return {"ok": True, "status": "applied", "action": action}
+        self.human_bridge.mark_completed(request_id)
+        return {"ok": True, "status": "completed", "action": action}
 
     def _detect_human_gate(self, page: Any) -> dict[str, Any] | None:
         settings = self.config.get("human_interaction", {})
