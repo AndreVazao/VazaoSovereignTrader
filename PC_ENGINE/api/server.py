@@ -33,6 +33,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         provided = request.headers.get("X-Token", "")
         if not expected or not hmac.compare_digest(provided, expected):
             raise PermissionError("unauthorized")
+        human_watchdog.heartbeat("pc")
 
     @app.errorhandler(PermissionError)
     def handle_unauthorized(_: PermissionError):
