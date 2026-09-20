@@ -236,6 +236,9 @@
     "enabled": true,
     "data_dir": "PC_ENGINE/data/human_bridge",
     "response_timeout_seconds": 900,
+    "mobile_timeout_seconds": 30,
+    "pc_timeout_seconds": 30,
+    "responded_timeout_seconds": 120,
     "notes": "Durable human-interaction queue. Request metadata may persist; passwords, OTPs and other secrets are never persisted by the bridge."
   },
   "browser": {
