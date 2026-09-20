@@ -39,12 +39,12 @@ class BrowserTradingConnector:
         self.live_enabled = bool(config.get("live_enabled", False))
         self.require_confirmation = bool(config.get("require_confirmation", True))
         self.confirmation_phrase = str(config.get("confirmation_phrase", "EXECUTE WEB ORDER"))
-        self.actions_path = Path(config.get(
-            "actions_log",
-            f"PC_ENGINE/data/browser/{platform}_actions.jsonl",
-        ))
+        self.actions_path = Path(config.get("actions_log", f"PC_ENGINE/data/browser/{platform}_actions.jsonl"))
         self.actions_path.parent.mkdir(parents=True, exist_ok=True)
-        self.human_bridge = HumanInteractionBridge(config.get("human_bridge_data_dir", "PC_ENGINE/data/human_bridge"))
+        self.human_bridge = HumanInteractionBridge(
+            config.get("human_bridge_data_dir", "PC_ENGINE/data/human_bridge"),
+            default_ttl_seconds=int(config.get("human_interaction_ttl_seconds", 900)),
+        )
 
     def open(self) -> dict[str, Any]:
         if not self.enabled:
@@ -84,40 +84,58 @@ class BrowserTradingConnector:
                 raise RuntimeError(f"missing selector: {button_key}")
 
             if not live:
-                return self._finish(action_id, side, symbol, quantity, "paper",
-                    "browser dry-run: form prepared; submit not clicked")
+                return self._finish(action_id, side, symbol, quantity, "paper", "browser dry-run: form prepared; submit not clicked")
 
             button.click()
             self._wait_for_confirmation(page, selectors)
-            return self._finish(action_id, side, symbol, quantity, "submitted",
-                "browser order submitted")
+            return self._finish(action_id, side, symbol, quantity, "submitted", "browser order submitted")
         except Exception as exc:
             self._capture(page, action_id)
             return self._finish(action_id, side, symbol, quantity, "error", str(exc))
 
     def resume_human_interaction(self, request_id: str) -> dict[str, Any]:
-        response = self.human_bridge.consume_response(request_id)
+        request = self.human_bridge.get(request_id)
+        if request is None:
+            return {"ok": False, "status": "not_found"}
+        if request.platform != self.platform:
+            return {"ok": False, "status": "platform_mismatch"}
+        if request.expires_at and time.time() >= request.expires_at:
+            self.human_bridge.cancel(request_id)
+            return {"ok": False, "status": "expired"}
+        current_session = self.manager.session_id(self.platform)
+        if request.session_id and request.session_id != current_session:
+            self.human_bridge.cancel(request_id)
+            return {"ok": False, "status": "session_mismatch"}
+        if request.status != "RESPONDED":
+            return {"ok": False, "status": "waiting" if request.status == "PENDING" else request.status.lower()}
+
+        response = self.human_bridge.peek_response(request_id)
         if not response:
-            return {"ok": False, "status": "waiting"}
-        if not self.human_bridge.mark_applied(request_id):
-            return {"ok": False, "status": "invalid_request_state"}
+            return {"ok": False, "status": "response_missing"}
+
         page = self.manager.page(self.platform, self.config.get("trading_url"))
         action = response.get("action", "fill")
         values = response.get("values", {})
         selectors = self.config.get("selectors", {})
-        if action == "click":
-            page.mouse.click(float(values["x"]), float(values["y"]))
-        elif action == "type":
-            page.keyboard.type(str(values.get("text", "")))
-        elif action == "press":
-            page.keyboard.press(str(values.get("key", "Enter")))
-        else:
-            for name, value in values.items():
-                selector = selectors.get(f"{name}_input") or selectors.get(name)
-                if selector:
-                    page.locator(str(selector)).first.fill(str(value))
-        self.human_bridge.mark_completed(request_id)
-        return {"ok": True, "status": "completed", "action": action}
+        try:
+            if action == "click":
+                page.mouse.click(float(values["x"]), float(values["y"]))
+            elif action == "type":
+                page.keyboard.type(str(values.get("text", "")))
+            elif action == "press":
+                page.keyboard.press(str(values.get("key", "Enter")))
+            else:
+                for name, value in values.items():
+                    selector = selectors.get(f"{name}_input") or selectors.get(name)
+                    if selector:
+                        page.locator(str(selector)).first.fill(str(value))
+            if not self.human_bridge.mark_applied(request_id):
+                return {"ok": False, "status": "invalid_request_state"}
+            self.human_bridge.consume_response(request_id)
+            self.human_bridge.mark_completed(request_id)
+            return {"ok": True, "status": "completed", "action": action}
+        except Exception as exc:
+            return {"ok": False, "status": "apply_error", "message": str(exc)}
 
     def _detect_human_gate(self, page: Any) -> dict[str, Any] | None:
         settings = self.config.get("human_interaction", {})
@@ -137,7 +155,11 @@ class BrowserTradingConnector:
         title = {"CAPTCHA": "CAPTCHA / verificação humana", "OTP": "Código de segurança / 2FA", "LOGIN": "Login necessário"}[kind]
         fields = settings.get("fields", [])
         if not fields:
-            fields = ([{"name": "username", "type": "text", "label": "Utilizador"}, {"name": "password", "type": "secret", "label": "Password"}] if kind == "LOGIN" else ([{"name": "otp", "type": "secret", "label": "Código"}] if kind == "OTP" else []))
+            fields = (
+                [{"name": "username", "type": "text", "label": "Utilizador"}, {"name": "password", "type": "secret", "label": "Password"}]
+                if kind == "LOGIN"
+                else ([{"name": "otp", "type": "secret", "label": "Código"}] if kind == "OTP" else [])
+            )
         screenshot_dir = Path(self.config.get("evidence_dir", "PC_ENGINE/data/browser/evidence"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         path = screenshot_dir / f"{self.platform}_human_{int(time.time()*1000)}.png"
@@ -146,9 +168,14 @@ class BrowserTradingConnector:
         except Exception:
             path = None
         request = self.human_bridge.create_request(
-            self.platform, kind, title,
+            self.platform,
+            kind,
+            title,
             "O PC precisa de uma intervenção humana. Faz a operação no telefone e envia-a; o browser continua nesta sessão.",
-            url=page.url, screenshot_path=str(path) if path else None, fields=fields,
+            url=page.url,
+            screenshot_path=str(path) if path else None,
+            fields=fields,
+            session_id=self.manager.session_id(self.platform),
         )
         return request.__dict__
 
@@ -182,8 +209,7 @@ class BrowserTradingConnector:
     def _wait_for_confirmation(self, page: Any, selectors: dict[str, Any]) -> None:
         selector = selectors.get("order_confirmation")
         if selector:
-            page.locator(selector).wait_for(state="visible",
-                timeout=int(self.config.get("confirmation_timeout_ms", 10000)))
+            page.locator(selector).wait_for(state="visible", timeout=int(self.config.get("confirmation_timeout_ms", 10000)))
         else:
             page.wait_for_timeout(int(self.config.get("post_submit_wait_ms", 1000)))
 
