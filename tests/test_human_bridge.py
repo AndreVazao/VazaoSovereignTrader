@@ -109,3 +109,32 @@ def test_claim_can_be_reissued_after_process_recovery(tmp_path):
     assert new_token and new_token != old_token
     assert not bridge.respond(item.request_id, action="fill", values={"otp": "1"}, claim_token=old_token or "")
     assert bridge.respond(item.request_id, action="fill", values={"otp": "2"}, claim_token=new_token)
+
+
+def test_watchdog_heartbeat_and_stale_detection(tmp_path):
+    from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
+    bridge = HumanInteractionBridge(str(tmp_path))
+    watchdog = HumanBridgeWatchdog(bridge, {"mobile_timeout_seconds": 10, "pc_timeout_seconds": 10})
+    watchdog.heartbeat("mobile")
+    watchdog.heartbeat("pc")
+    fresh = watchdog.check(time.time())
+    assert fresh["ok"] is True
+    stale = watchdog.check(time.time() + 11)
+    assert stale["safe_state"] is True
+    assert stale["mobile"]["stale"] is True
+    assert stale["pc"]["stale"] is True
+
+
+def test_watchdog_cancels_stuck_response(tmp_path):
+    from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
+    bridge = HumanInteractionBridge(str(tmp_path))
+    watchdog = HumanBridgeWatchdog(bridge, {"responded_timeout_seconds": 30})
+    item = bridge.create_request("binance", "OTP", "Codigo", "Intervencao")
+    assert bridge.respond(item.request_id, action="fill", values={"otp": "SECRET"}, claim_token=bridge.claim_token(item.request_id))
+    current = bridge.get(item.request_id)
+    current.updated_at = time.time() - 31
+    bridge._append(current)
+    result = watchdog.check(time.time())
+    assert result["cancelled_stuck_responses"] == 1
+    assert bridge.get(item.request_id).status == "CANCELLED"
+    assert bridge.peek_response(item.request_id) is None
