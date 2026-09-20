@@ -125,7 +125,7 @@ class MobileCockpit(App):
     def respond_human(self, item, fields):
         try:
             values = {name: widget.text for name, widget in fields.items()}
-            self._request("POST", "/human-interaction/respond", json={"request_id": item["request_id"], "action": "fill", "values": values})
+            self._request("POST", "/human-interaction/respond", json={"request_id": item["request_id"], "claim_token": item.get("claim_token", ""), "action": "fill", "values": values})
             for widget in fields.values():
                 widget.text = ""
             self.refresh_human(0)
