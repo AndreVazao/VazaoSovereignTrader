@@ -57,6 +57,7 @@ class RuntimeState:
     paper_collector: Dict[str, object] = field(default_factory=dict)
     research: Dict[str, object] = field(default_factory=dict)
     pending_orders: Dict[str, dict] = field(default_factory=dict)
+    execution_intents: Dict[str, dict] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
 
 
@@ -151,11 +152,16 @@ class SovereignEngine:
         raw_state = self.recovery.load_state()
         raw_positions = raw_state.get("positions", {})
         pending = raw_state.get("pending_orders", {})
+        intents = raw_state.get("execution_intents", {})
         self.state.pending_orders.update(pending)
+        self.state.execution_intents.update(intents)
         self.order_manager.restore_order_guards(raw_state.get("order_guards", {}))
         if pending:
             self.state.status = "SAFE_MODE"
             self.log("RECOVERY_PENDING_ORDERS", {"order_ids": list(pending)})
+        if intents:
+            self.state.status = "SAFE_MODE"
+            self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS", {"intent_ids": list(intents)})
         recovered = {}
         for symbol, data in raw_positions.items():
             try:
@@ -167,7 +173,7 @@ class SovereignEngine:
             self.log("RECOVERY_POSITIONS_LOADED", {"symbols": list(recovered.keys())})
 
     def _persist_recovery(self) -> None:
-        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards())
+        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards(), self.state.execution_intents)
 
     def reconcile_account_state(self) -> dict:
         """Verify local positions and open orders against the live exchange."""
@@ -555,7 +561,21 @@ class SovereignEngine:
         self._persist_recovery()
 
     def _open_position(self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float, stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0) -> None:
-        result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct)
+        intent_id = f"intent-{time.time_ns()}"
+        self.state.execution_intents[intent_id] = {
+            "exchange": exchange.name, "symbol": symbol, "side": "buy",
+            "requested_qty": float(qty), "reference_price": float(price),
+            "created_ts": time.time(),
+        }
+        self._persist_recovery()
+        try:
+            result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct)
+        except Exception:
+            self.state.status = "SAFE_MODE"
+            self._persist_recovery()
+            raise
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
         if result.status == "PENDING_OR_PARTIAL":
             self.state.status = "SAFE_MODE"
             self.log("ORDER_FILL_UNCONFIRMED", {
@@ -600,7 +620,21 @@ class SovereignEngine:
         self.log("POSITION_OPENED", {"symbol": symbol, "price": result.price, "qty": result.qty, "fee": result.fee, "reason": reason})
 
     def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
-        result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct)
+        intent_id = f"intent-{time.time_ns()}"
+        self.state.execution_intents[intent_id] = {
+            "exchange": exchange.name, "symbol": position.symbol, "side": "sell",
+            "requested_qty": float(position.qty), "reference_price": float(price),
+            "created_ts": time.time(),
+        }
+        self._persist_recovery()
+        try:
+            result = self.order_manager.sell(exchange, position.symbol, position.qty, self.paper, spread_pct)
+        except Exception:
+            self.state.status = "SAFE_MODE"
+            self._persist_recovery()
+            raise
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
         if result.status == "PENDING_OR_PARTIAL":
             self.state.status = "SAFE_MODE"
             self.log("EXIT_FILL_UNCONFIRMED", {
