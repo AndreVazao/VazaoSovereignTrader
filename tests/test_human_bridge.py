@@ -87,3 +87,25 @@ def test_claim_token_is_not_persisted(tmp_path):
     raw = (tmp_path / "requests.jsonl").read_text(encoding="utf-8")
     assert token not in raw
     assert item.claim_token_hash in raw
+
+
+def test_expired_request_is_transitioned_and_cannot_be_replayed(tmp_path):
+    import time
+    bridge = HumanInteractionBridge(str(tmp_path), default_ttl_seconds=30)
+    item = bridge.create_request("binance", "OTP", "Codigo", "Intervencao")
+    item.expires_at = time.time() - 1
+    bridge._append(item)
+    assert bridge.pending() == []
+    assert bridge.get(item.request_id).status == "EXPIRED"
+    assert not bridge.respond(item.request_id, action="fill", values={"otp": "123456"}, claim_token=bridge.claim_token(item.request_id) or "")
+
+
+def test_claim_can_be_reissued_after_process_recovery(tmp_path):
+    bridge = HumanInteractionBridge(str(tmp_path))
+    item = bridge.create_request("binance", "OTP", "Codigo", "Intervencao")
+    old_token = bridge.claim_token(item.request_id)
+    bridge._RAM_CLAIMS.pop(item.request_id, None)
+    new_token = bridge.reissue_claim(item.request_id)
+    assert new_token and new_token != old_token
+    assert not bridge.respond(item.request_id, action="fill", values={"otp": "1"}, claim_token=old_token or "")
+    assert bridge.respond(item.request_id, action="fill", values={"otp": "2"}, claim_token=new_token)
