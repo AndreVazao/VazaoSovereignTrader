@@ -53,6 +53,7 @@ class RuntimeState:
     watchdog: Dict[str, str | bool | int] = field(default_factory=dict)
     preflight: Dict[str, object] = field(default_factory=dict)
     account_reconciliation: Dict[str, object] = field(default_factory=dict)
+    financial_reconciliation: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
     research: Dict[str, object] = field(default_factory=dict)
@@ -527,6 +528,46 @@ class SovereignEngine:
             raise ValueError(f"non-quote fee currency for {symbol}: {sorted(currencies)}")
         return max(0.0, total)
 
+    def _validate_order_financial_invariant(self, raw: dict, symbol: str, filled_qty: float, average_price: float) -> dict:
+        """Validate exchange-reported quantity/price/cost consistency before accounting."""
+        cfg = self.config.get("reconciliation", {})
+        relative_tolerance = max(0.0, float(cfg.get("financial_relative_tolerance", 0.002)))
+        cost = raw.get("cost")
+        fee = raw.get("fee")
+        if cost is None:
+            cost_value = None
+        else:
+            cost_value = float(cost)
+            if cost_value < 0:
+                return {"ok": False, "reason": "negative_order_cost", "cost": cost_value}
+        if average_price < 0 or filled_qty < 0:
+            return {"ok": False, "reason": "negative_fill_or_price"}
+        expected_cost = filled_qty * average_price
+        if cost_value is not None:
+            tolerance = max(1e-12, abs(expected_cost) * relative_tolerance)
+            if abs(cost_value - expected_cost) > tolerance:
+                return {
+                    "ok": False,
+                    "reason": "order_cost_price_quantity_mismatch",
+                    "reported_cost": cost_value,
+                    "expected_cost": expected_cost,
+                    "tolerance": tolerance,
+                }
+        fee_value = 0.0
+        if isinstance(fee, dict):
+            fee_cost = fee.get("cost")
+            if fee_cost is not None:
+                fee_value = float(fee_cost)
+        if fee_value < 0:
+            return {"ok": False, "reason": "negative_fee", "fee": fee_value}
+        return {
+            "ok": True,
+            "reported_cost": cost_value,
+            "expected_cost": expected_cost,
+            "fee": fee_value,
+            "relative_tolerance": relative_tolerance,
+        }
+
     def _reconcile_pending_orders(self) -> None:
         """Reconcile exchange fills idempotently, including partial fills and fees."""
         exchange = self._main_exchange()
@@ -563,6 +604,21 @@ class SovereignEngine:
                 known_filled = float(item.get("known_filled_qty") or 0.0)
                 delta = max(0.0, final_filled - known_filled)
                 side = str(item.get("side", "")).lower()
+                financial = self._validate_order_financial_invariant(
+                    raw, symbol, final_filled,
+                    float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0),
+                )
+                self.state.financial_reconciliation = {
+                    "order_id": order_id,
+                    "symbol": symbol,
+                    **financial,
+                    "checked_at": time.time(),
+                }
+                if not financial.get("ok", False):
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_FINANCIAL_INVARIANT_BLOCKED", self.state.financial_reconciliation)
+                    continue
+
                 cumulative_fee = self._extract_cumulative_quote_fee(raw, symbol)
                 known_fee = float(item.get("known_fee") or 0.0)
                 fee_delta = max(0.0, cumulative_fee - known_fee)
