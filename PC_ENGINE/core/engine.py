@@ -750,6 +750,11 @@ class SovereignEngine:
                         })
                         continue
 
+                    if side == "buy":
+                        self.state.financial_account["quote_flow"] = float(self.state.financial_account.get("quote_flow", 0.0) or 0.0) - delta_notional - fee_delta
+                    elif side == "sell":
+                        self.state.financial_account["quote_flow"] = float(self.state.financial_account.get("quote_flow", 0.0) or 0.0) + delta_notional - fee_delta
+
                 item["known_filled_qty"] = final_filled
                 item["known_fee"] = cumulative_fee
                 item["known_quote_notional"] = cumulative_notional
