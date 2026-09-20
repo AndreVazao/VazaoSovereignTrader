@@ -17,6 +17,8 @@ class OrderResult:
     fee: float
     order_id: str
     reason: str
+    requested_qty: float = 0.0
+    status: str = "FILLED"
 
 
 class OrderManager:
@@ -35,28 +37,39 @@ class OrderManager:
     def _execute(self, exchange, symbol: str, side: str, qty: float, price: float, paper: bool, spread_pct: float) -> OrderResult:
         valid, reason, normalized_qty = self.rules.validate_order(exchange, symbol, qty, price)
         if not valid:
-            return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", reason)
+            return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", reason, normalized_qty, "REJECTED")
 
         fingerprint = f"{exchange.name}:{symbol}:{side}:{round(normalized_qty, 12)}:{round(price, 8)}"
         now = time.monotonic()
         last = self.last_client_order.get(fingerprint)
         if last is not None and now - last < self.duplicate_window_seconds:
-            return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", "duplicate blocked")
+            return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", "duplicate blocked", normalized_qty, "REJECTED")
         self.last_client_order[fingerprint] = now
 
         try:
             if paper:
                 fill = self.paper_broker.fill(symbol, side, normalized_qty, price, spread_pct)
-                return OrderResult(True, side, symbol, normalized_qty, fill.fill_price, fill.fee, f"paper-{side}", "paper fill")
+                return OrderResult(True, side, symbol, normalized_qty, fill.fill_price, fill.fee, f"paper-{side}", "paper fill", normalized_qty, "FILLED")
 
             raw = exchange.market_buy(symbol, normalized_qty) if side == "buy" else exchange.market_sell(symbol, normalized_qty)
-            filled_qty = float(raw.get("filled") or raw.get("amount") or normalized_qty)
+            filled_raw = raw.get("filled")
+            amount_raw = raw.get("amount")
+            filled_qty = float(filled_raw if filled_raw is not None else (amount_raw if raw.get("status") == "closed" else 0.0))
             fill_price = float(raw.get("average") or raw.get("price") or price)
             fee = self._extract_fee(raw, symbol, fill_price)
-            return OrderResult(True, side, symbol, filled_qty, fill_price, fee, str(raw.get("id", "")), "exchange accepted")
+            status = str(raw.get("status") or "").lower()
+            if status in {"closed", "filled"}:
+                normalized_status = "FILLED"
+            elif status in {"open", "new", "partially_filled", "partially-filled"} or filled_qty < normalized_qty:
+                normalized_status = "PENDING_OR_PARTIAL"
+            else:
+                normalized_status = "UNKNOWN"
+            ok = filled_qty > 0 and normalized_status in {"FILLED", "PENDING_OR_PARTIAL"}
+            reason = "exchange fill confirmed" if normalized_status == "FILLED" else "exchange order submitted without full fill confirmation"
+            return OrderResult(ok, side, symbol, filled_qty, fill_price, fee, str(raw.get("id", "")), reason, normalized_qty, normalized_status)
         except Exception as exc:
             self.last_client_order.pop(fingerprint, None)
-            return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", f"exchange error: {exc}")
+            return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", f"exchange error: {exc}", normalized_qty, "ERROR")
 
     @staticmethod
     def _extract_fee(raw: dict, symbol: str, fill_price: float) -> float:
