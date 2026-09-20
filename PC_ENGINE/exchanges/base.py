@@ -47,6 +47,10 @@ class ExchangeClient(ABC):
         """Return currently open exchange orders; fail closed if unsupported."""
         raise NotImplementedError("open-order reconciliation is not supported")
 
+    def fetch_order_by_client_order_id(self, client_order_id: str, symbol: str) -> Dict[str, Any]:
+        """Find an order by client identity; fail closed if unsupported."""
+        raise NotImplementedError("client-order-id reconciliation is not supported")
+
     def fetch_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         """Return exchange order state; implementations must fail closed if unsupported."""
         raise NotImplementedError("exchange order reconciliation is not supported")
