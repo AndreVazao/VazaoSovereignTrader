@@ -969,6 +969,8 @@ class SovereignEngine:
                 return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": symbol, "side": "buy", "reason": result.reason})
+            self.state.execution_intents.pop(intent_id, None)
+            self._persist_recovery()
             return
         position = Position(
             exchange=exchange.name,
@@ -1039,6 +1041,8 @@ class SovereignEngine:
                 return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": position.symbol, "side": "sell", "reason": result.reason})
+            self.state.execution_intents.pop(intent_id, None)
+            self._persist_recovery()
             return
         filled_qty = min(float(result.qty), float(position.qty))
         if filled_qty <= 0:
