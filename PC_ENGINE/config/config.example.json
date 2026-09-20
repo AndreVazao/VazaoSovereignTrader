@@ -215,7 +215,11 @@
   "research": {
     "enabled": true,
     "data_dir": "PC_ENGINE/data/research",
-    "notes": "Human research requests are hypotheses only. They must pass evidence, PAPER and OOS validation before any execution relevance. Public-source collection only unless a permitted connector is configured."
+    "worker_interval_seconds": 2.0,
+    "autonomous_observation_enabled": true,
+    "min_observation_score": 70,
+    "dedupe_seconds": 3600,
+    "notes": "Research may originate from the operator or autonomous market observations. Public-source findings and internal hypotheses are evidence only; they must be measured on own data and pass PAPER/OOS/readiness gates before any execution relevance."
   },
   "human_bridge": {
     "enabled": true,
