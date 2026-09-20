@@ -92,25 +92,27 @@ def run(data_dir: str | Path | None = None) -> dict:
     outcome_engine.save(outcomes, str(data_root / "state_outcomes.jsonl"))
 
     walk = WalkForwardEvaluator(data_dir=data_root).evaluate()
-    walk_passed = bool(walk.get("results")) and any(bool(row.get("passed")) for row in walk["results"])
+    walk_results = walk.get("results", [])
+    walk_passed = bool(walk_results) and all(bool(row.get("passed")) for row in walk_results)
     _write_json(validation_dir / "walk_forward.json", {
         "generated_ts_ms": int(time.time() * 1000),
         "ok": walk_passed,
         "passed": walk_passed,
         "paper_only": True,
         "source": "confluence_outcomes.jsonl",
-        "results": walk.get("results", []),
+        "results": walk_results,
     })
 
     regime = RegimeAwareValidator(data_dir=data_root).evaluate()
-    regime_passed = bool(regime.get("results")) and any(bool(row.get("passed")) for row in regime["results"])
+    regime_results = regime.get("results", [])
+    regime_passed = bool(regime_results) and all(bool(row.get("passed")) for row in regime_results)
     _write_json(validation_dir / "regime_validation.json", {
         "generated_ts_ms": int(time.time() * 1000),
         "ok": regime_passed,
         "passed": regime_passed,
         "paper_only": True,
         "source": "confluence_outcomes.jsonl",
-        "results": regime.get("results", []),
+        "results": regime_results,
     })
 
     execution = run_execution_smoke_test()
