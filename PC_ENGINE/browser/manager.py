@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +9,12 @@ from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
 
 class BrowserManager:
-    """Persistent Chromium profiles, one isolated context per platform."""
+    """Persistent Chromium profiles, one isolated context per platform.
+
+    A fresh in-memory session id is created whenever a platform page is created.
+    Human-bridge requests are bound to that id so a stale response cannot be
+    applied to a different browser page after a restart/replacement.
+    """
 
     def __init__(self, settings: dict[str, Any] | None = None):
         self.settings = settings or {}
@@ -20,6 +26,7 @@ class BrowserManager:
         self._browser: Browser | None = None
         self._contexts: dict[str, BrowserContext] = {}
         self._pages: dict[str, Page] = {}
+        self._session_ids: dict[str, str] = {}
         self._lock = threading.RLock()
 
     def start(self) -> None:
@@ -38,6 +45,7 @@ class BrowserManager:
                     pass
             self._contexts.clear()
             self._pages.clear()
+            self._session_ids.clear()
             if self._browser is not None:
                 try:
                     self._browser.close()
@@ -77,14 +85,23 @@ class BrowserManager:
             page = context.pages[0] if context.pages else context.new_page()
             page.set_default_timeout(self.timeout_ms)
             self._pages[key] = page
+            self._session_ids[key] = uuid.uuid4().hex
             if url and (page.url == "about:blank" or page.url != url):
                 page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
             return page
+
+    def session_id(self, platform: str) -> str:
+        key = self._safe_key(platform)
+        with self._lock:
+            if key not in self._session_ids:
+                self.page(platform)
+            return self._session_ids[key]
 
     def close_platform(self, platform: str) -> None:
         key = self._safe_key(platform)
         with self._lock:
             page = self._pages.pop(key, None)
+            self._session_ids.pop(key, None)
             if page is not None:
                 try:
                     page.close()
