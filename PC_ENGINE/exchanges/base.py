@@ -35,6 +35,14 @@ class ExchangeClient(ABC):
     def market_sell(self, symbol: str, qty: float) -> Dict[str, Any]:
         raise NotImplementedError
 
+    def market_buy_with_client_order_id(self, symbol: str, qty: float, client_order_id: str) -> Dict[str, Any]:
+        """Submit a buy while preserving an optional deterministic client identity."""
+        return self.market_buy(symbol, qty)
+
+    def market_sell_with_client_order_id(self, symbol: str, qty: float, client_order_id: str) -> Dict[str, Any]:
+        """Submit a sell while preserving an optional deterministic client identity."""
+        return self.market_sell(symbol, qty)
+
     def fetch_open_orders(self, symbol: str | None = None) -> List[Dict[str, Any]]:
         """Return currently open exchange orders; fail closed if unsupported."""
         raise NotImplementedError("open-order reconciliation is not supported")
