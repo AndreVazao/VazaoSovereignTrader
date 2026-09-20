@@ -269,7 +269,7 @@ class SovereignEngine:
             except Exception as exc:
                 self.state.status = "SAFE_MODE"
                 self.log("ENGINE_ERROR_SAFE_MODE", {"error": str(exc)})
-                self.recovery.save_positions(self.state.open_positions)
+                self._persist_recovery()
                 time.sleep(15)
                 continue
             time.sleep(float(self.config["engine"].get("cycle_seconds", 20)))
@@ -329,12 +329,17 @@ class SovereignEngine:
                         })
                         continue
 
+                    fee_raw = raw.get("fee", 0.0)
+                    if isinstance(fee_raw, dict):
+                        fee_value = float(fee_raw.get("cost") or fee_raw.get("amount") or 0.0)
+                    else:
+                        fee_value = float(fee_raw or 0.0)
                     if side == "buy":
                         old_qty = position.qty
                         old_cost = position.entry * old_qty
                         position.qty = old_qty + delta
                         position.entry = (old_cost + fill_price * delta) / position.qty
-                        position.entry_fee += float(raw.get("fee", 0.0) or 0.0)
+                        position.entry_fee += fee_value
                     elif side == "sell":
                         if delta > position.qty + 1e-12:
                             self.state.status = "SAFE_MODE"
@@ -345,7 +350,7 @@ class SovereignEngine:
                             continue
                         allocated_entry_fee = position.entry_fee * (delta / position.qty) if position.qty > 0 else 0.0
                         gross_pnl = (fill_price - position.entry) * delta
-                        sell_fee = float(raw.get("fee", 0.0) or 0.0)
+                        sell_fee = fee_value
                         net_pnl = gross_pnl - allocated_entry_fee - sell_fee
                         pnl_pct = net_pnl / (position.entry * delta) if position.entry > 0 and delta > 0 else 0.0
                         self.risk.record_trade_result(symbol, pnl_pct)
