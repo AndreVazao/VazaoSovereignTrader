@@ -952,6 +952,7 @@ class SovereignEngine:
                 "known_filled_qty": result.qty,
                 "known_fill_price": result.price,
                 "known_fee": result.fee,
+                "known_quote_notional": float(result.qty) * float(result.price),
                 "created_ts": time.time(),
                 "client_order_id": client_order_id,
                 "stop_pct": stop_pct,
@@ -974,8 +975,13 @@ class SovereignEngine:
             opened_ts=time.time(),
             entry_fee=result.fee,
         )
+        if result.status != "PENDING_OR_PARTIAL":
+            self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
         with self.lock:
             self.state.open_positions[symbol] = position
+        self._persist_recovery()
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
         self.log("POSITION_OPENED", {"symbol": symbol, "price": result.price, "qty": result.qty, "fee": result.fee, "reason": reason})
 
     def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
@@ -1018,6 +1024,7 @@ class SovereignEngine:
                 "known_filled_qty": result.qty,
                 "known_fill_price": result.price,
                 "known_fee": result.fee,
+                "known_quote_notional": float(result.qty) * float(result.price),
                 "created_ts": time.time(),
             }
             self._persist_recovery()
@@ -1029,6 +1036,8 @@ class SovereignEngine:
         filled_qty = min(float(result.qty), float(position.qty))
         if filled_qty <= 0:
             return
+        if result.status != "PENDING_OR_PARTIAL":
+            self._record_financial_fill("sell", position.symbol, filled_qty, float(result.price) * filled_qty, float(result.fee))
         allocated_entry_fee = position.entry_fee * (filled_qty / position.qty) if position.qty > 0 else 0.0
         notional = result.price * filled_qty
         gross_pnl = (result.price - position.entry) * filled_qty
