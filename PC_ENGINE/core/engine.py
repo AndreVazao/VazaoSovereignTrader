@@ -97,7 +97,11 @@ class SovereignEngine:
             min_observation_score=float(research_cfg.get("min_observation_score", 70.0)),
             dedupe_seconds=float(research_cfg.get("dedupe_seconds", 3600.0)),
         )
-        self.research_worker = ResearchWorker(research_dir)
+        self.research_worker = ResearchWorker(
+            research_dir,
+            replay_path=str(research_cfg.get("replay_path", "PC_ENGINE/data/replay/l2_temporal_replay.json")),
+            oos_path=str(research_cfg.get("oos_path", "PC_ENGINE/data/radar/l2_oos_validation.json")),
+        )
         self.research_stop_event = threading.Event()
         self.research_thread: Optional[threading.Thread] = None
         self._load_recovery_state()
@@ -330,7 +334,8 @@ class SovereignEngine:
                 self.state.regimes[symbol] = signal.regime
                 with self.lock:
                     self.state.opportunities[symbol] = asdict(opportunity)
-                self.autonomous_research.observe(symbol, score, signal.regime, asdict(opportunity))
+                if self.config.get("research", {}).get("enabled", True) and self.config.get("research", {}).get("autonomous_observation_enabled", True):
+                    self.autonomous_research.observe(symbol, score, signal.regime, asdict(opportunity))
             except Exception as exc:
                 scores[symbol] = 0.0
                 self.log("SYMBOL_ANALYSIS_ERROR", {"symbol": symbol, "error": str(exc)})
