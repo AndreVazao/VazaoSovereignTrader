@@ -628,7 +628,7 @@ class SovereignEngine:
         }
         self._persist_recovery()
         try:
-            result = self.order_manager.sell(exchange, position.symbol, position.qty, self.paper, spread_pct)
+            result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct)
         except Exception:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
