@@ -34,6 +34,11 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def _all_validation_rows_passed(results: list[dict]) -> bool:
+    """Readiness requires every evaluated validation slice to pass."""
+    return bool(results) and all(bool(row.get("passed")) for row in results)
+
+
 def run_execution_smoke_test() -> dict:
     """Exercise only the PAPER execution primitives; never touches an exchange."""
     rules = ExchangeRulesEngine()
@@ -93,7 +98,7 @@ def run(data_dir: str | Path | None = None) -> dict:
 
     walk = WalkForwardEvaluator(data_dir=data_root).evaluate()
     walk_results = walk.get("results", [])
-    walk_passed = bool(walk_results) and all(bool(row.get("passed")) for row in walk_results)
+    walk_passed = _all_validation_rows_passed(walk_results)
     _write_json(validation_dir / "walk_forward.json", {
         "generated_ts_ms": int(time.time() * 1000),
         "ok": walk_passed,
@@ -105,7 +110,7 @@ def run(data_dir: str | Path | None = None) -> dict:
 
     regime = RegimeAwareValidator(data_dir=data_root).evaluate()
     regime_results = regime.get("results", [])
-    regime_passed = bool(regime_results) and all(bool(row.get("passed")) for row in regime_results)
+    regime_passed = _all_validation_rows_passed(regime_results)
     _write_json(validation_dir / "regime_validation.json", {
         "generated_ts_ms": int(time.time() * 1000),
         "ok": regime_passed,
