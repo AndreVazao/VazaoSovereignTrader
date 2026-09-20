@@ -16,8 +16,8 @@ class FakeExchange:
 
 
 class FakeRecovery:
-    def save_positions(self, positions, pending_orders=None):
-        self.saved = (positions, pending_orders)
+    def save_positions(self, positions, pending_orders=None, order_guards=None, execution_intents=None):
+        self.saved = (positions, pending_orders, order_guards, execution_intents)
 
 
 class FakeLedger:
@@ -98,3 +98,27 @@ def test_reconcile_pending_sell_reduces_position_by_unseen_fill_delta():
     assert engine.state.open_positions["BTC/USDT"].qty == 0.5
     assert engine.state.pending_orders == {}
     assert len(engine.ledger.trades) == 1
+
+
+def test_reconcile_unknown_status_keeps_safe_mode_and_pending_order():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "buy-unknown", "status": "mystery", "filled": 0.2, "average": 100.0},
+        position,
+        {"buy-unknown": {"symbol": "BTC/USDT", "side": "buy", "known_filled_qty": 0.2}},
+    )
+    engine._reconcile_pending_orders()
+    assert engine.state.status == "SAFE_MODE"
+    assert "buy-unknown" in engine.state.pending_orders
+
+
+def test_reconcile_open_order_keeps_safe_mode_and_pending_order():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "buy-open", "status": "open", "filled": 0.2, "average": 100.0},
+        position,
+        {"buy-open": {"symbol": "BTC/USDT", "side": "buy", "known_filled_qty": 0.2}},
+    )
+    engine._reconcile_pending_orders()
+    assert engine.state.status == "SAFE_MODE"
+    assert "buy-open" in engine.state.pending_orders
