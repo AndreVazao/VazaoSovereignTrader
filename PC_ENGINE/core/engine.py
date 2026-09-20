@@ -53,6 +53,7 @@ class RuntimeState:
     preflight: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
+    research: Dict[str, object] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
 
 
