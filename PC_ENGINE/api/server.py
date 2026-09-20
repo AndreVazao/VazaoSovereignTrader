@@ -113,7 +113,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             screenshot_path=payload.get("screenshot_path"),
             fields=payload.get("fields") or [],
         )
-        return jsonify({"ok": True, "request": item.__dict__})
+        return jsonify({"ok": True, "request": human_bridge.public_item(item)})
 
     @app.get("/human-interaction/screenshot-data/<request_id>")
     def human_interaction_screenshot_data(request_id: str):
@@ -134,7 +134,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         payload = request.get_json(force=True) or {}
         request_id = str(payload.get("request_id", ""))
         # The browser connector consumes the RAM-only response and reproduces the action locally.
-        ok = human_bridge.respond(request_id, action=str(payload.get("action", "click")), values=payload.get("values") or {})
+        ok = human_bridge.respond(request_id, action=str(payload.get("action", "click")), values=payload.get("values") or {}, claim_token=str(payload.get("claim_token", "")))
         return jsonify({"ok": ok}), (200 if ok else 404)
 
     @app.post("/human-interaction/respond")
@@ -143,9 +143,10 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         payload = request.get_json(force=True) or {}
         request_id = str(payload.get("request_id", ""))
         values = payload.get("values") or {}
+        claim_token = str(payload.get("claim_token", ""))
         if not isinstance(values, dict):
             return jsonify({"ok": False, "error": "values_must_be_object"}), 400
-        ok = human_bridge.respond(request_id, action=str(payload.get("action", "fill")), values=values)
+        ok = human_bridge.respond(request_id, action=str(payload.get("action", "fill")), values=values, claim_token=claim_token)
         return jsonify({"ok": ok}), (200 if ok else 404)
 
     @app.post("/human-interaction/cancel")
