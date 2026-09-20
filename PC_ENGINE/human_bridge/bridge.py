@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import threading
+import hmac
 import time
 import uuid
+import hashlib
+import secrets
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -24,11 +27,13 @@ class HumanInteractionRequest:
     updated_at: float
     session_id: str | None = None
     expires_at: float = 0.0
+    claim_token_hash: str | None = None
 
 
 class HumanInteractionBridge:
     _RAM_RESPONSES: dict[str, dict[str, Any]] = {}
     _RAM_LOCK = threading.RLock()
+    _RAM_CLAIMS: dict[str, str] = {}
 
     """Durable control-plane for human web interactions.
 
@@ -58,8 +63,10 @@ class HumanInteractionBridge:
     ) -> HumanInteractionRequest:
         now = time.time()
         ttl = max(30, int(ttl_seconds if ttl_seconds is not None else self.default_ttl_seconds))
+        request_id = uuid.uuid4().hex
+        claim_token = secrets.token_urlsafe(24)
         item = HumanInteractionRequest(
-            uuid.uuid4().hex,
+            request_id,
             platform,
             kind,
             title,
@@ -72,9 +79,12 @@ class HumanInteractionBridge:
             now,
             session_id,
             now + ttl,
+            hashlib.sha256(claim_token.encode()).hexdigest(),
         )
         with self._lock:
             self._append(item)
+            with self._RAM_LOCK:
+                self._RAM_CLAIMS[item.request_id] = claim_token
         return item
 
     def get(self, request_id: str) -> HumanInteractionRequest | None:
@@ -83,10 +93,31 @@ class HumanInteractionBridge:
 
     def pending(self) -> list[dict[str, Any]]:
         latest = self._latest()
-        return [asdict(x) for x in latest.values() if x.status == "PENDING" and not self._is_expired(x)]
+        return [self.public_item(x) for x in latest.values() if x.status == "PENDING" and not self._is_expired(x)]
 
-    def respond(self, request_id: str, *, action: str, values: dict[str, Any] | None = None) -> bool:
+    def claim_token(self, request_id: str) -> str | None:
+        with self._RAM_LOCK:
+            return self._RAM_CLAIMS.get(request_id)
+
+    def authenticate_claim(self, request_id: str, claim_token: str) -> bool:
+        item = self.get(request_id)
+        if item is None or not claim_token or not item.claim_token_hash:
+            return False
+        digest = hashlib.sha256(claim_token.encode()).hexdigest()
+        return hmac.compare_digest(digest, item.claim_token_hash) and not self._is_expired(item)
+
+    def public_item(self, item: HumanInteractionRequest) -> dict[str, Any]:
+        data = asdict(item)
+        data.pop("claim_token_hash", None)
+        token = self.claim_token(item.request_id)
+        if token:
+            data["claim_token"] = token
+        return data
+
+    def respond(self, request_id: str, *, action: str, values: dict[str, Any] | None = None, claim_token: str = "") -> bool:
         values = values or {}
+        if not self.authenticate_claim(request_id, claim_token):
+            return False
         with self._lock:
             item = self._latest().get(request_id)
             if item is None or item.status != "PENDING" or self._is_expired(item):
@@ -141,6 +172,7 @@ class HumanInteractionBridge:
             self._append(item)
             with self._RAM_LOCK:
                 self._RAM_RESPONSES.pop(self._response_key(request_id), None)
+                self._RAM_CLAIMS.pop(request_id, None)
             return True
 
     def snapshot(self) -> dict[str, Any]:
@@ -150,7 +182,7 @@ class HumanInteractionBridge:
             "responded_waiting_pc": sum(x.status == "RESPONDED" for x in latest.values()),
             "applied": sum(x.status == "APPLIED" for x in latest.values()),
             "requests": [
-                asdict(x) for x in latest.values()
+                self.public_item(x) for x in latest.values()
                 if x.status in {"PENDING", "RESPONDED", "APPLIED"}
             ],
         }
