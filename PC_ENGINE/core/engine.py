@@ -230,8 +230,16 @@ class SovereignEngine:
                 expected_by_asset[base_asset] = expected_by_asset.get(base_asset, 0.0) + float(position.qty)
                 symbols_by_asset.setdefault(base_asset, []).append(symbol)
 
+            position_baseline = financial.get("position_baseline_qty")
+            if not isinstance(position_baseline, dict):
+                position_baseline = {asset: float(qty) for asset, qty in expected_by_asset.items()}
+                financial["position_baseline_qty"] = dict(position_baseline)
+                financial.setdefault("base_flow", {})
+                financial["initialized_at"] = time.time()
+                self.log("FINANCIAL_POSITION_BASELINE_INITIALIZED", {"position_baseline_qty": position_baseline})
+            baseline = financial.get("baseline_total")
             if baseline is None:
-                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote or str(k) in expected_by_asset}
+                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote}
                 financial["baseline_total"] = baseline
                 financial["quote_flow"] = quote_flow
                 financial["initialized_at"] = time.time()
@@ -242,18 +250,20 @@ class SovereignEngine:
             quote_tol = max(dust_tolerance, abs(expected_quote) * financial_tolerance)
             quote_mismatch = abs(exchange_quote - expected_quote) > quote_tol
             base_flow_mismatches = []
-            for asset, flow in base_flow.items():
-                baseline_asset = float(baseline.get(asset, 0.0) or 0.0)
-                expected_asset = baseline_asset + float(flow or 0.0)
-                exchange_asset = float(total.get(asset, 0.0) or 0.0)
-                tolerance = max(dust_tolerance, abs(expected_asset) * financial_tolerance)
-                if abs(exchange_asset - expected_asset) > tolerance:
+            all_base_assets = set(position_baseline) | set(expected_by_asset) | set(base_flow)
+            for asset in all_base_assets:
+                baseline_position = float(position_baseline.get(asset, 0.0) or 0.0)
+                current_position = float(expected_by_asset.get(asset, 0.0) or 0.0)
+                flow = float(base_flow.get(asset, 0.0) or 0.0)
+                expected_position = baseline_position + flow
+                tolerance = max(dust_tolerance, abs(expected_position) * financial_tolerance)
+                if abs(current_position - expected_position) > tolerance:
                     base_flow_mismatches.append({
                         "asset": asset,
-                        "baseline": baseline_asset,
-                        "flow": float(flow or 0.0),
-                        "expected_exchange_total": expected_asset,
-                        "exchange_total": exchange_asset,
+                        "baseline_position": baseline_position,
+                        "flow": flow,
+                        "expected_local_position": expected_position,
+                        "local_position": current_position,
                         "tolerance": tolerance,
                     })
             mismatches = []
