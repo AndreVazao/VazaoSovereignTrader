@@ -25,6 +25,17 @@ class ResearchWorker:
         self.knowledge = ResearchKnowledge(data_dir)
         self.timeout = float(timeout_seconds)
 
+    def run_forever(self, stop_event, interval_seconds: float = 2.0) -> None:
+        """Process research in its own worker thread without blocking market cycles."""
+        interval = max(0.25, float(interval_seconds))
+        while not stop_event.is_set():
+            try:
+                self.process_pending(max_items=1)
+            except Exception:
+                # Research is non-critical. A broken source must never stop the trader.
+                pass
+            stop_event.wait(interval)
+
     def process_pending(self, max_items: int = 1) -> dict:
         items = self.inbox._latest()
         processed = 0
