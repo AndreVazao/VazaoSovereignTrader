@@ -107,6 +107,7 @@ class RealReadinessService:
             l2_oos_detail=f"stable_rows={l2_stable}",
             reconciliation_ok=reconciliation_ok,
             reconciliation_detail=f"unreconciled_ratio={reconciliation.get('unreconciled_ratio', 'missing')}",
+            account_reconciliation=engine.state.account_reconciliation,
             min_state_samples=self.min_state_samples,
             min_outcome_samples=self.min_outcome_samples,
             min_eligible_outcomes=self.min_eligible_outcomes,
