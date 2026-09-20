@@ -91,7 +91,12 @@ class SovereignEngine:
         self.cycle_count = 0
         self.preflight_done = False
         research_dir = config.get("research", {}).get("data_dir", "PC_ENGINE/data/research")
-        self.autonomous_research = AutonomousResearchWorker(research_dir)
+        research_cfg = config.get("research", {})
+        self.autonomous_research = AutonomousResearchWorker(
+            research_dir,
+            min_observation_score=float(research_cfg.get("min_observation_score", 70.0)),
+            dedupe_seconds=float(research_cfg.get("dedupe_seconds", 3600.0)),
+        )
         self.research_worker = ResearchWorker(research_dir)
         self.research_stop_event = threading.Event()
         self.research_thread: Optional[threading.Thread] = None
