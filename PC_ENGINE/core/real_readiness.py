@@ -35,6 +35,7 @@ class RealReadinessGate:
         credentials_detail: str = "not required", l2_oos_ok: bool = True,
         l2_oos_detail: str = "not required", reconciliation_ok: bool = True,
         reconciliation_detail: str = "not required",
+        account_reconciliation: dict | None = None,
         min_state_samples: int = 1000, min_outcome_samples: int = 1000,
         min_eligible_outcomes: int = 1,
     ) -> ReadinessReport:
