@@ -528,7 +528,7 @@ class SovereignEngine:
         return max(0.0, total)
 
     def _reconcile_pending_orders(self) -> None:
-        """Reconcile exchange fills idempotently, including cumulative fees."""
+        """Reconcile exchange fills idempotently, including partial fills and fees."""
         exchange = self._main_exchange()
         if exchange is None:
             return
@@ -549,13 +549,16 @@ class SovereignEngine:
                         "returned_client_order_id": returned_client_id,
                     })
                     continue
+
                 status = str(raw.get("status") or "").lower()
-                if status in {"open", "new", "partially_filled", "partially-filled"}:
-                    self.log("PENDING_ORDER_STILL_OPEN", {"order_id": order_id, "symbol": symbol, "status": status, "filled_qty": raw.get("filled")})
+                terminal = status in {"closed", "filled", "canceled", "cancelled", "rejected"}
+                open_status = status in {"open", "new", "partially_filled", "partially-filled"}
+                if not terminal and not open_status:
+                    self.log("PENDING_ORDER_UNKNOWN_STATUS", {
+                        "order_id": order_id, "symbol": symbol, "status": status
+                    })
                     continue
-                if status not in {"closed", "filled", "canceled", "cancelled", "rejected"}:
-                    self.log("PENDING_ORDER_UNKNOWN_STATUS", {"order_id": order_id, "symbol": symbol, "status": status})
-                    continue
+
                 final_filled = float(raw.get("filled") or 0.0)
                 known_filled = float(item.get("known_filled_qty") or 0.0)
                 delta = max(0.0, final_filled - known_filled)
@@ -563,24 +566,39 @@ class SovereignEngine:
                 cumulative_fee = self._extract_cumulative_quote_fee(raw, symbol)
                 known_fee = float(item.get("known_fee") or 0.0)
                 fee_delta = max(0.0, cumulative_fee - known_fee)
+
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
                     fill_price = float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0)
                     if fill_price <= 0:
                         self.state.status = "SAFE_MODE"
-                        self.log("MANUAL_RECONCILIATION_REQUIRED", {"order_id": order_id, "symbol": symbol, "side": side, "known_filled_qty": known_filled, "final_filled_qty": final_filled, "delta_qty": delta})
+                        self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                            "order_id": order_id, "symbol": symbol, "side": side,
+                            "known_filled_qty": known_filled, "final_filled_qty": final_filled,
+                            "delta_qty": delta,
+                        })
                         continue
+
                     if side == "buy":
                         if position is None:
                             stop_pct = float(item.get("stop_pct") or 0.0)
                             tp_pct = float(item.get("take_profit_pct") or 0.0)
                             if stop_pct <= 0 or tp_pct <= 0:
                                 self.state.status = "SAFE_MODE"
-                                self.log("MANUAL_RECONCILIATION_REQUIRED", {"order_id": order_id, "symbol": symbol, "reason": "missing_buy_recovery_risk_metadata"})
+                                self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                                    "order_id": order_id, "symbol": symbol,
+                                    "reason": "missing_buy_recovery_risk_metadata",
+                                })
                                 continue
-                            position = Position(exchange=exchange.name, symbol=symbol, entry=fill_price, qty=delta, stop=fill_price * (1 - stop_pct), take_profit=fill_price * (1 + tp_pct), opened_ts=float(item.get("created_ts") or time.time()), entry_fee=fee_delta)
+                            position = Position(
+                                exchange=exchange.name, symbol=symbol, entry=fill_price, qty=delta,
+                                stop=fill_price * (1 - stop_pct), take_profit=fill_price * (1 + tp_pct),
+                                opened_ts=float(item.get("created_ts") or time.time()), entry_fee=fee_delta,
+                            )
                             self.state.open_positions[symbol] = position
-                            self.log("POSITION_RECOVERED_FROM_PENDING_BUY", {"order_id": order_id, "symbol": symbol, "qty": delta, "entry": fill_price})
+                            self.log("POSITION_RECOVERED_FROM_PENDING_BUY", {
+                                "order_id": order_id, "symbol": symbol, "qty": delta, "entry": fill_price,
+                            })
                         else:
                             old_qty = position.qty
                             old_cost = position.entry * old_qty
@@ -590,7 +608,10 @@ class SovereignEngine:
                     elif side == "sell":
                         if position is None or delta > position.qty + 1e-12:
                             self.state.status = "SAFE_MODE"
-                            self.log("MANUAL_RECONCILIATION_REQUIRED", {"order_id": order_id, "symbol": symbol, "side": side, "position_qty": position.qty if position else 0.0, "delta_qty": delta})
+                            self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                                "order_id": order_id, "symbol": symbol, "side": side,
+                                "position_qty": position.qty if position else 0.0, "delta_qty": delta,
+                            })
                             continue
                         allocated_entry_fee = position.entry_fee * (delta / position.qty) if position.qty > 0 else 0.0
                         gross_pnl = (fill_price - position.entry) * delta
@@ -600,23 +621,44 @@ class SovereignEngine:
                         self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
-                        self.ledger.trade({"exchange": position.exchange, "symbol": symbol, "side": "close", "qty": delta, "entry": position.entry, "exit": fill_price, "fees": allocated_entry_fee + fee_delta, "pnl_pct": pnl_pct, "reason": "reconciled_pending_order"})
+                        self.ledger.trade({
+                            "exchange": position.exchange, "symbol": symbol, "side": "close", "qty": delta,
+                            "entry": position.entry, "exit": fill_price,
+                            "fees": allocated_entry_fee + fee_delta, "pnl_pct": pnl_pct,
+                            "reason": "reconciled_pending_order",
+                        })
                         if position.qty <= 1e-12:
                             self.state.open_positions.pop(symbol, None)
                     else:
                         self.state.status = "SAFE_MODE"
-                        self.log("MANUAL_RECONCILIATION_REQUIRED", {"order_id": order_id, "symbol": symbol, "reason": "unknown_side"})
+                        self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                            "order_id": order_id, "symbol": symbol, "reason": "unknown_side"
+                        })
                         continue
+
                 item["known_filled_qty"] = final_filled
                 item["known_fee"] = cumulative_fee
-                item["known_fill_price"] = float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0)
-                self.log("PENDING_ORDER_RECONCILED", {"order_id": order_id, "symbol": symbol, "side": side, "status": status, "known_filled_qty": known_filled, "final_filled_qty": final_filled, "delta_qty": delta, "known_fee": known_fee, "final_fee": cumulative_fee, "fee_delta": fee_delta})
+                item["known_fill_price"] = float(
+                    raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0
+                )
+                self.log("PENDING_ORDER_RECONCILED", {
+                    "order_id": order_id, "symbol": symbol, "side": side, "status": status,
+                    "terminal": terminal, "known_filled_qty": known_filled,
+                    "final_filled_qty": final_filled, "delta_qty": delta,
+                    "known_fee": known_fee, "final_fee": cumulative_fee, "fee_delta": fee_delta,
+                })
+                # Persist the applied-fill marker atomically with the position.
+                # If the process dies here, the next run sees the same pending
+                # order but delta=0 and cannot apply the fill/fee a second time.
                 self._persist_recovery()
-                self.state.pending_orders.pop(order_id, None)
-                self._persist_recovery()
+                if terminal:
+                    self.state.pending_orders.pop(order_id, None)
+                    self._persist_recovery()
             except Exception as exc:
                 self.state.status = "SAFE_MODE"
-                self.log("PENDING_ORDER_RECONCILE_ERROR", {"order_id": order_id, "symbol": symbol, "error": str(exc)})
+                self.log("PENDING_ORDER_RECONCILE_ERROR", {
+                    "order_id": order_id, "symbol": symbol, "error": str(exc)
+                })
         if self.state.pending_orders:
             self.state.status = "SAFE_MODE"
 
