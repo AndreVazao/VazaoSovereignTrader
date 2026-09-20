@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 from PC_ENGINE.core.engine import Position, RuntimeState, SovereignEngine
 
 
@@ -47,6 +49,7 @@ class FakeChampion:
 
 def make_engine(order, position, pending):
     engine = object.__new__(SovereignEngine)
+    engine.lock = threading.RLock()
     engine.state = RuntimeState(status="SAFE_MODE", mode="REAL")
     engine.state.open_positions[position.symbol] = position
     engine.state.pending_orders = pending
