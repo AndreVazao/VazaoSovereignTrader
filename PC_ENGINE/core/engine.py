@@ -386,6 +386,19 @@ class SovereignEngine:
 
     def _open_position(self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float, stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0) -> None:
         result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct)
+        if result.status == "PENDING_OR_PARTIAL":
+            self.state.status = "SAFE_MODE"
+            self.recovery.save_positions(self.state.open_positions)
+            self.log("ORDER_FILL_UNCONFIRMED", {
+                "symbol": symbol,
+                "side": "buy",
+                "order_id": result.order_id,
+                "filled_qty": result.qty,
+                "requested_qty": result.requested_qty,
+                "reason": result.reason,
+            })
+            if result.qty <= 0:
+                return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": symbol, "side": "buy", "reason": result.reason})
             return
@@ -405,6 +418,19 @@ class SovereignEngine:
 
     def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
         result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct)
+        if result.status == "PENDING_OR_PARTIAL":
+            self.state.status = "SAFE_MODE"
+            self.recovery.save_positions(self.state.open_positions)
+            self.log("EXIT_FILL_UNCONFIRMED", {
+                "symbol": position.symbol,
+                "side": "sell",
+                "order_id": result.order_id,
+                "filled_qty": result.qty,
+                "requested_qty": result.requested_qty,
+                "reason": result.reason,
+            })
+            if result.qty <= 0:
+                return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": position.symbol, "side": "sell", "reason": result.reason})
             return
