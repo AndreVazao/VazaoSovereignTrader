@@ -81,6 +81,20 @@ class CcxtExchangeClient(ExchangeClient):
             return []
         return self.client.fetch_open_orders(symbol) if symbol else self.client.fetch_open_orders()
 
+    def fetch_order_by_client_order_id(self, client_order_id: str, symbol: str) -> Dict[str, Any]:
+        if self.paper:
+            return {}
+        if not self.client.has.get("fetchOrders"):
+            raise NotImplementedError("exchange does not support historical order lookup")
+        orders = self.client.fetch_orders(symbol)
+        matches = [
+            order for order in orders
+            if str(order.get("clientOrderId") or order.get("client_order_id") or "").strip() == str(client_order_id).strip()
+        ]
+        if len(matches) != 1:
+            raise LookupError(f"expected exactly one order for client_order_id={client_order_id}, found {len(matches)}")
+        return matches[0]
+
     def fetch_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         if self.paper:
             return {"id": order_id, "symbol": symbol, "status": "closed", "filled": 0.0}
