@@ -52,6 +52,18 @@ class CcxtExchangeClient(ExchangeClient):
             return 1.0
         return (ask - bid) / bid
 
+    def market_buy_with_client_order_id(self, symbol: str, qty: float, client_order_id: str) -> Dict[str, Any]:
+        if self.paper:
+            return {"id": "paper-buy", "symbol": symbol, "side": "buy", "amount": qty, "clientOrderId": client_order_id}
+        amount = float(self.client.amount_to_precision(symbol, qty))
+        return self.client.create_order(symbol, "market", "buy", amount, None, {"clientOrderId": client_order_id})
+
+    def market_sell_with_client_order_id(self, symbol: str, qty: float, client_order_id: str) -> Dict[str, Any]:
+        if self.paper:
+            return {"id": "paper-sell", "symbol": symbol, "side": "sell", "amount": qty, "clientOrderId": client_order_id}
+        amount = float(self.client.amount_to_precision(symbol, qty))
+        return self.client.create_order(symbol, "market", "sell", amount, None, {"clientOrderId": client_order_id})
+
     def market_buy(self, symbol: str, qty: float) -> Dict[str, Any]:
         if self.paper:
             return {"id": "paper-buy", "symbol": symbol, "side": "buy", "amount": qty}
