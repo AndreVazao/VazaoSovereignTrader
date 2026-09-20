@@ -13,6 +13,11 @@
     "paper_starting_balance": 1000,
     "preflight_required": true
   },
+  "reconciliation": {
+    "dust_tolerance": 1e-10,
+    "relative_tolerance": 0.001,
+    "notes": "REAL startup/cycle reconciliation blocks on non-dust unexpected assets, balance mismatches, or open orders. These thresholds do not authorize execution."
+  },
   "fast_path": {
     "enabled": false,
     "allow_real": false,
