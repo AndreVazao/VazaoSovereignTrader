@@ -774,6 +774,9 @@ class SovereignEngine:
                         })
                         continue
 
+                if delta > 1e-12 and side in {"buy", "sell"}:
+                    self._record_financial_fill(side, symbol, delta, delta_notional, fee_delta)
+
                 item["known_filled_qty"] = final_filled
                 item["known_fee"] = cumulative_fee
                 item["known_quote_notional"] = cumulative_notional
