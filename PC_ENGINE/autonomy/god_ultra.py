@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from time import monotonic_ns
 from typing import Iterable, List
 
@@ -79,6 +80,17 @@ class GodUltraEngine:
         impact = opportunity.metadata.get("execution_impact_bps")
         fill_ratio = opportunity.metadata.get("fill_ratio")
         book_age = opportunity.metadata.get("book_age_ms")
+        numeric_values = [
+            opportunity.expected_edge_bps,
+            opportunity.confidence,
+            opportunity.signal_age_ms,
+            opportunity.required_capital,
+            opportunity.liquidity_capital,
+        ]
+        if any(not isfinite(float(value)) for value in numeric_values):
+            return False
+        if any(value is not None and not isfinite(float(value)) for value in (impact, fill_ratio, book_age)):
+            return False
         return (
             opportunity.expected_edge_bps >= self.min_expectancy_bps
             and opportunity.confidence >= self.min_confidence
@@ -95,7 +107,17 @@ class GodUltraEngine:
         )
 
     def select(self, opportunities: Iterable[Opportunity], risk: RiskSnapshot) -> List[ExecutionIntent]:
-        if risk.kill_switch or risk.available_capital <= 0:
+        if risk.kill_switch or not isfinite(float(risk.available_capital)) or risk.available_capital <= 0:
+            return []
+        if any(
+            not isfinite(float(value))
+            for value in (
+                risk.current_exposure,
+                risk.max_exposure,
+                risk.daily_loss_pct,
+                risk.max_daily_loss_pct,
+            )
+        ):
             return []
         if risk.max_exposure > 0 and risk.current_exposure >= risk.max_exposure:
             return []

@@ -47,7 +47,11 @@
   "paper": {
     "fee_pct": 0.001,
     "slippage_pct": 0.0005,
-    "reject_probability": 0
+    "reject_probability": 0,
+    "autonomous_intents_path": "PC_ENGINE/data/paper/autonomous_intents.jsonl",
+    "fills_path": "PC_ENGINE/data/paper/fills.jsonl",
+    "runs_path": "PC_ENGINE/data/paper/runs.jsonl",
+    "reconciliation_path": "PC_ENGINE/data/paper/autonomous_reconciliation.json"
   },
   "watchdog": {
     "enabled": true,
@@ -216,6 +220,8 @@
     "enabled": true,
     "data_dir": "PC_ENGINE/data/research",
     "worker_interval_seconds": 2.0,
+    "replay_path": "PC_ENGINE/data/replay/l2_temporal_replay.json",
+    "oos_path": "PC_ENGINE/data/radar/l2_oos_validation.json",
     "autonomous_observation_enabled": true,
     "min_observation_score": 70,
     "dedupe_seconds": 3600,

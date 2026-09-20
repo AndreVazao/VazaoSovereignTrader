@@ -67,11 +67,12 @@ class L2OutOfSampleValidator:
         except (OSError, json.JSONDecodeError, TypeError):
             trades = []
 
+        # Keep every generated signal in the validation population. Filtering to
+        # completed trades would create survivorship/selection bias and inflate
+        # completion and expectancy by silently removing misses/rejections.
         valid = [
             t for t in trades
-            if t.get("status") in {"COMPLETED", "PARTIAL_EXIT"}
-            and t.get("exit_filled_qty", 0) > 0
-            and isinstance(t.get("signal_time_ms"), (int, float))
+            if isinstance(t.get("signal_time_ms"), (int, float))
         ]
         valid.sort(key=lambda t: float(t["signal_time_ms"]))
         if not valid:
@@ -96,15 +97,34 @@ class L2OutOfSampleValidator:
             inside, outside = parts["in"], parts["out"]
             if not inside or not outside:
                 continue
-            in_values = [float(t.get("net_pnl", 0.0)) for t in inside]
-            out_values = [float(t.get("net_pnl", 0.0)) for t in outside]
+            # A non-completed signal contributes zero realized P&L rather than
+            # disappearing from the denominator.
+            in_values = [
+                float(t.get("net_pnl", 0.0) or 0.0)
+                if t.get("status") in {"COMPLETED", "PARTIAL_EXIT"} and float(t.get("exit_filled_qty", 0) or 0) > 0
+                else 0.0
+                for t in inside
+            ]
+            out_values = [
+                float(t.get("net_pnl", 0.0) or 0.0)
+                if t.get("status") in {"COMPLETED", "PARTIAL_EXIT"} and float(t.get("exit_filled_qty", 0) or 0) > 0
+                else 0.0
+                for t in outside
+            ]
             lo, hi = self._ci(out_values)
             completion = sum(
-                t.get("status") in {"COMPLETED", "PARTIAL_EXIT"} and t.get("exit_filled_qty", 0) >= t.get("entry_filled_qty", 0)
+                t.get("status") == "COMPLETED"
+                and float(t.get("exit_filled_qty", 0) or 0) >= float(t.get("entry_filled_qty", 0) or 0) > 0
                 for t in outside
             ) / len(outside)
-            entry_impacts = [float(t["entry_impact_bps"]) for t in outside if t.get("entry_impact_bps") is not None]
-            exit_impacts = [float(t["exit_impact_bps"]) for t in outside if t.get("exit_impact_bps") is not None]
+            entry_impacts = [
+                float(t["entry_impact_bps"]) for t in outside
+                if t.get("status") in {"COMPLETED", "PARTIAL_EXIT"} and t.get("entry_impact_bps") is not None
+            ]
+            exit_impacts = [
+                float(t["exit_impact_bps"]) for t in outside
+                if t.get("status") in {"COMPLETED", "PARTIAL_EXIT"} and t.get("exit_impact_bps") is not None
+            ]
             stable = (
                 len(inside) >= self.min_in_samples
                 and len(outside) >= self.min_out_samples

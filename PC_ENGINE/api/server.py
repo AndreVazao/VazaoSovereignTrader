@@ -54,7 +54,13 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.get("/paper-reconciliation")
     def paper_reconciliation():
         require_token()
-        report = PaperAutonomyReconciler().reconcile()
+        paper_cfg = engine.config.get("paper", {})
+        report = PaperAutonomyReconciler(
+            intents_path=paper_cfg.get("autonomous_intents_path", "PC_ENGINE/data/paper/autonomous_intents.jsonl"),
+            fills_path=paper_cfg.get("fills_path", "PC_ENGINE/data/paper/fills.jsonl"),
+            runs_path=paper_cfg.get("runs_path", "PC_ENGINE/data/paper/runs.jsonl"),
+            output_path=paper_cfg.get("reconciliation_path", "PC_ENGINE/data/paper/autonomous_reconciliation.json"),
+        ).reconcile()
         return jsonify(report)
 
     @app.get("/readiness")
@@ -69,7 +75,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         if engine.mode.upper() != "PAPER":
             return jsonify({"ok": False, "error": "readiness_pipeline_requires_paper_mode"}), 409
         try:
-            result = run_readiness_pipeline()
+            result = run_readiness_pipeline(engine.config.get("real_readiness", {}).get("data_dir", "PC_ENGINE/data/radar"))
         except Exception as exc:
             return jsonify({"ok": False, "error": f"readiness_pipeline_failed: {exc}"}), 500
         return jsonify({"ok": True, "result": result, "readiness": readiness.collect(engine)})

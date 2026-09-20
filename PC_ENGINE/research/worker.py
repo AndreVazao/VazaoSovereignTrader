@@ -19,15 +19,18 @@ class ResearchWorker:
     The output is evidence/hypotheses only.
     """
 
-    def __init__(self, data_dir: str = "PC_ENGINE/data/research", timeout_seconds: float = 8.0):
+    def __init__(
+        self,
+        data_dir: str = "PC_ENGINE/data/research",
+        timeout_seconds: float = 8.0,
+        replay_path: str = "PC_ENGINE/data/replay/l2_temporal_replay.json",
+        oos_path: str = "PC_ENGINE/data/radar/l2_oos_validation.json",
+    ):
         self.root = Path(data_dir)
         self.root.mkdir(parents=True, exist_ok=True)
         self.inbox = TraderResearchInbox(data_dir)
         self.knowledge = ResearchKnowledge(data_dir)
-        self.evaluator = ResearchOwnDataEvaluator(
-            replay_path="PC_ENGINE/data/replay/l2_temporal_replay.json",
-            oos_path="PC_ENGINE/data/radar/l2_oos_validation.json",
-        )
+        self.evaluator = ResearchOwnDataEvaluator(replay_path=replay_path, oos_path=oos_path)
         self.timeout = float(timeout_seconds)
 
     def run_forever(self, stop_event, interval_seconds: float = 2.0) -> None:
