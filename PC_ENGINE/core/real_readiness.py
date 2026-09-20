@@ -39,7 +39,7 @@ class RealReadinessGate:
         min_state_samples: int = 1000, min_outcome_samples: int = 1000,
         min_eligible_outcomes: int = 1,
     ) -> ReadinessReport:
-        if account_reconciliation is not None:
+        if account_reconciliation:
             reconciliation_ok = bool(account_reconciliation.get("ok", False))
             reconciliation_detail = str(account_reconciliation.get("status") or account_reconciliation.get("reason") or "account reconciliation")
             if account_reconciliation.get("quote_mismatch"):
