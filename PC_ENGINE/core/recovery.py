@@ -29,7 +29,7 @@ class RecoveryManager:
 
     def load_state(self) -> Dict:
         if not self.state_path.exists():
-            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}}
+            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}, "financial_account": {}}
         try:
             payload = json.loads(self.state_path.read_text(encoding="utf-8"))
             return {
