@@ -54,6 +54,7 @@ class RuntimeState:
     preflight: Dict[str, object] = field(default_factory=dict)
     account_reconciliation: Dict[str, object] = field(default_factory=dict)
     financial_reconciliation: Dict[str, object] = field(default_factory=dict)
+    financial_account: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
     research: Dict[str, object] = field(default_factory=dict)
@@ -154,6 +155,9 @@ class SovereignEngine:
         raw_positions = raw_state.get("positions", {})
         pending = raw_state.get("pending_orders", {})
         intents = raw_state.get("execution_intents", {})
+        financial_account = raw_state.get("financial_account", {})
+        if isinstance(financial_account, dict):
+            self.state.financial_account.update(financial_account)
         self.state.pending_orders.update(pending)
         self.state.execution_intents.update(intents)
         self.order_manager.restore_order_guards(raw_state.get("order_guards", {}))
@@ -174,7 +178,7 @@ class SovereignEngine:
             self.log("RECOVERY_POSITIONS_LOADED", {"symbols": list(recovered.keys())})
 
     def _persist_recovery(self) -> None:
-        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards(), self.state.execution_intents)
+        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards(), self.state.execution_intents, self.state.financial_account)
 
     def reconcile_account_state(self) -> dict:
         """Verify local positions, balances, and open orders against the live exchange."""
@@ -195,6 +199,10 @@ class SovereignEngine:
             recon_cfg = self.config.get("reconciliation", {})
             dust_tolerance = max(0.0, float(recon_cfg.get("dust_tolerance", 1e-10)))
             relative_tolerance = max(0.0, float(recon_cfg.get("relative_tolerance", 0.001)))
+            financial_tolerance = max(0.0, float(recon_cfg.get("financial_relative_tolerance", 0.002)))
+            financial = self.state.financial_account
+            baseline = financial.get("baseline_total")
+            quote_flow = float(financial.get("quote_flow", 0.0) or 0.0)
 
             expected_by_asset: dict[str, float] = {}
             symbols_by_asset: dict[str, list[str]] = {}
@@ -203,6 +211,17 @@ class SovereignEngine:
                 expected_by_asset[base_asset] = expected_by_asset.get(base_asset, 0.0) + float(position.qty)
                 symbols_by_asset.setdefault(base_asset, []).append(symbol)
 
+            if baseline is None:
+                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote or str(k) in expected_by_asset}
+                financial["baseline_total"] = baseline
+                financial["quote_flow"] = quote_flow
+                financial["initialized_at"] = time.time()
+                self.log("FINANCIAL_ACCOUNT_BASELINE_INITIALIZED", {"baseline_total": baseline})
+            baseline_quote = float(baseline.get(quote, 0.0) or 0.0)
+            expected_quote = baseline_quote + quote_flow
+            exchange_quote = float(total.get(quote, 0.0) or 0.0)
+            quote_tol = max(dust_tolerance, abs(expected_quote) * financial_tolerance)
+            quote_mismatch = abs(exchange_quote - expected_quote) > quote_tol
             mismatches = []
             for asset, expected_qty in expected_by_asset.items():
                 exchange_qty = float(total.get(asset, 0.0) or 0.0)
@@ -230,7 +249,7 @@ class SovereignEngine:
                     })
 
             result = {
-                "ok": not mismatches and not unexpected_assets and not open_orders,
+                "ok": not mismatches and not unexpected_assets and not open_orders and not quote_mismatch,
                 "status": "MATCH" if not mismatches and not unexpected_assets and not open_orders else "BLOCKED",
                 "tracked_positions": len(self.state.open_positions),
                 "expected_assets": expected_by_asset,
@@ -240,6 +259,11 @@ class SovereignEngine:
                 "open_order_ids": [str(o.get("id", "")) for o in open_orders if o.get("id")],
                 "dust_tolerance": dust_tolerance,
                 "relative_tolerance": relative_tolerance,
+                "financial_account": dict(financial),
+                "quote_mismatch": quote_mismatch,
+                "expected_quote": expected_quote,
+                "exchange_quote": exchange_quote,
+                "quote_tolerance": quote_tol,
                 "checked_at": time.time(),
             }
         except (NotImplementedError, ValueError, TypeError) as exc:
