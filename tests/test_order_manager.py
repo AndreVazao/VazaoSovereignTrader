@@ -35,3 +35,22 @@ def test_successful_order_is_temporarily_deduplicated():
     assert first.ok
     assert not second.ok
     assert second.reason == "duplicate blocked"
+
+class FakeLiveExchange(FakeExchange):
+    def market_buy(self, symbol, qty):
+        return {"id": "live-1", "status": "open", "amount": qty, "filled": 0.0}
+
+    def market_sell(self, symbol, qty):
+        return {"id": "live-2", "status": "open", "amount": qty, "filled": 0.0}
+
+
+def test_live_order_must_not_be_treated_as_filled_when_exchange_reports_open():
+    rules = ExchangeRulesEngine()
+    broker = PaperBroker(reject_probability=0.0)
+    manager = OrderManager(rules, broker)
+    result = manager.buy(FakeLiveExchange(), "BTC/USDT", 0.01, 50000.0, paper=False)
+
+    assert not result.ok
+    assert result.status == "PENDING_OR_PARTIAL"
+    assert result.qty == 0.0
+    assert result.order_id == "live-1"
