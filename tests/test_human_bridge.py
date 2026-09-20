@@ -17,3 +17,12 @@ def test_secret_response_is_not_written_to_disk(tmp_path: Path):
     assert "SUPER-SECRET" not in raw
     assert bridge.consume_response(item.request_id)["values"]["password"] == "SUPER-SECRET"
     assert bridge.consume_response(item.request_id) is None
+
+
+def test_human_interaction_lifecycle(tmp_path):
+    from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
+    bridge = HumanInteractionBridge(str(tmp_path))
+    item = bridge.create_request("binance", "OTP", "Codigo", "Introduz o codigo", fields=[{"name": "otp", "type": "secret"}])
+    assert bridge.respond(item.request_id, action="fill", values={"otp": "123456"})
+    assert bridge.mark_applied(item.request_id)
+    assert bridge.mark_completed(item.request_id)
