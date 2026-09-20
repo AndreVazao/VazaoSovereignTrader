@@ -448,6 +448,7 @@ class SovereignEngine:
                             "known_filled_qty": 0.0,
                             "known_fill_price": float(intent.get("reference_price") or 0.0),
                             "known_fee": 0.0,
+                            "known_quote_notional": 0.0,
                             "created_ts": float(intent.get("created_ts") or time.time()),
                             "recovered_from_intent": intent_id,
                             "client_order_id": client_order_id,
@@ -484,6 +485,7 @@ class SovereignEngine:
                 "known_filled_qty": 0.0,
                 "known_fill_price": float(order.get("average") or order.get("price") or intent.get("reference_price") or 0.0),
                 "known_fee": 0.0,
+                "known_quote_notional": 0.0,
                 "created_ts": float(intent.get("created_ts") or time.time()),
                 "recovered_from_intent": intent_id,
                 "client_order_id": client_order_id,
@@ -621,11 +623,43 @@ class SovereignEngine:
 
                 cumulative_fee = self._extract_cumulative_quote_fee(raw, symbol)
                 known_fee = float(item.get("known_fee") or 0.0)
+                if cumulative_fee + 1e-12 < known_fee:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_FEE_REGRESSION", {
+                        "order_id": order_id, "symbol": symbol,
+                        "known_fee": known_fee, "reported_fee": cumulative_fee,
+                    })
+                    continue
                 fee_delta = max(0.0, cumulative_fee - known_fee)
+
+                reported_cost = financial.get("reported_cost")
+                cumulative_notional = (
+                    float(reported_cost) if reported_cost is not None
+                    else float(financial.get("expected_cost") or 0.0)
+                )
+                known_notional = float(item.get("known_quote_notional") or 0.0)
+                notional_tolerance = max(1e-12, abs(cumulative_notional) * float(financial.get("relative_tolerance") or 0.002))
+                if cumulative_notional + notional_tolerance < known_notional:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_NOTIONAL_REGRESSION", {
+                        "order_id": order_id, "symbol": symbol,
+                        "known_quote_notional": known_notional,
+                        "reported_quote_notional": cumulative_notional,
+                        "tolerance": notional_tolerance,
+                    })
+                    continue
+                delta_notional = max(0.0, cumulative_notional - known_notional)
 
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
-                    fill_price = float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0)
+                    if delta_notional <= 0:
+                        self.state.status = "SAFE_MODE"
+                        self.log("PENDING_ORDER_MISSING_INCREMENTAL_NOTIONAL", {
+                            "order_id": order_id, "symbol": symbol, "delta_qty": delta,
+                            "delta_quote_notional": delta_notional,
+                        })
+                        continue
+                    fill_price = delta_notional / delta
                     if fill_price <= 0:
                         self.state.status = "SAFE_MODE"
                         self.log("MANUAL_RECONCILIATION_REQUIRED", {
@@ -694,6 +728,7 @@ class SovereignEngine:
 
                 item["known_filled_qty"] = final_filled
                 item["known_fee"] = cumulative_fee
+                item["known_quote_notional"] = cumulative_notional
                 item["known_fill_price"] = float(
                     raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0
                 )
