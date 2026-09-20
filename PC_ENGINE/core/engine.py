@@ -21,6 +21,7 @@ from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.storage.ledger import Ledger
+from PC_ENGINE.research.autonomous import AutonomousResearchWorker
 
 
 @dataclass
@@ -52,6 +53,7 @@ class RuntimeState:
     preflight: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
+    research: Dict[str, object] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
 
 
@@ -87,6 +89,7 @@ class SovereignEngine:
         self.lock = threading.RLock()
         self.cycle_count = 0
         self.preflight_done = False
+        self.autonomous_research = AutonomousResearchWorker(config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
         self._load_recovery_state()
 
     def _build_exchanges(self) -> dict[str, CcxtExchangeClient]:
@@ -304,6 +307,7 @@ class SovereignEngine:
                 self.state.regimes[symbol] = signal.regime
                 with self.lock:
                     self.state.opportunities[symbol] = asdict(opportunity)
+                self.autonomous_research.observe(symbol, score, signal.regime, asdict(opportunity))
             except Exception as exc:
                 scores[symbol] = 0.0
                 self.log("SYMBOL_ANALYSIS_ERROR", {"symbol": symbol, "error": str(exc)})
@@ -315,6 +319,7 @@ class SovereignEngine:
             self.state.pnl_today_pct = self.risk.state.pnl_today_pct
             self.state.pnl_week_pct = self.risk.state.pnl_week_pct
             self.state.champion_challenger = self.champion.recommendation()
+            self.state.research = self.autonomous_research.snapshot()
 
         for symbol, position in list(self.state.open_positions.items()):
             ticker = exchange.fetch_ticker(symbol)
