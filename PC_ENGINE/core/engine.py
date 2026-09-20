@@ -22,6 +22,7 @@ from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.storage.ledger import Ledger
 from PC_ENGINE.research.autonomous import AutonomousResearchWorker
+from PC_ENGINE.research.worker import ResearchWorker
 
 
 @dataclass
@@ -89,7 +90,9 @@ class SovereignEngine:
         self.lock = threading.RLock()
         self.cycle_count = 0
         self.preflight_done = False
-        self.autonomous_research = AutonomousResearchWorker(config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
+        research_dir = config.get("research", {}).get("data_dir", "PC_ENGINE/data/research")
+        self.autonomous_research = AutonomousResearchWorker(research_dir)
+        self.research_worker = ResearchWorker(research_dir)
         self._load_recovery_state()
 
     def _build_exchanges(self) -> dict[str, CcxtExchangeClient]:
@@ -228,6 +231,8 @@ class SovereignEngine:
                 time.sleep(1)
                 continue
             try:
+                if self.config.get("research", {}).get("enabled", True):
+                    self.research_worker.process_pending(max_items=1)
                 self.cycle()
             except Exception as exc:
                 self.state.status = "SAFE_MODE"
