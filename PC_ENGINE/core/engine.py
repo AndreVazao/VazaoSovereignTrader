@@ -244,9 +244,11 @@ class SovereignEngine:
             self.log("PREFLIGHT_BLOCKED_START", preflight)
             return
         if self.state.execution_intents:
-            self.state.status = "SAFE_MODE"
-            self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS_BLOCK_START", {"intent_ids": list(self.state.execution_intents)})
-            return
+            self._recover_unresolved_execution_intents()
+            if self.state.execution_intents:
+                self.state.status = "SAFE_MODE"
+                self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS_BLOCK_START", {"intent_ids": list(self.state.execution_intents)})
+                return
         self.stop_event.clear()
         self.research_stop_event.clear()
         self.state.status = "RUNNING"
@@ -356,6 +358,58 @@ class SovereignEngine:
                 self.log("WATCHDOG_EXCHANGE_BLOCK", asdict(ex_status))
                 return False
         return True
+
+    def _recover_unresolved_execution_intents(self) -> None:
+        """Find only unambiguously matching open orders after a crash.
+
+        This never assumes a fill. If no unique open-order match exists, the
+        intent remains unresolved and startup stays in SAFE_MODE.
+        """
+        if not self.state.execution_intents or self.paper:
+            return
+        exchange = self._main_exchange()
+        if exchange is None:
+            return
+        try:
+            open_orders = exchange.fetch_open_orders()
+        except Exception as exc:
+            self.log("EXECUTION_INTENT_RECOVERY_BLOCKED", {"error": str(exc)})
+            return
+        for intent_id, intent in list(self.state.execution_intents.items()):
+            symbol = str(intent.get("symbol", ""))
+            side = str(intent.get("side", "")).lower()
+            requested = float(intent.get("requested_qty") or 0.0)
+            if not symbol or side not in {"buy", "sell"} or requested <= 0:
+                continue
+            matches = []
+            for order in open_orders:
+                if str(order.get("symbol", "")) != symbol:
+                    continue
+                if str(order.get("side", "")).lower() != side:
+                    continue
+                amount = float(order.get("amount") or order.get("origQty") or 0.0)
+                if amount <= 0 or abs(amount - requested) > max(1e-12, requested * 1e-9):
+                    continue
+                if order.get("id"):
+                    matches.append(order)
+            if len(matches) != 1:
+                continue
+            order = matches[0]
+            order_id = str(order["id"])
+            self.state.pending_orders[order_id] = {
+                "exchange": exchange.name,
+                "symbol": symbol,
+                "side": side,
+                "requested_qty": requested,
+                "known_filled_qty": float(order.get("filled") or 0.0),
+                "known_fill_price": float(order.get("average") or order.get("price") or intent.get("reference_price") or 0.0),
+                "known_fee": 0.0,
+                "created_ts": float(intent.get("created_ts") or time.time()),
+                "recovered_from_intent": intent_id,
+            }
+            self.state.execution_intents.pop(intent_id, None)
+            self.log("EXECUTION_INTENT_RECOVERED_OPEN_ORDER", {"intent_id": intent_id, "order_id": order_id, "symbol": symbol, "side": side})
+        self._persist_recovery()
 
     def _reconcile_pending_orders(self) -> None:
         """Reconcile final exchange fills without guessing unknown positions."""
