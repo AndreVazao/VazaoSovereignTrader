@@ -100,10 +100,11 @@ def test_reconciliation_accepts_base_asset_flow_across_multiple_symbols():
         "BTC/USDT": Position("binance", "BTC/USDT", 100, 0.2, 98, 104, 1),
         "BTC/USDC": Position("binance", "BTC/USDC", 110, 0.3, 108, 114, 2),
     }
-    engine = make_engine(Exchange({"BTC": 0.6, "USDT": 900}), positions)
+    engine = make_engine(Exchange({"BTC": 0.5, "USDT": 1000}), positions)
     assert engine.reconcile_account_state()["ok"] is True
     engine.state.financial_account["base_flow"] = {"BTC": 0.1}
     engine.state.financial_account["quote_flow"] = -100.0
+    engine._main_exchange = lambda: Exchange({"BTC": 0.6, "USDT": 900})
     result = engine.reconcile_account_state()
     assert result["ok"] is True
     assert result["expected_assets"]["BTC"] == 0.5
