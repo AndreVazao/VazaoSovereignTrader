@@ -68,3 +68,22 @@ def test_responded_request_can_be_cancelled_and_secret_removed(tmp_path):
     assert bridge.cancel(item.request_id)
     assert bridge.get(item.request_id).status == "CANCELLED"
     assert bridge.peek_response(item.request_id) is None
+
+
+def test_response_requires_per_request_claim_token(tmp_path):
+    bridge = HumanInteractionBridge(str(tmp_path))
+    item = bridge.create_request("binance", "OTP", "Codigo", "Intervencao")
+    assert not bridge.respond(item.request_id, action="fill", values={"otp": "123456"}, claim_token="wrong")
+    token = bridge.claim_token(item.request_id)
+    assert token
+    assert bridge.respond(item.request_id, action="fill", values={"otp": "123456"}, claim_token=token)
+
+
+def test_claim_token_is_not_persisted(tmp_path):
+    bridge = HumanInteractionBridge(str(tmp_path))
+    bridge.create_request("binance", "OTP", "Codigo", "Intervencao")
+    item = bridge.get(bridge.pending()[0]["request_id"])
+    token = bridge.claim_token(item.request_id)
+    raw = (tmp_path / "requests.jsonl").read_text(encoding="utf-8")
+    assert token not in raw
+    assert item.claim_token_hash in raw
