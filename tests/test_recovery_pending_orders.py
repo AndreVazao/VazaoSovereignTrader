@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from PC_ENGINE.core.recovery import RecoveryManager
+from PC_ENGINE.core.engine import RuntimeState, SovereignEngine
 
 
 def test_recovery_persists_pending_orders(tmp_path):
@@ -30,3 +31,27 @@ def test_recovery_persists_execution_intents_atomically(tmp_path):
     recovery.save_positions({}, {}, {}, {"intent-1": {"symbol": "BTC/USDT", "side": "buy", "requested_qty": 0.1}})
     assert recovery.load_execution_intents()["intent-1"]["side"] == "buy"
     assert not (tmp_path / "runtime_state.json.tmp").exists()
+
+
+
+def test_recovery_execution_intent_blocks_engine_start():
+    import threading
+
+    engine = object.__new__(SovereignEngine)
+    engine.thread = None
+    engine.state = RuntimeState(status="SAFE_MODE", mode="REAL", execution_intents={"intent-1": {"symbol": "BTC/USDT"}})
+    engine.config = {"engine": {"preflight_required": False}, "research": {"enabled": False}}
+    engine.stop_event = threading.Event()
+    engine.research_stop_event = threading.Event()
+    engine.paper = False
+    engine.paper_collector = None
+    engine.research_thread = None
+    engine.run_preflight = lambda: {"ok": True}
+    logs = []
+    engine.log = lambda message, data=None: logs.append((message, data))
+
+    engine.start()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.thread is None
+    assert logs[-1][0] == "RECOVERY_UNRESOLVED_EXECUTION_INTENTS_BLOCK_START"
