@@ -79,3 +79,32 @@ def test_financial_quote_invariant_accepts_reconciled_quote_flow():
     result = engine.reconcile_account_state()
     assert result["ok"] is True
     assert result["expected_quote"] == 900.0
+
+
+
+def test_reconciliation_blocks_base_asset_flow_mismatch_across_symbols():
+    positions = {
+        "BTC/USDT": Position("binance", "BTC/USDT", 100, 0.2, 98, 104, 1),
+        "BTC/USDC": Position("binance", "BTC/USDC", 110, 0.3, 108, 114, 2),
+    }
+    engine = make_engine(Exchange({"BTC": 0.5, "USDT": 1000}), positions)
+    assert engine.reconcile_account_state()["ok"] is True
+    engine.state.financial_account["base_flow"] = {"BTC": 0.1}
+    result = engine.reconcile_account_state()
+    assert result["ok"] is False
+    assert result["base_flow_mismatches"][0]["asset"] == "BTC"
+
+
+def test_reconciliation_accepts_base_asset_flow_across_multiple_symbols():
+    positions = {
+        "BTC/USDT": Position("binance", "BTC/USDT", 100, 0.2, 98, 104, 1),
+        "BTC/USDC": Position("binance", "BTC/USDC", 110, 0.3, 108, 114, 2),
+    }
+    engine = make_engine(Exchange({"BTC": 0.6, "USDT": 900}), positions)
+    assert engine.reconcile_account_state()["ok"] is True
+    engine.state.financial_account["base_flow"] = {"BTC": 0.1}
+    engine.state.financial_account["quote_flow"] = -100.0
+    result = engine.reconcile_account_state()
+    assert result["ok"] is True
+    assert result["expected_assets"]["BTC"] == 0.5
+
