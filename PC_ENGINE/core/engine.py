@@ -291,7 +291,8 @@ class SovereignEngine:
         if not self._watchdog_gate(exchange):
             return
         if self.state.status == "SAFE_MODE":
-            self.state.status = "RUNNING"
+            self.log("SAFE_MODE_HOLD")
+            return
 
         balance = exchange.free_quote_balance(self.config["engine"].get("quote_currency", "USDT"))
         if self.paper:
