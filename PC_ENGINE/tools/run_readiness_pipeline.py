@@ -57,7 +57,7 @@ def run_execution_smoke_test() -> dict:
     # Duplicate protection is deterministic at OrderManager level even when
     # an exchange rejects metadata; the call must never become a real order.
     try:
-        manager.last_client_order.add("paper-smoke:BTC/USDT:buy:0.01")
+        manager.last_client_order["paper-smoke:BTC/USDT:buy:0.01"] = time.monotonic()
         blocked = manager.buy(exchange, "BTC/USDT", 0.01, 100.0, paper=True)
         checks["duplicate_block"] = blocked.ok is False and "duplicate" in blocked.reason.lower()
     except Exception:
@@ -80,18 +80,20 @@ def run_execution_smoke_test() -> dict:
     }
 
 
-def run() -> dict:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    VALIDATION_DIR.mkdir(parents=True, exist_ok=True)
+def run(data_dir: str | Path | None = None) -> dict:
+    data_root = Path(data_dir) if data_dir is not None else DATA_DIR
+    validation_dir = data_root / "validation"
+    data_root.mkdir(parents=True, exist_ok=True)
+    validation_dir.mkdir(parents=True, exist_ok=True)
 
-    states = _read_jsonl(DATA_DIR / "market_states.jsonl")
+    states = _read_jsonl(data_root / "market_states.jsonl")
     outcome_engine = StateOutcomeEngine()
     outcomes = outcome_engine.evaluate(states)
-    outcome_engine.save(outcomes, str(DATA_DIR / "state_outcomes.jsonl"))
+    outcome_engine.save(outcomes, str(data_root / "state_outcomes.jsonl"))
 
-    walk = WalkForwardEvaluator(data_dir=DATA_DIR).evaluate()
+    walk = WalkForwardEvaluator(data_dir=data_root).evaluate()
     walk_passed = bool(walk.get("results")) and any(bool(row.get("passed")) for row in walk["results"])
-    _write_json(VALIDATION_DIR / "walk_forward.json", {
+    _write_json(validation_dir / "walk_forward.json", {
         "generated_ts_ms": int(time.time() * 1000),
         "ok": walk_passed,
         "passed": walk_passed,
@@ -100,9 +102,9 @@ def run() -> dict:
         "results": walk.get("results", []),
     })
 
-    regime = RegimeAwareValidator(data_dir=DATA_DIR).evaluate()
+    regime = RegimeAwareValidator(data_dir=data_root).evaluate()
     regime_passed = bool(regime.get("results")) and any(bool(row.get("passed")) for row in regime["results"])
-    _write_json(VALIDATION_DIR / "regime_validation.json", {
+    _write_json(validation_dir / "regime_validation.json", {
         "generated_ts_ms": int(time.time() * 1000),
         "ok": regime_passed,
         "passed": regime_passed,
@@ -112,7 +114,7 @@ def run() -> dict:
     })
 
     execution = run_execution_smoke_test()
-    _write_json(VALIDATION_DIR / "execution_test.json", execution)
+    _write_json(validation_dir / "execution_test.json", execution)
 
     eligible = sum(1 for row in outcomes if row.eligible)
     return {
