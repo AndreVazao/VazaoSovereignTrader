@@ -54,3 +54,18 @@ def test_live_order_must_not_be_treated_as_filled_when_exchange_reports_open():
     assert result.status == "PENDING_OR_PARTIAL"
     assert result.qty == 0.0
     assert result.order_id == "live-1"
+
+
+def test_order_guard_survives_manager_restore():
+    rules = ExchangeRulesEngine()
+    broker = PaperBroker(fee_pct=0.001, slippage_pct=0.0, reject_probability=0.0)
+    manager = OrderManager(rules, broker, duplicate_window_seconds=60)
+    exchange = FakeExchange()
+    first = manager.buy(exchange, "BTC/USDT", 0.01, 50000.0, paper=True)
+    assert first.ok
+    guards = manager.export_order_guards()
+    restored = OrderManager(rules, broker, duplicate_window_seconds=60)
+    restored.restore_order_guards(guards)
+    second = restored.buy(exchange, "BTC/USDT", 0.01, 50000.0, paper=True)
+    assert not second.ok
+    assert second.reason == "duplicate blocked"
