@@ -137,6 +137,16 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         ok = human_bridge.respond(request_id, action=str(payload.get("action", "click")), values=payload.get("values") or {}, claim_token=str(payload.get("claim_token", "")))
         return jsonify({"ok": ok}), (200 if ok else 404)
 
+    @app.post("/human-interaction/reissue-claim")
+    def human_interaction_reissue_claim():
+        require_token()
+        request_id = str((request.get_json(force=True) or {}).get("request_id", ""))
+        token = human_bridge.reissue_claim(request_id)
+        if not token:
+            return jsonify({"ok": False, "error": "claim_reissue_not_allowed"}), 409
+        item = human_bridge.get(request_id)
+        return jsonify({"ok": True, "request": human_bridge.public_item(item)})
+
     @app.post("/human-interaction/respond")
     def human_interaction_respond():
         require_token()

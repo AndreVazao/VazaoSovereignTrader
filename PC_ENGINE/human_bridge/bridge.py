@@ -92,8 +92,39 @@ class HumanInteractionBridge:
             return self._latest().get(request_id)
 
     def pending(self) -> list[dict[str, Any]]:
+        self.expire_stale()
         latest = self._latest()
-        return [self.public_item(x) for x in latest.values() if x.status == "PENDING" and not self._is_expired(x)]
+        return [self.public_item(x) for x in latest.values() if x.status == "PENDING"]
+
+    def expire_stale(self) -> int:
+        changed = 0
+        with self._lock:
+            latest = self._latest()
+            now = time.time()
+            for item in latest.values():
+                if item.status in {"PENDING", "RESPONDED"} and item.expires_at and now >= item.expires_at:
+                    item.status = "EXPIRED"
+                    item.updated_at = now
+                    self._append(item)
+                    with self._RAM_LOCK:
+                        self._RAM_RESPONSES.pop(self._response_key(item.request_id), None)
+                        self._RAM_CLAIMS.pop(item.request_id, None)
+                    changed += 1
+        return changed
+
+    def reissue_claim(self, request_id: str) -> str | None:
+        self.expire_stale()
+        with self._lock:
+            item = self._latest().get(request_id)
+            if item is None or item.status != "PENDING":
+                return None
+            token = secrets.token_urlsafe(24)
+            item.claim_token_hash = hashlib.sha256(token.encode()).hexdigest()
+            item.updated_at = time.time()
+            self._append(item)
+            with self._RAM_LOCK:
+                self._RAM_CLAIMS[request_id] = token
+            return token
 
     def claim_token(self, request_id: str) -> str | None:
         with self._RAM_LOCK:
@@ -101,7 +132,7 @@ class HumanInteractionBridge:
 
     def authenticate_claim(self, request_id: str, claim_token: str) -> bool:
         item = self.get(request_id)
-        if item is None or not claim_token or not item.claim_token_hash:
+        if item is None or item.status != "PENDING" or not claim_token or not item.claim_token_hash:
             return False
         digest = hashlib.sha256(claim_token.encode()).hexdigest()
         return hmac.compare_digest(digest, item.claim_token_hash) and not self._is_expired(item)
@@ -110,7 +141,7 @@ class HumanInteractionBridge:
         data = asdict(item)
         data.pop("claim_token_hash", None)
         token = self.claim_token(item.request_id)
-        if token:
+        if token and item.status == "PENDING":
             data["claim_token"] = token
         return data
 
@@ -176,9 +207,10 @@ class HumanInteractionBridge:
             return True
 
     def snapshot(self) -> dict[str, Any]:
+        self.expire_stale()
         latest = self._latest()
         return {
-            "pending": sum(x.status == "PENDING" and not self._is_expired(x) for x in latest.values()),
+            "pending": sum(x.status == "PENDING" for x in latest.values()),
             "responded_waiting_pc": sum(x.status == "RESPONDED" for x in latest.values()),
             "applied": sum(x.status == "APPLIED" for x in latest.values()),
             "requests": [
