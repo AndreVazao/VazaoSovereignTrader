@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import ipaddress
 import re
+import socket
 import time
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from html import unescape
 from pathlib import Path
 
@@ -120,10 +123,40 @@ class ResearchWorker:
         )
         return {"interesting": interesting, "category": category, "summary": summary, "pages_read": len(pages)}
 
+    @staticmethod
+    def _validate_public_url(url: str) -> None:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("only public http/https URLs are allowed")
+        if parsed.username or parsed.password:
+            raise ValueError("URLs with embedded credentials are not allowed")
+        host = parsed.hostname
+        try:
+            addresses = {
+                info[4][0]
+                for info in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+            }
+        except OSError as exc:
+            raise ValueError("host resolution failed") from exc
+        for address in addresses:
+            ip = ipaddress.ip_address(address)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+                raise ValueError("private or non-public destination blocked")
+
     def _fetch_public_page(self, url: str) -> str:
+        try:
+            self._validate_public_url(url)
+        except ValueError:
+            return ""
+        class SafeRedirectHandler(HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                ResearchWorker._validate_public_url(newurl)
+                return super().redirect_request(req, fp, code, msg, headers, newurl)
+
         req = Request(url, headers={"User-Agent": "VazaoSovereignTrader-Research/1.0"})
         try:
-            with urlopen(req, timeout=self.timeout) as response:
+            with build_opener(SafeRedirectHandler()).open(req, timeout=self.timeout) as response:
+                self._validate_public_url(response.geturl())
                 content_type = response.headers.get("Content-Type", "")
                 if "text/html" not in content_type and "text/plain" not in content_type:
                     return ""
