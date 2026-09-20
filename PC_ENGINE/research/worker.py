@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PC_ENGINE.research.inbox import TraderResearchInbox
 from PC_ENGINE.research.knowledge import ResearchKnowledge
+from PC_ENGINE.research.evaluator import ResearchOwnDataEvaluator
 
 
 class ResearchWorker:
@@ -23,6 +24,10 @@ class ResearchWorker:
         self.root.mkdir(parents=True, exist_ok=True)
         self.inbox = TraderResearchInbox(data_dir)
         self.knowledge = ResearchKnowledge(data_dir)
+        self.evaluator = ResearchOwnDataEvaluator(
+            replay_path="PC_ENGINE/data/replay/l2_temporal_replay.json",
+            oos_path="PC_ENGINE/data/radar/l2_oos_validation.json",
+        )
         self.timeout = float(timeout_seconds)
 
     def run_forever(self, stop_event, interval_seconds: float = 2.0) -> None:
@@ -50,14 +55,23 @@ class ResearchWorker:
                 result = self._process(item.message, item.urls)
                 item.result = result["summary"]
                 item.status = "COMPLETED" if result["interesting"] else "DISCARDED"
+                evaluation = self.evaluator.evaluate(item.message)
+                item.result = f'{result["summary"]} {evaluation["summary"]}'
+                final_status = evaluation["status"]
                 self.knowledge.record(
                     title=f"Research: {item.message[:100]}",
                     category=result["category"],
-                    status="hypothesis" if result["interesting"] else "failed",
-                    evidence=result["summary"],
-                    source_urls=item.urls,
-                    metrics={"pages_read": result["pages_read"]},
-                    tags=["research-worker"],
+                    status="validating" if final_status == "OOS_VALIDATION_CANDIDATE" else (
+                        "hypothesis" if result["interesting"] else "failed"
+                    ),
+                    evidence=f'{result["summary"]} {evaluation["summary"]}',
+                    source_urls=item.urls + evaluation["data_sources"],
+                    metrics={
+                        "pages_read": result["pages_read"],
+                        **evaluation["metrics"],
+                        "evidence_ids": evaluation["evidence_ids"],
+                    },
+                    tags=["research-worker", "own-data-evaluation"],
                     hypothesis_id=item.request_id,
                 )
             except Exception as exc:
