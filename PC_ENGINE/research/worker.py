@@ -90,6 +90,13 @@ class ResearchWorker:
             if text:
                 pages.append((url, text))
         if not pages:
+            if not urls:
+                return {
+                    "interesting": True,
+                    "category": "market_pattern",
+                    "summary": "Hipótese interna autónoma; não depende de fonte web. Será medida apenas contra os dados próprios disponíveis.",
+                    "pages_read": 0,
+                }
             return {
                 "interesting": False,
                 "category": "failed_hypothesis",
