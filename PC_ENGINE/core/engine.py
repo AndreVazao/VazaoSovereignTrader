@@ -550,6 +550,24 @@ class SovereignEngine:
                     })
                     continue
 
+                returned_symbol = str(raw.get("symbol") or "").strip()
+                expected_side = str(item.get("side") or "").lower()
+                returned_side = str(raw.get("side") or "").lower()
+                if returned_symbol and returned_symbol != symbol:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_SYMBOL_MISMATCH", {
+                        "order_id": order_id, "expected_symbol": symbol,
+                        "returned_symbol": returned_symbol,
+                    })
+                    continue
+                if returned_side and expected_side and returned_side != expected_side:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_SIDE_MISMATCH", {
+                        "order_id": order_id, "expected_side": expected_side,
+                        "returned_side": returned_side,
+                    })
+                    continue
+
                 status = str(raw.get("status") or "").lower()
                 terminal = status in {"closed", "filled", "canceled", "cancelled", "rejected"}
                 open_status = status in {"open", "new", "partially_filled", "partially-filled"}
@@ -561,10 +579,38 @@ class SovereignEngine:
 
                 final_filled = float(raw.get("filled") or 0.0)
                 known_filled = float(item.get("known_filled_qty") or 0.0)
+                requested_qty = float(item.get("requested_qty") or 0.0)
+                side = expected_side
+
+                tolerance = max(1e-12, requested_qty * 1e-9)
+                if final_filled < -tolerance or final_filled > requested_qty + tolerance:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_FILL_QUANTITY_INVALID", {
+                        "order_id": order_id, "symbol": symbol,
+                        "requested_qty": requested_qty,
+                        "reported_filled_qty": final_filled,
+                    })
+                    continue
+                if final_filled + tolerance < known_filled:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_FILL_REGRESSION", {
+                        "order_id": order_id, "symbol": symbol,
+                        "known_filled_qty": known_filled,
+                        "reported_filled_qty": final_filled,
+                    })
+                    continue
+
                 delta = max(0.0, final_filled - known_filled)
-                side = str(item.get("side", "")).lower()
                 cumulative_fee = self._extract_cumulative_quote_fee(raw, symbol)
                 known_fee = float(item.get("known_fee") or 0.0)
+                if cumulative_fee + tolerance < known_fee:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_FEE_REGRESSION", {
+                        "order_id": order_id, "symbol": symbol,
+                        "known_fee": known_fee,
+                        "reported_fee": cumulative_fee,
+                    })
+                    continue
                 fee_delta = max(0.0, cumulative_fee - known_fee)
 
                 if delta > 1e-12:
