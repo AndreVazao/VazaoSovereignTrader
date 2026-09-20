@@ -13,8 +13,10 @@ class AutonomousResearchWorker:
     that deserve measurement. External-source research can consume the same queue.
     """
 
-    def __init__(self, data_dir: str = "PC_ENGINE/data/research"):
+    def __init__(self, data_dir: str = "PC_ENGINE/data/research", min_observation_score: float = 70.0, dedupe_seconds: float = 3600.0):
         self.inbox = TraderResearchInbox(data_dir)
+        self.min_observation_score = float(min_observation_score)
+        self.dedupe_seconds = float(dedupe_seconds)
         self.knowledge = ResearchKnowledge(data_dir)
         self.state_path = Path(data_dir) / "autonomous_state.json"
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -26,7 +28,7 @@ class AutonomousResearchWorker:
         key = f"{symbol}:{regime}"
         now = time.time()
         # Avoid filling the queue with the same observation every cycle.
-        if score < 70.0 or now - self._last_emit.get(key, 0.0) < 3600:
+        if score < self.min_observation_score or now - self._last_emit.get(key, 0.0) < self.dedupe_seconds:
             return False
         opp = opportunity or {}
         message = (
@@ -52,6 +54,8 @@ class AutonomousResearchWorker:
     def snapshot(self) -> dict:
         return {
             "enabled": True,
+            "min_observation_score": self.min_observation_score,
+            "dedupe_seconds": self.dedupe_seconds,
             "last_emissions": len(self._last_emit),
             "queue": self.inbox.snapshot(),
             "knowledge": self.knowledge.snapshot(),
