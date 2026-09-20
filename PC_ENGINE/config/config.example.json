@@ -212,6 +212,11 @@
     "consensus_min_outcome_samples": 30,
     "notes": "PAPER advisory ranking only. Learning never bypasses Risk Engine, RealModeGuard or Order Manager."
   },
+  "research": {
+    "enabled": true,
+    "data_dir": "PC_ENGINE/data/research",
+    "notes": "Human research requests are hypotheses only. They must pass evidence, PAPER and OOS validation before any execution relevance. Public-source collection only unless a permitted connector is configured."
+  },
   "human_bridge": {
     "enabled": true,
     "data_dir": "PC_ENGINE/data/human_bridge",
