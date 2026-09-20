@@ -424,6 +424,9 @@ class SovereignEngine:
                             "created_ts": float(intent.get("created_ts") or time.time()),
                             "recovered_from_intent": intent_id,
                             "client_order_id": client_order_id,
+                            "stop_pct": float(intent.get("stop_pct") or 0.0),
+                            "take_profit_pct": float(intent.get("take_profit_pct") or 0.0),
+                            "reason": str(intent.get("reason") or "recovered_execution_intent"),
                         }
                         self.state.execution_intents.pop(intent_id, None)
                         self.log("EXECUTION_INTENT_RECOVERED_HISTORICAL_ORDER", {
