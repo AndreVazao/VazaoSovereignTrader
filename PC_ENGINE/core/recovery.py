@@ -40,7 +40,7 @@ class RecoveryManager:
                 "financial_account": payload.get("financial_account", {}) if isinstance(payload, dict) else {},
             }
         except Exception:
-            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}}
+            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}, "financial_account": {}}
 
     def load_positions(self) -> Dict:
         return self.load_state().get("positions", {})
