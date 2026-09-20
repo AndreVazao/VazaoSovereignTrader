@@ -63,3 +63,13 @@ class CcxtExchangeClient(ExchangeClient):
             return {"id": "paper-sell", "symbol": symbol, "side": "sell", "amount": qty}
         amount = float(self.client.amount_to_precision(symbol, qty))
         return self.client.create_market_sell_order(symbol, amount)
+
+    def fetch_open_orders(self, symbol: str | None = None) -> List[Dict[str, Any]]:
+        if self.paper:
+            return []
+        return self.client.fetch_open_orders(symbol) if symbol else self.client.fetch_open_orders()
+
+    def fetch_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+        if self.paper:
+            return {"id": order_id, "symbol": symbol, "status": "closed", "filled": 0.0}
+        return self.client.fetch_order(order_id, symbol)

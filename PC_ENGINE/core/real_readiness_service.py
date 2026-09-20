@@ -83,7 +83,11 @@ class RealReadinessService:
         l2_stable = sum(bool(row.get("stable")) for row in l2_rows)
         l2_ok = l2_stable > 0 if self.require_l2_oos else True
 
-        reconciliation_path = Path("PC_ENGINE/data/paper/autonomous_reconciliation.json")
+        paper_cfg = engine.config.get("paper", {})
+        reconciliation_path = Path(paper_cfg.get(
+            "reconciliation_path",
+            "PC_ENGINE/data/paper/autonomous_reconciliation.json",
+        ))
         reconciliation = self._read_json(reconciliation_path)
         reconciliation_ok = bool(reconciliation) and float(reconciliation.get("unreconciled_ratio", 0.0) or 0.0) == 0.0
         if not self.require_reconciliation:
