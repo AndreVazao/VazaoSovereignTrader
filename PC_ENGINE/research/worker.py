@@ -58,11 +58,13 @@ class ResearchWorker:
                 evaluation = self.evaluator.evaluate(item.message)
                 item.result = f'{result["summary"]} {evaluation["summary"]}'
                 final_status = evaluation["status"]
+                evidence_available = final_status != "INSUFFICIENT_DATA"
+                item.status = "COMPLETED" if (result["interesting"] or evidence_available) else "DISCARDED"
                 self.knowledge.record(
                     title=f"Research: {item.message[:100]}",
                     category=result["category"],
                     status="validating" if final_status == "OOS_VALIDATION_CANDIDATE" else (
-                        "hypothesis" if result["interesting"] else "failed"
+                        "hypothesis" if (result["interesting"] or evidence_available) else "failed"
                     ),
                     evidence=f'{result["summary"]} {evaluation["summary"]}',
                     source_urls=item.urls + evaluation["data_sources"],
