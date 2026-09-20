@@ -191,6 +191,9 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         if engine.mode.upper() == "REAL":
             if engine.state.pending_orders:
                 return jsonify({"ok": False, "error": "real_start_requires_pending_order_reconciliation", "orders": list(engine.state.pending_orders)}), 409
+            reconciliation = engine.reconcile_account_state()
+            if not reconciliation.get("ok", False):
+                return jsonify({"ok": False, "error": "real_account_reconciliation_blocked", "reconciliation": reconciliation}), 409
             report = readiness.collect(engine)
             if not report.get("ready", False):
                 return jsonify({"ok": False, "error": "real_readiness_blocked", "readiness": report}), 409
@@ -235,14 +238,16 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
                 return jsonify({"ok": False, "error": "real_mode_not_authorized", "reason": reason, "guard": guard.snapshot()}), 403
             engine.set_mode("REAL")
             preflight = engine.run_preflight()
+            reconciliation = engine.reconcile_account_state()
             report = readiness.collect(engine)
-            if not preflight.get("ok") or not report.get("ready", False):
+            if not preflight.get("ok") or not reconciliation.get("ok", False) or not report.get("ready", False):
                 engine.set_mode("PAPER")
                 return jsonify({
                     "ok": False,
                     "error": "real_readiness_blocked",
                     "preflight": preflight,
                     "readiness": report,
+                    "reconciliation": reconciliation,
                     "guard": guard.snapshot(),
                 }), 409
             return jsonify({"ok": True, "mode": engine.mode, "guard": guard.snapshot(), "readiness": report})
