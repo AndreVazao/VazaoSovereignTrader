@@ -38,7 +38,7 @@ class RecoveryManager:
                 "execution_intents": payload.get("execution_intents", {}) if isinstance(payload, dict) else {},
             }
         except Exception:
-            return {"positions": {}, "pending_orders": {}}
+            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}}
 
     def load_positions(self) -> Dict:
         return self.load_state().get("positions", {})
