@@ -37,13 +37,13 @@ class OrderManager:
         self.last_client_order = {k: v for k, v in self.last_client_order.items() if now - v < self.duplicate_window_seconds}
         return dict(self.last_client_order)
 
-    def buy(self, exchange, symbol: str, qty: float, price: float, paper: bool, spread_pct: float = 0.0) -> OrderResult:
-        return self._execute(exchange, symbol, "buy", qty, price, paper, spread_pct)
+    def buy(self, exchange, symbol: str, qty: float, price: float, paper: bool, spread_pct: float = 0.0, client_order_id: str | None = None) -> OrderResult:
+        return self._execute(exchange, symbol, "buy", qty, price, paper, spread_pct, client_order_id)
 
-    def sell(self, exchange, symbol: str, qty: float, price: float, paper: bool, spread_pct: float = 0.0) -> OrderResult:
-        return self._execute(exchange, symbol, "sell", qty, price, paper, spread_pct)
+    def sell(self, exchange, symbol: str, qty: float, price: float, paper: bool, spread_pct: float = 0.0, client_order_id: str | None = None) -> OrderResult:
+        return self._execute(exchange, symbol, "sell", qty, price, paper, spread_pct, client_order_id)
 
-    def _execute(self, exchange, symbol: str, side: str, qty: float, price: float, paper: bool, spread_pct: float) -> OrderResult:
+    def _execute(self, exchange, symbol: str, side: str, qty: float, price: float, paper: bool, spread_pct: float, client_order_id: str | None = None) -> OrderResult:
         valid, reason, normalized_qty = self.rules.validate_order(exchange, symbol, qty, price)
         if not valid:
             return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", reason, normalized_qty, "REJECTED")
@@ -60,7 +60,14 @@ class OrderManager:
                 fill = self.paper_broker.fill(symbol, side, normalized_qty, price, spread_pct)
                 return OrderResult(True, side, symbol, normalized_qty, fill.fill_price, fill.fee, f"paper-{side}", "paper fill", normalized_qty, "FILLED")
 
-            raw = exchange.market_buy(symbol, normalized_qty) if side == "buy" else exchange.market_sell(symbol, normalized_qty)
+            if client_order_id:
+                method = getattr(exchange, "market_buy_with_client_order_id" if side == "buy" else "market_sell_with_client_order_id", None)
+                if method:
+                    raw = method(symbol, normalized_qty, client_order_id)
+                else:
+                    raw = exchange.market_buy(symbol, normalized_qty) if side == "buy" else exchange.market_sell(symbol, normalized_qty)
+            else:
+                raw = exchange.market_buy(symbol, normalized_qty) if side == "buy" else exchange.market_sell(symbol, normalized_qty)
             filled_raw = raw.get("filled")
             amount_raw = raw.get("amount")
             filled_qty = float(filled_raw if filled_raw is not None else (amount_raw if raw.get("status") == "closed" else 0.0))
