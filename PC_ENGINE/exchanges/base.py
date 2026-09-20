@@ -34,3 +34,7 @@ class ExchangeClient(ABC):
     @abstractmethod
     def market_sell(self, symbol: str, qty: float) -> Dict[str, Any]:
         raise NotImplementedError
+
+    def fetch_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+        """Return exchange order state; implementations must fail closed if unsupported."""
+        raise NotImplementedError("exchange order reconciliation is not supported")
