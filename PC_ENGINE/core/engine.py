@@ -435,23 +435,39 @@ class SovereignEngine:
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": position.symbol, "side": "sell", "reason": result.reason})
             return
-        pnl_pct = (result.price - position.entry) / position.entry if position.entry else 0.0
-        notional = result.price * position.qty
-        fee_pct_equiv = (position.entry_fee + result.fee) / notional if notional > 0 else 0.0
-        pnl_pct -= fee_pct_equiv
+        filled_qty = min(float(result.qty), float(position.qty))
+        if filled_qty <= 0:
+            return
+        allocated_entry_fee = position.entry_fee * (filled_qty / position.qty) if position.qty > 0 else 0.0
+        notional = result.price * filled_qty
+        gross_pnl = (result.price - position.entry) * filled_qty
+        net_pnl = gross_pnl - allocated_entry_fee - result.fee
+        pnl_pct = net_pnl / (position.entry * filled_qty) if position.entry and filled_qty > 0 else 0.0
         self.risk.record_trade_result(position.symbol, pnl_pct)
         self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
+        remaining_qty = max(0.0, position.qty - filled_qty)
         with self.lock:
-            self.state.open_positions.pop(position.symbol, None)
+            if remaining_qty <= 1e-12:
+                self.state.open_positions.pop(position.symbol, None)
+            else:
+                position.qty = remaining_qty
+                position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
         self.ledger.trade({
             "exchange": position.exchange,
             "symbol": position.symbol,
             "side": "close",
-            "qty": position.qty,
+            "qty": filled_qty,
             "entry": position.entry,
             "exit": result.price,
-            "fees": position.entry_fee + result.fee,
+            "fees": allocated_entry_fee + result.fee,
             "pnl_pct": pnl_pct,
             "reason": reason,
         })
-        self.log("POSITION_CLOSED", {"symbol": position.symbol, "pnl_pct": pnl_pct, "fee": position.entry_fee + result.fee, "reason": reason})
+        self.log("POSITION_PARTIALLY_CLOSED" if remaining_qty > 1e-12 else "POSITION_CLOSED", {
+            "symbol": position.symbol,
+            "filled_qty": filled_qty,
+            "remaining_qty": remaining_qty,
+            "pnl_pct": pnl_pct,
+            "fee": allocated_entry_fee + result.fee,
+            "reason": reason,
+        })
