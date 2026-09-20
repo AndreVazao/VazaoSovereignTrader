@@ -249,6 +249,17 @@ class SovereignEngine:
                 self.state.status = "SAFE_MODE"
                 self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS_BLOCK_START", {"intent_ids": list(self.state.execution_intents)})
                 return
+        # In REAL mode, reconcile the live account before exposing RUNNING state.
+        # Recovery must happen first so an unambiguous open order can be converted
+        # into a pending order; reconciliation then deliberately blocks while that
+        # order is unresolved. This prevents even a brief startup window where REAL
+        # execution is active against an unreconciled account.
+        if self.mode == "REAL":
+            reconciliation = self.reconcile_account_state()
+            if not reconciliation.get("ok", False):
+                self.state.status = "SAFE_MODE"
+                self.log("REAL_START_BLOCKED_ACCOUNT_RECONCILIATION", reconciliation)
+                return
         self.stop_event.clear()
         self.research_stop_event.clear()
         self.state.status = "RUNNING"
