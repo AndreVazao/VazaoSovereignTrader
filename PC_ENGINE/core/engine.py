@@ -176,7 +176,7 @@ class SovereignEngine:
         self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards(), self.state.execution_intents)
 
     def reconcile_account_state(self) -> dict:
-        """Verify local positions and open orders against the live exchange."""
+        """Verify local positions, balances, and open orders against the live exchange."""
         exchange = self._main_exchange()
         if exchange is None:
             result = {"ok": False, "status": "BLOCKED", "reason": "no_exchange"}
@@ -191,31 +191,57 @@ class SovereignEngine:
             open_orders = exchange.fetch_open_orders()
             total = balance.get("total", {}) or {}
             quote = str(self.config.get("engine", {}).get("quote_currency", "USDT"))
-            mismatches = []
-            tracked_assets = set()
+            recon_cfg = self.config.get("reconciliation", {})
+            dust_tolerance = max(0.0, float(recon_cfg.get("dust_tolerance", 1e-10)))
+            relative_tolerance = max(0.0, float(recon_cfg.get("relative_tolerance", 0.001)))
+
+            expected_by_asset: dict[str, float] = {}
+            symbols_by_asset: dict[str, list[str]] = {}
             for symbol, position in self.state.open_positions.items():
                 base_asset = str(symbol).split("/", 1)[0]
-                tracked_assets.add(base_asset)
-                exchange_qty = float(total.get(base_asset, 0.0) or 0.0)
-                tolerance = max(1e-12, abs(float(position.qty)) * 0.001)
-                if abs(exchange_qty - float(position.qty)) > tolerance:
-                    mismatches.append({"symbol": symbol, "asset": base_asset, "local_qty": float(position.qty), "exchange_total": exchange_qty, "tolerance": tolerance})
+                expected_by_asset[base_asset] = expected_by_asset.get(base_asset, 0.0) + float(position.qty)
+                symbols_by_asset.setdefault(base_asset, []).append(symbol)
+
+            mismatches = []
+            for asset, expected_qty in expected_by_asset.items():
+                exchange_qty = float(total.get(asset, 0.0) or 0.0)
+                tolerance = max(dust_tolerance, abs(expected_qty) * relative_tolerance)
+                if abs(exchange_qty - expected_qty) > tolerance:
+                    mismatches.append({
+                        "asset": asset,
+                        "symbols": symbols_by_asset.get(asset, []),
+                        "local_qty": expected_qty,
+                        "exchange_total": exchange_qty,
+                        "tolerance": tolerance,
+                    })
+
             unexpected_assets = []
             for asset, value in total.items():
+                asset_name = str(asset)
                 qty = float(value or 0.0)
-                if qty > 1e-10 and str(asset) not in tracked_assets and str(asset) != quote:
-                    unexpected_assets.append({"asset": str(asset), "total": qty})
+                if asset_name == quote or qty <= dust_tolerance:
+                    continue
+                if asset_name not in expected_by_asset:
+                    unexpected_assets.append({
+                        "asset": asset_name,
+                        "total": qty,
+                        "reason": "exchange_asset_without_local_position",
+                    })
+
             result = {
                 "ok": not mismatches and not unexpected_assets and not open_orders,
                 "status": "MATCH" if not mismatches and not unexpected_assets and not open_orders else "BLOCKED",
                 "tracked_positions": len(self.state.open_positions),
+                "expected_assets": expected_by_asset,
                 "open_orders": len(open_orders),
                 "mismatches": mismatches,
                 "unexpected_assets": unexpected_assets,
                 "open_order_ids": [str(o.get("id", "")) for o in open_orders if o.get("id")],
+                "dust_tolerance": dust_tolerance,
+                "relative_tolerance": relative_tolerance,
                 "checked_at": time.time(),
             }
-        except NotImplementedError as exc:
+        except (NotImplementedError, ValueError, TypeError) as exc:
             result = {"ok": False, "status": "BLOCKED", "reason": str(exc)}
         except Exception as exc:
             result = {"ok": False, "status": "ERROR", "reason": str(exc)}
