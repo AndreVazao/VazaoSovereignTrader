@@ -400,6 +400,35 @@ class SovereignEngine:
                     if exchange_client_id == client_order_id and order.get("id"):
                         matches.append(order)
                 if len(matches) != 1:
+                    try:
+                        historical = exchange.fetch_order_by_client_order_id(client_order_id, symbol)
+                    except (NotImplementedError, LookupError) as exc:
+                        self.log("EXECUTION_INTENT_CLOSED_LOOKUP_UNAVAILABLE", {
+                            "intent_id": intent_id, "client_order_id": client_order_id, "reason": str(exc)
+                        })
+                        historical = None
+                    except Exception as exc:
+                        self.log("EXECUTION_INTENT_CLOSED_LOOKUP_ERROR", {
+                            "intent_id": intent_id, "client_order_id": client_order_id, "error": str(exc)
+                        })
+                        historical = None
+                    if historical and historical.get("id"):
+                        self.state.pending_orders[str(historical["id"])] = {
+                            "exchange": exchange.name,
+                            "symbol": symbol,
+                            "side": side,
+                            "requested_qty": requested,
+                            "known_filled_qty": 0.0,
+                            "known_fill_price": float(intent.get("reference_price") or 0.0),
+                            "known_fee": 0.0,
+                            "created_ts": float(intent.get("created_ts") or time.time()),
+                            "recovered_from_intent": intent_id,
+                            "client_order_id": client_order_id,
+                        }
+                        self.state.execution_intents.pop(intent_id, None)
+                        self.log("EXECUTION_INTENT_RECOVERED_HISTORICAL_ORDER", {
+                            "intent_id": intent_id, "order_id": str(historical["id"]), "symbol": symbol, "side": side
+                        })
                     continue
             else:
                 for order in open_orders:
