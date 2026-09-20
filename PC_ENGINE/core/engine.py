@@ -180,6 +180,24 @@ class SovereignEngine:
     def _persist_recovery(self) -> None:
         self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards(), self.state.execution_intents, self.state.financial_account)
 
+    def _record_financial_fill(self, side: str, symbol: str, qty: float, quote_notional: float, fee: float) -> None:
+        """Record authoritative REAL fills for quote and base-asset cash-flow invariants."""
+        if self.paper or qty <= 0 or quote_notional < 0 or fee < 0:
+            return
+        base_asset = str(symbol).split("/", 1)[0]
+        financial = self.state.financial_account
+        base_flow = financial.setdefault("base_flow", {})
+        signed_qty = float(qty) if side == "buy" else -float(qty) if side == "sell" else 0.0
+        if not signed_qty:
+            return
+        base_flow[base_asset] = float(base_flow.get(base_asset, 0.0) or 0.0) + signed_qty
+        quote_flow = float(financial.get("quote_flow", 0.0) or 0.0)
+        if side == "buy":
+            quote_flow -= float(quote_notional) + float(fee)
+        else:
+            quote_flow += float(quote_notional) - float(fee)
+        financial["quote_flow"] = quote_flow
+
     def reconcile_account_state(self) -> dict:
         """Verify local positions, balances, and open orders against the live exchange."""
         exchange = self._main_exchange()
@@ -203,6 +221,7 @@ class SovereignEngine:
             financial = self.state.financial_account
             baseline = financial.get("baseline_total")
             quote_flow = float(financial.get("quote_flow", 0.0) or 0.0)
+            base_flow = financial.setdefault("base_flow", {})
 
             expected_by_asset: dict[str, float] = {}
             symbols_by_asset: dict[str, list[str]] = {}
@@ -222,6 +241,21 @@ class SovereignEngine:
             exchange_quote = float(total.get(quote, 0.0) or 0.0)
             quote_tol = max(dust_tolerance, abs(expected_quote) * financial_tolerance)
             quote_mismatch = abs(exchange_quote - expected_quote) > quote_tol
+            base_flow_mismatches = []
+            for asset, flow in base_flow.items():
+                baseline_asset = float(baseline.get(asset, 0.0) or 0.0)
+                expected_asset = baseline_asset + float(flow or 0.0)
+                exchange_asset = float(total.get(asset, 0.0) or 0.0)
+                tolerance = max(dust_tolerance, abs(expected_asset) * financial_tolerance)
+                if abs(exchange_asset - expected_asset) > tolerance:
+                    base_flow_mismatches.append({
+                        "asset": asset,
+                        "baseline": baseline_asset,
+                        "flow": float(flow or 0.0),
+                        "expected_exchange_total": expected_asset,
+                        "exchange_total": exchange_asset,
+                        "tolerance": tolerance,
+                    })
             mismatches = []
             for asset, expected_qty in expected_by_asset.items():
                 exchange_qty = float(total.get(asset, 0.0) or 0.0)
@@ -241,7 +275,7 @@ class SovereignEngine:
                 qty = float(value or 0.0)
                 if asset_name == quote or qty <= dust_tolerance:
                     continue
-                if asset_name not in expected_by_asset:
+                if asset_name not in expected_by_asset and asset_name not in base_flow:
                     unexpected_assets.append({
                         "asset": asset_name,
                         "total": qty,
@@ -249,8 +283,8 @@ class SovereignEngine:
                     })
 
             result = {
-                "ok": not mismatches and not unexpected_assets and not open_orders and not quote_mismatch,
-                "status": "MATCH" if not mismatches and not unexpected_assets and not open_orders else "BLOCKED",
+                "ok": not mismatches and not base_flow_mismatches and not unexpected_assets and not open_orders and not quote_mismatch,
+                "status": "MATCH" if not mismatches and not base_flow_mismatches and not unexpected_assets and not open_orders and not quote_mismatch else "BLOCKED",
                 "tracked_positions": len(self.state.open_positions),
                 "expected_assets": expected_by_asset,
                 "open_orders": len(open_orders),
@@ -260,6 +294,7 @@ class SovereignEngine:
                 "dust_tolerance": dust_tolerance,
                 "relative_tolerance": relative_tolerance,
                 "financial_account": dict(financial),
+                "base_flow_mismatches": base_flow_mismatches,
                 "quote_mismatch": quote_mismatch,
                 "expected_quote": expected_quote,
                 "exchange_quote": exchange_quote,
@@ -750,10 +785,8 @@ class SovereignEngine:
                         })
                         continue
 
-                    if side == "buy":
-                        self.state.financial_account["quote_flow"] = float(self.state.financial_account.get("quote_flow", 0.0) or 0.0) - delta_notional - fee_delta
-                    elif side == "sell":
-                        self.state.financial_account["quote_flow"] = float(self.state.financial_account.get("quote_flow", 0.0) or 0.0) + delta_notional - fee_delta
+                    if side in {"buy", "sell"}:
+                        self._record_financial_fill(side, symbol, delta, delta_notional, fee_delta)
 
                 item["known_filled_qty"] = final_filled
                 item["known_fee"] = cumulative_fee
@@ -933,6 +966,7 @@ class SovereignEngine:
                 "known_filled_qty": result.qty,
                 "known_fill_price": result.price,
                 "known_fee": result.fee,
+                "known_quote_notional": float(result.qty) * float(result.price),
                 "created_ts": time.time(),
                 "client_order_id": client_order_id,
                 "stop_pct": stop_pct,
@@ -940,11 +974,14 @@ class SovereignEngine:
                 "reason": reason,
             }
             self._persist_recovery()
+            if result.qty > 0:
+                self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
             if result.qty <= 0:
                 return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": symbol, "side": "buy", "reason": result.reason})
             return
+        self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
         position = Position(
             exchange=exchange.name,
             symbol=symbol,
@@ -1002,6 +1039,8 @@ class SovereignEngine:
                 "created_ts": time.time(),
             }
             self._persist_recovery()
+            if result.qty > 0:
+                self._record_financial_fill("sell", position.symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
             if result.qty <= 0:
                 return
         if not result.ok:
@@ -1010,6 +1049,7 @@ class SovereignEngine:
         filled_qty = min(float(result.qty), float(position.qty))
         if filled_qty <= 0:
             return
+        self._record_financial_fill("sell", position.symbol, filled_qty, float(result.price) * filled_qty, float(result.fee))
         allocated_entry_fee = position.entry_fee * (filled_qty / position.qty) if position.qty > 0 else 0.0
         notional = result.price * filled_qty
         gross_pnl = (result.price - position.entry) * filled_qty
