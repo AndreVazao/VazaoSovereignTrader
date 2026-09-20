@@ -759,10 +759,7 @@ class SovereignEngine:
                         self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
-                        self._persist_recovery()
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
-        self.ledger.trade({
+                        self.ledger.trade({
                             "exchange": position.exchange, "symbol": symbol, "side": "close", "qty": delta,
                             "entry": position.entry, "exit": fill_price,
                             "fees": allocated_entry_fee + fee_delta, "pnl_pct": pnl_pct,
