@@ -28,6 +28,15 @@ class OrderManager:
         self.duplicate_window_seconds = float(duplicate_window_seconds)
         self.last_client_order: dict[str, float] = {}
 
+    def restore_order_guards(self, guards: dict[str, float]) -> None:
+        now = time.monotonic()
+        self.last_client_order = {str(k): float(v) for k, v in guards.items() if now - float(v) < self.duplicate_window_seconds}
+
+    def export_order_guards(self) -> dict[str, float]:
+        now = time.monotonic()
+        self.last_client_order = {k: v for k, v in self.last_client_order.items() if now - v < self.duplicate_window_seconds}
+        return dict(self.last_client_order)
+
     def buy(self, exchange, symbol: str, qty: float, price: float, paper: bool, spread_pct: float = 0.0) -> OrderResult:
         return self._execute(exchange, symbol, "buy", qty, price, paper, spread_pct)
 

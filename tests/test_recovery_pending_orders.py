@@ -15,3 +15,10 @@ def test_recovery_persists_pending_orders(tmp_path):
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["pending_orders"]["order-1"]["symbol"] == "BTC/USDT"
     assert recovery.load_pending_orders()["order-1"]["side"] == "buy"
+
+
+def test_recovery_persists_order_guards(tmp_path):
+    path = tmp_path / "runtime_state.json"
+    recovery = RecoveryManager(path)
+    recovery.save_positions({}, {}, {"fake:BTC/USDT:buy:0.01:100.0": 123.0})
+    assert recovery.load_order_guards()["fake:BTC/USDT:buy:0.01:100.0"] == 123.0
