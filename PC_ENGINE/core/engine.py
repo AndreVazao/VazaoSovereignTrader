@@ -55,6 +55,7 @@ class RuntimeState:
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
     research: Dict[str, object] = field(default_factory=dict)
+    pending_orders: Dict[str, dict] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
 
 
@@ -146,7 +147,13 @@ class SovereignEngine:
         return exchange.fetch_ohlcv(symbol, timeframe, limit)
 
     def _load_recovery_state(self) -> None:
-        raw_positions = self.recovery.load_positions()
+        raw_state = self.recovery.load_state()
+        raw_positions = raw_state.get("positions", {})
+        pending = raw_state.get("pending_orders", {})
+        self.state.pending_orders.update(pending)
+        if pending:
+            self.state.status = "SAFE_MODE"
+            self.log("RECOVERY_PENDING_ORDERS", {"order_ids": list(pending)})
         recovered = {}
         for symbol, data in raw_positions.items():
             try:
@@ -156,6 +163,9 @@ class SovereignEngine:
         if recovered:
             self.state.open_positions.update(recovered)
             self.log("RECOVERY_POSITIONS_LOADED", {"symbols": list(recovered.keys())})
+
+    def _persist_recovery(self) -> None:
+        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders)
 
     def log(self, message: str, data: dict | None = None) -> None:
         row = message if data is None else f"{message}: {data}"
@@ -218,7 +228,7 @@ class SovereignEngine:
         with self.lock:
             self.state.status = "OFF"
             self.state.paper_collector = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
-        self.recovery.save_positions(self.state.open_positions)
+        self._persist_recovery()
         self.log("ENGINE_STOPPED")
 
     def set_mode(self, mode: str) -> None:
@@ -283,12 +293,46 @@ class SovereignEngine:
                 return False
         return True
 
+    def _reconcile_pending_orders(self) -> None:
+        """Re-check live orders after interruption; never infer a position automatically."""
+        exchange = self._main_exchange()
+        if exchange is None:
+            return
+        for order_id, item in list(self.state.pending_orders.items()):
+            symbol = str(item.get("symbol", ""))
+            if not order_id or not symbol:
+                continue
+            try:
+                raw = exchange.fetch_order(order_id, symbol)
+                status = str(raw.get("status") or "").lower()
+                if status in {"open", "new", "partially_filled", "partially-filled"}:
+                    self.log("PENDING_ORDER_STILL_OPEN", {"order_id": order_id, "symbol": symbol, "status": status})
+                    continue
+                if status in {"closed", "filled", "canceled", "cancelled", "rejected"}:
+                    self.log("PENDING_ORDER_RECONCILED", {
+                        "order_id": order_id,
+                        "symbol": symbol,
+                        "status": status,
+                        "filled_qty": raw.get("filled"),
+                    })
+                    self.state.pending_orders.pop(order_id, None)
+                    self._persist_recovery()
+                    continue
+                self.log("PENDING_ORDER_UNKNOWN_STATUS", {"order_id": order_id, "symbol": symbol, "status": status})
+            except Exception as exc:
+                self.log("PENDING_ORDER_RECONCILE_ERROR", {"order_id": order_id, "symbol": symbol, "error": str(exc)})
+        if self.state.pending_orders:
+            self.state.status = "SAFE_MODE"
+
     def cycle(self) -> None:
         exchange = self._main_exchange()
         if exchange is None:
             self.log("NO_EXCHANGE_ENABLED")
             return
         if not self._watchdog_gate(exchange):
+            return
+        if self.state.pending_orders:
+            self._reconcile_pending_orders()
             return
         if self.state.status == "SAFE_MODE":
             self.log("SAFE_MODE_HOLD")
@@ -398,6 +442,22 @@ class SovereignEngine:
                 "requested_qty": result.requested_qty,
                 "reason": result.reason,
             })
+            self.state.pending_orders[result.order_id] = {
+                "exchange": exchange.name,
+                "symbol": symbol,
+                "side": "buy",
+                "requested_qty": result.requested_qty,
+                "created_ts": time.time(),
+            }
+            self._persist_recovery()
+            self.state.pending_orders[result.order_id] = {
+                "exchange": exchange.name,
+                "symbol": position.symbol,
+                "side": "sell",
+                "requested_qty": result.requested_qty,
+                "created_ts": time.time(),
+            }
+            self._persist_recovery()
             if result.qty <= 0:
                 return
         if not result.ok:
