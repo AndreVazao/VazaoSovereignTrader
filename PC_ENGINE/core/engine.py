@@ -204,6 +204,8 @@ class SovereignEngine:
         self.research_stop_event.set()
         if self.paper_collector is not None:
             self.paper_collector.stop()
+        if self.research_thread is not None and self.research_thread.is_alive():
+            self.research_thread.join(timeout=1.0)
         with self.lock:
             self.state.status = "OFF"
             self.state.paper_collector = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
