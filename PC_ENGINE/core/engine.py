@@ -261,7 +261,7 @@ class SovereignEngine:
                 self.log("ENGINE_ERROR_SAFE_MODE", {"error": str(exc)})
                 self.recovery.save_positions(self.state.open_positions)
                 time.sleep(15)
-                self.state.status = "RUNNING"
+                continue
             time.sleep(float(self.config["engine"].get("cycle_seconds", 20)))
 
     def _watchdog_gate(self, exchange: CcxtExchangeClient) -> bool:
