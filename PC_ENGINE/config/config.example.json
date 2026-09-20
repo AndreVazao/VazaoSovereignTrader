@@ -216,6 +216,8 @@
     "enabled": true,
     "data_dir": "PC_ENGINE/data/research",
     "worker_interval_seconds": 2.0,
+    "replay_path": "PC_ENGINE/data/replay/l2_temporal_replay.json",
+    "oos_path": "PC_ENGINE/data/radar/l2_oos_validation.json",
     "autonomous_observation_enabled": true,
     "min_observation_score": 70,
     "dedupe_seconds": 3600,
