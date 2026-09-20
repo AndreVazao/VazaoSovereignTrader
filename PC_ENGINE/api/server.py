@@ -189,6 +189,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def start():
         require_token()
         if engine.mode.upper() == "REAL":
+            if engine.state.pending_orders:
+                return jsonify({"ok": False, "error": "real_start_requires_pending_order_reconciliation", "orders": list(engine.state.pending_orders)}), 409
             report = readiness.collect(engine)
             if not report.get("ready", False):
                 return jsonify({"ok": False, "error": "real_readiness_blocked", "readiness": report}), 409
@@ -226,6 +228,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         if requested == "REAL":
             if engine.state.open_positions:
                 return jsonify({"ok": False, "error": "real_mode_requires_manual_position_reconciliation", "positions": list(engine.state.open_positions)}), 409
+            if engine.state.pending_orders:
+                return jsonify({"ok": False, "error": "real_mode_requires_pending_order_reconciliation", "orders": list(engine.state.pending_orders)}), 409
             authorized, reason = guard.can_enable_real()
             if not authorized:
                 return jsonify({"ok": False, "error": "real_mode_not_authorized", "reason": reason, "guard": guard.snapshot()}), 403
