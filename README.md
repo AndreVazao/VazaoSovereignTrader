@@ -86,6 +86,35 @@ Saída: PC_ENGINE/data/radar/capital_opportunities.jsonl.
 
 Documentação: docs/CAPITAL_OPPORTUNITY_ENGINE.md.
 
+## Cérebro de Investigação Autónomo
+
+O Trader possui uma fila de investigação que pode receber mensagens/URLs pelo cockpit ou criar hipóteses a partir das próprias observações. O worker de investigação corre isolado do ciclo de mercado para que uma fonte web lenta não atrase a recolha/decisão.
+
+Fluxo:
+
+```text
+mensagem / observação interna
+        ↓
+investigação pública permitida
+        ↓
+hipótese estruturada
+        ↓
+medição nos dados próprios L2/PAPER
+        ↓
+OOS / execução / risco
+        ↓
+apenas evidência estável pode chegar à revisão REAL
+```
+
+O investigador não faz login, não resolve CAPTCHA, não contorna anti-bot e não cria ordens. Se não houver dados próprios suficientes, a hipótese fica sem evidência em vez de ser promovida.
+
+Artefactos principais:
+- `PC_ENGINE/data/research/requests.jsonl`
+- `PC_ENGINE/data/research/knowledge.jsonl`
+- `PC_ENGINE/data/research/autonomous_state.json`
+- `PC_ENGINE/data/replay/l2_temporal_replay.json`
+- `PC_ENGINE/data/radar/l2_oos_validation.json`
+
 ## Aviso
 
 Isto não é aconselhamento financeiro e não garante lucro. Usa apenas APIs oficiais das exchanges, sem withdraw permission, e começa sempre em PAPER.
