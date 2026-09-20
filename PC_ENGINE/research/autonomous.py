@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 from PC_ENGINE.research.inbox import TraderResearchInbox
+from PC_ENGINE.research.knowledge import ResearchKnowledge
 
 
 class AutonomousResearchWorker:
@@ -14,6 +15,7 @@ class AutonomousResearchWorker:
 
     def __init__(self, data_dir: str = "PC_ENGINE/data/research"):
         self.inbox = TraderResearchInbox(data_dir)
+        self.knowledge = ResearchKnowledge(data_dir)
         self.state_path = Path(data_dir) / "autonomous_state.json"
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self._last_emit: dict[str, float] = {}
@@ -34,7 +36,15 @@ class AutonomousResearchWorker:
             f"de execução repetível e mensurável. Usar apenas evidência pública/permitted; "
             f"testar custos, liquidez e estabilidade antes de promover a hipótese."
         )
-        self.inbox.submit(message)
+        request = self.inbox.submit(message)
+        self.knowledge.record(
+            title=f"Autonomous research: {symbol} {regime}",
+            category="market_pattern",
+            status="hypothesis",
+            evidence=f"Internal observation score={score:.2f}; regime={regime}",
+            tags=[symbol, regime.lower(), "autonomous"],
+            hypothesis_id=request.request_id,
+        )
         self._last_emit[key] = now
         self._save()
         return True
@@ -44,6 +54,7 @@ class AutonomousResearchWorker:
             "enabled": True,
             "last_emissions": len(self._last_emit),
             "queue": self.inbox.snapshot(),
+            "knowledge": self.knowledge.snapshot(),
         }
 
     def _load(self) -> None:
