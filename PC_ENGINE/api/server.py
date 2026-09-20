@@ -155,6 +155,12 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         ok = human_bridge.cancel(request_id)
         return jsonify({"ok": ok}), (200 if ok else 404)
 
+    @app.get("/human-interaction/status/<request_id>")
+    def human_interaction_status(request_id: str):
+        require_token()
+        item = next((x for x in human_bridge.snapshot().get("requests", []) if x.get("request_id") == request_id), None)
+        return jsonify({"ok": item is not None, "request": item}), (200 if item else 404)
+
     @app.get("/human-interaction/screenshot/<request_id>")
     def human_interaction_screenshot(request_id: str):
         require_token()
