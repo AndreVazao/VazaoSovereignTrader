@@ -15,7 +15,7 @@ def test_pending_buy_recreates_position_when_local_position_was_lost():
                 "status": "closed",
                 "filled": 0.25,
                 "average": 200.0,
-                "fee": {"cost": 0.05},
+                "fees": [{"cost": 0.05, "currency": "USDT"}],
             }
 
     engine = object.__new__(SovereignEngine)

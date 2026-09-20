@@ -474,12 +474,13 @@ class SovereignEngine:
                     continue
             order = matches[0]
             order_id = str(order["id"])
+            # The recovered order has not had any fill applied locally yet.
             self.state.pending_orders[order_id] = {
                 "exchange": exchange.name,
                 "symbol": symbol,
                 "side": side,
                 "requested_qty": requested,
-                "known_filled_qty": float(order.get("filled") or 0.0),
+                "known_filled_qty": 0.0,
                 "known_fill_price": float(order.get("average") or order.get("price") or intent.get("reference_price") or 0.0),
                 "known_fee": 0.0,
                 "created_ts": float(intent.get("created_ts") or time.time()),
@@ -493,8 +494,41 @@ class SovereignEngine:
             self.log("EXECUTION_INTENT_RECOVERED_OPEN_ORDER", {"intent_id": intent_id, "order_id": order_id, "symbol": symbol, "side": side})
         self._persist_recovery()
 
+    def _extract_cumulative_quote_fee(self, raw: dict, symbol: str) -> float:
+        """Return cumulative fee only when safely quote-denominated."""
+        fee_entries = raw.get("fees")
+        if isinstance(fee_entries, list) and fee_entries:
+            entries = fee_entries
+        else:
+            single = raw.get("fee")
+            entries = [single] if isinstance(single, dict) else []
+        if not entries:
+            single = raw.get("fee")
+            if single is None:
+                return 0.0
+            if isinstance(single, (int, float, str)):
+                return max(0.0, float(single))
+            return 0.0
+        quote = str(symbol).split("/", 1)[1] if "/" in symbol else ""
+        total = 0.0
+        currencies = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            currency = str(entry.get("currency") or "").strip()
+            if currency:
+                currencies.add(currency)
+            cost = entry.get("cost")
+            if cost is None:
+                cost = entry.get("amount")
+            if cost is not None:
+                total += float(cost)
+        if currencies and quote and any(currency != quote for currency in currencies):
+            raise ValueError(f"non-quote fee currency for {symbol}: {sorted(currencies)}")
+        return max(0.0, total)
+
     def _reconcile_pending_orders(self) -> None:
-        """Reconcile final exchange fills without guessing unknown positions."""
+        """Reconcile exchange fills idempotently, including partial fills and fees."""
         exchange = self._main_exchange()
         if exchange is None:
             return
@@ -504,18 +538,34 @@ class SovereignEngine:
                 continue
             try:
                 raw = exchange.fetch_order(order_id, symbol)
-                status = str(raw.get("status") or "").lower()
-                if status in {"open", "new", "partially_filled", "partially-filled"}:
-                    self.log("PENDING_ORDER_STILL_OPEN", {"order_id": order_id, "symbol": symbol, "status": status, "filled_qty": raw.get("filled")})
+                expected_client_id = str(item.get("client_order_id") or "").strip()
+                returned_client_id = str(raw.get("clientOrderId") or raw.get("client_order_id") or "").strip()
+                if expected_client_id and returned_client_id != expected_client_id:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_IDENTITY_MISMATCH", {
+                        "order_id": order_id,
+                        "symbol": symbol,
+                        "expected_client_order_id": expected_client_id,
+                        "returned_client_order_id": returned_client_id,
+                    })
                     continue
-                if status not in {"closed", "filled", "canceled", "cancelled", "rejected"}:
-                    self.log("PENDING_ORDER_UNKNOWN_STATUS", {"order_id": order_id, "symbol": symbol, "status": status})
+
+                status = str(raw.get("status") or "").lower()
+                terminal = status in {"closed", "filled", "canceled", "cancelled", "rejected"}
+                open_status = status in {"open", "new", "partially_filled", "partially-filled"}
+                if not terminal and not open_status:
+                    self.log("PENDING_ORDER_UNKNOWN_STATUS", {
+                        "order_id": order_id, "symbol": symbol, "status": status
+                    })
                     continue
 
                 final_filled = float(raw.get("filled") or 0.0)
                 known_filled = float(item.get("known_filled_qty") or 0.0)
                 delta = max(0.0, final_filled - known_filled)
                 side = str(item.get("side", "")).lower()
+                cumulative_fee = self._extract_cumulative_quote_fee(raw, symbol)
+                known_fee = float(item.get("known_fee") or 0.0)
+                fee_delta = max(0.0, cumulative_fee - known_fee)
 
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
@@ -529,11 +579,6 @@ class SovereignEngine:
                         })
                         continue
 
-                    fee_raw = raw.get("fee", 0.0)
-                    if isinstance(fee_raw, dict):
-                        fee_value = float(fee_raw.get("cost") or fee_raw.get("amount") or 0.0)
-                    else:
-                        fee_value = float(fee_raw or 0.0)
                     if side == "buy":
                         if position is None:
                             stop_pct = float(item.get("stop_pct") or 0.0)
@@ -546,77 +591,77 @@ class SovereignEngine:
                                 })
                                 continue
                             position = Position(
-                                exchange=exchange.name,
-                                symbol=symbol,
-                                entry=fill_price,
-                                qty=delta,
-                                stop=fill_price * (1 - stop_pct),
-                                take_profit=fill_price * (1 + tp_pct),
-                                opened_ts=float(item.get("created_ts") or time.time()),
-                                entry_fee=fee_value,
+                                exchange=exchange.name, symbol=symbol, entry=fill_price, qty=delta,
+                                stop=fill_price * (1 - stop_pct), take_profit=fill_price * (1 + tp_pct),
+                                opened_ts=float(item.get("created_ts") or time.time()), entry_fee=fee_delta,
                             )
                             self.state.open_positions[symbol] = position
                             self.log("POSITION_RECOVERED_FROM_PENDING_BUY", {
-                                "order_id": order_id, "symbol": symbol, "qty": delta,
-                                "entry": fill_price,
+                                "order_id": order_id, "symbol": symbol, "qty": delta, "entry": fill_price,
                             })
                         else:
                             old_qty = position.qty
                             old_cost = position.entry * old_qty
                             position.qty = old_qty + delta
                             position.entry = (old_cost + fill_price * delta) / position.qty
-                            position.entry_fee += fee_value
+                            position.entry_fee += fee_delta
                     elif side == "sell":
-                        if delta > position.qty + 1e-12:
+                        if position is None or delta > position.qty + 1e-12:
                             self.state.status = "SAFE_MODE"
                             self.log("MANUAL_RECONCILIATION_REQUIRED", {
                                 "order_id": order_id, "symbol": symbol, "side": side,
-                                "position_qty": position.qty, "delta_qty": delta,
+                                "position_qty": position.qty if position else 0.0, "delta_qty": delta,
                             })
                             continue
                         allocated_entry_fee = position.entry_fee * (delta / position.qty) if position.qty > 0 else 0.0
                         gross_pnl = (fill_price - position.entry) * delta
-                        sell_fee = fee_value
-                        net_pnl = gross_pnl - allocated_entry_fee - sell_fee
+                        net_pnl = gross_pnl - allocated_entry_fee - fee_delta
                         pnl_pct = net_pnl / (position.entry * delta) if position.entry > 0 and delta > 0 else 0.0
                         self.risk.record_trade_result(symbol, pnl_pct)
                         self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
                         self.ledger.trade({
-                            "exchange": position.exchange,
-                            "symbol": symbol,
-                            "side": "close",
-                            "qty": delta,
-                            "entry": position.entry,
-                            "exit": fill_price,
-                            "fees": allocated_entry_fee + sell_fee,
-                            "pnl_pct": pnl_pct,
+                            "exchange": position.exchange, "symbol": symbol, "side": "close", "qty": delta,
+                            "entry": position.entry, "exit": fill_price,
+                            "fees": allocated_entry_fee + fee_delta, "pnl_pct": pnl_pct,
                             "reason": "reconciled_pending_order",
                         })
                         if position.qty <= 1e-12:
                             self.state.open_positions.pop(symbol, None)
                     else:
                         self.state.status = "SAFE_MODE"
-                        self.log("MANUAL_RECONCILIATION_REQUIRED", {"order_id": order_id, "symbol": symbol, "reason": "unknown_side"})
+                        self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                            "order_id": order_id, "symbol": symbol, "reason": "unknown_side"
+                        })
                         continue
 
+                item["known_filled_qty"] = final_filled
+                item["known_fee"] = cumulative_fee
+                item["known_fill_price"] = float(
+                    raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0
+                )
                 self.log("PENDING_ORDER_RECONCILED", {
-                    "order_id": order_id,
-                    "symbol": symbol,
-                    "side": side,
-                    "status": status,
-                    "known_filled_qty": known_filled,
-                    "final_filled_qty": final_filled,
-                    "delta_qty": delta,
+                    "order_id": order_id, "symbol": symbol, "side": side, "status": status,
+                    "terminal": terminal, "known_filled_qty": known_filled,
+                    "final_filled_qty": final_filled, "delta_qty": delta,
+                    "known_fee": known_fee, "final_fee": cumulative_fee, "fee_delta": fee_delta,
                 })
-                self.state.pending_orders.pop(order_id, None)
+                # Persist the applied-fill marker atomically with the position.
+                # If the process dies here, the next run sees the same pending
+                # order but delta=0 and cannot apply the fill/fee a second time.
                 self._persist_recovery()
+                if terminal:
+                    self.state.pending_orders.pop(order_id, None)
+                    self._persist_recovery()
             except Exception as exc:
                 self.state.status = "SAFE_MODE"
-                self.log("PENDING_ORDER_RECONCILE_ERROR", {"order_id": order_id, "symbol": symbol, "error": str(exc)})
+                self.log("PENDING_ORDER_RECONCILE_ERROR", {
+                    "order_id": order_id, "symbol": symbol, "error": str(exc)
+                })
         if self.state.pending_orders:
             self.state.status = "SAFE_MODE"
+
 
     def cycle(self) -> None:
         exchange = self._main_exchange()
