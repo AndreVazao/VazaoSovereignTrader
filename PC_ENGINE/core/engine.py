@@ -52,6 +52,7 @@ class RuntimeState:
     regimes: Dict[str, str] = field(default_factory=dict)
     watchdog: Dict[str, str | bool | int] = field(default_factory=dict)
     preflight: Dict[str, object] = field(default_factory=dict)
+    account_reconciliation: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
     research: Dict[str, object] = field(default_factory=dict)
@@ -166,6 +167,58 @@ class SovereignEngine:
 
     def _persist_recovery(self) -> None:
         self.recovery.save_positions(self.state.open_positions, self.state.pending_orders)
+
+    def reconcile_account_state(self) -> dict:
+        """Verify local positions and open orders against the live exchange."""
+        exchange = self._main_exchange()
+        if exchange is None:
+            result = {"ok": False, "status": "BLOCKED", "reason": "no_exchange"}
+            self.state.account_reconciliation = result
+            return result
+        if self.paper:
+            result = {"ok": True, "status": "PAPER", "tracked_positions": len(self.state.open_positions), "open_orders": 0}
+            self.state.account_reconciliation = result
+            return result
+        try:
+            balance = exchange.fetch_balance()
+            open_orders = exchange.fetch_open_orders()
+            total = balance.get("total", {}) or {}
+            quote = str(self.config.get("engine", {}).get("quote_currency", "USDT"))
+            mismatches = []
+            tracked_assets = set()
+            for symbol, position in self.state.open_positions.items():
+                base_asset = str(symbol).split("/", 1)[0]
+                tracked_assets.add(base_asset)
+                exchange_qty = float(total.get(base_asset, 0.0) or 0.0)
+                tolerance = max(1e-12, abs(float(position.qty)) * 0.001)
+                if abs(exchange_qty - float(position.qty)) > tolerance:
+                    mismatches.append({"symbol": symbol, "asset": base_asset, "local_qty": float(position.qty), "exchange_total": exchange_qty, "tolerance": tolerance})
+            unexpected_assets = []
+            for asset, value in total.items():
+                qty = float(value or 0.0)
+                if qty > 1e-10 and str(asset) not in tracked_assets and str(asset) != quote:
+                    unexpected_assets.append({"asset": str(asset), "total": qty})
+            result = {
+                "ok": not mismatches and not unexpected_assets and not open_orders,
+                "status": "MATCH" if not mismatches and not unexpected_assets and not open_orders else "BLOCKED",
+                "tracked_positions": len(self.state.open_positions),
+                "open_orders": len(open_orders),
+                "mismatches": mismatches,
+                "unexpected_assets": unexpected_assets,
+                "open_order_ids": [str(o.get("id", "")) for o in open_orders if o.get("id")],
+                "checked_at": time.time(),
+            }
+        except NotImplementedError as exc:
+            result = {"ok": False, "status": "BLOCKED", "reason": str(exc)}
+        except Exception as exc:
+            result = {"ok": False, "status": "ERROR", "reason": str(exc)}
+        self.state.account_reconciliation = result
+        if not result.get("ok"):
+            self.state.status = "SAFE_MODE"
+            self.log("ACCOUNT_RECONCILIATION_BLOCKED", result)
+        else:
+            self.log("ACCOUNT_RECONCILIATION_MATCH", result)
+        return result
 
     def log(self, message: str, data: dict | None = None) -> None:
         row = message if data is None else f"{message}: {data}"
@@ -398,6 +451,9 @@ class SovereignEngine:
             self.log("NO_EXCHANGE_ENABLED")
             return
         if not self._watchdog_gate(exchange):
+            return
+        if self.mode == "REAL" and not self.state.account_reconciliation.get("ok", False):
+            self.reconcile_account_state()
             return
         if self.state.pending_orders:
             self._reconcile_pending_orders()
