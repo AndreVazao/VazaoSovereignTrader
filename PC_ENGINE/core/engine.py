@@ -943,8 +943,6 @@ class SovereignEngine:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
             raise
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
         if result.status == "PENDING_OR_PARTIAL":
             self.state.status = "SAFE_MODE"
             self.log("ORDER_FILL_UNCONFIRMED", {
@@ -976,10 +974,14 @@ class SovereignEngine:
             if result.qty > 0:
                 self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
             self._persist_recovery()
+            self.state.execution_intents.pop(intent_id, None)
+            self._persist_recovery()
             if result.qty <= 0:
                 return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": symbol, "side": "buy", "reason": result.reason})
+            self.state.execution_intents.pop(intent_id, None)
+            self._persist_recovery()
             return
         if result.status != "PENDING_OR_PARTIAL":
             self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
@@ -995,6 +997,9 @@ class SovereignEngine:
         )
         with self.lock:
             self.state.open_positions[symbol] = position
+        self._persist_recovery()
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
         self.log("POSITION_OPENED", {"symbol": symbol, "price": result.price, "qty": result.qty, "fee": result.fee, "reason": reason})
 
     def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
@@ -1014,8 +1019,6 @@ class SovereignEngine:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
             raise
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
         if result.status == "PENDING_OR_PARTIAL":
             self.state.status = "SAFE_MODE"
             self.log("EXIT_FILL_UNCONFIRMED", {
@@ -1043,10 +1046,14 @@ class SovereignEngine:
             if result.qty > 0:
                 self._record_financial_fill("sell", position.symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
             self._persist_recovery()
+            self.state.execution_intents.pop(intent_id, None)
+            self._persist_recovery()
             if result.qty <= 0:
                 return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": position.symbol, "side": "sell", "reason": result.reason})
+            self.state.execution_intents.pop(intent_id, None)
+            self._persist_recovery()
             return
         filled_qty = min(float(result.qty), float(position.qty))
         if filled_qty <= 0:
@@ -1078,6 +1085,9 @@ class SovereignEngine:
             "pnl_pct": pnl_pct,
             "reason": reason,
         })
+        self._persist_recovery()
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
         self.log("POSITION_PARTIALLY_CLOSED" if remaining_qty > 1e-12 else "POSITION_CLOSED", {
             "symbol": position.symbol,
             "filled_qty": filled_qty,
