@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+
 import hmac
 import base64
 
@@ -13,6 +15,7 @@ from PC_ENGINE.core.real_readiness_service import RealReadinessService
 from PC_ENGINE.tools.run_readiness_pipeline import run as run_readiness_pipeline
 from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
 from PC_ENGINE.autonomy.paper_reconciliation import PaperAutonomyReconciler
+from PC_ENGINE.research.inbox import TraderResearchInbox
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -20,6 +23,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     readiness = RealReadinessService(engine.config)
     guard = RealModeGuard(engine.config.get("real_mode_guard", {}))
     human_bridge = HumanInteractionBridge(engine.config.get("human_bridge", {}).get("data_dir", "PC_ENGINE/data/human_bridge"))
+    research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
 
     def require_token() -> None:
         expected = env_value(token_env, "")
@@ -69,6 +73,21 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         except Exception as exc:
             return jsonify({"ok": False, "error": f"readiness_pipeline_failed: {exc}"}), 500
         return jsonify({"ok": True, "result": result, "readiness": readiness.collect(engine)})
+
+    @app.get("/research")
+    def research_snapshot():
+        require_token()
+        return jsonify(research.snapshot())
+
+    @app.post("/research")
+    def research_submit():
+        require_token()
+        payload = request.get_json(force=True) or {}
+        try:
+            item = research.submit(str(payload.get("message", "")))
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "request": asdict(item)})
 
     @app.get("/human-interaction/pending")
     def human_interaction_pending():
