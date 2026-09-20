@@ -93,6 +93,8 @@ class SovereignEngine:
         research_dir = config.get("research", {}).get("data_dir", "PC_ENGINE/data/research")
         self.autonomous_research = AutonomousResearchWorker(research_dir)
         self.research_worker = ResearchWorker(research_dir)
+        self.research_stop_event = threading.Event()
+        self.research_thread: Optional[threading.Thread] = None
         self._load_recovery_state()
 
     def _build_exchanges(self) -> dict[str, CcxtExchangeClient]:
@@ -163,7 +165,17 @@ class SovereignEngine:
             self.log("PREFLIGHT_BLOCKED_START", preflight)
             return
         self.stop_event.clear()
+        self.research_stop_event.clear()
         self.state.status = "RUNNING"
+        if self.config.get("research", {}).get("enabled", True):
+            interval = float(self.config.get("research", {}).get("worker_interval_seconds", 2.0))
+            self.research_thread = threading.Thread(
+                target=self.research_worker.run_forever,
+                args=(self.research_stop_event, interval),
+                name="research-worker",
+                daemon=True,
+            )
+            self.research_thread.start()
         if self.paper and self.paper_collector is not None:
             self.paper_collector.start()
         self.thread = threading.Thread(target=self._loop, daemon=True)
@@ -189,8 +201,11 @@ class SovereignEngine:
 
     def stop(self) -> None:
         self.stop_event.set()
+        self.research_stop_event.set()
         if self.paper_collector is not None:
             self.paper_collector.stop()
+        if self.research_thread is not None and self.research_thread.is_alive():
+            self.research_thread.join(timeout=1.0)
         with self.lock:
             self.state.status = "OFF"
             self.state.paper_collector = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
@@ -231,8 +246,6 @@ class SovereignEngine:
                 time.sleep(1)
                 continue
             try:
-                if self.config.get("research", {}).get("enabled", True):
-                    self.research_worker.process_pending(max_items=1)
                 self.cycle()
             except Exception as exc:
                 self.state.status = "SAFE_MODE"
@@ -324,7 +337,10 @@ class SovereignEngine:
             self.state.pnl_today_pct = self.risk.state.pnl_today_pct
             self.state.pnl_week_pct = self.risk.state.pnl_week_pct
             self.state.champion_challenger = self.champion.recommendation()
-            self.state.research = self.autonomous_research.snapshot()
+            self.state.research = {
+                **self.autonomous_research.snapshot(),
+                "inbox": self.research_worker.inbox.snapshot(),
+            }
 
         for symbol, position in list(self.state.open_positions.items()):
             ticker = exchange.fetch_ticker(symbol)
