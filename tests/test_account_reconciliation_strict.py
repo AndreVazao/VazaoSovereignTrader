@@ -59,3 +59,23 @@ def test_reconciliation_blocks_open_orders_even_when_balances_match():
     result = engine.reconcile_account_state()
     assert result["ok"] is False
     assert result["open_order_ids"] == ["o1"]
+
+
+def test_financial_quote_invariant_blocks_unexplained_balance_change():
+    engine = make_engine(Exchange({"USDT": 1000}), {})
+    first = engine.reconcile_account_state()
+    assert first["ok"] is True
+    engine._main_exchange = lambda: Exchange({"USDT": 900})
+    result = engine.reconcile_account_state()
+    assert result["ok"] is False
+    assert result["quote_mismatch"] is True
+
+
+def test_financial_quote_invariant_accepts_reconciled_quote_flow():
+    engine = make_engine(Exchange({"USDT": 1000}), {})
+    assert engine.reconcile_account_state()["ok"] is True
+    engine.state.financial_account["quote_flow"] = -100.0
+    engine._main_exchange = lambda: Exchange({"USDT": 900})
+    result = engine.reconcile_account_state()
+    assert result["ok"] is True
+    assert result["expected_quote"] == 900.0
