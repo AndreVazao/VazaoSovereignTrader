@@ -62,7 +62,7 @@ class TraderResearchInbox:
         }
 
     def _extract_urls(self, message: str) -> list[str]:
-        found = re.findall(r"https?://[^\s<>"]+", message)
+        found = re.findall(r'https?://[^\s<>"]+', message)
         urls = []
         for raw in found:
             url = raw.rstrip(".,;:)]}")
