@@ -973,15 +973,16 @@ class SovereignEngine:
                 "take_profit_pct": tp_pct,
                 "reason": reason,
             }
-            self._persist_recovery()
             if result.qty > 0:
                 self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
+            self._persist_recovery()
             if result.qty <= 0:
                 return
         if not result.ok:
             self.log("ORDER_REJECTED", {"symbol": symbol, "side": "buy", "reason": result.reason})
             return
-        self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
+        if result.status != "PENDING_OR_PARTIAL":
+            self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
         position = Position(
             exchange=exchange.name,
             symbol=symbol,
@@ -1036,11 +1037,12 @@ class SovereignEngine:
                 "known_filled_qty": result.qty,
                 "known_fill_price": result.price,
                 "known_fee": result.fee,
+                "known_quote_notional": float(result.qty) * float(result.price),
                 "created_ts": time.time(),
             }
-            self._persist_recovery()
             if result.qty > 0:
                 self._record_financial_fill("sell", position.symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
+            self._persist_recovery()
             if result.qty <= 0:
                 return
         if not result.ok:
@@ -1049,7 +1051,8 @@ class SovereignEngine:
         filled_qty = min(float(result.qty), float(position.qty))
         if filled_qty <= 0:
             return
-        self._record_financial_fill("sell", position.symbol, filled_qty, float(result.price) * filled_qty, float(result.fee))
+        if result.status != "PENDING_OR_PARTIAL":
+            self._record_financial_fill("sell", position.symbol, filled_qty, float(result.price) * filled_qty, float(result.fee))
         allocated_entry_fee = position.entry_fee * (filled_qty / position.qty) if position.qty > 0 else 0.0
         notional = result.price * filled_qty
         gross_pnl = (result.price - position.entry) * filled_qty
