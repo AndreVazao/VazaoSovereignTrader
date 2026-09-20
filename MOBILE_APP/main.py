@@ -97,7 +97,7 @@ class MobileCockpit(App):
             response = self._request("GET", "/human-interaction/pending")
             if response.status_code != 200:
                 return
-            items = [x for x in response.json().get("requests", []) if x.get("status") == "PENDING"]
+            items = [x for x in response.json().get("requests", []) if x.get("status") in {"PENDING", "RESPONDED", "APPLIED"}]
             self.human_box.clear_widgets()
             self.human_widgets.clear()
             if not items:
@@ -114,7 +114,8 @@ class MobileCockpit(App):
                     box.add_widget(inp)
                     fields[field.get("name", "value")] = inp
                 actions = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=42)
-                actions.add_widget(Button(text="ENVIAR AO PC", on_press=lambda _, i=item, f=fields: self.respond_human(i, f)))
+                label = "ENVIAR AO PC" if item.get("status") == "PENDING" else ("A AGUARDAR PC…" if item.get("status") == "RESPONDED" else "APLICADO")
+                actions.add_widget(Button(text=label, disabled=item.get("status") != "PENDING", on_press=lambda _, i=item, f=fields: self.respond_human(i, f)))
                 actions.add_widget(Button(text="CANCELAR", on_press=lambda _, i=item: self.cancel_human(i)))
                 box.add_widget(actions)
                 self.human_box.add_widget(box)
