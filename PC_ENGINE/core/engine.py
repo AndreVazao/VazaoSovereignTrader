@@ -381,19 +381,33 @@ class SovereignEngine:
             requested = float(intent.get("requested_qty") or 0.0)
             if not symbol or side not in {"buy", "sell"} or requested <= 0:
                 continue
+            client_order_id = str(intent.get("client_order_id") or "").strip()
             matches = []
-            for order in open_orders:
-                if str(order.get("symbol", "")) != symbol:
+            if client_order_id:
+                for order in open_orders:
+                    exchange_client_id = str(order.get("clientOrderId") or order.get("client_order_id") or "").strip()
+                    if exchange_client_id == client_order_id and order.get("id"):
+                        matches.append(order)
+                # New intents must be recovered by their durable exchange/client
+                # identity. Do not fall back to quantity matching, which could
+                # accidentally adopt an unrelated pre-existing order.
+                if len(matches) != 1:
                     continue
-                if str(order.get("side", "")).lower() != side:
+            else:
+                # Legacy intents created before deterministic client IDs retain the
+                # previous conservative exact-quantity fallback.
+                for order in open_orders:
+                    if str(order.get("symbol", "")) != symbol:
+                        continue
+                    if str(order.get("side", "")).lower() != side:
+                        continue
+                    amount = float(order.get("amount") or order.get("origQty") or 0.0)
+                    if amount <= 0 or abs(amount - requested) > max(1e-12, requested * 1e-9):
+                        continue
+                    if order.get("id"):
+                        matches.append(order)
+                if len(matches) != 1:
                     continue
-                amount = float(order.get("amount") or order.get("origQty") or 0.0)
-                if amount <= 0 or abs(amount - requested) > max(1e-12, requested * 1e-9):
-                    continue
-                if order.get("id"):
-                    matches.append(order)
-            if len(matches) != 1:
-                continue
             order = matches[0]
             order_id = str(order["id"])
             self.state.pending_orders[order_id] = {
@@ -406,6 +420,7 @@ class SovereignEngine:
                 "known_fee": 0.0,
                 "created_ts": float(intent.get("created_ts") or time.time()),
                 "recovered_from_intent": intent_id,
+                "client_order_id": client_order_id,
             }
             self.state.execution_intents.pop(intent_id, None)
             self.log("EXECUTION_INTENT_RECOVERED_OPEN_ORDER", {"intent_id": intent_id, "order_id": order_id, "symbol": symbol, "side": side})
@@ -620,14 +635,16 @@ class SovereignEngine:
 
     def _open_position(self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float, stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0) -> None:
         intent_id = f"intent-{time.time_ns()}"
+        client_order_id = f"vzt-{time.time_ns()}-buy"
         self.state.execution_intents[intent_id] = {
             "exchange": exchange.name, "symbol": symbol, "side": "buy",
             "requested_qty": float(qty), "reference_price": float(price),
+            "client_order_id": client_order_id,
             "created_ts": time.time(),
         }
         self._persist_recovery()
         try:
-            result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct)
+            result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct, client_order_id)
         except Exception:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
@@ -656,6 +673,7 @@ class SovereignEngine:
                 "known_fill_price": result.price,
                 "known_fee": result.fee,
                 "created_ts": time.time(),
+                "client_order_id": client_order_id,
             }
             self._persist_recovery()
             if result.qty <= 0:
@@ -679,14 +697,16 @@ class SovereignEngine:
 
     def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
         intent_id = f"intent-{time.time_ns()}"
+        client_order_id = f"vzt-{time.time_ns()}-sell"
         self.state.execution_intents[intent_id] = {
             "exchange": exchange.name, "symbol": position.symbol, "side": "sell",
             "requested_qty": float(position.qty), "reference_price": float(price),
+            "client_order_id": client_order_id,
             "created_ts": time.time(),
         }
         self._persist_recovery()
         try:
-            result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct)
+            result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct, client_order_id)
         except Exception:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
