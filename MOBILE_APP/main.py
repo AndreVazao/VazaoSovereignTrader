@@ -46,6 +46,7 @@ class MobileCockpit(App):
             root.add_widget(w)
         Clock.schedule_interval(self.refresh, 5)
         Clock.schedule_interval(self.refresh_human, 3)
+        Clock.schedule_interval(self.heartbeat, 10)
         return root
 
     def _load_lang(self, code):
@@ -92,6 +93,11 @@ class MobileCockpit(App):
         except Exception as exc:
             self.status.text = f"Modo erro: {exc}"
 
+    def heartbeat(self, _dt=0):
+        try:
+            self._request("POST", "/human-interaction/heartbeat", json={"source": "mobile"})
+        except Exception:
+            pass
     def refresh_human(self, _dt=0):
         try:
             response = self._request("GET", "/human-interaction/pending")
