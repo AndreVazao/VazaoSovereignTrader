@@ -45,3 +45,10 @@ def test_execution_quality_gates_accept_good_l2():
     risk = RiskSnapshot(available_capital=100.0, max_exposure=80.0)
     good = make_opp(1, 10, metadata={"execution_impact_bps": 4, "fill_ratio": 1.0, "book_age_ms": 10})
     assert len(engine.select([good], risk)) == 1
+
+
+def test_non_finite_opportunity_is_blocked():
+    engine = GodUltraEngine()
+    risk = RiskSnapshot(available_capital=100.0, max_exposure=80.0)
+    bad = make_opp(1, float("nan"))
+    assert engine.select([bad], risk) == []
