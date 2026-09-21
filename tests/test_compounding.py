@@ -1,4 +1,4 @@
-from PC_ENGINE.core.compounding import CompoundingController
+from PC_ENGINE.core.compounding import CompoundingController, GlobalCompoundingOrchestrator
 
 
 def test_profit_is_compounded_into_next_equity_base():
@@ -40,3 +40,38 @@ def test_global_base_advances_by_tenfold_tiers():
 def test_global_base_catches_up_multiple_tiers():
     c = CompoundingController(owner_id="andre", venue="binance")
     assert c.next_global_base(total_equity=10000.0, current_base=1.0) == 10000.0
+
+
+def test_global_base_moves_only_when_all_venues_reach_it():
+    c = GlobalCompoundingOrchestrator(
+        owner_id="andre", venues=["binance", "bingx", "okx"], seed_base=1.0
+    )
+    s = c.snapshot({"binance": 110.0, "bingx": 100.0, "okx": 99.0})
+    assert s.global_base == 10.0
+    assert s.all_venues_at_base is True
+    assert s.next_base == 100.0
+
+
+def test_global_tier_waits_for_weakest_configured_venue():
+    c = GlobalCompoundingOrchestrator(
+        owner_id="andre", venues=["binance", "bingx", "okx"], seed_base=1.0
+    )
+    s = c.snapshot({"binance": 1000.0, "bingx": 100.0, "okx": 9.99})
+    assert s.global_base == 1.0
+    assert s.all_venues_at_base is True
+    assert s.next_base == 10.0
+
+
+def test_funding_plan_moves_only_surplus_above_current_base():
+    c = GlobalCompoundingOrchestrator(
+        owner_id="andre", venues=["binance", "bingx"], seed_base=1.0
+    )
+    plan = c.funding_plan({"binance": 15.0, "bingx": 5.0})
+    assert plan == [{
+        "owner_id": "andre",
+        "source_venue": "binance",
+        "destination_venue": "bingx",
+        "target_base": 1.0,
+        "amount": 4.0,
+        "reason": "GLOBAL_TIER_CAPITALIZATION",
+    }]
