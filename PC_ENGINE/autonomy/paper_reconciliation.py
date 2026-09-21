@@ -69,6 +69,7 @@ class PaperAutonomyReconciler:
         rejected = 0
         partial = 0
         completed = 0
+        invalid = 0
         signed_notional = 0.0
         filled_notional = 0.0
         fees = 0.0
@@ -76,7 +77,8 @@ class PaperAutonomyReconciler:
         for intent in intents:
             opportunity_id = str(intent.get("opportunity_id", ""))
             matched = fills_by_opp.get(opportunity_id, [])
-            requested = sum(float(x.get("requested_qty", 0.0) or 0.0) for x in matched)
+            requested_values = [float(x.get("requested_qty", 0.0) or 0.0) for x in matched]
+            requested = max(requested_values, default=0.0)
             filled = sum(float(x.get("filled_qty", 0.0) or 0.0) for x in matched)
             fee = sum(float(x.get("fee", 0.0) or 0.0) for x in matched)
             notional = sum(
@@ -87,14 +89,26 @@ class PaperAutonomyReconciler:
             side = str(intent.get("side", "BUY")).upper()
             signed = notional if side == "BUY" else -notional
             statuses = {str(x.get("status", "")).upper() for x in matched}
+            fill_ids = [str(x.get("fill_id", "")).strip() for x in matched]
+            duplicate_fill_ids = len(fill_ids) != len(set(x for x in fill_ids if x))
+            invalid_values = any(
+                float(x.get("filled_qty", 0.0) or 0.0) < 0
+                or float(x.get("fee", 0.0) or 0.0) < 0
+                or float(x.get("fill_price", x.get("requested_price", 0.0)) or 0.0) < 0
+                for x in matched
+            )
+            overfill = requested > 0 and filled > requested + max(1e-12, requested * 1e-9)
 
             if not matched:
                 state = "MISSING"
                 missing += 1
+            elif duplicate_fill_ids or invalid_values or overfill:
+                state = "INVALID"
+                invalid += 1
             elif "REJECTED" in statuses or "INVALID" in statuses:
                 state = "REJECTED"
                 rejected += 1
-            elif any(s == "PARTIAL" for s in statuses):
+            elif filled + max(1e-12, requested * 1e-9) < requested or any(s == "PARTIAL" for s in statuses):
                 state = "PARTIAL"
                 partial += 1
                 reconciled += 1
@@ -136,6 +150,7 @@ class PaperAutonomyReconciler:
             "missing_intents": missing,
             "rejected_intents": rejected,
             "partial_intents": partial,
+            "invalid_intents": invalid,
             "completed_intents": completed,
             "fills": len(fills),
             "runs": len(runs),
@@ -147,7 +162,7 @@ class PaperAutonomyReconciler:
             "run_fees": run_fees,
             "net_pnl": net_pnl,
             "conservative_drawdown_floor": drawdown,
-            "unreconciled_ratio": (missing / len(intents)) if intents else 0.0,
+            "unreconciled_ratio": ((missing + invalid) / len(intents)) if intents else 0.0,
             "rows": intent_rows,
         }
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
