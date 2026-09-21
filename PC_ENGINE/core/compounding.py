@@ -65,7 +65,7 @@ class CompoundingController:
         protected_reserve = current * self.reserve_cash_pct
         # Equity, rather than the original deposit, is the compounding base.
         # A losing cycle naturally reduces the next position size.
-        reinvestment_equity = max(0.0, current - protected_reserve)
+        reinvestment_equity = current
         transferable_surplus = max(0.0, current - baseline)
 
         status = "COMPOUNDING" if current > 0 else "STOPPED"
