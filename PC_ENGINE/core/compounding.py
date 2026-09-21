@@ -178,7 +178,7 @@ class GlobalCompoundingOrchestrator:
                     "owner_id": snap.owner_id,
                     "source_venue": source.venue,
                     "destination_venue": destination.venue,
-                    "target_base": snap.global_base,
+                    "target_base": target_base,
                     "amount": round(amount, 8),
                     "reason": "GLOBAL_TIER_CAPITALIZATION",
                 })
