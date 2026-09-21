@@ -94,3 +94,38 @@ def test_importer_rejects_stale_future_and_malformed_artifacts(tmp_path):
     assert result.skipped == 2
     assert result.rejected == 1
     assert len(store.read()) == 1
+
+
+def test_shared_artifact_source_trust_and_expiry_are_validated(tmp_path):
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    payload = artifact().to_public_dict()
+    payload.update({
+        "source_owner_ref": "owner-andre",
+        "source_node_ref": "node-pc-01",
+        "trust_score": 0.85,
+        "source_count": 2,
+        "expires_at_ms": 200_000,
+    })
+    validated = store.validate_public_artifact(payload)
+    assert validated["trust_score"] == 0.85
+    assert validated["source_count"] == 2
+
+    invalid = dict(payload)
+    invalid["trust_score"] = 1.5
+    try:
+        store.validate_public_artifact(invalid)
+    except ValueError as exc:
+        assert str(exc) == "invalid_trust_score"
+    else:
+        raise AssertionError("invalid trust must be rejected")
+
+
+def test_importer_skips_expired_shared_artifact(tmp_path):
+    from PC_ENGINE.core.shared_intelligence import SharedIntelligenceImporter
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    payload = artifact().to_public_dict()
+    payload["created_at_ms"] = 99_000
+    payload["expires_at_ms"] = 100_000
+    result = SharedIntelligenceImporter(store).import_rows([payload], now_ms=100_000)
+    assert result.skipped == 1
+    assert result.accepted == 0
