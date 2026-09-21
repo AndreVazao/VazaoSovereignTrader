@@ -74,7 +74,7 @@ class SovereignEngine:
         # A process restart can never inherit a protected REAL mode from
         # configuration alone. REAL must be entered through the guarded API
         # transition after readiness and explicit operator authorization.
-        self.mode = "PAPER" if configured_mode == "REAL" else configured_mode
+        self.mode = self._startup_mode(configured_mode)
         self.paper = self.mode != "REAL"
         self.real_operational = False
         self.real_fail_safe_reason = ""
@@ -128,6 +128,12 @@ class SovereignEngine:
         self.research_stop_event = threading.Event()
         self.research_thread: Optional[threading.Thread] = None
         self._load_recovery_state()
+
+    @staticmethod
+    def _startup_mode(configured_mode: str) -> str:
+        """Normalize persisted startup mode so REAL is never inherited on restart."""
+        mode = str(configured_mode or "PAPER").upper()
+        return "PAPER" if mode == "REAL" else mode
 
     def _build_exchanges(self) -> dict[str, CcxtExchangeClient]:
         out: dict[str, CcxtExchangeClient] = {}
