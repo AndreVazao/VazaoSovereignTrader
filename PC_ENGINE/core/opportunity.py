@@ -83,7 +83,10 @@ class PaperOpportunityEngine:
     def _latest_latency_edge(self, symbol: str, now_ms: int, direction: str = "UP") -> dict | None:
         try:
             with self.latency_path.open("r", encoding="utf-8") as handle:
-                lines = handle.readlines()
+                handle.seek(0, 2)
+                size = handle.tell()
+                handle.seek(max(0, size - 131072))
+                lines = handle.read().splitlines()
         except (FileNotFoundError, OSError):
             return None
         for line in reversed(lines):
