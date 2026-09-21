@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server";import { appendUnique,requireAuth } from "../_lib";
+export async function POST(request:Request){try{requireAuth(request);const body=await request.json();if(!Array.isArray(body?.rows))return NextResponse.json({error:"rows_required"},{status:400});const accepted=await appendUnique(body.rows);return NextResponse.json({accepted,rejected:Math.max(0,body.rows.length-accepted)});}catch(error){if(error instanceof Response)return error;return NextResponse.json({error:String(error)},{status:400});}}
