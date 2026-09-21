@@ -1,0 +1,1 @@
+{"name":"vazao-sovereign-trader-shared-intelligence-api","private":true,"version":"0.1.0","scripts":{"build":"next build"},"dependencies":{"@vercel/blob":"^2.0.0","next":"^16.0.0","react":"^19.0.0","react-dom":"^19.0.0"},"devDependencies":{"typescript":"^5.9.0"}}
