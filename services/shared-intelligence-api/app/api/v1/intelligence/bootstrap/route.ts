@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server";import { isFresh,pullRows,requireAuth } from "../_lib";
+export async function GET(request:Request){try{requireAuth(request);const url=new URL(request.url),limit=Number(url.searchParams.get("limit")||"500");const result=await pullRows(null,Number.isFinite(limit)?limit:500);const rows=result.rows.filter(row=>isFresh(row.artifact));return NextResponse.json({...result,rows,count:rows.length,bootstrap:true});}catch(error){if(error instanceof Response)return error;return NextResponse.json({error:String(error)},{status:400});}}
