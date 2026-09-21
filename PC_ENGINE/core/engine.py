@@ -229,6 +229,10 @@ class SovereignEngine:
             recon_cfg = self.config.get("reconciliation", {})
             dust_tolerance = max(0.0, float(recon_cfg.get("dust_tolerance", 1e-10)))
             relative_tolerance = max(0.0, float(recon_cfg.get("relative_tolerance", 0.001)))
+            financial_tolerance = max(0.0, float(recon_cfg.get("financial_relative_tolerance", 0.002)))
+            financial = self.state.financial_account
+            quote_flow = float(financial.get("quote_flow", 0.0) or 0.0)
+            base_flow = financial.setdefault("base_flow", {})
 
             expected_by_asset: dict[str, float] = {}
             symbols_by_asset: dict[str, list[str]] = {}
@@ -236,6 +240,36 @@ class SovereignEngine:
                 base_asset = str(symbol).split("/", 1)[0]
                 expected_by_asset[base_asset] = expected_by_asset.get(base_asset, 0.0) + float(position.qty)
                 symbols_by_asset.setdefault(base_asset, []).append(symbol)
+
+            position_baseline = financial.get("position_baseline_qty")
+            if not isinstance(position_baseline, dict):
+                position_baseline = {asset: float(qty) for asset, qty in expected_by_asset.items()}
+                financial["position_baseline_qty"] = dict(position_baseline)
+                financial["initialized_at"] = time.time()
+            baseline = financial.get("baseline_total")
+            if baseline is None:
+                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote}
+                financial["baseline_total"] = baseline
+                financial["quote_flow"] = quote_flow
+                financial["initialized_at"] = time.time()
+            baseline_quote = float(baseline.get(quote, 0.0) or 0.0)
+            expected_quote = baseline_quote + quote_flow
+            exchange_quote = float(total.get(quote, 0.0) or 0.0)
+            quote_tol = max(dust_tolerance, abs(expected_quote) * financial_tolerance)
+            quote_mismatch = abs(exchange_quote - expected_quote) > quote_tol
+
+            base_flow_mismatches = []
+            for asset in set(position_baseline) | set(expected_by_asset) | set(base_flow):
+                expected_position = float(position_baseline.get(asset, 0.0) or 0.0) + float(base_flow.get(asset, 0.0) or 0.0)
+                current_position = float(expected_by_asset.get(asset, 0.0) or 0.0)
+                tolerance = max(dust_tolerance, abs(expected_position) * financial_tolerance)
+                if abs(current_position - expected_position) > tolerance:
+                    base_flow_mismatches.append({
+                        "asset": asset,
+                        "expected": expected_position,
+                        "local": current_position,
+                        "tolerance": tolerance,
+                    })
 
             mismatches = []
             for asset, expected_qty in expected_by_asset.items():
@@ -256,7 +290,7 @@ class SovereignEngine:
                 qty = float(value or 0.0)
                 if asset_name == quote or qty <= dust_tolerance:
                     continue
-                if asset_name not in expected_by_asset:
+                if asset_name not in expected_by_asset and asset_name not in base_flow:
                     unexpected_assets.append({
                         "asset": asset_name,
                         "total": qty,
@@ -264,8 +298,8 @@ class SovereignEngine:
                     })
 
             result = {
-                "ok": not mismatches and not unexpected_assets and not open_orders,
-                "status": "MATCH" if not mismatches and not unexpected_assets and not open_orders else "BLOCKED",
+                "ok": not mismatches and not base_flow_mismatches and not unexpected_assets and not open_orders and not quote_mismatch,
+                "status": "MATCH" if not mismatches and not base_flow_mismatches and not unexpected_assets and not open_orders and not quote_mismatch else "BLOCKED",
                 "tracked_positions": len(self.state.open_positions),
                 "expected_assets": expected_by_asset,
                 "open_orders": len(open_orders),
@@ -274,6 +308,12 @@ class SovereignEngine:
                 "open_order_ids": [str(o.get("id", "")) for o in open_orders if o.get("id")],
                 "dust_tolerance": dust_tolerance,
                 "relative_tolerance": relative_tolerance,
+                "financial_account": dict(financial),
+                "base_flow_mismatches": base_flow_mismatches,
+                "quote_mismatch": quote_mismatch,
+                "expected_quote": expected_quote,
+                "exchange_quote": exchange_quote,
+                "quote_tolerance": quote_tol,
                 "checked_at": time.time(),
             }
         except (NotImplementedError, ValueError, TypeError) as exc:
