@@ -388,6 +388,20 @@
       "promotion_rule": "Consider paid data only when measured coverage/latency improvement is expected to exceed recurring cost."
     }
   },
+  "external_source_latency": {
+    "enabled": false,
+    "min_samples": 20,
+    "min_lead_ms": 25,
+    "max_lead_ms": 2000,
+    "min_same_direction_ratio": 0.7,
+    "fee_bps": 4,
+    "spread_bps": 1,
+    "slippage_bps": 1,
+    "execution_buffer_bps": 1,
+    "history_limit": 5000,
+    "path": "PC_ENGINE/data/radar/external_source_latency.jsonl",
+    "notes": "Research-only temporal evidence. External sources never authorize orders; measured edge must survive fees, spread, slippage and execution buffer."
+  },
   "capital_opportunity": {
     "enabled": true,
     "min_samples": 30,
