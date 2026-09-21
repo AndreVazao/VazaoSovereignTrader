@@ -8,7 +8,46 @@ function sha256(value:unknown){return createHash("sha256").update(canonical(valu
 function auth(request:Request){const expected=process.env.SHARED_INTELLIGENCE_SYNC_TOKEN;if(!expected)return false;const supplied=request.headers.get("authorization")?.replace(/^Bearer\\s+/i,"")??"";const a=Buffer.from(supplied),b=Buffer.from(expected);return a.length===b.length&&timingSafeEqual(a,b);}
 export function requireAuth(request:Request){if(!auth(request))throw new Response("Unauthorized",{status:401});}
 export function validateArtifact(payload:Record<string,unknown>){for(const key of Object.keys(payload))if(!SHARED_FIELDS.has(key))throw new Error("private_or_unknown_field:"+key);const sample=Number(payload.sample_count),wins=Number(payload.win_count),rate=Number(payload.win_rate);if(!Number.isInteger(sample)||sample<0||!Number.isInteger(wins)||wins<0||wins>sample)throw new Error("invalid_counts");if(!Number.isFinite(rate)||rate<0||rate>1)throw new Error("invalid_win_rate");if(!String(payload.strategy_id??"").trim())throw new Error("strategy_id_required");const artifactId=String(payload.artifact_id??"");if(artifactId.length>128)throw new Error("artifact_id_too_long");const sourceDigest=String(payload.source_digest??"");if(sourceDigest&&(sourceDigest.length!==64||!/^[0-9a-f]+$/i.test(sourceDigest)))throw new Error("invalid_source_digest");const trust=Number(payload.trust_score??0);if(!Number.isFinite(trust)||trust<0||trust>1)throw new Error("invalid_trust_score");const sourceCount=Number(payload.source_count??1);if(!Number.isInteger(sourceCount)||sourceCount<1)throw new Error("invalid_source_count");if(!Number.isFinite(Number(payload.created_at_ms)))throw new Error("created_at_ms_required");const expiry=Number(payload.expires_at_ms??0);if(!Number.isFinite(expiry)||expiry<0)throw new Error("invalid_expiry");for(const key of ["source_owner_ref","source_node_ref"])if(String(payload[key]??"").length>128)throw new Error("source_ref_too_long");return payload;}
-async function readAll(){const prefix=process.env.SHARED_INTELLIGENCE_BLOB_PREFIX||"shared-intelligence/";const result=await list({prefix});const rows:Envelope[]=[];for(const blob of result.blobs){try{const {stream}=await get(blob.pathname,{access:"private",useCache:false});const value=JSON.parse(await new Response(stream).text());if(value?.artifact&&value?.sha256)rows.push(value);}catch{continue;}}rows.sort((a,b)=>Number(a.artifact.created_at_ms)-Number(b.artifact.created_at_ms));return rows;}
-export async function appendUnique(rows:Envelope[]){let accepted=0;const existing=new Set((await readAll()).map(r=>r.sha256));for(const row of rows.slice(0,MAX_BATCH)){const artifact=validateArtifact(row.artifact);const digest=sha256(artifact);if(digest!==row.sha256||existing.has(digest))continue;const prefix=process.env.SHARED_INTELLIGENCE_BLOB_PREFIX||"shared-intelligence/";await put(prefix+digest+".json",JSON.stringify({artifact,sha256:digest}),{access:"private",contentType:"application/json",addRandomSuffix:false,allowOverwrite:false});existing.add(digest);accepted++;}return accepted;}
-export async function pullRows(cursor:string|null,limit:number){const all=await readAll();const idx=cursor?all.findIndex(r=>r.sha256===cursor):-1;const start=cursor&&idx>=0?idx+1:0;const rows=all.slice(start,start+Math.min(Math.max(limit,1),MAX_BATCH));const next_cursor=rows.length?rows[rows.length-1].sha256:(cursor??"");return {rows,next_cursor};}
+async function readBlob(pathname:string):Promise<Envelope|null>{
+  try{
+    const result=await get(pathname,{access:"private",useCache:false});
+    if(!result||result.statusCode!==200||!result.stream)return null;
+    const value=JSON.parse(await new Response(result.stream).text());
+    return value?.artifact&&value?.sha256?value:null;
+  }catch{return null;}
+}
+
+async function readPage(cursor:string|null,limit:number){
+  const prefix=process.env.SHARED_INTELLIGENCE_BLOB_PREFIX||"shared-intelligence/";
+  const page=await list({prefix,cursor:cursor||undefined,limit:Math.min(Math.max(limit,1),MAX_BATCH)});
+  const rows:Envelope[]=[];
+  for(const blob of page.blobs){
+    const value=await readBlob(blob.pathname);
+    if(value)rows.push(value);
+  }
+  return {rows,next_cursor:page.cursor??""};
+}
+
+export async function appendUnique(rows:Envelope[]){
+  let accepted=0;
+  const prefix=process.env.SHARED_INTELLIGENCE_BLOB_PREFIX||"shared-intelligence/";
+  for(const row of rows.slice(0,MAX_BATCH)){
+    try{
+      const artifact=validateArtifact(row.artifact);
+      const digest=sha256(artifact);
+      if(digest!==row.sha256)continue;
+      const created=Number(artifact.created_at_ms);
+      if(!Number.isInteger(created)||created<=0)continue;
+      const pathname=prefix+String(created).padStart(13,"0")+"-"+digest+".json";
+      await put(pathname,JSON.stringify({artifact,sha256:digest}),{access:"private",contentType:"application/json",addRandomSuffix:false,allowOverwrite:false});
+      accepted++;
+    }catch{}
+  }
+  return accepted;
+}
+
+export async function pullRows(cursor:string|null,limit:number){
+  return readPage(cursor,limit);
+}
+
 export function isFresh(artifact:Record<string,unknown>,now=Date.now()){const created=Number(artifact.created_at_ms),expires=Number(artifact.expires_at_ms??0);return created>0&&now>=created&&now-created<=MAX_AGE_MS&&(!expires||now<expires);}
