@@ -591,6 +591,7 @@ class SovereignEngine:
                             "known_filled_qty": 0.0,
                             "known_fill_price": float(intent.get("reference_price") or 0.0),
                             "known_fee": 0.0,
+                            "known_quote_notional": 0.0,
                             "created_ts": float(intent.get("created_ts") or time.time()),
                             "recovered_from_intent": intent_id,
                             "client_order_id": client_order_id,
@@ -627,6 +628,7 @@ class SovereignEngine:
                 "known_filled_qty": 0.0,
                 "known_fill_price": float(order.get("average") or order.get("price") or intent.get("reference_price") or 0.0),
                 "known_fee": 0.0,
+                "known_quote_notional": 0.0,
                 "created_ts": float(intent.get("created_ts") or time.time()),
                 "recovered_from_intent": intent_id,
                 "client_order_id": client_order_id,
@@ -670,6 +672,37 @@ class SovereignEngine:
         if currencies and quote and any(currency != quote for currency in currencies):
             raise ValueError(f"non-quote fee currency for {symbol}: {sorted(currencies)}")
         return max(0.0, total)
+
+    def _validate_order_financial_invariant(self, raw: dict, symbol: str, filled_qty: float, average_price: float) -> dict:
+        cfg = self.config.get("reconciliation", {})
+        tolerance_pct = max(0.0, float(cfg.get("financial_relative_tolerance", 0.002)))
+        cost = raw.get("cost")
+        if cost is not None:
+            cost = float(cost)
+            expected = float(filled_qty) * float(average_price)
+            tolerance = max(1e-12, abs(expected) * tolerance_pct)
+            if cost < 0:
+                return {"ok": False, "reason": "negative_order_cost", "cost": cost}
+            if abs(cost - expected) > tolerance:
+                return {
+                    "ok": False,
+                    "reason": "order_cost_price_quantity_mismatch",
+                    "reported_cost": cost,
+                    "expected_cost": expected,
+                    "tolerance": tolerance,
+                }
+        fee = raw.get("fee")
+        if isinstance(fee, dict) and fee.get("cost") is not None and float(fee["cost"]) < 0:
+            return {"ok": False, "reason": "negative_fee", "fee": float(fee["cost"])}
+        if float(filled_qty) < 0 or float(average_price) < 0:
+            return {"ok": False, "reason": "negative_fill_or_price"}
+        expected = float(filled_qty) * float(average_price)
+        return {
+            "ok": True,
+            "reported_cost": cost,
+            "expected_cost": expected,
+            "relative_tolerance": tolerance_pct,
+        }
 
     def _reconcile_pending_orders(self) -> None:
         """Reconcile exchange fills idempotently, including partial fills and fees."""
@@ -756,10 +789,47 @@ class SovereignEngine:
                     })
                     continue
                 fee_delta = max(0.0, cumulative_fee - known_fee)
+                financial = self._validate_order_financial_invariant(
+                    raw,
+                    symbol,
+                    final_filled,
+                    float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0),
+                )
+                self.state.financial_reconciliation = {
+                    "order_id": order_id,
+                    "symbol": symbol,
+                    **financial,
+                    "checked_at": time.time(),
+                }
+                if not financial.get("ok", False):
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_FINANCIAL_INVARIANT_BLOCKED", self.state.financial_reconciliation)
+                    continue
+                cumulative_notional = float(
+                    financial.get("reported_cost")
+                    if financial.get("reported_cost") is not None
+                    else financial.get("expected_cost") or 0.0
+                )
+                known_notional = float(item.get("known_quote_notional") or 0.0)
+                tolerance_notional = max(
+                    1e-12,
+                    abs(cumulative_notional) * float(financial.get("relative_tolerance") or 0.002),
+                )
+                if cumulative_notional + tolerance_notional < known_notional:
+                    self.state.status = "SAFE_MODE"
+                    self.log("PENDING_ORDER_NOTIONAL_REGRESSION", {"order_id": order_id, "symbol": symbol})
+                    continue
+                delta_notional = max(0.0, cumulative_notional - known_notional)
 
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
-                    fill_price = float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0)
+                    if delta_notional <= 0:
+                        self.state.status = "SAFE_MODE"
+                        self.log("PENDING_ORDER_MISSING_INCREMENTAL_NOTIONAL", {
+                            "order_id": order_id, "symbol": symbol, "delta_qty": delta
+                        })
+                        continue
+                    fill_price = delta_notional / delta
                     if fill_price <= 0:
                         self.state.status = "SAFE_MODE"
                         self.log("MANUAL_RECONCILIATION_REQUIRED", {
@@ -826,8 +896,12 @@ class SovereignEngine:
                         })
                         continue
 
+                if delta > 1e-12 and side in {"buy", "sell"}:
+                    self._record_financial_fill(side, symbol, delta, delta_notional, fee_delta)
+
                 item["known_filled_qty"] = final_filled
                 item["known_fee"] = cumulative_fee
+                item["known_quote_notional"] = cumulative_notional
                 item["known_fill_price"] = float(
                     raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0
                 )
