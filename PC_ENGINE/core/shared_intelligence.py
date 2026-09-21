@@ -24,6 +24,11 @@ SHARED_FIELDS = frozenset({
     "producer_version",
     "artifact_id",
     "source_digest",
+    "source_owner_ref",
+    "source_node_ref",
+    "trust_score",
+    "source_count",
+    "expires_at_ms",
 })
 
 
@@ -46,6 +51,11 @@ class SharedIntelligenceArtifact:
     producer_version: str = "1"
     artifact_id: str = ""
     source_digest: str = ""
+    source_owner_ref: str = ""
+    source_node_ref: str = ""
+    trust_score: float = 0.0
+    source_count: int = 1
+    expires_at_ms: int = 0
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
@@ -65,6 +75,11 @@ class SharedIntelligenceArtifact:
             "producer_version": self.producer_version,
             "artifact_id": self.artifact_id,
             "source_digest": self.source_digest,
+            "source_owner_ref": self.source_owner_ref,
+            "source_node_ref": self.source_node_ref,
+            "trust_score": self.trust_score,
+            "source_count": self.source_count,
+            "expires_at_ms": self.expires_at_ms,
         }
 
 
@@ -101,6 +116,18 @@ class SharedIntelligenceStore:
         source_digest = str(payload.get("source_digest", "")).strip()
         if source_digest and (len(source_digest) != 64 or any(ch not in "0123456789abcdef" for ch in source_digest.lower())):
             raise ValueError("invalid_source_digest")
+        trust_score = float(payload.get("trust_score", 0.0))
+        if not 0.0 <= trust_score <= 1.0:
+            raise ValueError("invalid_trust_score")
+        source_count = int(payload.get("source_count", 1))
+        if source_count < 1:
+            raise ValueError("invalid_source_count")
+        expires_at_ms = int(payload.get("expires_at_ms", 0))
+        if expires_at_ms < 0:
+            raise ValueError("invalid_expiry")
+        for field in ("source_owner_ref", "source_node_ref"):
+            if len(str(payload.get(field, ""))) > 128:
+                raise ValueError("source_ref_too_long")
         return dict(payload)
 
     def append(self, artifact: SharedIntelligenceArtifact) -> str:
@@ -160,7 +187,11 @@ class SharedIntelligenceImporter:
                     rejected += 1
                     continue
                 created_at_ms = int(validated["created_at_ms"])
+                expires_at_ms = int(validated.get("expires_at_ms", 0) or 0)
                 if created_at_ms <= 0 or now_ms - created_at_ms > self.max_age_ms:
+                    skipped += 1
+                    continue
+                if expires_at_ms and now_ms >= expires_at_ms:
                     skipped += 1
                     continue
                 if now_ms < created_at_ms:
@@ -183,6 +214,11 @@ class SharedIntelligenceImporter:
                         producer_version=str(validated.get("producer_version", "1")),
                         artifact_id=str(validated.get("artifact_id", "")),
                         source_digest=str(validated.get("source_digest", "")),
+                        source_owner_ref=str(validated.get("source_owner_ref", "")),
+                        source_node_ref=str(validated.get("source_node_ref", "")),
+                        trust_score=float(validated.get("trust_score", 0.0)),
+                        source_count=int(validated.get("source_count", 1)),
+                        expires_at_ms=int(validated.get("expires_at_ms", 0)),
                     )
                 )
                 accepted += 1
