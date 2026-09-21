@@ -16,7 +16,7 @@ class CapitalRoutingPolicy:
     owner_id: str
     enabled: bool = True
     reserve_cash_pct: float = 0.20
-    minimum_transfer_quote: float = 25.0
+    minimum_transfer_quote: float = 10.0
     capital_plus_profit_pct: float = 0.0
     max_transfer_pct_per_cycle: float = 0.10
     require_destination_need: bool = True
@@ -24,6 +24,8 @@ class CapitalRoutingPolicy:
     require_destination_ready: bool = True
     require_profit_after_costs: bool = True
     allow_cross_owner_transfer: bool = False
+    automatic_same_owner_transfer: bool = True
+    require_destination_whitelist: bool = True
 
     def validate(self) -> None:
         if not self.owner_id:
@@ -38,6 +40,8 @@ class CapitalRoutingPolicy:
             raise ValueError("max_transfer_pct_per_cycle must be in (0, 1]")
         if self.allow_cross_owner_transfer:
             raise ValueError("cross-owner transfers are forbidden")
+        if self.require_destination_whitelist is False and self.automatic_same_owner_transfer:
+            raise ValueError("automatic transfers require destination whitelist")
 
     def transferable_surplus(
         self,
@@ -67,6 +71,7 @@ class CapitalRoutingPolicy:
         expected_net_edge_bps: float,
         estimated_transfer_cost_quote: float,
         destination_ready: bool,
+        destination_whitelisted: bool = False,
     ) -> tuple[bool, str]:
         self.validate()
 
@@ -75,6 +80,10 @@ class CapitalRoutingPolicy:
 
         if not self.enabled:
             return False, "ROUTING_DISABLED"
+        if not self.automatic_same_owner_transfer:
+            return False, "AUTO_TRANSFER_DISABLED"
+        if self.require_destination_whitelist and not destination_whitelisted:
+            return False, "DESTINATION_NOT_WHITELISTED"
 
         if source_available_quote <= 0 or destination_required_quote <= 0:
             return False, "NO_CAPITAL_OR_NEED"
@@ -126,5 +135,7 @@ class CapitalRoutingPolicy:
             "require_destination_ready": self.require_destination_ready,
             "require_profit_after_costs": self.require_profit_after_costs,
             "allow_cross_owner_transfer": False,
-            "execution_authority": "NONE",
+            "automatic_same_owner_transfer": self.automatic_same_owner_transfer,
+            "require_destination_whitelist": self.require_destination_whitelist,
+            "execution_authority": "AUTO_SAME_OWNER",
         }
