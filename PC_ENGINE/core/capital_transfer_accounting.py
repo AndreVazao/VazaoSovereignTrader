@@ -22,13 +22,7 @@ class CapitalTransferAccountingEntry:
 
 
 class CapitalTransferAccounting:
-    """Owner-private expected balance deltas for CONFIRMED transfers.
-
-    This is an accounting expectation layer, not a venue balance source. A
-    transfer is applied exactly once, and only after venue verification marks
-    the durable transfer state CONFIRMED. Observed venue balances remain the
-    reconciliation authority.
-    """
+    """Owner-private expected deltas applied exactly once after CONFIRMED."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -40,18 +34,14 @@ class CapitalTransferAccounting:
         with self.path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 try:
-                    row = json.loads(line)
-                    item = CapitalTransferAccountingEntry(**row)
+                    item = CapitalTransferAccountingEntry(**json.loads(line))
                     latest[item.intent_id] = item
                 except (json.JSONDecodeError, TypeError):
                     continue
         return latest
 
-    def apply_confirmed(
-        self, *, intent_id: str, owner_id: str, source_venue: str,
-        destination_venue: str, asset: str, amount: float,
-        external_reference: str | None = None,
-    ) -> CapitalTransferAccountingEntry:
+    def apply_confirmed(self, *, intent_id: str, owner_id: str, source_venue: str, destination_venue: str,
+                        asset: str, amount: float, external_reference: str | None = None) -> CapitalTransferAccountingEntry:
         if not intent_id or not owner_id:
             raise ValueError("intent_id and owner_id are required")
         if not source_venue or not destination_venue or source_venue == destination_venue:
@@ -64,15 +54,9 @@ class CapitalTransferAccounting:
                 raise PermissionError("transfer accounting belongs to another owner")
             return existing
         item = CapitalTransferAccountingEntry(
-            intent_id=intent_id,
-            owner_id=owner_id,
-            source_venue=source_venue.lower(),
-            destination_venue=destination_venue.lower(),
-            asset=asset.upper(),
-            amount=round(float(amount), 8),
-            source_delta=round(-float(amount), 8),
-            destination_delta=round(float(amount), 8),
-            external_reference=external_reference,
+            intent_id=intent_id, owner_id=owner_id, source_venue=source_venue.lower(), destination_venue=destination_venue.lower(),
+            asset=asset.upper(), amount=round(float(amount), 8), source_delta=round(-float(amount), 8),
+            destination_delta=round(float(amount), 8), external_reference=external_reference,
             recorded_at_ms=int(time.time() * 1000),
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -90,30 +74,21 @@ class CapitalTransferAccounting:
                 bucket[item.asset] = round(bucket.get(item.asset, 0.0) + delta, 8)
         return result
 
-    def reconcile_observed(
-        self, *, owner_id: str, observed: dict[str, dict[str, float]],
-        tolerance: float = 1e-8,
-    ) -> dict[str, Any]:
+    def reconcile_deltas(self, *, owner_id: str, observed_deltas: dict[str, dict[str, float]], tolerance: float = 1e-8) -> dict[str, Any]:
         if tolerance < 0:
             raise ValueError("tolerance must be non-negative")
         expected = self.expected_deltas(owner_id=owner_id)
         mismatches: list[dict[str, Any]] = []
-        venues = set(expected) | {str(v).lower() for v in observed}
+        venues = set(expected) | {str(v).lower() for v in observed_deltas}
         for venue in sorted(venues):
             exp_assets = expected.get(venue, {})
-            obs_assets = {str(k).upper(): float(v) for k, v in observed.get(venue, {}).items()}
+            obs_assets = {str(k).upper(): float(v) for k, v in observed_deltas.get(venue, {}).items()}
             for asset in set(exp_assets) | set(obs_assets):
-                exp = float(exp_assets.get(asset, 0.0))
-                obs = float(obs_assets.get(asset, 0.0))
+                exp, obs = float(exp_assets.get(asset, 0.0)), float(obs_assets.get(asset, 0.0))
                 if abs(obs - exp) > tolerance:
                     mismatches.append({"venue": venue, "asset": asset, "expected_delta": exp, "observed_delta": obs})
-        return {
-            "owner_private": True,
-            "reconciled": not mismatches,
-            "mismatch_count": len(mismatches),
-            "mismatches": mismatches,
-            "expected_deltas": expected,
-        }
+        return {"owner_private": True, "reconciled": not mismatches, "mismatch_count": len(mismatches),
+                "mismatches": mismatches, "expected_deltas": expected}
 
     def snapshot(self, *, owner_id: str | None = None) -> dict[str, Any]:
         entries = list(self._entries().values())
