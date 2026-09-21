@@ -65,6 +65,19 @@
     },
     "notes": "Local token authentication is the primary control. Tailscale identity is an optional device binding and must be supplied by a trusted Tailscale ingress; never treat a client-supplied header as cryptographic proof. Owner identity is derived from credentials, never from request payloads."
   },
+  "capital_venue_discovery": {
+    "enabled": true,
+    "probe_private_balances": true,
+    "venues": [
+      "binance",
+      "bingx",
+      "okx",
+      "bybit",
+      "coinbase",
+      "kraken"
+    ],
+    "notes": "Read-only capital visibility. The engine detects configured private credentials and, when available, reads balances from supported venues. It never transfers funds, creates orders, or persists credentials. Capital remains owner-private."
+  },
   "engine": {
     "cycle_seconds": 20,
     "quote_currency": "USDT",
