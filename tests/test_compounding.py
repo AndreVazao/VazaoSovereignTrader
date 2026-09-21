@@ -27,3 +27,16 @@ def test_recovery_does_not_falsely_report_profit():
     assert s.realized_profit == -2.0
     assert s.transferable_surplus == 0.0
     assert s.status == "RECOVERY"
+
+
+def test_global_base_advances_by_tenfold_tiers():
+    c = CompoundingController(owner_id="andre", venue="binance")
+    assert c.tier_for_equity(total_equity=9.99) == 1.0
+    assert c.tier_for_equity(total_equity=10.0) == 10.0
+    assert c.tier_for_equity(total_equity=999.99) == 100.0
+    assert c.tier_for_equity(total_equity=1000.0) == 1000.0
+
+
+def test_global_base_catches_up_multiple_tiers():
+    c = CompoundingController(owner_id="andre", venue="binance")
+    assert c.next_global_base(total_equity=10000.0, current_base=1.0) == 10000.0
