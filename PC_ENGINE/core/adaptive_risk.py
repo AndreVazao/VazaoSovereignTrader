@@ -13,14 +13,15 @@ class AdaptiveRiskSnapshot:
     multiplier: float
     eligible: bool
     reason: str
+    context_key: str = "global"
 
 
 class AdaptiveRiskController:
-    """PAPER-first adaptive risk policy.
+    """PAPER-first adaptive risk policy with contextual evidence.
 
-    Risk can increase only when independent evidence supports it.
-    Win rate alone is never sufficient: minimum samples, positive
-    expectancy, drawdown and a hard multiplier ceiling all apply.
+    Context can be strategy/symbol/regime/horizon specific. Missing contextual
+    evidence fails closed to the conservative multiplier; global evidence is
+    never silently substituted for a specific context.
     """
 
     def __init__(self, settings: dict):
@@ -35,42 +36,45 @@ class AdaptiveRiskController:
         self.min_multiplier = min(self.base_multiplier, max(0.0, float(cfg.get("min_multiplier", 0.5))))
         self.scale_window = max(1, int(cfg.get("scale_window", 400)))
 
-    def evaluate(
-        self,
-        *,
-        samples: int,
-        wins: int,
-        mean_net_bps: float,
-        drawdown_pct: float,
-    ) -> AdaptiveRiskSnapshot:
+    def evaluate(self, *, samples: int, wins: int, mean_net_bps: float,
+                 drawdown_pct: float, context_key: str = "global") -> AdaptiveRiskSnapshot:
         samples = max(0, int(samples))
         wins = min(max(0, int(wins)), samples)
         win_rate = wins / samples if samples else 0.0
         dd = max(0.0, float(drawdown_pct))
+        context_key = str(context_key or "global")[:256]
 
         if not self.enabled:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.base_multiplier, False, "adaptive risk disabled")
+                                        self.base_multiplier, False, "adaptive risk disabled", context_key)
         if samples < self.min_samples:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "insufficient validated samples")
+                                        self.min_multiplier, False, "insufficient contextual evidence", context_key)
         if dd >= self.max_drawdown_pct:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "drawdown protection active")
+                                        self.min_multiplier, False, "drawdown protection active", context_key)
         if win_rate < self.min_win_rate:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "win rate below threshold")
+                                        self.min_multiplier, False, "context win rate below threshold", context_key)
         if float(mean_net_bps) <= self.min_mean_net_bps:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "net expectancy below threshold")
+                                        self.min_multiplier, False, "context net expectancy below threshold", context_key)
 
-        # Scale gradually with evidence quality; never jump directly to the ceiling.
         evidence = min(1.0, samples / self.scale_window)
         quality = min(1.0, max(0.0, (win_rate - self.min_win_rate) / max(1e-9, 1.0 - self.min_win_rate)))
         expectancy = min(1.0, max(0.0, float(mean_net_bps) / max(1e-9, self.min_mean_net_bps * 3.0)))
         confidence = evidence * (0.5 * quality + 0.5 * expectancy)
         multiplier = self.base_multiplier + (self.max_multiplier - self.base_multiplier) * confidence
         multiplier = min(self.max_multiplier, max(self.base_multiplier, multiplier))
-
         return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                    multiplier, True, "validated positive edge")
+                                    multiplier, True, "validated contextual edge", context_key)
+
+    def context_key(self, *, strategy_id: str, symbol: str,
+                    regime: str | None = None, horizon_seconds: int | None = None) -> str:
+        parts = [
+            str(strategy_id or "unknown").strip().lower(),
+            str(symbol or "unknown").strip().upper(),
+            str(regime or "unknown").strip().lower(),
+            str(horizon_seconds if horizon_seconds is not None else "unknown"),
+        ]
+        return "|".join(parts)
