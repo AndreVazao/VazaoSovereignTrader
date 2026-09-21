@@ -55,7 +55,7 @@ class LatencyEdgeDetector:
         self.slippage_bps = float(slippage_bps)
         self.execution_latency_ms = int(execution_latency_ms)
         self.latency_decay_bps_per_100ms = float(latency_decay_bps_per_100ms)
-        self._history: dict[tuple[str, str, str], deque[tuple[int, float, float]]] = defaultdict(
+        self._history: dict[tuple[str, str, str, str], deque[tuple[int, float, float]]] = defaultdict(
             lambda: deque(maxlen=history_size)
         )
 
@@ -68,7 +68,7 @@ class LatencyEdgeDetector:
         direction: str,
         lead_ms: int,
         receive_lead_ms: int | None = None,
-        leader_move_bps: float,
+        leader_move_bps: float = 0.0,
         follower_move_bps: float,
     ) -> LatencyObservation:
         lead_ms = int(lead_ms)
