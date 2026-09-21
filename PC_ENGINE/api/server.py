@@ -285,6 +285,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             report = readiness.collect(engine)
             if not preflight.get("ok") or not reconciliation.get("ok", False) or not report.get("ready", False):
                 engine.set_mode("PAPER")
+                guard.disarm("REAL readiness failed; authorization revoked")
                 return jsonify({
                     "ok": False,
                     "error": "real_readiness_blocked",

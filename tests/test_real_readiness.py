@@ -47,3 +47,25 @@ def test_gate_blocks_financial_reconciliation_mismatch_even_if_legacy_flag_is_tr
     )
     assert not report.ready
     assert "PAPER_RECONCILIATION" in report.blockers
+
+
+def test_gate_blocks_unresolved_execution_state():
+    pending = RealReadinessGate().evaluate(
+        mode="REAL", preflight_ok=True, state_samples=1000,
+        outcome_samples=1000, eligible_outcomes=1,
+        walk_forward_ok=True, regime_validation_ok=True,
+        watchdog_ok=True, recovery_ok=True, execution_test_ok=True,
+        pending_orders_ok=False,
+    )
+    assert not pending.ready
+    assert "PENDING_ORDERS_CLEAR" in pending.blockers
+
+    intent = RealReadinessGate().evaluate(
+        mode="REAL", preflight_ok=True, state_samples=1000,
+        outcome_samples=1000, eligible_outcomes=1,
+        walk_forward_ok=True, recovery_ok=True,
+        execution_test_ok=True, regime_validation_ok=True,
+        watchdog_ok=True, execution_intents_ok=False,
+    )
+    assert not intent.ready
+    assert "EXECUTION_INTENTS_CLEAR" in intent.blockers
