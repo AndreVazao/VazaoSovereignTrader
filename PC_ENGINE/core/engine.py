@@ -413,10 +413,14 @@ class SovereignEngine:
         self._persist_recovery()
         self.log("ENGINE_STOPPED")
 
-    def set_mode(self, mode: str) -> None:
+    def set_mode(self, mode: str, *, real_authorized: bool = False) -> None:
         mode = mode.upper()
         if mode not in {"PAPER", "REAL"}:
             raise ValueError("mode must be PAPER or REAL")
+        if mode == "REAL" and not real_authorized:
+            raise RuntimeError("REAL mode requires guarded operator authorization")
+        if mode == "REAL" and not bool(self.config.get("autonomous_execution", {}).get("allow_real", False)):
+            raise RuntimeError("REAL mode disabled by configuration")
         if mode == "REAL" and self.state.status == "RUNNING":
             raise RuntimeError("Stop the engine before switching to REAL")
         if mode == "REAL" and self.paper_collector is not None:
