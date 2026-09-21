@@ -80,6 +80,7 @@ class CapitalTransferPlanner:
             transfer_cost = float(opportunity.get("estimated_transfer_cost_quote", 0) or 0)
             transfer_time = float(opportunity.get("estimated_transfer_time_seconds", 0) or 0)
             ready = bool(opportunity.get("destination_ready", False))
+            destination_whitelisted = bool(opportunity.get("destination_whitelisted", False))
             if destination_id not in by_venue or required <= 0:
                 continue
 
@@ -112,6 +113,7 @@ class CapitalTransferPlanner:
                     expected_net_edge_bps=edge,
                     estimated_transfer_cost_quote=transfer_cost,
                     destination_ready=ready,
+                    destination_whitelisted=destination_whitelisted,
                 )
                 if not ok:
                     continue
