@@ -10,9 +10,14 @@ from PC_ENGINE.core.config import DATA_DIR
 
 
 class RecoveryManager:
-    def __init__(self, state_path: Path | None = None):
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        self.state_path = state_path or (DATA_DIR / "runtime_state.json")
+    def __init__(self, state_path: Path | None = None, owner_id: str = "andre"):
+        if state_path is None:
+            private_dir = DATA_DIR / "owners" / str(owner_id).strip().lower()
+            private_dir.mkdir(parents=True, exist_ok=True)
+            state_path = private_dir / "runtime_state.json"
+        else:
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+        self.state_path = state_path
 
     def save_positions(self, positions: Dict, pending_orders: Dict | None = None, order_guards: Dict[str, float] | None = None, execution_intents: Dict[str, dict] | None = None, financial_account: Dict | None = None) -> None:
         payload = {

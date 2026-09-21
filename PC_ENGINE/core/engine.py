@@ -8,6 +8,8 @@ from typing import Dict, List, Optional
 from PC_ENGINE.ai_council.stub import DisabledAICouncil
 from PC_ENGINE.core.allocator import CapitalAllocator
 from PC_ENGINE.core.opportunity import PaperOpportunityEngine
+from PC_ENGINE.core.config import DATA_DIR
+from PC_ENGINE.core.owner_context import OwnerContext
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.order_manager import OrderManager
 from PC_ENGINE.core.paper_broker import PaperBroker
@@ -70,6 +72,9 @@ class RuntimeState:
 class SovereignEngine:
     def __init__(self, config: dict):
         self.config = config
+        self.owner_context = OwnerContext.from_config(config, DATA_DIR)
+        self.owner_id = self.owner_context.owner_id
+        config.setdefault("owner", {})["id"] = self.owner_id
         configured_mode = str(config.get("mode", "PAPER")).upper()
         # A process restart can never inherit a protected REAL mode from
         # configuration alone. REAL must be entered through the guarded API
@@ -80,16 +85,25 @@ class SovereignEngine:
         self.real_fail_safe_reason = ""
         self.real_mode_guard = None
         self.state = RuntimeState(mode=self.mode)
-        self.ledger = Ledger()
+        self.state.operational["owner_id"] = self.owner_id
+        self.ledger = Ledger(
+            path=self.owner_context.private_path("logs/trades.jsonl"),
+            events_path=self.owner_context.private_path("logs/events.jsonl"),
+        )
         self.rules = ExchangeRulesEngine()
-        paper_cfg = config.get("paper", {})
+        paper_cfg = dict(config.get("paper", {}))
+        paper_cfg["autonomous_intents_path"] = str(self.owner_context.private_path("paper/autonomous_intents.jsonl"))
+        paper_cfg["fills_path"] = str(self.owner_context.private_path("paper/fills.jsonl"))
+        paper_cfg["runs_path"] = str(self.owner_context.private_path("paper/runs.jsonl"))
+        paper_cfg["reconciliation_path"] = str(self.owner_context.private_path("paper/autonomous_reconciliation.json"))
+        config["paper"] = paper_cfg
         self.paper_broker = PaperBroker(
             fee_pct=float(paper_cfg.get("fee_pct", 0.001)),
             slippage_pct=float(paper_cfg.get("slippage_pct", 0.0005)),
             reject_probability=float(paper_cfg.get("reject_probability", 0.0)),
         )
         self.order_manager = OrderManager(self.rules, self.paper_broker)
-        self.recovery = RecoveryManager()
+        self.recovery = RecoveryManager(state_path=self.owner_context.private_path("runtime_state.json"))
         self.watchdog = Watchdog()
         self.ai_council = DisabledAICouncil()
         self.champion = ChampionChallenger()
@@ -104,17 +118,18 @@ class SovereignEngine:
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
-        human_cfg = config.get("human_bridge", {})
+        human_cfg = dict(config.get("human_bridge", {}))
+        human_cfg["data_dir"] = str(self.owner_context.private_path("human_bridge"))
+        research_cfg = dict(config.get("research", {}))
         self.human_bridge = HumanInteractionBridge(
-            human_cfg.get("data_dir", "PC_ENGINE/data/human_bridge"),
+            human_cfg.get("data_dir"),
             default_ttl_seconds=int(human_cfg.get("human_interaction_ttl_seconds", human_cfg.get("response_timeout_seconds", 900))),
         )
         self.human_bridge_watchdog = HumanBridgeWatchdog(self.human_bridge, human_cfg)
         self._human_bridge_operational_last_state = None
         self.cycle_count = 0
         self.preflight_done = False
-        research_dir = config.get("research", {}).get("data_dir", "PC_ENGINE/data/research")
-        research_cfg = config.get("research", {})
+        research_dir = str(self.owner_context.private_path("research"))
         self.autonomous_research = AutonomousResearchWorker(
             research_dir,
             min_observation_score=float(research_cfg.get("min_observation_score", 70.0)),
@@ -481,6 +496,7 @@ class SovereignEngine:
     def snapshot(self) -> dict:
         with self.lock:
             data = asdict(self.state)
+            data["owner"] = self.owner_context.snapshot()
             data["open_positions"] = {k: asdict(v) for k, v in self.state.open_positions.items()}
             data["paper_collector"] = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
             data["real_operational"] = self.real_operational

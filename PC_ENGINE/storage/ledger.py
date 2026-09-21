@@ -9,10 +9,16 @@ from PC_ENGINE.core.config import LOG_DIR
 
 
 class Ledger:
-    def __init__(self, path: Path | None = None):
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        self.path = path or (LOG_DIR / "trades.jsonl")
-        self.events_path = LOG_DIR / "events.jsonl"
+    def __init__(self, path: Path | None = None, events_path: Path | None = None, owner_id: str = "andre"):
+        if path is None:
+            private_dir = LOG_DIR.parent / "owners" / str(owner_id).strip().lower() / "logs"
+            private_dir.mkdir(parents=True, exist_ok=True)
+            path = private_dir / "trades.jsonl"
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
+        self.events_path = events_path or self.path.with_name("events.jsonl")
+        self.events_path.parent.mkdir(parents=True, exist_ok=True)
 
     def event(self, event: str, data: Dict[str, Any]) -> None:
         row = {"ts": int(time.time()), "event": event, "data": data}

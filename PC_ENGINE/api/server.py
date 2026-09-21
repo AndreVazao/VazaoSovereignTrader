@@ -57,7 +57,17 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.get("/health")
     def health():
-        return jsonify({"ok": True, "service": "VazaoSovereignTrader", "mode": engine.mode})
+        return jsonify({
+            "ok": True,
+            "service": "VazaoSovereignTrader",
+            "mode": engine.mode,
+            "owner_id": engine.owner_id,
+        })
+
+    @app.get("/identity")
+    def identity():
+        require_token()
+        return jsonify({"ok": True, "owner": engine.owner_context.snapshot()})
 
     @app.get("/status")
     def status():

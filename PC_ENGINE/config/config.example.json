@@ -1,5 +1,12 @@
 {
   "mode": "PAPER",
+  "owner": {
+    "id": "andre",
+    "display_name": "André",
+    "isolation_enabled": true,
+    "shared_intelligence_enabled": true,
+    "notes": "Owner identity is the financial isolation boundary. Shared intelligence never grants access to another owner's capital, orders, balances, P&L, credentials or REAL authorization."
+  },
   "server": {
     "host": "0.0.0.0",
     "port": 8765,
@@ -227,7 +234,7 @@
   "research": {
     "enabled": true,
     "data_dir": "PC_ENGINE/data/research",
-    "worker_interval_seconds": 2.0,
+    "worker_interval_seconds": 2,
     "replay_path": "PC_ENGINE/data/replay/l2_temporal_replay.json",
     "oos_path": "PC_ENGINE/data/radar/l2_oos_validation.json",
     "autonomous_observation_enabled": true,
