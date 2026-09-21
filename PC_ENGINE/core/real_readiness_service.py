@@ -75,7 +75,12 @@ class RealReadinessService:
         validation_dir = self.data_dir / "validation"
         preflight_ok = bool(engine.state.preflight.get("ok")) if engine.state.preflight else False
         watchdog_ok = bool(engine.state.watchdog.get("ok", False)) if engine.state.watchdog else False
-        recovery_ok = not bool(engine.state.open_positions) or (self.data_dir / "recovery_heartbeat.json").exists()
+        recovery_ok = (
+            not bool(engine.state.open_positions)
+            or (self.data_dir / "recovery_heartbeat.json").exists()
+        )
+        pending_orders_ok = not bool(engine.state.pending_orders)
+        execution_intents_ok = not bool(engine.state.execution_intents)
         critical_errors = sum(1 for line in engine.state.logs if "CRITICAL" in line.upper())
 
         l2_payload = self._read_json(self.data_dir / "l2_oos_validation.json")
@@ -89,21 +94,31 @@ class RealReadinessService:
             "PC_ENGINE/data/paper/autonomous_reconciliation.json",
         ))
         reconciliation = self._read_json(reconciliation_path)
-        reconciliation_ok = bool(reconciliation) and float(reconciliation.get("unreconciled_ratio", 0.0) or 0.0) == 0.0
+        reconciliation_ok = (
+            bool(reconciliation)
+            and float(reconciliation.get("unreconciled_ratio", 0.0) or 0.0) == 0.0
+        )
         if not self.require_reconciliation:
             reconciliation_ok = True
 
         credentials_ok, credentials_detail = self._live_credentials_ok(engine)
         report = self.gate.evaluate(
-            mode=engine.mode, preflight_ok=preflight_ok,
-            state_samples=len(states), outcome_samples=outcome_samples,
+            mode=engine.mode,
+            preflight_ok=preflight_ok,
+            state_samples=len(states),
+            outcome_samples=outcome_samples,
             eligible_outcomes=eligible,
             walk_forward_ok=self._validation_status(validation_dir / "walk_forward.json"),
             regime_validation_ok=self._validation_status(validation_dir / "regime_validation.json"),
-            watchdog_ok=watchdog_ok, recovery_ok=recovery_ok,
+            watchdog_ok=watchdog_ok,
+            recovery_ok=recovery_ok,
+            pending_orders_ok=pending_orders_ok,
+            execution_intents_ok=execution_intents_ok,
             execution_test_ok=self._validation_status(validation_dir / "execution_test.json"),
-            critical_errors=critical_errors, credentials_ok=credentials_ok,
-            credentials_detail=credentials_detail, l2_oos_ok=l2_ok,
+            critical_errors=critical_errors,
+            credentials_ok=credentials_ok,
+            credentials_detail=credentials_detail,
+            l2_oos_ok=l2_ok,
             l2_oos_detail=f"stable_rows={l2_stable}",
             reconciliation_ok=reconciliation_ok,
             reconciliation_detail=f"unreconciled_ratio={reconciliation.get('unreconciled_ratio', 'missing')}",
@@ -114,11 +129,16 @@ class RealReadinessService:
         )
         payload = report.to_dict()
         payload["evidence"] = {
-            "market_state_rows": len(states), "outcome_rows": len(outcomes),
-            "outcome_samples": outcome_samples, "eligible_outcomes": eligible,
-            "l2_stable_rows": l2_stable, "l2_oos_required": self.require_l2_oos,
+            "market_state_rows": len(states),
+            "outcome_rows": len(outcomes),
+            "outcome_samples": outcome_samples,
+            "eligible_outcomes": eligible,
+            "l2_stable_rows": l2_stable,
+            "l2_oos_required": self.require_l2_oos,
             "paper_reconciliation_required": self.require_reconciliation,
             "reconciliation_path": str(reconciliation_path),
+            "pending_orders_clear": pending_orders_ok,
+            "execution_intents_clear": execution_intents_ok,
             "required_market_state_rows": self.min_state_samples,
             "required_outcome_samples": self.min_outcome_samples,
             "required_eligible_outcomes": self.min_eligible_outcomes,
