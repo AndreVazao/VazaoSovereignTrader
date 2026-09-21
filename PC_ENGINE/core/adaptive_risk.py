@@ -76,7 +76,7 @@ class AdaptiveRiskController:
         multiplier = min(self.max_multiplier, max(self.base_multiplier, multiplier))
 
         return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                    multiplier, True, "validated positive edge")
+                                    multiplier, True, "validated positive edge", context_key)
 
     def context_key(self, *, strategy_id: str, symbol: str, regime: str | None = None, horizon_seconds: int | None = None) -> str:
         return "|".join([
