@@ -1134,8 +1134,6 @@ class SovereignEngine:
             self.state.status = "SAFE_MODE"
             self._persist_recovery()
             raise
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
         if result.status == "PENDING_OR_PARTIAL":
             self.state.status = "SAFE_MODE"
             self.log("EXIT_FILL_UNCONFIRMED", {
@@ -1200,6 +1198,8 @@ class SovereignEngine:
             "pnl_pct": pnl_pct,
             "reason": reason,
         })
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
         self.log("POSITION_PARTIALLY_CLOSED" if remaining_qty > 1e-12 else "POSITION_CLOSED", {
             "symbol": position.symbol,
             "filled_qty": filled_qty,
