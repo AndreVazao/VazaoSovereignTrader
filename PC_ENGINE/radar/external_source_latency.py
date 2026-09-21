@@ -70,8 +70,29 @@ class ExternalSourceLatencyProfiler:
         self.path = Path(path) if path else None
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.profile_path = self.path.with_name("external_source_latency_profiles.jsonl") if self.path else None
         self._history: dict[tuple[str, str, str], list[SourceLatencyObservation]] = {}
         self._lock = threading.RLock()
+        self._load_history()
+
+    def _load_history(self) -> None:
+        if not self.path or not self.path.exists():
+            return
+        try:
+            with self.path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    try:
+                        raw = json.loads(line)
+                        observation = SourceLatencyObservation(**raw)
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        continue
+                    key = (observation.source_id, observation.symbol, observation.direction)
+                    rows = self._history.setdefault(key, [])
+                    rows.append(observation)
+                    if len(rows) > self.history_limit:
+                        del rows[:-self.history_limit]
+        except OSError:
+            return
 
     @staticmethod
     def _direction(delta_bps: float) -> str:
@@ -137,6 +158,10 @@ class ExternalSourceLatencyProfiler:
             if self.path:
                 with self.path.open("a", encoding="utf-8") as handle:
                     handle.write(json.dumps(asdict(observation), sort_keys=True) + "\n")
+            profile = self._profile_locked(key)
+            if self.profile_path:
+                with self.profile_path.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(asdict(profile), sort_keys=True) + "\n")
         return observation
 
     @staticmethod
@@ -152,10 +177,10 @@ class ExternalSourceLatencyProfiler:
         fraction = index - lower
         return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
-    def profile(self, source_id: str, symbol: str, direction: str) -> SourceLatencyProfile:
-        key = (str(source_id).strip(), str(symbol).strip(), str(direction).upper())
-        with self._lock:
-            rows = list(self._history.get(key, []))
+    def _profile_locked(self, key: tuple[str, str, str]) -> SourceLatencyProfile:
+        return self._build_profile(key, list(self._history.get(key, [])))
+
+    def _build_profile(self, key: tuple[str, str, str], rows: list[SourceLatencyObservation]) -> SourceLatencyProfile:
         eligible = [row for row in rows if row.eligible]
         leads = [float(row.lead_ms) for row in eligible]
         deltas = [float(row.delta_bps) for row in eligible]
@@ -187,4 +212,10 @@ class ExternalSourceLatencyProfiler:
             same_direction_ratio=same_ratio,
             net_edge_bps=net_edge,
             eligible=qualifies,
+            observed_ts_ms=int(time.time() * 1000),
         )
+
+    def profile(self, source_id: str, symbol: str, direction: str) -> SourceLatencyProfile:
+        key = (str(source_id).strip(), str(symbol).strip(), str(direction).upper())
+        with self._lock:
+            return self._profile_locked(key)
