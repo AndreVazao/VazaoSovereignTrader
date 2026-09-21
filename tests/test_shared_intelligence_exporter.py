@@ -30,3 +30,10 @@ def test_exporter_skips_invalid_rows(tmp_path):
     )
     store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
     assert export_learning_file(source, store, artifact_type="state_outcome") == 0
+
+
+def test_exporter_fails_closed_when_visibility_is_missing(tmp_path):
+    source = tmp_path / "learning.jsonl"
+    source.write_text('{"strategy_id":"implicit","sample_count":10,"win_count":8}\n', encoding="utf-8")
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    assert export_learning_file(source, store, artifact_type="state_outcome") == 0
