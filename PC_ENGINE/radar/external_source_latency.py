@@ -7,6 +7,8 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from PC_ENGINE.core.retention import retain_jsonl
+
 
 @dataclass(frozen=True)
 class SourceLatencyObservation:
@@ -60,6 +62,8 @@ class ExternalSourceLatencyProfiler:
         execution_buffer_bps: float = 1.0,
         history_limit: int = 5000,
         path: str | Path | None = None,
+        max_age_days: int = 14,
+        compact_every: int = 1_000,
     ):
         self.min_samples = max(1, int(min_samples))
         self.min_lead_ms = max(0, int(min_lead_ms))
@@ -67,6 +71,9 @@ class ExternalSourceLatencyProfiler:
         self.min_same_direction_ratio = max(0.0, min(1.0, float(min_same_direction_ratio)))
         self.cost_bps = max(0.0, float(fee_bps) + float(spread_bps) + float(slippage_bps) + float(execution_buffer_bps))
         self.history_limit = max(10, int(history_limit))
+        self.max_age_ms = max(1, int(max_age_days)) * 86_400_000
+        self.compact_every = max(100, int(compact_every))
+        self._record_count = 0
         self.path = Path(path) if path else None
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
