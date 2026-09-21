@@ -128,3 +128,58 @@ class SharedIntelligenceStore:
                     raise ValueError("artifact_integrity_mismatch")
                 rows.append(row)
         return rows
+
+
+@dataclass(frozen=True)
+class SharedIntelligenceImportResult:
+    accepted: int
+    rejected: int
+    skipped: int
+
+
+class SharedIntelligenceImporter:
+    """Fail-closed advisory importer; never touches financial or execution state."""
+
+    def __init__(self, store: SharedIntelligenceStore, *, max_age_ms: int = 86_400_000):
+        self.store = store
+        self.max_age_ms = max(1, int(max_age_ms))
+
+    def import_rows(self, rows: list[dict[str, Any]], *, now_ms: int) -> SharedIntelligenceImportResult:
+        accepted = rejected = skipped = 0
+        for row in rows:
+            try:
+                payload = row.get("artifact", row) if isinstance(row, dict) else None
+                if not isinstance(payload, dict):
+                    rejected += 1
+                    continue
+                validated = self.store.validate_public_artifact(payload)
+                created_at_ms = int(validated["created_at_ms"])
+                if created_at_ms <= 0 or now_ms - created_at_ms > self.max_age_ms:
+                    skipped += 1
+                    continue
+                if now_ms < created_at_ms:
+                    skipped += 1
+                    continue
+                self.store.append(
+                    SharedIntelligenceArtifact(
+                        artifact_type=str(validated["artifact_type"]),
+                        strategy_id=str(validated["strategy_id"]),
+                        market=str(validated["market"]),
+                        regime=str(validated["regime"]),
+                        horizon_seconds=int(validated["horizon_seconds"]),
+                        sample_count=int(validated["sample_count"]),
+                        win_count=int(validated["win_count"]),
+                        win_rate=float(validated["win_rate"]),
+                        mean_net_bps=float(validated["mean_net_bps"]),
+                        median_net_bps=float(validated["median_net_bps"]),
+                        eligible=bool(validated["eligible"]),
+                        created_at_ms=created_at_ms,
+                        producer_version=str(validated.get("producer_version", "1")),
+                        artifact_id=str(validated.get("artifact_id", "")),
+                        source_digest=str(validated.get("source_digest", "")),
+                    )
+                )
+                accepted += 1
+            except (TypeError, ValueError, KeyError, OverflowError):
+                rejected += 1
+        return SharedIntelligenceImportResult(accepted, rejected, skipped)
