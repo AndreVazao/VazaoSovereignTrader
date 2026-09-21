@@ -76,6 +76,9 @@ class SovereignEngine:
         # transition after readiness and explicit operator authorization.
         self.mode = "PAPER" if configured_mode == "REAL" else configured_mode
         self.paper = self.mode != "REAL"
+        self.real_operational = False
+        self.real_fail_safe_reason = ""
+        self.real_mode_guard = None
         self.state = RuntimeState(mode=self.mode)
         self.ledger = Ledger()
         self.rules = ExchangeRulesEngine()
@@ -339,19 +342,45 @@ class SovereignEngine:
             self.state.logs = self.state.logs[-100:]
         self.ledger.event(message, data or {})
 
+    def _enter_real_fail_safe(self, reason: str, data: dict | None = None) -> None:
+        """Leave REAL immediately on a critical runtime condition."""
+        if self.mode != "REAL":
+            self.state.status = "SAFE_MODE"
+            self.real_operational = False
+            return
+        self.real_fail_safe_reason = str(reason)
+        self.real_operational = False
+        self.mode = "PAPER"
+        self.paper = True
+        self.state.mode = "PAPER"
+        guard = getattr(self, "real_mode_guard", None)
+        if guard is not None:
+            guard.disarm(f"REAL fail-safe: {reason}")
+        self.state.status = "SAFE_MODE"
+        payload = {"reason": reason}
+        if data:
+            payload.update(data)
+        self.log("REAL_FAIL_SAFE", payload)
+
+    def _enter_safe_state(self, reason: str, data: dict | None = None) -> None:
+        if self.mode == "REAL":
+            self._enter_real_fail_safe(reason, data)
+        else:
+            self.state.status = "SAFE_MODE"
+
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
             self.pause(False)
             return
         preflight = self.run_preflight()
         if self.config.get("engine", {}).get("preflight_required", True) and not preflight["ok"]:
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("preflight_failed", preflight)
             self.log("PREFLIGHT_BLOCKED_START", preflight)
             return
         if self.state.execution_intents:
             self._recover_unresolved_execution_intents()
             if self.state.execution_intents:
-                self.state.status = "SAFE_MODE"
+                self._enter_safe_state("unresolved_execution_intents", {"intent_ids": list(self.state.execution_intents)})
                 self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS_BLOCK_START", {"intent_ids": list(self.state.execution_intents)})
                 return
         # In REAL mode, reconcile the live account before exposing RUNNING state.
@@ -362,12 +391,13 @@ class SovereignEngine:
         if self.mode == "REAL":
             reconciliation = self.reconcile_account_state()
             if not reconciliation.get("ok", False):
-                self.state.status = "SAFE_MODE"
+                self._enter_safe_state("account_reconciliation_failed", reconciliation)
                 self.log("REAL_START_BLOCKED_ACCOUNT_RECONCILIATION", reconciliation)
                 return
         self.stop_event.clear()
         self.research_stop_event.clear()
         self.state.status = "RUNNING"
+        self.real_operational = self.mode == "REAL"
         if self.config.get("research", {}).get("enabled", True):
             interval = float(self.config.get("research", {}).get("worker_interval_seconds", 2.0))
             self.research_thread = threading.Thread(
@@ -427,6 +457,9 @@ class SovereignEngine:
             self.paper_collector.stop()
         self.mode = mode
         self.paper = mode != "REAL"
+        self.real_operational = False
+        if mode == "REAL":
+            self.real_fail_safe_reason = ""
         self.state.mode = mode
         self.exchanges = self._build_exchanges()
         if self.paper:
@@ -435,11 +468,16 @@ class SovereignEngine:
             self.paper_collector = None
         self.log("MODE_CHANGED", {"mode": mode})
 
+    def fail_safe_real(self, reason: str, data: dict | None = None) -> None:
+        self._enter_real_fail_safe(reason, data)
+
     def snapshot(self) -> dict:
         with self.lock:
             data = asdict(self.state)
             data["open_positions"] = {k: asdict(v) for k, v in self.state.open_positions.items()}
             data["paper_collector"] = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
+            data["real_operational"] = self.real_operational
+            data["real_fail_safe_reason"] = self.real_fail_safe_reason
             return data
 
     def _main_exchange(self) -> CcxtExchangeClient | None:
@@ -453,7 +491,7 @@ class SovereignEngine:
             try:
                 self.cycle()
             except Exception as exc:
-                self.state.status = "SAFE_MODE"
+                self._enter_safe_state("engine_exception", {"error": str(exc)})
                 self.log("ENGINE_ERROR_SAFE_MODE", {"error": str(exc)})
                 self._persist_recovery()
                 time.sleep(15)
@@ -467,14 +505,14 @@ class SovereignEngine:
             status = self.watchdog.check_internet()
             self.state.watchdog = asdict(status)
             if not status.ok:
-                self.state.status = "SAFE_MODE"
+                self._enter_safe_state("watchdog_internet_failure", asdict(status))
                 self.log("WATCHDOG_BLOCK", asdict(status))
                 return False
             symbol = self.config["symbols"][0]
             ex_status = self.watchdog.check_exchange(exchange, symbol)
             self.state.watchdog = asdict(ex_status)
             if not ex_status.ok:
-                self.state.status = "SAFE_MODE"
+                self._enter_safe_state("watchdog_exchange_failure", asdict(ex_status))
                 self.log("WATCHDOG_EXCHANGE_BLOCK", asdict(ex_status))
                 return False
         return True
