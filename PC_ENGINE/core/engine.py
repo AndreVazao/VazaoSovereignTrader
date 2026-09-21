@@ -8,6 +8,8 @@ from typing import Dict, List, Optional
 from PC_ENGINE.ai_council.stub import DisabledAICouncil
 from PC_ENGINE.core.allocator import CapitalAllocator
 from PC_ENGINE.core.opportunity import PaperOpportunityEngine
+from PC_ENGINE.core.config import DATA_DIR
+from PC_ENGINE.core.owner_context import OwnerContext
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.order_manager import OrderManager
 from PC_ENGINE.core.paper_broker import PaperBroker
@@ -70,6 +72,9 @@ class RuntimeState:
 class SovereignEngine:
     def __init__(self, config: dict):
         self.config = config
+        self.owner_context = OwnerContext.from_config(config, DATA_DIR)
+        self.owner_id = self.owner_context.owner_id
+        config.setdefault("owner", {})["id"] = self.owner_id
         configured_mode = str(config.get("mode", "PAPER")).upper()
         # A process restart can never inherit a protected REAL mode from
         # configuration alone. REAL must be entered through the guarded API
@@ -80,7 +85,8 @@ class SovereignEngine:
         self.real_fail_safe_reason = ""
         self.real_mode_guard = None
         self.state = RuntimeState(mode=self.mode)
-        self.ledger = Ledger()
+        self.state.operational["owner_id"] = self.owner_id
+        self.ledger = Ledger(\n            path=self.owner_context.private_path("logs/trades.jsonl"),\n            events_path=self.owner_context.private_path("logs/events.jsonl"),\n        )
         self.rules = ExchangeRulesEngine()
         paper_cfg = config.get("paper", {})
         self.paper_broker = PaperBroker(
@@ -89,7 +95,7 @@ class SovereignEngine:
             reject_probability=float(paper_cfg.get("reject_probability", 0.0)),
         )
         self.order_manager = OrderManager(self.rules, self.paper_broker)
-        self.recovery = RecoveryManager()
+        self.recovery = RecoveryManager(state_path=self.owner_context.private_path("runtime_state.json"))
         self.watchdog = Watchdog()
         self.ai_council = DisabledAICouncil()
         self.champion = ChampionChallenger()
@@ -104,17 +110,16 @@ class SovereignEngine:
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
-        human_cfg = config.get("human_bridge", {})
+        human_cfg = dict(config.get("human_bridge", {}))\n        human_cfg.setdefault("data_dir", str(self.owner_context.private_path("human_bridge")))\n        research_cfg = dict(config.get("research", {}))
         self.human_bridge = HumanInteractionBridge(
-            human_cfg.get("data_dir", "PC_ENGINE/data/human_bridge"),
+            human_cfg.get("data_dir"),
             default_ttl_seconds=int(human_cfg.get("human_interaction_ttl_seconds", human_cfg.get("response_timeout_seconds", 900))),
         )
         self.human_bridge_watchdog = HumanBridgeWatchdog(self.human_bridge, human_cfg)
         self._human_bridge_operational_last_state = None
         self.cycle_count = 0
         self.preflight_done = False
-        research_dir = config.get("research", {}).get("data_dir", "PC_ENGINE/data/research")
-        research_cfg = config.get("research", {})
+        research_dir = str(research_cfg.get("data_dir") or self.owner_context.private_path("research"))
         self.autonomous_research = AutonomousResearchWorker(
             research_dir,
             min_observation_score=float(research_cfg.get("min_observation_score", 70.0)),
