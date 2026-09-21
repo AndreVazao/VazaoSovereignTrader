@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-import hmac
 import base64
 
 from flask import Flask, Response, jsonify, request, send_file
@@ -10,6 +9,7 @@ from flask import Flask, Response, jsonify, request, send_file
 from PC_ENGINE.api.dashboard import DASHBOARD_HTML
 from PC_ENGINE.core.config import env_value
 from PC_ENGINE.core.engine import SovereignEngine
+from PC_ENGINE.core.identity import IdentityAuthenticator, AuthenticatedPrincipal
 from PC_ENGINE.core.real_mode_guard import RealModeGuard
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
 from PC_ENGINE.tools.run_readiness_pipeline import run as run_readiness_pipeline
@@ -25,9 +25,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     guard_settings = dict(engine.config.get("real_mode_guard", {}))
     guard_settings["allow_real"] = bool(engine.config.get("autonomous_execution", {}).get("allow_real", False))
     guard = RealModeGuard(guard_settings)
-    # The guard authorizes the transition; once REAL is active, the engine
-    # owns the continuous fail-safe lifecycle and can revoke this guard.
     engine.real_mode_guard = guard
+    identity = IdentityAuthenticator(engine.config, env_value, fallback_token_env=token_env)
     human_cfg = engine.config.get("human_bridge", {})
     human_bridge = getattr(engine, "human_bridge", None)
     human_watchdog = getattr(engine, "human_bridge_watchdog", None)
@@ -39,12 +38,25 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
     research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
 
-    def require_token() -> None:
-        expected = env_value(token_env, "")
+    def require_token() -> AuthenticatedPrincipal:
         provided = request.headers.get("X-Token", "")
-        if not expected or not hmac.compare_digest(provided, expected):
-            raise PermissionError("unauthorized")
+        tailscale_identity = request.headers.get("X-Tailscale-Identity", "")
+        device_id = request.headers.get("X-Device-ID", "")
+        principal = identity.authenticate(
+            provided,
+            tailscale_identity=tailscale_identity,
+            device_id=device_id,
+        )
+        if principal.owner_id != engine.owner_id:
+            raise PermissionError("owner_mismatch")
         human_watchdog.heartbeat("pc")
+        return principal
+
+    def require_scope(scope: str) -> AuthenticatedPrincipal:
+        principal = require_token()
+        if not principal.has(scope):
+            raise PermissionError(f"scope_required:{scope}")
+        return principal
 
     @app.errorhandler(PermissionError)
     def handle_unauthorized(_: PermissionError):
@@ -65,13 +77,17 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         })
 
     @app.get("/identity")
-    def identity():
-        require_token()
-        return jsonify({"ok": True, "owner": engine.owner_context.snapshot()})
+    def identity_route():
+        principal = require_token()
+        return jsonify({
+            "ok": True,
+            "owner": engine.owner_context.snapshot(),
+            "principal": principal.snapshot(),
+        })
 
     @app.get("/status")
     def status():
-        require_token()
+        require_scope("read_private_state")
         if hasattr(engine, "refresh_human_bridge_operational_state"):
             engine.refresh_human_bridge_operational_state()
         payload = engine.snapshot()
@@ -80,7 +96,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.get("/paper-reconciliation")
     def paper_reconciliation():
-        require_token()
+        require_scope("read_private_state")
         paper_cfg = engine.config.get("paper", {})
         report = PaperAutonomyReconciler(
             intents_path=paper_cfg.get("autonomous_intents_path", "PC_ENGINE/data/paper/autonomous_intents.jsonl"),
@@ -93,12 +109,12 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.get("/readiness")
     @app.get("/real-readiness")
     def real_readiness():
-        require_token()
+        require_scope("read_private_state")
         return jsonify(readiness.collect(engine))
 
     @app.post("/readiness/run")
     def readiness_run():
-        require_token()
+        require_scope("trade_paper")
         if engine.mode.upper() != "PAPER":
             return jsonify({"ok": False, "error": "readiness_pipeline_requires_paper_mode"}), 409
         try:
@@ -109,12 +125,12 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.get("/research")
     def research_snapshot():
-        require_token()
+        require_scope("read_private_state")
         return jsonify(research.snapshot())
 
     @app.post("/research")
     def research_submit():
-        require_token()
+        require_scope("publish_shared_intelligence")
         payload = request.get_json(force=True) or {}
         try:
             item = research.submit(str(payload.get("message", "")))
@@ -124,7 +140,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/human-interaction/heartbeat")
     def human_interaction_heartbeat():
-        require_token()
+        require_scope("read_private_state")
         source = str((request.get_json(force=True) or {}).get("source", "mobile")).lower()
         try:
             human_watchdog.heartbeat(source)
@@ -134,16 +150,17 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.get("/human-interaction/watchdog")
     def human_interaction_watchdog():
-        require_token()
+        require_scope("read_private_state")
         return jsonify(engine.refresh_human_bridge_operational_state())
+
     @app.get("/human-interaction/pending")
     def human_interaction_pending():
-        require_token()
+        require_scope("read_private_state")
         return jsonify(human_bridge.snapshot())
 
     @app.post("/human-interaction/request")
     def human_interaction_request():
-        require_token()
+        require_scope("manage_owner_settings")
         payload = request.get_json(force=True) or {}
         item = human_bridge.create_request(
             str(payload.get("platform", "browser")),
@@ -158,7 +175,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.get("/human-interaction/screenshot-data/<request_id>")
     def human_interaction_screenshot_data(request_id: str):
-        require_token()
+        require_scope("read_private_state")
         item = next((x for x in human_bridge.pending() if x.get("request_id") == request_id), None)
         if not item or not item.get("screenshot_path"):
             return jsonify({"ok": False, "error": "screenshot_not_available"}), 404
@@ -171,16 +188,15 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/human-interaction/browser-action")
     def human_interaction_browser_action():
-        require_token()
+        require_scope("manage_owner_settings")
         payload = request.get_json(force=True) or {}
         request_id = str(payload.get("request_id", ""))
-        # The browser connector consumes the RAM-only response and reproduces the action locally.
         ok = human_bridge.respond(request_id, action=str(payload.get("action", "click")), values=payload.get("values") or {}, claim_token=str(payload.get("claim_token", "")))
         return jsonify({"ok": ok}), (200 if ok else 404)
 
     @app.post("/human-interaction/reissue-claim")
     def human_interaction_reissue_claim():
-        require_token()
+        require_scope("manage_owner_settings")
         request_id = str((request.get_json(force=True) or {}).get("request_id", ""))
         token = human_bridge.reissue_claim(request_id)
         if not token:
@@ -190,7 +206,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/human-interaction/respond")
     def human_interaction_respond():
-        require_token()
+        require_scope("manage_owner_settings")
         payload = request.get_json(force=True) or {}
         request_id = str(payload.get("request_id", ""))
         values = payload.get("values") or {}
@@ -202,20 +218,20 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/human-interaction/cancel")
     def human_interaction_cancel():
-        require_token()
+        require_scope("manage_owner_settings")
         request_id = str((request.get_json(force=True) or {}).get("request_id", ""))
         ok = human_bridge.cancel(request_id)
         return jsonify({"ok": ok}), (200 if ok else 404)
 
     @app.get("/human-interaction/status/<request_id>")
     def human_interaction_status(request_id: str):
-        require_token()
+        require_scope("read_private_state")
         item = next((x for x in human_bridge.snapshot().get("requests", []) if x.get("request_id") == request_id), None)
         return jsonify({"ok": item is not None, "request": item}), (200 if item else 404)
 
     @app.get("/human-interaction/screenshot/<request_id>")
     def human_interaction_screenshot(request_id: str):
-        require_token()
+        require_scope("read_private_state")
         item = next((x for x in human_bridge.pending() if x.get("request_id") == request_id), None)
         if not item or not item.get("screenshot_path"):
             return jsonify({"ok": False, "error": "screenshot_not_available"}), 404
@@ -227,14 +243,14 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/real/arm")
     def real_arm():
-        require_token()
+        require_scope("trade_real")
         payload = request.get_json(force=True) or {}
         ok, reason = guard.arm(str(payload.get("phrase", "")))
         return jsonify({"ok": ok, "reason": reason, "guard": guard.snapshot()}), (200 if ok else 403)
 
     @app.post("/real/disarm")
     def real_disarm():
-        require_token()
+        require_scope("trade_real")
         guard.disarm("operator disarmed")
         if engine.mode.upper() == "REAL":
             engine.fail_safe_real("operator_disarmed")
@@ -242,13 +258,15 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/preflight")
     def preflight():
-        require_token()
+        require_scope("trade_paper")
         return jsonify(engine.run_preflight())
 
     @app.post("/start")
     def start():
-        require_token()
+        principal = require_scope("trade_paper")
         if engine.mode.upper() == "REAL":
+            if not principal.has("trade_real"):
+                raise PermissionError("scope_required:trade_real")
             if engine.state.pending_orders:
                 return jsonify({"ok": False, "error": "real_start_requires_pending_order_reconciliation", "orders": list(engine.state.pending_orders)}), 409
             reconciliation = engine.reconcile_account_state()
@@ -267,30 +285,32 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/pause")
     def pause():
-        require_token()
+        require_scope("trade_paper")
         engine.pause(True)
         return jsonify({"ok": True})
 
     @app.post("/resume")
     def resume():
-        require_token()
+        require_scope("trade_paper")
         engine.pause(False)
         return jsonify({"ok": True})
 
     @app.post("/stop")
     def stop():
-        require_token()
-        engine.stop()
+        require_scope("trade_paper")
         guard.disarm("engine stopped")
+        engine.stop()
         return jsonify({"ok": True})
 
     @app.post("/mode")
     def mode():
-        require_token()
+        principal = require_scope("trade_paper")
         payload = request.get_json(force=True) or {}
         requested = str(payload.get("mode", "PAPER")).upper()
 
         if requested == "REAL":
+            if not principal.has("trade_real"):
+                raise PermissionError("scope_required:trade_real")
             if engine.state.open_positions:
                 return jsonify({"ok": False, "error": "real_mode_requires_manual_position_reconciliation", "positions": list(engine.state.open_positions)}), 409
             if engine.state.pending_orders:

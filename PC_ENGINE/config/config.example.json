@@ -12,6 +12,44 @@
     "port": 8765,
     "local_control_token_env": "VST_LOCAL_TOKEN"
   },
+  "identity": {
+    "mode": "local",
+    "require_device_identity": false,
+    "trusted_tailscale_ingress": false,
+    "owners": {
+      "andre": {
+        "user_id": "andre",
+        "token_env": "ANDRE_TOKEN",
+        "device_id": "andre-pc-01",
+        "tailscale_identity": "andre-pc-01",
+        "scopes": [
+          "read_private_state",
+          "trade_paper",
+          "trade_real",
+          "manage_exchange_accounts",
+          "manage_owner_settings",
+          "read_shared_intelligence",
+          "publish_shared_intelligence"
+        ]
+      },
+      "genro": {
+        "user_id": "genro",
+        "token_env": "GENRO_TOKEN",
+        "device_id": "genro-pc-01",
+        "tailscale_identity": "genro-pc-01",
+        "scopes": [
+          "read_private_state",
+          "trade_paper",
+          "trade_real",
+          "manage_exchange_accounts",
+          "manage_owner_settings",
+          "read_shared_intelligence",
+          "publish_shared_intelligence"
+        ]
+      }
+    },
+    "notes": "Local token authentication is the primary control. Tailscale identity is an optional device binding and must be supplied by a trusted Tailscale ingress; never treat a client-supplied header as cryptographic proof. Owner identity is derived from credentials, never from request payloads."
+  },
   "engine": {
     "cycle_seconds": 20,
     "quote_currency": "USDT",
