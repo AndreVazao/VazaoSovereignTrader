@@ -70,7 +70,11 @@ class RuntimeState:
 class SovereignEngine:
     def __init__(self, config: dict):
         self.config = config
-        self.mode = str(config.get("mode", "PAPER")).upper()
+        configured_mode = str(config.get("mode", "PAPER")).upper()
+        # A process restart can never inherit a protected REAL mode from
+        # configuration alone. REAL must be entered through the guarded API
+        # transition after readiness and explicit operator authorization.
+        self.mode = "PAPER" if configured_mode == "REAL" else configured_mode
         self.paper = self.mode != "REAL"
         self.state = RuntimeState(mode=self.mode)
         self.ledger = Ledger()
