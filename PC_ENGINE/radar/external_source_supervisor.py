@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from PC_ENGINE.radar.external_source_adapter import (
-    ExternalMarketObservation,
     ExternalSourceAdapter,
     observation_quality,
     validate_observation,
@@ -42,12 +41,14 @@ class ExternalSourceSupervisor:
         adapters: Iterable[ExternalSourceAdapter] = (),
         poll_interval_seconds: float = 1.0,
         max_observations_per_poll: int = 500,
+        max_silence_seconds: float = 5.0,
         clock_ms=None,
     ) -> None:
         self.radar = radar
         self.adapters = list(adapters)
         self.poll_interval_seconds = max(0.05, float(poll_interval_seconds))
         self.max_observations_per_poll = max(1, int(max_observations_per_poll))
+        self.max_silence_ms = max(250, int(float(max_silence_seconds) * 1000))
         self.clock_ms = clock_ms or (lambda: time.time_ns() // 1_000_000)
         self.health = {
             str(adapter.source_id): ExternalSourceHealth(str(adapter.source_id))
@@ -119,27 +120,41 @@ class ExternalSourceSupervisor:
 
     def snapshot(self) -> dict:
         with self._lock:
+            now = int(self.clock_ms())
+            sources = {}
+            for source_id, item in self.health.items():
+                age_ms = (
+                    max(0, now - item.last_observation_ms)
+                    if item.last_observation_ms
+                    else None
+                )
+                fresh = age_ms is not None and age_ms <= self.max_silence_ms
+                sources[source_id] = {
+                    "polls": item.polls,
+                    "observations": item.observations,
+                    "accepted": item.accepted,
+                    "rejected": item.rejected,
+                    "errors": item.errors,
+                    "last_poll_ms": item.last_poll_ms,
+                    "last_observation_ms": item.last_observation_ms,
+                    "last_observation_age_ms": age_ms,
+                    "last_transport_latency_ms": item.last_transport_latency_ms,
+                    "last_error": item.last_error,
+                    "sequence_gaps": item.sequence_gaps,
+                    "last_sequence": item.last_sequence,
+                    "fresh": fresh,
+                    "healthy": (
+                        item.errors == 0
+                        and item.rejected == 0
+                        and fresh
+                    ),
+                }
             return {
                 "running": bool(self._thread and self._thread.is_alive()),
                 "poll_interval_seconds": self.poll_interval_seconds,
+                "max_silence_seconds": self.max_silence_ms / 1000,
                 "adapter_count": len(self.adapters),
-                "sources": {
-                    source_id: {
-                        "polls": item.polls,
-                        "observations": item.observations,
-                        "accepted": item.accepted,
-                        "rejected": item.rejected,
-                        "errors": item.errors,
-                        "last_poll_ms": item.last_poll_ms,
-                        "last_observation_ms": item.last_observation_ms,
-                        "last_transport_latency_ms": item.last_transport_latency_ms,
-                        "last_error": item.last_error,
-                        "sequence_gaps": item.sequence_gaps,
-                        "last_sequence": item.last_sequence,
-                        "healthy": item.errors == 0 and item.rejected == 0,
-                    }
-                    for source_id, item in self.health.items()
-                },
+                "sources": sources,
             }
 
     def _loop(self) -> None:
