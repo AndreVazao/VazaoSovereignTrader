@@ -34,6 +34,7 @@ class ExternalSourceSupervisorTests(unittest.TestCase):
                 price=100.0,
                 source_ts_ms=1_000,
                 received_ts_ms=1_025,
+                sequence=3,
             )
         ])
         supervisor = ExternalSourceSupervisor(
@@ -50,6 +51,8 @@ class ExternalSourceSupervisorTests(unittest.TestCase):
         self.assertEqual(health["accepted"], 1)
         self.assertEqual(health["rejected"], 0)
         self.assertEqual(health["last_transport_latency_ms"], 25.0)
+        self.assertEqual(health["last_sequence"], 3)
+        self.assertTrue(health["healthy"])
 
     def test_invalid_row_is_rejected_without_stopping_other_sources(self) -> None:
         radar = FakeRadar()
