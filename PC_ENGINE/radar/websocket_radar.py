@@ -9,6 +9,8 @@ from typing import Callable
 
 import websocket
 
+from PC_ENGINE.radar.latency_edge import LatencyEdgeDetector
+
 
 @dataclass(frozen=True)
 class MarketEvent:
@@ -58,7 +60,8 @@ class WebSocketMarketRadar:
     def __init__(self, symbols: list[str], exchanges: list[str] | None = None,
                  data_dir: str | Path = "PC_ENGINE/data/radar",
                  min_move_bps: float = 5.0, lead_window_ms: int = 750,
-                 callback: Callable[[MarketEvent], None] | None = None) -> None:
+                 callback: Callable[[MarketEvent], None] | None = None,
+                 latency_detector: LatencyEdgeDetector | None = None) -> None:
         self.symbols = list(dict.fromkeys(symbols))
         wanted = exchanges or ["binance", "coinbase", "okx"]
         self.exchanges = [x for x in dict.fromkeys(wanted) if x in self.ENDPOINTS]
@@ -67,6 +70,7 @@ class WebSocketMarketRadar:
         self.min_move = float(min_move_bps) / 10000.0
         self.lead_window_ms = int(lead_window_ms)
         self.callback = callback
+        self.latency_detector = latency_detector or LatencyEdgeDetector(max_lead_ms=self.lead_window_ms)
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._last_price: dict[tuple[str, str], float] = {}
@@ -133,7 +137,7 @@ class WebSocketMarketRadar:
             leader_move = (leader.price - leader.price_before) / leader.price_before
             if abs(leader_move) < self.min_move or leader_move * follower_move <= 0:
                 continue
-            self._persist_lead_lag(LeadLagEvent(
+            lead = LeadLagEvent(
                 symbol=event.symbol,
                 leader=leader.exchange,
                 follower=event.exchange,
@@ -146,7 +150,10 @@ class WebSocketMarketRadar:
                 receive_lag_ms=receive_lag,
                 leader_move_bps=round(leader_move * 10000, 3),
                 follower_move_bps=round(follower_move * 10000, 3),
-            ))
+            )
+            self._persist_lead_lag(lead)
+            edge = self.latency_detector.observe_event(lead)
+            self._persist_latency_edge(edge)
 
     def _persist(self, event: MarketEvent) -> None:
         path = self.data_dir / "websocket_events.jsonl"
@@ -157,6 +164,11 @@ class WebSocketMarketRadar:
         path = self.data_dir / "websocket_lead_lag.jsonl"
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(asdict(lead), ensure_ascii=False) + "\n")
+
+    def _persist_latency_edge(self, edge: object) -> None:
+        path = self.data_dir / "websocket_latency_edges.jsonl"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(edge), ensure_ascii=False) + "\n")
 
     def _run_binance(self) -> None:
         streams = "/".join(f"{self.normalize_symbol(s)[0].lower()}{self.normalize_symbol(s)[1].lower()}@trade" for s in self.symbols)
