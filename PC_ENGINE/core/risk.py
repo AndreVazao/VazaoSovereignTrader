@@ -4,6 +4,8 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from PC_ENGINE.core.adaptive_risk import AdaptiveRiskController, AdaptiveRiskSnapshot
+
 
 @dataclass
 class RiskState:
@@ -20,6 +22,7 @@ class RiskEngine:
     def __init__(self, settings: dict):
         self.settings = settings
         self.state = RiskState()
+        self.adaptive_risk = AdaptiveRiskController(settings.get("adaptive_risk", {}))
 
     def update_equity(self, equity: float, starting_equity: float) -> None:
         if self.state.equity_peak <= 0:
@@ -56,6 +59,35 @@ class RiskEngine:
             return 0.0
         risk_amount = equity * float(self.settings["risk_per_trade_pct"])
         return max(0.0, risk_amount / stop_pct)
+
+    def adaptive_position_notional(
+        self,
+        equity: float,
+        stop_pct: float,
+        *,
+        samples: int,
+        wins: int,
+        mean_net_bps: float,
+        strategy_id: str = "unknown",
+        symbol: str = "unknown",
+        regime: str | None = None,
+        horizon_seconds: int | None = None,
+    ) -> tuple[float, AdaptiveRiskSnapshot]:
+        base = self.position_notional(equity, stop_pct)
+        context = self.adaptive_risk.context_key(
+            strategy_id=strategy_id,
+            symbol=symbol,
+            regime=regime,
+            horizon_seconds=horizon_seconds,
+        )
+        snapshot = self.adaptive_risk.evaluate(
+            samples=samples,
+            wins=wins,
+            mean_net_bps=mean_net_bps,
+            drawdown_pct=max(0.0, -self.state.drawdown_pct),
+            context_key=context,
+        )
+        return base * snapshot.multiplier, snapshot
 
     def record_trade_result(self, symbol: str, pnl_pct: float) -> None:
         self.state.pnl_today_pct += pnl_pct
