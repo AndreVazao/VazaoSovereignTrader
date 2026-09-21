@@ -491,6 +491,7 @@ class SovereignEngine:
     def snapshot(self) -> dict:
         with self.lock:
             data = asdict(self.state)
+            data["owner"] = self.owner_context.snapshot()
             data["open_positions"] = {k: asdict(v) for k, v in self.state.open_positions.items()}
             data["paper_collector"] = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
             data["real_operational"] = self.real_operational
