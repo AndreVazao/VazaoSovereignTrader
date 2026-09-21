@@ -72,3 +72,25 @@ def test_invalid_source_digest_is_rejected(tmp_path):
         assert str(exc) == "invalid_source_digest"
     else:
         raise AssertionError("invalid provenance must be rejected")
+
+
+def test_importer_rejects_stale_future_and_malformed_artifacts(tmp_path):
+    from PC_ENGINE.core.shared_intelligence import SharedIntelligenceImporter
+
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    now_ms = 100_000
+    valid = artifact().to_public_dict()
+    valid["created_at_ms"] = now_ms - 1_000
+    future = dict(valid)
+    future["created_at_ms"] = now_ms + 1_000
+    stale = dict(valid)
+    stale["created_at_ms"] = now_ms - 90_000_000
+    malformed = {"artifact": {"owner_id": "andre", "balance": 1000}}
+
+    result = SharedIntelligenceImporter(store, max_age_ms=10_000).import_rows(
+        [valid, future, stale, malformed], now_ms=now_ms
+    )
+    assert result.accepted == 1
+    assert result.skipped == 2
+    assert result.rejected == 1
+    assert len(store.read()) == 1
