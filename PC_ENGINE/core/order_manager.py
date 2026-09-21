@@ -57,7 +57,14 @@ class OrderManager:
 
         try:
             if paper:
-                fill = self.paper_broker.fill(symbol, side, normalized_qty, price, spread_pct)
+                try:
+                    fill = self.paper_broker.fill(symbol, side, normalized_qty, price, spread_pct)
+                except Exception as exc:
+                    return OrderResult(
+                        False, side, symbol, normalized_qty, price, 0.0,
+                        f"paper-{side}-rejected", f"paper rejection: {exc}",
+                        normalized_qty, "REJECTED",
+                    )
                 return OrderResult(True, side, symbol, normalized_qty, fill.fill_price, fill.fee, f"paper-{side}", "paper fill", normalized_qty, "FILLED")
 
             if client_order_id:
