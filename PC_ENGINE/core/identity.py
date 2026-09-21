@@ -44,9 +44,10 @@ class IdentityAuthenticator:
     itself a financial authorization.
     """
 
-    def __init__(self, config: dict, env_getter):
+    def __init__(self, config: dict, env_getter, fallback_token_env: str | None = None):
         self.config = config if isinstance(config, dict) else {}
         self.env_getter = env_getter
+        self.fallback_token_env = fallback_token_env
         owner_cfg = self.config.get("owner", {})
         self.default_owner = str(owner_cfg.get("id", "andre")).strip().lower()
         self.identity_cfg = self.config.get("identity", {})
@@ -74,7 +75,8 @@ class IdentityAuthenticator:
 
         if selected is None:
             fallback_env = str(
-                self.config.get("server", {}).get("local_control_token_env", "VST_LOCAL_TOKEN")
+                self.fallback_token_env
+                or self.config.get("server", {}).get("local_control_token_env", "VST_LOCAL_TOKEN")
             )
             expected = self.env_getter(fallback_env, "")
             if not expected or not token or token != expected:
