@@ -35,9 +35,17 @@ class RealReadinessGate:
         credentials_detail: str = "not required", l2_oos_ok: bool = True,
         l2_oos_detail: str = "not required", reconciliation_ok: bool = True,
         reconciliation_detail: str = "not required",
+        account_reconciliation: dict | None = None,
         min_state_samples: int = 1000, min_outcome_samples: int = 1000,
         min_eligible_outcomes: int = 1,
     ) -> ReadinessReport:
+        if account_reconciliation:
+            reconciliation_ok = bool(account_reconciliation.get("ok", False))
+            reconciliation_detail = str(account_reconciliation.get("status") or account_reconciliation.get("reason") or "account reconciliation")
+            if account_reconciliation.get("quote_mismatch"):
+                reconciliation_detail = "quote cash-flow invariant mismatch"
+            elif account_reconciliation.get("base_flow_mismatches"):
+                reconciliation_detail = "base-asset cash-flow invariant mismatch"
         checks = (
             GateCheck("MODE_SUPPORTED", mode.upper() in {"PAPER", "REAL"}, f"mode={mode}"),
             GateCheck("PREFLIGHT", bool(preflight_ok), "exchange/config preflight"),
