@@ -52,3 +52,41 @@ def test_guard_is_process_local_and_starts_disarmed():
     ok, reason = restarted.can_enable_real()
     assert not ok
     assert "not armed" in reason
+
+
+def test_engine_rejects_direct_real_transition_without_guard_authorization():
+    from types import SimpleNamespace
+    from PC_ENGINE.core.engine import SovereignEngine
+
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.config = {"autonomous_execution": {"allow_real": True}}
+    engine.mode = "PAPER"
+    engine.paper = True
+    engine.state = SimpleNamespace(status="OFF", mode="PAPER")
+    engine.paper_collector = None
+
+    try:
+        engine.set_mode("REAL")
+    except RuntimeError as exc:
+        assert "guarded operator authorization" in str(exc)
+    else:
+        raise AssertionError("direct REAL transition must be rejected")
+
+
+def test_engine_rejects_real_when_configuration_disables_it():
+    from types import SimpleNamespace
+    from PC_ENGINE.core.engine import SovereignEngine
+
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.config = {"autonomous_execution": {"allow_real": False}}
+    engine.mode = "PAPER"
+    engine.paper = True
+    engine.state = SimpleNamespace(status="OFF", mode="PAPER")
+    engine.paper_collector = None
+
+    try:
+        engine.set_mode("REAL", real_authorized=True)
+    except RuntimeError as exc:
+        assert "disabled by configuration" in str(exc)
+    else:
+        raise AssertionError("REAL transition must be disabled by configuration")
