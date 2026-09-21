@@ -68,13 +68,19 @@ class RiskEngine:
         samples: int,
         wins: int,
         mean_net_bps: float,
+        strategy_id: str = "unknown",
+        symbol: str = "unknown",
+        regime: str | None = None,
+        horizon_seconds: int | None = None,
     ) -> tuple[float, AdaptiveRiskSnapshot]:
         base = self.position_notional(equity, stop_pct)
+        context = self.adaptive_risk.context_key(strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)
         snapshot = self.adaptive_risk.evaluate(
             samples=samples,
             wins=wins,
             mean_net_bps=mean_net_bps,
             drawdown_pct=max(0.0, -self.state.drawdown_pct),
+            context_key=context,
         )
         return base * snapshot.multiplier, snapshot
 

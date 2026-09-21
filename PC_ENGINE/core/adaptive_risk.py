@@ -13,6 +13,7 @@ class AdaptiveRiskSnapshot:
     multiplier: float
     eligible: bool
     reason: str
+    context_key: str = "global"
 
 
 class AdaptiveRiskController:
@@ -42,27 +43,29 @@ class AdaptiveRiskController:
         wins: int,
         mean_net_bps: float,
         drawdown_pct: float,
+        context_key: str = "global",
     ) -> AdaptiveRiskSnapshot:
         samples = max(0, int(samples))
         wins = min(max(0, int(wins)), samples)
         win_rate = wins / samples if samples else 0.0
         dd = max(0.0, float(drawdown_pct))
+        context_key = str(context_key or "global")[:256]
 
         if not self.enabled:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.base_multiplier, False, "adaptive risk disabled")
+                                        self.base_multiplier, False, "adaptive risk disabled", context_key)
         if samples < self.min_samples:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "insufficient validated samples")
+                                        self.min_multiplier, False, "insufficient contextual evidence", context_key)
         if dd >= self.max_drawdown_pct:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "drawdown protection active")
+                                        self.min_multiplier, False, "drawdown protection active", context_key)
         if win_rate < self.min_win_rate:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "win rate below threshold")
+                                        self.min_multiplier, False, "context win rate below threshold", context_key)
         if float(mean_net_bps) <= self.min_mean_net_bps:
             return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                        self.min_multiplier, False, "net expectancy below threshold")
+                                        self.min_multiplier, False, "context net expectancy below threshold", context_key)
 
         # Scale gradually with evidence quality; never jump directly to the ceiling.
         evidence = min(1.0, samples / self.scale_window)
@@ -73,4 +76,12 @@ class AdaptiveRiskController:
         multiplier = min(self.max_multiplier, max(self.base_multiplier, multiplier))
 
         return AdaptiveRiskSnapshot(samples, wins, win_rate, float(mean_net_bps), dd,
-                                    multiplier, True, "validated positive edge")
+                                    multiplier, True, "validated positive edge", context_key)
+
+    def context_key(self, *, strategy_id: str, symbol: str, regime: str | None = None, horizon_seconds: int | None = None) -> str:
+        return "|".join([
+            str(strategy_id or "unknown").strip().lower(),
+            str(symbol or "unknown").strip().upper(),
+            str(regime or "unknown").strip().lower(),
+            str(horizon_seconds if horizon_seconds is not None else "unknown"),
+        ])
