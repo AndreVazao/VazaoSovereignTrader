@@ -180,10 +180,10 @@ class SovereignEngine:
         self.state.execution_intents.update(intents)
         self.order_manager.restore_order_guards(raw_state.get("order_guards", {}))
         if pending:
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self.log("RECOVERY_PENDING_ORDERS", {"order_ids": list(pending)})
         if intents:
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS", {"intent_ids": list(intents)})
         recovered = {}
         for symbol, data in raw_positions.items():
@@ -329,7 +329,7 @@ class SovereignEngine:
             result = {"ok": False, "status": "ERROR", "reason": str(exc)}
         self.state.account_reconciliation = result
         if not result.get("ok"):
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self.log("ACCOUNT_RECONCILIATION_BLOCKED", result)
         else:
             self.log("ACCOUNT_RECONCILIATION_MATCH", result)
@@ -345,7 +345,7 @@ class SovereignEngine:
     def _enter_real_fail_safe(self, reason: str, data: dict | None = None) -> None:
         """Leave REAL immediately on a critical runtime condition."""
         if self.mode != "REAL":
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self.real_operational = False
             return
         self.real_fail_safe_reason = str(reason)
@@ -356,7 +356,7 @@ class SovereignEngine:
         guard = getattr(self, "real_mode_guard", None)
         if guard is not None:
             guard.disarm(f"REAL fail-safe: {reason}")
-        self.state.status = "SAFE_MODE"
+        self._enter_safe_state("critical_runtime_condition")
         payload = {"reason": reason}
         if data:
             payload.update(data)
@@ -366,7 +366,7 @@ class SovereignEngine:
         if self.mode == "REAL":
             self._enter_real_fail_safe(reason, data)
         else:
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -769,7 +769,7 @@ class SovereignEngine:
                 expected_client_id = str(item.get("client_order_id") or "").strip()
                 returned_client_id = str(raw.get("clientOrderId") or raw.get("client_order_id") or "").strip()
                 if expected_client_id and returned_client_id != expected_client_id:
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_IDENTITY_MISMATCH", {
                         "order_id": order_id,
                         "symbol": symbol,
@@ -782,14 +782,14 @@ class SovereignEngine:
                 expected_side = str(item.get("side") or "").lower()
                 returned_side = str(raw.get("side") or "").lower()
                 if returned_symbol and returned_symbol != symbol:
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_SYMBOL_MISMATCH", {
                         "order_id": order_id, "expected_symbol": symbol,
                         "returned_symbol": returned_symbol,
                     })
                     continue
                 if returned_side and expected_side and returned_side != expected_side:
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_SIDE_MISMATCH", {
                         "order_id": order_id, "expected_side": expected_side,
                         "returned_side": returned_side,
@@ -812,7 +812,7 @@ class SovereignEngine:
 
                 tolerance = max(1e-12, requested_qty * 1e-9)
                 if final_filled < -tolerance or final_filled > requested_qty + tolerance:
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_FILL_QUANTITY_INVALID", {
                         "order_id": order_id, "symbol": symbol,
                         "requested_qty": requested_qty,
@@ -820,7 +820,7 @@ class SovereignEngine:
                     })
                     continue
                 if final_filled + tolerance < known_filled:
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_FILL_REGRESSION", {
                         "order_id": order_id, "symbol": symbol,
                         "known_filled_qty": known_filled,
@@ -832,7 +832,7 @@ class SovereignEngine:
                 cumulative_fee = self._extract_cumulative_quote_fee(raw, symbol)
                 known_fee = float(item.get("known_fee") or 0.0)
                 if cumulative_fee + tolerance < known_fee:
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_FEE_REGRESSION", {
                         "order_id": order_id, "symbol": symbol,
                         "known_fee": known_fee,
@@ -853,7 +853,7 @@ class SovereignEngine:
                     "checked_at": time.time(),
                 }
                 if not financial.get("ok", False):
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_FINANCIAL_INVARIANT_BLOCKED", self.state.financial_reconciliation)
                     continue
                 cumulative_notional = float(
@@ -867,7 +867,7 @@ class SovereignEngine:
                     abs(cumulative_notional) * float(financial.get("relative_tolerance") or 0.002),
                 )
                 if cumulative_notional + tolerance_notional < known_notional:
-                    self.state.status = "SAFE_MODE"
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_NOTIONAL_REGRESSION", {"order_id": order_id, "symbol": symbol})
                     continue
                 delta_notional = max(0.0, cumulative_notional - known_notional)
@@ -875,14 +875,14 @@ class SovereignEngine:
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
                     if delta_notional <= 0:
-                        self.state.status = "SAFE_MODE"
+                        self._enter_safe_state("critical_runtime_condition")
                         self.log("PENDING_ORDER_MISSING_INCREMENTAL_NOTIONAL", {
                             "order_id": order_id, "symbol": symbol, "delta_qty": delta
                         })
                         continue
                     fill_price = delta_notional / delta
                     if fill_price <= 0:
-                        self.state.status = "SAFE_MODE"
+                        self._enter_safe_state("critical_runtime_condition")
                         self.log("MANUAL_RECONCILIATION_REQUIRED", {
                             "order_id": order_id, "symbol": symbol, "side": side,
                             "known_filled_qty": known_filled, "final_filled_qty": final_filled,
@@ -895,7 +895,7 @@ class SovereignEngine:
                             stop_pct = float(item.get("stop_pct") or 0.0)
                             tp_pct = float(item.get("take_profit_pct") or 0.0)
                             if stop_pct <= 0 or tp_pct <= 0:
-                                self.state.status = "SAFE_MODE"
+                                self._enter_safe_state("critical_runtime_condition")
                                 self.log("MANUAL_RECONCILIATION_REQUIRED", {
                                     "order_id": order_id, "symbol": symbol,
                                     "reason": "missing_buy_recovery_risk_metadata",
@@ -918,7 +918,7 @@ class SovereignEngine:
                             position.entry_fee += fee_delta
                     elif side == "sell":
                         if position is None or delta > position.qty + 1e-12:
-                            self.state.status = "SAFE_MODE"
+                            self._enter_safe_state("critical_runtime_condition")
                             self.log("MANUAL_RECONCILIATION_REQUIRED", {
                                 "order_id": order_id, "symbol": symbol, "side": side,
                                 "position_qty": position.qty if position else 0.0, "delta_qty": delta,
@@ -941,7 +941,7 @@ class SovereignEngine:
                         if position.qty <= 1e-12:
                             self.state.open_positions.pop(symbol, None)
                     else:
-                        self.state.status = "SAFE_MODE"
+                        self._enter_safe_state("critical_runtime_condition")
                         self.log("MANUAL_RECONCILIATION_REQUIRED", {
                             "order_id": order_id, "symbol": symbol, "reason": "unknown_side"
                         })
@@ -970,12 +970,12 @@ class SovereignEngine:
                     self.state.pending_orders.pop(order_id, None)
                     self._persist_recovery()
             except Exception as exc:
-                self.state.status = "SAFE_MODE"
+                self._enter_safe_state("critical_runtime_condition")
                 self.log("PENDING_ORDER_RECONCILE_ERROR", {
                     "order_id": order_id, "symbol": symbol, "error": str(exc)
                 })
         if self.state.pending_orders:
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
 
 
     def cycle(self) -> None:
@@ -1103,11 +1103,11 @@ class SovereignEngine:
         try:
             result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct, client_order_id)
         except Exception:
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self._persist_recovery()
             raise
         if result.status == "PENDING_OR_PARTIAL":
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self.log("ORDER_FILL_UNCONFIRMED", {
                 "symbol": symbol,
                 "side": "buy",
@@ -1177,11 +1177,11 @@ class SovereignEngine:
         try:
             result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct, client_order_id)
         except Exception:
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self._persist_recovery()
             raise
         if result.status == "PENDING_OR_PARTIAL":
-            self.state.status = "SAFE_MODE"
+            self._enter_safe_state("critical_runtime_condition")
             self.log("EXIT_FILL_UNCONFIRMED", {
                 "symbol": position.symbol,
                 "side": "sell",
