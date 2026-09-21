@@ -32,7 +32,7 @@ def _strategy_visibility(payload: dict[str, Any]) -> str:
     return str(
         payload.get("strategy_visibility")
         or payload.get("visibility")
-        or "SHARED"
+        or "PRIVATE"
     ).upper()
 
 
