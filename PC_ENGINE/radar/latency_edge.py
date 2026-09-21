@@ -121,6 +121,8 @@ class LatencyEdgeDetector:
             lead_ms <= self.max_lead_ms
             and receive_lead_ms >= 0
             and receive_lead_ms <= self.max_lead_ms
+            and receive_lead_ms >= 0
+            and receive_lead_ms <= self.max_lead_ms
             and gross_edge_bps >= self.min_lead_bps
             and len(relevant) >= self.min_samples
             and same_ratio >= self.min_same_direction_ratio
