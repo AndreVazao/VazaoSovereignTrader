@@ -224,3 +224,39 @@ def test_restart_after_partial_fill_applies_only_remaining_delta(tmp_path):
     assert abs(position.entry - 101.2) < 1e-12
     assert second.state.financial_account["base_flow"]["BTC"] == 1.0
     assert abs(second.state.financial_account["quote_flow"] + 102.10) < 1e-12
+
+
+def test_sell_pending_preserves_execution_intent_until_pending_is_durable():
+    engine = object.__new__(SovereignEngine)
+    engine.paper = False
+    engine.state = RuntimeState()
+    engine.state.open_positions["BTC/USDT"] = Position(
+        "binance", "BTC/USDT", 100.0, 1.0, 98.0, 104.0, 1.0, 0.10
+    )
+    engine._persist_recovery = lambda: None
+    engine.log = lambda *args, **kwargs: None
+    engine.risk = RiskStub()
+    engine.champion = ChampionStub()
+    engine.ledger = LedgerStub()
+
+    class PendingOrderManager:
+        def sell(self, exchange, symbol, qty, price, paper, spread_pct, client_order_id):
+            return type("Result", (), {
+                "ok": True, "side": "sell", "symbol": symbol, "qty": 0.4,
+                "price": price, "fee": 0.04, "order_id": "sell-1",
+                "reason": "partial", "requested_qty": qty,
+                "status": "PENDING_OR_PARTIAL",
+            })()
+
+    engine.order_manager = PendingOrderManager()
+
+    class Exchange:
+        name = "binance"
+
+    engine._close_position(
+        Exchange(), engine.state.open_positions["BTC/USDT"],
+        101.0, "test", 0.0,
+    )
+
+    assert "sell-1" in engine.state.pending_orders
+    assert not engine.state.execution_intents
