@@ -91,7 +91,12 @@ class SovereignEngine:
             events_path=self.owner_context.private_path("logs/events.jsonl"),
         )
         self.rules = ExchangeRulesEngine()
-        paper_cfg = config.get("paper", {})
+        paper_cfg = dict(config.get("paper", {}))
+        paper_cfg.setdefault("autonomous_intents_path", str(self.owner_context.private_path("paper/autonomous_intents.jsonl")))
+        paper_cfg.setdefault("fills_path", str(self.owner_context.private_path("paper/fills.jsonl")))
+        paper_cfg.setdefault("runs_path", str(self.owner_context.private_path("paper/runs.jsonl")))
+        paper_cfg.setdefault("reconciliation_path", str(self.owner_context.private_path("paper/autonomous_reconciliation.json")))
+        config["paper"] = paper_cfg
         self.paper_broker = PaperBroker(
             fee_pct=float(paper_cfg.get("fee_pct", 0.001)),
             slippage_pct=float(paper_cfg.get("slippage_pct", 0.0005)),
