@@ -5,6 +5,8 @@ import json
 import time
 from pathlib import Path
 
+from PC_ENGINE.core.retention import retain_jsonl
+
 
 @dataclass(frozen=True)
 class MarketState:
@@ -35,9 +37,13 @@ class MarketState:
 class MarketStateStore:
     """Append-only PAPER observation store for unified market states."""
 
-    def __init__(self, data_dir: str = "PC_ENGINE/data/radar", filename: str = "market_states.jsonl") -> None:
+    def __init__(self, data_dir: str = "PC_ENGINE/data/radar", filename: str = "market_states.jsonl", *, max_rows: int = 100_000, max_age_days: int = 14, compact_every: int = 2_000) -> None:
         self.path = Path(data_dir) / filename
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.max_rows = max(1_000, int(max_rows))
+        self.max_age_ms = max(1, int(max_age_days)) * 86_400_000
+        self.compact_every = max(100, int(compact_every))
+        self._append_count = 0
 
     def append(self, state: MarketState) -> None:
         with self.path.open("a", encoding="utf-8") as handle:
