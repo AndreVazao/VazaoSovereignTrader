@@ -67,3 +67,13 @@ def test_owner_mismatch_never_writes_other_owner_state(tmp_path):
         raise AssertionError("owner mismatch must be rejected")
     assert adapter.calls == 0
     assert states.get(request.intent.intent_id, "andre") is None
+
+
+def test_confirmed_state_recovers_missing_accounting_after_restart(tmp_path):
+    bridge, request, adapter, states, accounting = _setup(tmp_path, enabled=True)
+    assert bridge.submit(request=request, real_authorized=True).state == "PENDING"
+    states.record(intent_id=request.intent.intent_id, owner_id="andre", state="CONFIRMED", external_reference="tx-1")
+    assert accounting.snapshot(owner_id="andre")["entries"] == []
+    assert bridge.reconcile(request=request).state == "CONFIRMED"
+    assert accounting.expected_deltas(owner_id="andre") == {"binance": {"USDT": -10.0}, "bingx": {"USDT": 10.0}}
+    assert adapter.calls == 1
