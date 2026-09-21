@@ -11,6 +11,7 @@ import websocket
 
 from PC_ENGINE.radar.latency_edge import LatencyEdgeDetector
 from PC_ENGINE.radar.external_source_latency import ExternalSourceLatencyProfiler, SourceLatencyObservation
+from PC_ENGINE.radar.external_source_adapter import ExternalMarketObservation, validate_observation
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,21 @@ class WebSocketMarketRadar:
             rows.append(event)
             if len(rows) > 256:
                 del rows[:-256]
+
+    def ingest_external_observation(
+        self,
+        observation: ExternalMarketObservation,
+    ) -> SourceLatencyObservation | None:
+        """Ingest one normalized external observation into the PAPER profiler."""
+        validate_observation(observation)
+        return self.record_external_source(
+            source_id=observation.source_id,
+            symbol=observation.symbol,
+            source_ts_ms=observation.source_ts_ms,
+            source_price=observation.price,
+            direction=observation.direction,
+            observed_ts_ms=observation.received_ts_ms,
+        )
 
     def record_external_source(
         self,
