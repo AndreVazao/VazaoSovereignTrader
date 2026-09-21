@@ -694,6 +694,11 @@ class SovereignEngine:
         fee = raw.get("fee")
         if isinstance(fee, dict) and fee.get("cost") is not None and float(fee["cost"]) < 0:
             return {"ok": False, "reason": "negative_fee", "fee": float(fee["cost"])}
+        fees = raw.get("fees")
+        if isinstance(fees, list):
+            for entry in fees:
+                if isinstance(entry, dict) and entry.get("cost") is not None and float(entry["cost"]) < 0:
+                    return {"ok": False, "reason": "negative_fee", "fee": float(entry["cost"])}
         if float(filled_qty) < 0 or float(average_price) < 0:
             return {"ok": False, "reason": "negative_fill_or_price"}
         expected = float(filled_qty) * float(average_price)
@@ -1073,10 +1078,10 @@ class SovereignEngine:
                 "symbol": symbol,
                 "side": "buy",
                 "requested_qty": result.requested_qty,
-                "known_filled_qty": result.qty,
+                "known_filled_qty": 0.0,
                 "known_fill_price": result.price,
-                "known_fee": result.fee,
-                "known_quote_notional": float(result.qty) * float(result.price),
+                "known_fee": 0.0,
+                "known_quote_notional": 0.0,
                 "created_ts": time.time(),
                 "client_order_id": client_order_id,
                 "stop_pct": stop_pct,
@@ -1149,10 +1154,10 @@ class SovereignEngine:
                 "symbol": position.symbol,
                 "side": "sell",
                 "requested_qty": result.requested_qty,
-                "known_filled_qty": result.qty,
+                "known_filled_qty": 0.0,
                 "known_fill_price": result.price,
-                "known_fee": result.fee,
-                "known_quote_notional": float(result.qty) * float(result.price),
+                "known_fee": 0.0,
+                "known_quote_notional": 0.0,
                 "created_ts": time.time(),
             }
             self._persist_recovery()
