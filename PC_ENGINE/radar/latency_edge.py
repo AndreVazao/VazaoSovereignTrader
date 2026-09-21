@@ -13,6 +13,7 @@ class LatencyObservation:
     follower: str
     direction: str
     lead_ms: int
+    receive_lead_ms: int
     lead_bps: float
     follower_bps: float
     net_expected_edge_bps: float
@@ -66,13 +67,15 @@ class LatencyEdgeDetector:
         follower: str,
         direction: str,
         lead_ms: int,
+        receive_lead_ms: int | None = None,
         leader_move_bps: float,
         follower_move_bps: float,
     ) -> LatencyObservation:
         lead_ms = int(lead_ms)
+        receive_lead_ms = lead_ms if receive_lead_ms is None else int(receive_lead_ms)
         leader_move_bps = float(leader_move_bps)
         follower_move_bps = float(follower_move_bps)
-        key = (symbol.upper(), leader.lower(), follower.lower())
+        key = (symbol.upper(), leader.lower(), follower.lower(), direction.upper())
         history = self._history[key]
 
         same_direction = (
@@ -116,6 +119,8 @@ class LatencyEdgeDetector:
 
         eligible = (
             lead_ms <= self.max_lead_ms
+            and receive_lead_ms >= 0
+            and receive_lead_ms <= self.max_lead_ms
             and gross_edge_bps >= self.min_lead_bps
             and len(relevant) >= self.min_samples
             and same_ratio >= self.min_same_direction_ratio
@@ -128,6 +133,7 @@ class LatencyEdgeDetector:
             follower=follower.lower(),
             direction=direction.upper(),
             lead_ms=lead_ms,
+            receive_lead_ms=receive_lead_ms,
             lead_bps=round(gross_edge_bps, 4),
             follower_bps=round(follower_move_bps, 4),
             net_expected_edge_bps=round(net_edge, 4),
@@ -144,9 +150,10 @@ class LatencyEdgeDetector:
             follower=event.follower,
             direction=event.direction,
             lead_ms=event.exchange_lag_ms,
+            receive_lead_ms=event.receive_lag_ms,
             leader_move_bps=event.leader_move_bps,
             follower_move_bps=event.follower_move_bps,
         )
 
-    def history(self, symbol: str, leader: str, follower: str) -> Iterable[tuple[int, float, float]]:
-        return tuple(self._history[(symbol.upper(), leader.lower(), follower.lower())])
+    def history(self, symbol: str, leader: str, follower: str, direction: str = "UP") -> Iterable[tuple[int, float, float]]:
+        return tuple(self._history[(symbol.upper(), leader.lower(), follower.lower(), direction.upper())])
