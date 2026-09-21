@@ -24,8 +24,14 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     readiness = RealReadinessService(engine.config)
     guard = RealModeGuard(engine.config.get("real_mode_guard", {}))
     human_cfg = engine.config.get("human_bridge", {})
-    human_bridge = HumanInteractionBridge(human_cfg.get("data_dir", "PC_ENGINE/data/human_bridge"), default_ttl_seconds=int(human_cfg.get("human_interaction_ttl_seconds", 900)))
-    human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
+    human_bridge = getattr(engine, "human_bridge", None)
+    human_watchdog = getattr(engine, "human_bridge_watchdog", None)
+    if human_bridge is None or human_watchdog is None:
+        human_bridge = HumanInteractionBridge(
+            human_cfg.get("data_dir", "PC_ENGINE/data/human_bridge"),
+            default_ttl_seconds=int(human_cfg.get("human_interaction_ttl_seconds", human_cfg.get("response_timeout_seconds", 900))),
+        )
+        human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
     research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
 
     def require_token() -> None:
@@ -51,6 +57,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.get("/status")
     def status():
         require_token()
+        if hasattr(engine, "refresh_human_bridge_operational_state"):
+            engine.refresh_human_bridge_operational_state()
         payload = engine.snapshot()
         payload["real_mode_guard"] = guard.snapshot()
         return jsonify(payload)
@@ -104,14 +112,15 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_token()
         source = str((request.get_json(force=True) or {}).get("source", "mobile")).lower()
         try:
-            return jsonify({"ok": True, "watchdog": human_watchdog.heartbeat(source)})
+            human_watchdog.heartbeat(source)
+            return jsonify({"ok": True, "watchdog": engine.refresh_human_bridge_operational_state()})
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.get("/human-interaction/watchdog")
     def human_interaction_watchdog():
         require_token()
-        return jsonify(human_watchdog.check())
+        return jsonify(engine.refresh_human_bridge_operational_state())
     @app.get("/human-interaction/pending")
     def human_interaction_pending():
         require_token()

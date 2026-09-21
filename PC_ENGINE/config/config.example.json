@@ -239,6 +239,8 @@
     "mobile_timeout_seconds": 30,
     "pc_timeout_seconds": 30,
     "responded_timeout_seconds": 120,
+    "operational_state_enabled": true,
+    "stale_trading_impact": "NONE",
     "notes": "Durable human-interaction queue. Request metadata may persist; passwords, OTPs and other secrets are never persisted by the bridge."
   },
   "browser": {

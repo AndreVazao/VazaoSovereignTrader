@@ -19,6 +19,8 @@ from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
 from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
+from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
+from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
 from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.storage.ledger import Ledger
 from PC_ENGINE.research.autonomous import AutonomousResearchWorker
@@ -51,6 +53,8 @@ class RuntimeState:
     opportunities: Dict[str, dict] = field(default_factory=dict)
     regimes: Dict[str, str] = field(default_factory=dict)
     watchdog: Dict[str, str | bool | int] = field(default_factory=dict)
+    human_bridge: Dict[str, object] = field(default_factory=dict)
+    operational: Dict[str, object] = field(default_factory=dict)
     preflight: Dict[str, object] = field(default_factory=dict)
     account_reconciliation: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
@@ -91,6 +95,13 @@ class SovereignEngine:
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
+        human_cfg = config.get("human_bridge", {})
+        self.human_bridge = HumanInteractionBridge(
+            human_cfg.get("data_dir", "PC_ENGINE/data/human_bridge"),
+            default_ttl_seconds=int(human_cfg.get("human_interaction_ttl_seconds", human_cfg.get("response_timeout_seconds", 900))),
+        )
+        self.human_bridge_watchdog = HumanBridgeWatchdog(self.human_bridge, human_cfg)
+        self._human_bridge_operational_last_state = None
         self.cycle_count = 0
         self.preflight_done = False
         research_dir = config.get("research", {}).get("data_dir", "PC_ENGINE/data/research")
@@ -395,6 +406,75 @@ class SovereignEngine:
                 self.log("WATCHDOG_EXCHANGE_BLOCK", asdict(ex_status))
                 return False
         return True
+
+    def refresh_human_bridge_operational_state(self, now: float | None = None) -> dict:
+        """Project Human Bridge liveness into engine operational telemetry.
+
+        A stale Android/PC bridge is control-plane degradation only. It never
+        changes engine.status, never enters SAFE_MODE and never blocks the
+        trading path because the browser bridge is not the trading executor.
+        Pending human interactions are reported as blocked until the bridge
+        recovers or their normal TTL expires.
+        """
+        if not bool(self.config.get("human_bridge", {}).get("enabled", True)):
+            report = {
+                "state": "DISABLED",
+                "trading_impact": "NONE",
+                "action": "CONTINUE_TRADING",
+                "human_interaction_required": 0,
+                "safe_state": False,
+            }
+            self.state.human_bridge = report
+            self.state.operational = {"state": "HEALTHY", "trading_impact": "NONE", "action": "CONTINUE_TRADING"}
+            return report
+
+        report = self.human_bridge_watchdog.check(now)
+        mobile = report.get("mobile", {})
+        pc = report.get("pc", {})
+        mobile_seen = float(mobile.get("last_seen") or 0.0) > 0.0
+        pc_seen = float(pc.get("last_seen") or 0.0) > 0.0
+        mobile_stale = bool(mobile.get("stale", True))
+        pc_stale = bool(pc.get("stale", True))
+        pending = sum(
+            1 for item in self.human_bridge.snapshot().get("requests", [])
+            if item.get("status") in {"PENDING", "RESPONDED"}
+        )
+
+        if not mobile_seen and not pc_seen:
+            state = "NOT_CONNECTED"
+        elif not mobile_stale and not pc_stale:
+            state = "HEALTHY"
+        elif mobile_stale and pc_stale:
+            state = "BRIDGE_UNAVAILABLE"
+        else:
+            state = "DEGRADED"
+
+        action = "CONTINUE_TRADING"
+        if state in {"DEGRADED", "BRIDGE_UNAVAILABLE"} and pending:
+            action = "HUMAN_INTERACTION_BLOCKED"
+
+        payload = {
+            **report,
+            "state": state,
+            "trading_impact": "NONE",
+            "action": action,
+            "human_interaction_required": pending,
+        }
+        self.state.human_bridge = payload
+        self.state.operational = {
+            "state": state,
+            "trading_impact": "NONE",
+            "action": action,
+            "human_interaction_required": pending,
+        }
+        if state != self._human_bridge_operational_last_state:
+            self._human_bridge_operational_last_state = state
+            self.log("HUMAN_BRIDGE_OPERATIONAL_STATE", {
+                "state": state,
+                "action": action,
+                "human_interaction_required": pending,
+            })
+        return payload
 
     def _recover_unresolved_execution_intents(self) -> None:
         """Find only unambiguously matching open orders after a crash.
@@ -714,6 +794,7 @@ class SovereignEngine:
         if exchange is None:
             self.log("NO_EXCHANGE_ENABLED")
             return
+        self.refresh_human_bridge_operational_state()
         if not self._watchdog_gate(exchange):
             return
         if self.mode == "REAL" and not self.state.account_reconciliation.get("ok", False):
