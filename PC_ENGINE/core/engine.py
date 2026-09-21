@@ -27,6 +27,10 @@ from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.storage.ledger import Ledger
 from PC_ENGINE.research.autonomous import AutonomousResearchWorker
 from PC_ENGINE.research.worker import ResearchWorker
+from PC_ENGINE.core.shared_intelligence import SharedIntelligenceStore
+from PC_ENGINE.core.shared_intelligence_sync import SharedIntelligenceSync
+from PC_ENGINE.core.shared_intelligence_sync_worker import SharedIntelligenceSyncWorker
+from PC_ENGINE.core.vercel_shared_intelligence import VercelSharedIntelligenceProvider
 
 
 @dataclass
@@ -64,6 +68,7 @@ class RuntimeState:
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
     research: Dict[str, object] = field(default_factory=dict)
+    shared_intelligence: Dict[str, object] = field(default_factory=dict)
     pending_orders: Dict[str, dict] = field(default_factory=dict)
     execution_intents: Dict[str, dict] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
@@ -142,8 +147,71 @@ class SovereignEngine:
         )
         self.research_stop_event = threading.Event()
         self.research_thread: Optional[threading.Thread] = None
+        self.shared_intelligence_store: SharedIntelligenceStore | None = None
+        self.shared_intelligence_sync: SharedIntelligenceSync | None = None
+        self.shared_intelligence_worker: SharedIntelligenceSyncWorker | None = None
+        self._build_shared_intelligence_sync()
         self._load_recovery_state()
 
+    def _build_shared_intelligence_sync(self) -> None:
+        cfg = dict(self.config.get("shared_intelligence", {}))
+        enabled = bool(cfg.get("enabled", True))
+        sync_enabled = bool(cfg.get("sync_enabled", False))
+        self.state.shared_intelligence = {
+            "enabled": enabled,
+            "sync_enabled": sync_enabled,
+            "provider": str(cfg.get("sync_provider", "vercel")),
+            "state": "DISABLED" if not enabled or not sync_enabled else "NOT_CONFIGURED",
+            "bootstrap": False,
+        }
+        if not enabled or not sync_enabled:
+            return
+
+        store_path = str(cfg.get("store_path", "PC_ENGINE/data/shared_intelligence/artifacts.jsonl"))
+        state_path = str(cfg.get("state_path", "PC_ENGINE/data/shared_intelligence/sync_state.json"))
+        self.shared_intelligence_store = SharedIntelligenceStore(store_path)
+        self.shared_intelligence_sync = SharedIntelligenceSync(self.shared_intelligence_store, state_path, pull_limit=int(cfg.get("pull_limit", 500)))
+        provider_name = str(cfg.get("sync_provider", "vercel")).lower()
+        if provider_name != "vercel":
+            self.state.shared_intelligence.update({"state": "UNSUPPORTED_PROVIDER"})
+            return
+        base_url = env_value(str(cfg.get("base_url_env", "VST_SHARED_INTELLIGENCE_URL")), "")
+        token = env_value(str(cfg.get("token_env", "VST_SHARED_INTELLIGENCE_TOKEN")), "")
+        if not base_url or not token:
+            self.state.shared_intelligence.update({
+                "state": "WAITING_FOR_PROVIDER_CONFIG",
+                "missing": [name for name, value in (("base_url", base_url), ("token", token)) if not value],
+            })
+            return
+        provider = VercelSharedIntelligenceProvider(base_url, token, timeout_seconds=float(cfg.get("timeout_seconds", 5.0)))
+        self.shared_intelligence_worker = SharedIntelligenceSyncWorker(
+            self.shared_intelligence_store, self.shared_intelligence_sync, provider,
+            pull_interval_seconds=float(cfg.get("pull_interval_seconds", 30.0)),
+            push_interval_seconds=float(cfg.get("push_interval_seconds", 60.0)),
+        )
+        self.state.shared_intelligence.update({
+            "state": "READY",
+            "pull_interval_seconds": float(cfg.get("pull_interval_seconds", 30.0)),
+            "push_interval_seconds": float(cfg.get("push_interval_seconds", 60.0)),
+        })
+
+    def _sync_shared_intelligence_before_start(self) -> None:
+        worker = self.shared_intelligence_worker
+        if worker is None:
+            return
+        try:
+            result = worker.run_once(bootstrap=not worker.bootstrap_done)
+            self.state.shared_intelligence.update({"state": "RUNNING", "bootstrap": bool(worker.bootstrap_done), "last_result": result})
+            worker.start()
+        except Exception as exc:
+            self.state.shared_intelligence.update({"state": "DEGRADED", "error": str(exc)})
+
+    def _stop_shared_intelligence(self) -> None:
+        worker = self.shared_intelligence_worker
+        if worker is None:
+            return
+        worker.stop()
+        self.state.shared_intelligence.update({"state": "STOPPED", "bootstrap": bool(worker.bootstrap_done), "last_result": dict(worker.last_result)})
     def _build_exchanges(self) -> dict[str, CcxtExchangeClient]:
         out: dict[str, CcxtExchangeClient] = {}
         for name, cfg in self.config.get("exchanges", {}).items():
@@ -418,6 +486,7 @@ class SovereignEngine:
                 return
         self.stop_event.clear()
         self.research_stop_event.clear()
+        self._sync_shared_intelligence_before_start()
         self.state.status = "RUNNING"
         self.real_operational = self.mode == "REAL"
         if self.config.get("research", {}).get("enabled", True):
@@ -455,6 +524,7 @@ class SovereignEngine:
     def stop(self) -> None:
         self.stop_event.set()
         self.research_stop_event.set()
+        self._stop_shared_intelligence()
         if self.paper_collector is not None:
             self.paper_collector.stop()
         if self.research_thread is not None and self.research_thread.is_alive():
@@ -501,6 +571,8 @@ class SovereignEngine:
             data["paper_collector"] = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
             data["real_operational"] = self.real_operational
             data["real_fail_safe_reason"] = self.real_fail_safe_reason
+            if self.shared_intelligence_worker is not None:
+                data["shared_intelligence"] = {**self.state.shared_intelligence, "bootstrap": bool(self.shared_intelligence_worker.bootstrap_done), "last_result": dict(self.shared_intelligence_worker.last_result)}
             return data
 
     def _main_exchange(self) -> CcxtExchangeClient | None:
