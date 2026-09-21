@@ -1,16 +1,63 @@
 import { NextResponse } from "next/server";
-import { get, list, put } from "@vercel/blob";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { appendUnique, isFresh, pullRows, requireAuth } from "../_lib";
 
-const MAX_BATCH=500, MAX_AGE_MS=86400000;
-const FIELDS=new Set(["schema_version","artifact_type","strategy_id","market","regime","horizon_seconds","sample_count","win_count","win_rate","mean_net_bps","median_net_bps","eligible","created_at_ms","producer_version","artifact_id","source_digest","source_owner_ref","source_node_ref","trust_score","source_count","expires_at_ms"]);
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ action: string }> },
+) {
+  try {
+    requireAuth(request);
+    const { action } = await params;
+    if (action === "health") {
+      return NextResponse.json({
+        service: "vazao-shared-intelligence",
+        status: "ok",
+        execution_authority: false,
+        financial_state_sync: false,
+        timestamp_ms: Date.now(),
+      });
+    }
+    if (action !== "bootstrap" && action !== "pull") {
+      return NextResponse.json({ error: "unsupported_action" }, { status: 404 });
+    }
+    const url = new URL(request.url);
+    const limit = Number(url.searchParams.get("limit") || "500");
+    const cursor = action === "bootstrap" ? null : url.searchParams.get("cursor");
+    const result = await pullRows(cursor, Number.isFinite(limit) ? limit : 500);
+    const rows = result.rows.filter((row) => isFresh(row.artifact));
+    return NextResponse.json({
+      ...result,
+      rows,
+      count: rows.length,
+      bootstrap: action === "bootstrap",
+    });
+  } catch (error) {
+    if (error instanceof Response) return error;
+    return NextResponse.json({ error: String(error) }, { status: 400 });
+  }
+}
 
-function canonical(v:Record<string,unknown>){return JSON.stringify(v,Object.keys(v).sort());}
-function digest(v:Record<string,unknown>){return createHash("sha256").update(canonical(v)).digest("hex");}
-function authorized(req:Request){const expected=process.env.SHARED_INTELLIGENCE_SYNC_TOKEN;if(!expected)return false;const supplied=req.headers.get("authorization")?.replace(/^Bearer\s+/i,"")??"";const a=Buffer.from(supplied),b=Buffer.from(expected);return a.length===b.length&&timingSafeEqual(a,b);}
-function validate(a:Record<string,unknown>){for(const k of Object.keys(a))if(!FIELDS.has(k))throw new Error("private_or_unknown_field:"+k);const n=Number(a.sample_count),w=Number(a.win_count),r=Number(a.win_rate);if(!Number.isInteger(n)||n<0||!Number.isInteger(w)||w<0||w>n||!Number.isFinite(r)||r<0||r>1)throw new Error("invalid_statistics");if(!String(a.strategy_id??"").trim())throw new Error("strategy_id_required");const artifactId=String(a.artifact_id??"");if(artifactId.length>128)throw new Error("artifact_id_too_long");const sourceDigest=String(a.source_digest??"");if(sourceDigest&&(sourceDigest.length!==64||!/^[0-9a-f]+$/i.test(sourceDigest)))throw new Error("invalid_source_digest");const trust=Number(a.trust_score??0);if(!Number.isFinite(trust)||trust<0||trust>1)throw new Error("invalid_trust_score");const sourceCount=Number(a.source_count??1);if(!Number.isInteger(sourceCount)||sourceCount<1)throw new Error("invalid_source_count");return a;}
-function fresh(a:Record<string,unknown>){const c=Number(a.created_at_ms),e=Number(a.expires_at_ms??0);return c>0&&Date.now()>=c&&Date.now()-c<=MAX_AGE_MS&&(!e||Date.now()<e);}
-async function readAll(){const result=await list({prefix:process.env.SHARED_INTELLIGENCE_BLOB_PREFIX||"shared-intelligence/"}),rows:any[]=[];for(const b of result.blobs){try{const {stream}=await get(b.pathname,{access:"private",useCache:false});const x=JSON.parse(await new Response(stream).text());if(x?.artifact&&x?.sha256)rows.push(x);}catch{continue;}}rows.sort((a,b)=>Number(a.artifact.created_at_ms)-Number(b.artifact.created_at_ms));return rows;}
-
-export async function GET(req:Request,{params}:{params:Promise<{action:string}>}){if(!authorized(req))return new Response("Unauthorized",{status:401});const {action}=await params;if(action==="health")return NextResponse.json({service:"vazao-shared-intelligence",status:"ok",execution_authority:false,financial_state_sync:false,timestamp_ms:Date.now()});const url=new URL(req.url),all=await readAll(),cursor=url.searchParams.get("cursor"),limit=Math.min(MAX_BATCH,Math.max(1,Number(url.searchParams.get("limit")||500)));let start=0;if(cursor){const i=all.findIndex(x=>x.sha256===cursor);if(i>=0)start=i+1;}const rows=all.slice(action==="bootstrap"?0:start, (action==="bootstrap"?0:start)+limit).filter(x=>fresh(x.artifact));const next_cursor=rows.length?rows[rows.length-1].sha256:(cursor||"");return NextResponse.json({rows,next_cursor,count:rows.length,bootstrap:action==="bootstrap"});}
-export async function POST(req:Request,{params}:{params:Promise<{action:string}>}){if(!authorized(req))return new Response("Unauthorized",{status:401});const {action}=await params;if(action!=="push")return NextResponse.json({error:"unsupported_action"},{status:404});const body=await req.json();if(!Array.isArray(body?.rows))return NextResponse.json({error:"rows_required"},{status:400});const existing=new Set((await readAll()).map(x=>x.sha256));let accepted=0;for(const row of body.rows.slice(0,MAX_BATCH)){try{const a=validate(row.artifact);const d=digest(a);if(d!==row.sha256||existing.has(d))continue;await put((process.env.SHARED_INTELLIGENCE_BLOB_PREFIX||"shared-intelligence/")+d+".json",JSON.stringify({artifact:a,sha256:d}),{access:"private",contentType:"application/json",addRandomSuffix:false,allowOverwrite:false});existing.add(d);accepted++;}catch{}}return NextResponse.json({accepted,rejected:body.rows.length-accepted});}
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ action: string }> },
+) {
+  try {
+    requireAuth(request);
+    const { action } = await params;
+    if (action !== "push") {
+      return NextResponse.json({ error: "unsupported_action" }, { status: 404 });
+    }
+    const body = await request.json();
+    if (!Array.isArray(body?.rows)) {
+      return NextResponse.json({ error: "rows_required" }, { status: 400 });
+    }
+    const accepted = await appendUnique(body.rows);
+    return NextResponse.json({
+      accepted,
+      rejected: Math.max(0, body.rows.length - accepted),
+    });
+  } catch (error) {
+    if (error instanceof Response) return error;
+    return NextResponse.json({ error: String(error) }, { status: 400 });
+  }
+}
