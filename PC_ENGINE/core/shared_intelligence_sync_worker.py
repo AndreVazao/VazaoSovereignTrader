@@ -53,6 +53,8 @@ class SharedIntelligenceSyncWorker:
             else self.sync.sync_once(self.provider)
         )
         push = self.sync.push_new(self.provider)
+        if bootstrap:
+            self.bootstrap_done = True
         self.last_result = {"pull": pull, "push": push}
         return self.last_result
 
