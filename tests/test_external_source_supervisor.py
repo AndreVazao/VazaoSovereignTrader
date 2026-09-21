@@ -54,6 +54,29 @@ class ExternalSourceSupervisorTests(unittest.TestCase):
         self.assertEqual(health["last_sequence"], 3)
         self.assertTrue(health["healthy"])
 
+    def test_stale_source_is_not_healthy(self) -> None:
+        radar = FakeRadar()
+        adapter = FakeAdapter([
+            ExternalMarketObservation(
+                source_id="feed-a",
+                symbol="BTC/USDT",
+                price=100.0,
+                source_ts_ms=1_000,
+                received_ts_ms=1_000,
+            )
+        ])
+        supervisor = ExternalSourceSupervisor(
+            radar,
+            [adapter],
+            max_silence_seconds=1,
+            clock_ms=lambda: 3_000,
+        )
+        supervisor.poll_once()
+        health = supervisor.snapshot()["sources"]["feed-a"]
+        self.assertFalse(health["fresh"])
+        self.assertFalse(health["healthy"])
+        self.assertEqual(health["last_observation_age_ms"], 2000)
+
     def test_invalid_row_is_rejected_without_stopping_other_sources(self) -> None:
         radar = FakeRadar()
         bad = FakeAdapter([
