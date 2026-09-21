@@ -10,6 +10,7 @@ from typing import Callable
 import websocket
 
 from PC_ENGINE.radar.latency_edge import LatencyEdgeDetector
+from PC_ENGINE.radar.external_source_latency import ExternalSourceLatencyProfiler, SourceLatencyObservation
 
 
 @dataclass(frozen=True)
@@ -61,7 +62,8 @@ class WebSocketMarketRadar:
                  data_dir: str | Path = "PC_ENGINE/data/radar",
                  min_move_bps: float = 5.0, lead_window_ms: int = 750,
                  callback: Callable[[MarketEvent], None] | None = None,
-                 latency_detector: LatencyEdgeDetector | None = None) -> None:
+                 latency_detector: LatencyEdgeDetector | None = None,
+                 external_latency_profiler: ExternalSourceLatencyProfiler | None = None) -> None:
         self.symbols = list(dict.fromkeys(symbols))
         wanted = exchanges or ["binance", "coinbase", "okx"]
         self.exchanges = [x for x in dict.fromkeys(wanted) if x in self.ENDPOINTS]
@@ -71,6 +73,8 @@ class WebSocketMarketRadar:
         self.lead_window_ms = int(lead_window_ms)
         self.callback = callback
         self.latency_detector = latency_detector or LatencyEdgeDetector(max_lead_ms=self.lead_window_ms)
+        self.external_latency_profiler = external_latency_profiler
+        self._recent_market_events: dict[str, list[MarketEvent]] = {}
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._last_price: dict[tuple[str, str], float] = {}
@@ -112,6 +116,7 @@ class WebSocketMarketRadar:
                 if abs(move) >= self.min_move:
                     self._last_move[key] = event
 
+        self._remember_market_event(event)
         self._match_candidate(event, previous_moves)
         if self.callback:
             try:
@@ -120,6 +125,53 @@ class WebSocketMarketRadar:
                 # A consumer must never kill the public market-data loop.
                 pass
         self._persist(event)
+
+    
+    def _remember_market_event(self, event: MarketEvent) -> None:
+        with self._lock:
+            rows = self._recent_market_events.setdefault(event.symbol, [])
+            rows.append(event)
+            if len(rows) > 256:
+                del rows[:-256]
+
+    def record_external_source(
+        self,
+        *,
+        source_id: str,
+        symbol: str,
+        source_ts_ms: int,
+        source_price: float,
+        direction: str | None = None,
+        observed_ts_ms: int | None = None,
+    ) -> SourceLatencyObservation | None:
+        """Ingest one timestamped external observation for PAPER research.
+
+        Adapters should call this only for official/compliant external feeds.
+        The profiler matches the observation against the first reference-market
+        event that occurs after the source timestamp.
+        """
+        profiler = self.external_latency_profiler
+        if profiler is None:
+            return None
+        normalized = str(symbol).upper().replace("-", "/")
+        with self._lock:
+            candidates = [
+                event for event in self._recent_market_events.get(normalized, [])
+                if event.exchange_ts_ms >= int(source_ts_ms)
+            ]
+        if not candidates:
+            return None
+        reference = min(candidates, key=lambda event: event.exchange_ts_ms)
+        return profiler.record(
+            source_id=source_id,
+            symbol=normalized,
+            source_ts_ms=int(source_ts_ms),
+            source_price=float(source_price),
+            market_ts_ms=reference.exchange_ts_ms,
+            market_price=reference.price,
+            direction=direction,
+            observed_ts_ms=observed_ts_ms,
+        )
 
     def _match_candidate(self, event: MarketEvent, previous_moves: list[tuple[tuple[str, str], MarketEvent]]) -> None:
         if event.price_before is None or event.price_before <= 0:
