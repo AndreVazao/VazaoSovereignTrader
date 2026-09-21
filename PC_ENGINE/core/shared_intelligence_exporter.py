@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,11 @@ def _strategy_visibility(payload: dict[str, Any]) -> str:
     ).upper()
 
 
+def _source_digest(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def export_learning_file(
     source_path: str | Path,
     store: SharedIntelligenceStore,
@@ -43,11 +49,7 @@ def export_learning_file(
     artifact_type: str,
     producer_version: str = "1",
 ) -> int:
-    """Export only privacy-safe, explicitly shared learning rows.
-
-    This is an advisory-data bridge. It never exports balances, orders, P&L,
-    credentials or execution authorization, and PRIVATE strategies are skipped.
-    """
+    """Export explicitly shared learning rows with provenance and no financial state."""
     source = Path(source_path)
     if not source.exists():
         return 0
@@ -59,17 +61,11 @@ def export_learning_file(
                 continue
             row = json.loads(line)
             payload = row.get("artifact", row)
-            if not isinstance(payload, dict):
-                continue
-            if _strategy_visibility(payload) != "SHARED":
+            if not isinstance(payload, dict) or _strategy_visibility(payload) != "SHARED":
                 continue
 
-            strategy_id = str(
-                payload.get("strategy_id")
-                or payload.get("strategy")
-                or "unknown"
-            ).strip()
-            if not strategy_id or strategy_id == "unknown":
+            strategy_id = str(payload.get("strategy_id") or payload.get("strategy") or "").strip()
+            if not strategy_id:
                 continue
 
             sample_count = _integer(payload, "sample_count", "samples")
@@ -77,6 +73,10 @@ def export_learning_file(
             if sample_count <= 0 or win_count < 0 or win_count > sample_count:
                 continue
 
+            source_digest = _source_digest(payload)
+            artifact_id = hashlib.sha256(
+                f"{artifact_type}:{strategy_id}:{source_digest}".encode("utf-8")
+            ).hexdigest()[:32]
             artifact = SharedIntelligenceArtifact(
                 artifact_type=artifact_type,
                 strategy_id=strategy_id,
@@ -84,9 +84,8 @@ def export_learning_file(
                 regime=str(payload.get("regime") or "UNKNOWN"),
                 horizon_seconds=max(
                     1,
-                    _integer(payload, "horizon_seconds", "horizon_ms", default=1000)
-                    if "horizon_seconds" in payload
-                    else _integer(payload, "horizon_ms", default=1000) // 1000,
+                    _integer(payload, "horizon_seconds", default=0)
+                    or _integer(payload, "horizon_ms", default=1000) // 1000,
                 ),
                 sample_count=sample_count,
                 win_count=win_count,
@@ -96,6 +95,8 @@ def export_learning_file(
                 eligible=_bool(payload, "eligible", default=False),
                 created_at_ms=_integer(payload, "created_at_ms", "timestamp_ms", "observed_ts_ms"),
                 producer_version=producer_version,
+                artifact_id=artifact_id,
+                source_digest=source_digest,
             )
             store.append(artifact)
             exported += 1
