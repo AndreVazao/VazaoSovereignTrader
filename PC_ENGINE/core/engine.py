@@ -353,6 +353,7 @@ class SovereignEngine:
         self.mode = "PAPER"
         self.paper = True
         self.state.mode = "PAPER"
+        self.exchanges = self._build_exchanges()
         guard = getattr(self, "real_mode_guard", None)
         if guard is not None:
             guard.disarm(f"REAL fail-safe: {reason}")
