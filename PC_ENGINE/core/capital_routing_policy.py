@@ -8,9 +8,9 @@ from typing import Any
 class CapitalRoutingPolicy:
     """Owner-private policy for moving capital between an owner's own venues.
 
-    Inter-owner transfers are never routable by this policy. A venue may receive
-    funds automatically only when it belongs to the same owner and the routing
-    conditions below are satisfied.
+    Inter-owner transfers are never routable by this policy. A venue only becomes
+    a source of automatically transferable capital after its equity has exceeded
+    its owner-defined capital baseline by the configured profit threshold.
     """
 
     owner_id: str
@@ -39,12 +39,30 @@ class CapitalRoutingPolicy:
         if self.allow_cross_owner_transfer:
             raise ValueError("cross-owner transfers are forbidden")
 
+    def transferable_surplus(
+        self,
+        *,
+        source_equity_quote: float,
+        source_baseline_capital_quote: float,
+    ) -> float:
+        """Return equity above capital + configured profit threshold.
+
+        The baseline is owner-private and must come from the venue's durable
+        capital ledger; it is never inferred from another owner's state.
+        """
+        self.validate()
+        if source_equity_quote <= 0 or source_baseline_capital_quote <= 0:
+            return 0.0
+        threshold = source_baseline_capital_quote * (1 + self.capital_plus_profit_pct)
+        return max(0.0, source_equity_quote - threshold)
+
     def can_route(
         self,
         *,
         source_owner_id: str,
         destination_owner_id: str,
         source_available_quote: float,
+        source_baseline_capital_quote: float,
         destination_required_quote: float,
         expected_net_edge_bps: float,
         estimated_transfer_cost_quote: float,
@@ -61,7 +79,20 @@ class CapitalRoutingPolicy:
         if source_available_quote <= 0 or destination_required_quote <= 0:
             return False, "NO_CAPITAL_OR_NEED"
 
-        if self.require_destination_need and destination_required_quote > source_available_quote * (1 - self.reserve_cash_pct):
+        surplus = self.transferable_surplus(
+            source_equity_quote=source_available_quote,
+            source_baseline_capital_quote=source_baseline_capital_quote,
+        )
+        if surplus <= 0:
+            return False, "PROFIT_THRESHOLD_NOT_REACHED"
+
+        protected_reserve = source_available_quote * self.reserve_cash_pct
+        transferable = min(
+            surplus,
+            source_available_quote * (1 - self.reserve_cash_pct),
+            source_available_quote * self.max_transfer_pct_per_cycle,
+        )
+        if self.require_destination_need and destination_required_quote > transferable:
             return False, "INSUFFICIENT_SURPLUS"
 
         if self.require_expected_opportunity and expected_net_edge_bps <= 0:
@@ -73,11 +104,7 @@ class CapitalRoutingPolicy:
         if self.require_profit_after_costs and expected_net_edge_bps <= 0:
             return False, "COSTS_EXCEED_EDGE"
 
-        amount = min(
-            destination_required_quote,
-            source_available_quote * (1 - self.reserve_cash_pct),
-            source_available_quote * self.max_transfer_pct_per_cycle,
-        )
+        amount = min(destination_required_quote, transferable)
         if amount < self.minimum_transfer_quote:
             return False, "BELOW_MINIMUM_TRANSFER"
 
