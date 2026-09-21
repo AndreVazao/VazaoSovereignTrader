@@ -86,7 +86,10 @@ class SovereignEngine:
         self.real_mode_guard = None
         self.state = RuntimeState(mode=self.mode)
         self.state.operational["owner_id"] = self.owner_id
-        self.ledger = Ledger(\n            path=self.owner_context.private_path("logs/trades.jsonl"),\n            events_path=self.owner_context.private_path("logs/events.jsonl"),\n        )
+        self.ledger = Ledger(
+            path=self.owner_context.private_path("logs/trades.jsonl"),
+            events_path=self.owner_context.private_path("logs/events.jsonl"),
+        )
         self.rules = ExchangeRulesEngine()
         paper_cfg = config.get("paper", {})
         self.paper_broker = PaperBroker(
@@ -110,7 +113,9 @@ class SovereignEngine:
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
-        human_cfg = dict(config.get("human_bridge", {}))\n        human_cfg.setdefault("data_dir", str(self.owner_context.private_path("human_bridge")))\n        research_cfg = dict(config.get("research", {}))
+        human_cfg = dict(config.get("human_bridge", {}))
+        human_cfg.setdefault("data_dir", str(self.owner_context.private_path("human_bridge")))
+        research_cfg = dict(config.get("research", {}))
         self.human_bridge = HumanInteractionBridge(
             human_cfg.get("data_dir"),
             default_ttl_seconds=int(human_cfg.get("human_interaction_ttl_seconds", human_cfg.get("response_timeout_seconds", 900))),
