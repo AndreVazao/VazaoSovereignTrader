@@ -90,3 +90,65 @@ def test_engine_rejects_real_when_configuration_disables_it():
         assert "disabled by configuration" in str(exc)
     else:
         raise AssertionError("REAL transition must be disabled by configuration")
+
+
+def test_real_session_continues_after_one_time_guard_consumption():
+    from types import SimpleNamespace
+    from PC_ENGINE.core.engine import SovereignEngine
+
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.config = {"autonomous_execution": {"allow_real": True}}
+    engine.mode = "REAL"
+    engine.paper = False
+    engine.real_operational = True
+    engine.real_fail_safe_reason = ""
+    engine.state = SimpleNamespace(mode="REAL", status="RUNNING")
+    engine.real_mode_guard = RealModeGuard({
+        "enabled": True,
+        "allow_real": True,
+        "confirmation_phrase": "EU ACEITO O RISCO",
+        "arm_seconds": 300,
+    })
+
+    ok, _ = engine.real_mode_guard.arm("EU ACEITO O RISCO")
+    assert ok
+    ok, _ = engine.real_mode_guard.consume()
+    assert ok
+    assert not engine.real_mode_guard.snapshot()["armed"]
+    assert engine.mode == "REAL"
+    assert engine.real_operational
+
+
+def test_real_fail_safe_switches_to_paper_and_disarms_guard():
+    from types import SimpleNamespace
+    from PC_ENGINE.core.engine import SovereignEngine
+
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.config = {"autonomous_execution": {"allow_real": True}}
+    engine.mode = "REAL"
+    engine.paper = False
+    engine.real_operational = True
+    engine.real_fail_safe_reason = ""
+    engine.state = SimpleNamespace(mode="REAL", status="RUNNING")
+    engine.paper_collector = None
+    engine.real_mode_guard = RealModeGuard({
+        "enabled": True,
+        "allow_real": True,
+        "confirmation_phrase": "EU ACEITO O RISCO",
+        "arm_seconds": 300,
+    })
+    engine.real_mode_guard.arm("EU ACEITO O RISCO")
+    engine.exchanges = {}
+    engine._build_exchanges = lambda: {}
+    engine._build_paper_collector = lambda: None
+    engine.log = lambda *args, **kwargs: None
+
+    engine.fail_safe_real("watchdog_exchange_failure")
+
+    assert engine.mode == "PAPER"
+    assert engine.paper
+    assert not engine.real_operational
+    assert engine.state.mode == "PAPER"
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.real_fail_safe_reason == "watchdog_exchange_failure"
+    assert not engine.real_mode_guard.snapshot()["armed"]
