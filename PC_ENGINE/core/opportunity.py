@@ -25,6 +25,9 @@ class OpportunityScore:
     latency_bonus: float = 0.0
     latency_edge_bps: float = 0.0
     latency_freshness: float = 0.0
+    external_latency_bonus: float = 0.0
+    external_latency_edge_bps: float = 0.0
+    external_latency_freshness: float = 0.0
 
 
 class PaperOpportunityEngine:
@@ -55,6 +58,11 @@ class PaperOpportunityEngine:
         self.latency_stale_after_ms = max(100, int(settings.get("latency_stale_after_ms", 1000)))
         self.latency_min_edge_bps = max(0.1, float(settings.get("latency_min_edge_bps", 1.0)))
         self.latency_path = Path(settings.get("latency_path", "PC_ENGINE/data/radar/websocket_latency_edges.jsonl"))
+        self.external_latency_weight = max(0.0, float(settings.get("external_latency_weight", 0.10)))
+        self.external_latency_max_bonus = max(0.0, min(0.20, float(settings.get("external_latency_max_bonus", 0.10))))
+        self.external_latency_stale_after_ms = max(100, int(settings.get("external_latency_stale_after_ms", 2000)))
+        self.external_latency_min_edge_bps = max(0.1, float(settings.get("external_latency_min_edge_bps", 1.0)))
+        self.external_latency_path = Path(settings.get("external_latency_profile_path", "PC_ENGINE/data/radar/external_source_latency_profiles.jsonl"))
 
     def _load_stats(self) -> None:
         try:
@@ -110,6 +118,36 @@ class PaperOpportunityEngine:
             return row
         return None
 
+    def _latest_external_latency_profile(self, symbol: str, now_ms: int, direction: str = "UP") -> dict | None:
+        try:
+            with self.external_latency_path.open("r", encoding="utf-8") as handle:
+                handle.seek(0, 2)
+                size = handle.tell()
+                handle.seek(max(0, size - 131072))
+                lines = handle.read().splitlines()
+        except (FileNotFoundError, OSError):
+            return None
+        for line in reversed(lines):
+            try:
+                row = json.loads(line)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if str(row.get("symbol", "")).upper() != symbol.upper():
+                continue
+            if str(row.get("direction", "")).upper() != direction.upper():
+                continue
+            if not bool(row.get("eligible", False)):
+                continue
+            observed_ts_ms = int(row.get("observed_ts_ms", 0) or 0)
+            if not observed_ts_ms:
+                continue
+            age_ms = max(0, now_ms - observed_ts_ms)
+            if age_ms > self.external_latency_stale_after_ms:
+                return None
+            row["_freshness"] = max(0.0, 1.0 - age_ms / self.external_latency_stale_after_ms)
+            return row
+        return None
+
     def score(
         self,
         *,
@@ -135,6 +173,9 @@ class PaperOpportunityEngine:
         latency_bonus = 0.0
         latency_edge_bps = 0.0
         latency_freshness = 0.0
+        external_latency_bonus = 0.0
+        external_latency_edge_bps = 0.0
+        external_latency_freshness = 0.0
         consensus_ok = False
         learning_reason = "sem aprendizagem elegível"
         if state:
@@ -177,9 +218,20 @@ class PaperOpportunityEngine:
                 self.latency_weight * edge_strength * persistence * same_direction * latency_freshness,
             )
 
-        final = max(0.0, min(1.0, base + learning_bonus + consensus_bonus + latency_bonus - cost_penalty))
+        external_profile = self._latest_external_latency_profile(symbol, now_ms, "UP")
+        if external_profile is not None:
+            external_latency_edge_bps = max(0.0, float(external_profile.get("net_edge_bps", 0.0)))
+            external_latency_freshness = float(external_profile.get("_freshness", 0.0))
+            edge_strength = max(0.0, min(1.0, external_latency_edge_bps / self.external_latency_min_edge_bps))
+            same_direction = max(0.0, min(1.0, float(external_profile.get("same_direction_ratio", 0.0))))
+            external_latency_bonus = min(
+                self.external_latency_max_bonus,
+                self.external_latency_weight * edge_strength * same_direction * external_latency_freshness,
+            )
+
+        final = max(0.0, min(1.0, base + learning_bonus + consensus_bonus + latency_bonus + external_latency_bonus - cost_penalty))
         confidence = max(0.0, min(1.0, 0.65 * base + 0.35 * (1.0 if learning_bonus > 0 else 0.0)))
-        reason = f"estratégia={base:.3f}; {learning_reason}; latency={latency_edge_bps:.2f}bps/{latency_freshness:.2f}; custo/spread={cost_penalty:.3f}"
+        reason = f"estratégia={base:.3f}; {learning_reason}; latency={latency_edge_bps:.2f}bps/{latency_freshness:.2f}; external={external_latency_edge_bps:.2f}bps/{external_latency_freshness:.2f}; custo/spread={cost_penalty:.3f}"
         return OpportunityScore(
             symbol=symbol,
             score=round(final, 6),
@@ -195,4 +247,7 @@ class PaperOpportunityEngine:
             latency_bonus=round(latency_bonus, 6),
             latency_edge_bps=round(latency_edge_bps, 4),
             latency_freshness=round(latency_freshness, 6),
+            external_latency_bonus=round(external_latency_bonus, 6),
+            external_latency_edge_bps=round(external_latency_edge_bps, 4),
+            external_latency_freshness=round(external_latency_freshness, 6),
         )
