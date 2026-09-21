@@ -34,6 +34,8 @@
     "min_eligible_outcomes": 1,
     "require_l2_oos_validation": true,
     "require_paper_reconciliation": true,
+    "max_evidence_age_seconds": 900,
+    "max_validation_age_seconds": 86400,
     "notes": "Missing validation artifacts block protected REAL review. This section never authorizes orders."
   },
   "real_mode_guard": {
