@@ -345,7 +345,7 @@ class SovereignEngine:
     def _enter_real_fail_safe(self, reason: str, data: dict | None = None) -> None:
         """Leave REAL immediately on a critical runtime condition."""
         if self.mode != "REAL":
-            self._enter_safe_state("critical_runtime_condition")
+            self.state.status = "SAFE_MODE"
             self.real_operational = False
             return
         self.real_fail_safe_reason = str(reason)
@@ -356,7 +356,13 @@ class SovereignEngine:
         guard = getattr(self, "real_mode_guard", None)
         if guard is not None:
             guard.disarm(f"REAL fail-safe: {reason}")
-        self._enter_safe_state("critical_runtime_condition")
+        self._build_paper_collector()
+        if self.paper_collector is not None:
+            try:
+                self.paper_collector.start()
+            except Exception:
+                pass
+        self.state.status = "SAFE_MODE"
         payload = {"reason": reason}
         if data:
             payload.update(data)
@@ -366,7 +372,7 @@ class SovereignEngine:
         if self.mode == "REAL":
             self._enter_real_fail_safe(reason, data)
         else:
-            self._enter_safe_state("critical_runtime_condition")
+            self.state.status = "SAFE_MODE"
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
