@@ -25,6 +25,8 @@ class ExternalSourceHealth:
     last_observation_ms: int = 0
     last_transport_latency_ms: float | None = None
     last_error: str | None = None
+    sequence_gaps: int = 0
+    last_sequence: int | None = None
 
 
 class ExternalSourceSupervisor:
@@ -54,6 +56,7 @@ class ExternalSourceSupervisor:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.RLock()
+        self._last_sequence: dict[str, int] = {}
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -89,6 +92,14 @@ class ExternalSourceSupervisor:
                         quality = observation_quality(observation)
                         if not quality["clock_order_valid"]:
                             raise ValueError("source_clock_order_invalid")
+                        if observation.sequence is not None:
+                            sequence = int(observation.sequence)
+                            previous = self._last_sequence.get(source_id)
+                            if previous is not None and sequence > previous + 1:
+                                health.sequence_gaps += 1
+                            if previous is None or sequence > previous:
+                                self._last_sequence[source_id] = sequence
+                            health.last_sequence = self._last_sequence[source_id]
                         self.radar.ingest_external_observation(observation)
                         health.accepted += 1
                         health.last_observation_ms = int(
@@ -123,6 +134,9 @@ class ExternalSourceSupervisor:
                         "last_observation_ms": item.last_observation_ms,
                         "last_transport_latency_ms": item.last_transport_latency_ms,
                         "last_error": item.last_error,
+                        "sequence_gaps": item.sequence_gaps,
+                        "last_sequence": item.last_sequence,
+                        "healthy": item.errors == 0 and item.rejected == 0,
                     }
                     for source_id, item in self.health.items()
                 },
