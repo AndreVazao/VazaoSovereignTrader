@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from PC_ENGINE.core.adaptive_risk import AdaptiveRiskController, AdaptiveRiskSnapshot
+from PC_ENGINE.core.adaptive_risk_evidence import AdaptiveRiskEvidenceStore
 
 
 @dataclass
@@ -22,7 +23,9 @@ class RiskEngine:
     def __init__(self, settings: dict):
         self.settings = settings
         self.state = RiskState()
-        self.adaptive_risk = AdaptiveRiskController(settings.get("adaptive_risk", {}))
+        adaptive_cfg = settings.get("adaptive_risk", {})
+        self.adaptive_risk = AdaptiveRiskController(adaptive_cfg)
+        self.adaptive_evidence = AdaptiveRiskEvidenceStore(str(adaptive_cfg.get("outcome_path", "PC_ENGINE/data/radar/state_outcomes.jsonl")))
 
     def update_equity(self, equity: float, starting_equity: float) -> None:
         if self.state.equity_peak <= 0:
@@ -91,3 +94,4 @@ class RiskEngine:
             self.state.symbol_loss_streak[symbol] += 1
         else:
             self.state.symbol_loss_streak[symbol] = 0
+\n    def adaptive_position_notional_auto(self, equity: float, stop_pct: float, *, strategy_id: str = "unknown", symbol: str = "unknown", regime: str | None = None, horizon_seconds: int | None = None, action: str = "BUY") -> tuple[float, AdaptiveRiskSnapshot]:\n        evidence = self.adaptive_evidence.lookup(symbol=symbol, regime=regime, horizon_seconds=horizon_seconds, action=action)\n        if evidence is None:\n            return self.adaptive_position_notional(equity, stop_pct, samples=0, wins=0, mean_net_bps=0.0, strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)\n        return self.adaptive_position_notional(equity, stop_pct, samples=evidence.samples, wins=evidence.wins, mean_net_bps=evidence.mean_net_bps, strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)\n
