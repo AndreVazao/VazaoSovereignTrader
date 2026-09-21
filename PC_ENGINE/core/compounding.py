@@ -133,17 +133,20 @@ class GlobalCompoundingOrchestrator:
 
     def funding_plan(self, equities: dict[str, float]) -> list[dict[str, Any]]:
         snap = self.snapshot(equities)
-        sources, destinations = [v for v in snap.venues if v.surplus > 0], [v for v in snap.venues if v.funding_need > 0]
+        target_base = snap.next_base if snap.all_venues_at_base else snap.global_base
+        sources = [v for v in snap.venues if v.equity > target_base]
+        destinations = [v for v in snap.venues if v.equity < target_base]
         plan: list[dict[str, Any]] = []
-        for destination in sorted(destinations, key=lambda x: x.funding_need, reverse=True):
-            remaining = destination.funding_need
-            for source in sorted(sources, key=lambda x: x.surplus, reverse=True):
-                if remaining <= 0 or source.surplus <= 0 or source.venue == destination.venue:
+        for destination in sorted(destinations, key=lambda x: target_base - x.equity, reverse=True):
+            remaining = max(0.0, target_base - destination.equity)
+            for source in sorted(sources, key=lambda x: x.equity - target_base, reverse=True):
+                available = max(0.0, source.equity - target_base)
+                if remaining <= 0 or available <= 0 or source.venue == destination.venue:
                     continue
-                amount = min(source.surplus, remaining)
+                amount = min(available, remaining)
                 if amount <= 0:
                     continue
                 plan.append({"owner_id": snap.owner_id, "source_venue": source.venue, "destination_venue": destination.venue,
-                             "target_base": snap.global_base, "amount": round(amount, 8), "reason": "GLOBAL_TIER_CAPITALIZATION"})
+                             "target_base": round(target_base, 8), "amount": round(amount, 8), "reason": "GLOBAL_TIER_CAPITALIZATION"})
                 remaining -= amount
         return plan
