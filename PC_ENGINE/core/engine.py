@@ -1084,6 +1084,8 @@ class SovereignEngine:
                 "reason": reason,
             }
             self._persist_recovery()
+            self.state.execution_intents.pop(intent_id, None)
+            self._persist_recovery()
             if result.qty <= 0:
                 return
         if not result.ok:
@@ -1153,6 +1155,8 @@ class SovereignEngine:
                 "known_quote_notional": float(result.qty) * float(result.price),
                 "created_ts": time.time(),
             }
+            self._persist_recovery()
+            self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
             if result.qty <= 0:
                 return
