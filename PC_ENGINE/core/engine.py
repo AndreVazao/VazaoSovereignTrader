@@ -92,10 +92,10 @@ class SovereignEngine:
         )
         self.rules = ExchangeRulesEngine()
         paper_cfg = dict(config.get("paper", {}))
-        paper_cfg.setdefault("autonomous_intents_path", str(self.owner_context.private_path("paper/autonomous_intents.jsonl")))
-        paper_cfg.setdefault("fills_path", str(self.owner_context.private_path("paper/fills.jsonl")))
-        paper_cfg.setdefault("runs_path", str(self.owner_context.private_path("paper/runs.jsonl")))
-        paper_cfg.setdefault("reconciliation_path", str(self.owner_context.private_path("paper/autonomous_reconciliation.json")))
+        paper_cfg["autonomous_intents_path"] = str(self.owner_context.private_path("paper/autonomous_intents.jsonl"))
+        paper_cfg["fills_path"] = str(self.owner_context.private_path("paper/fills.jsonl"))
+        paper_cfg["runs_path"] = str(self.owner_context.private_path("paper/runs.jsonl"))
+        paper_cfg["reconciliation_path"] = str(self.owner_context.private_path("paper/autonomous_reconciliation.json"))
         config["paper"] = paper_cfg
         self.paper_broker = PaperBroker(
             fee_pct=float(paper_cfg.get("fee_pct", 0.001)),
@@ -119,7 +119,7 @@ class SovereignEngine:
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
         human_cfg = dict(config.get("human_bridge", {}))
-        human_cfg.setdefault("data_dir", str(self.owner_context.private_path("human_bridge")))
+        human_cfg["data_dir"] = str(self.owner_context.private_path("human_bridge"))
         research_cfg = dict(config.get("research", {}))
         self.human_bridge = HumanInteractionBridge(
             human_cfg.get("data_dir"),
@@ -129,7 +129,7 @@ class SovereignEngine:
         self._human_bridge_operational_last_state = None
         self.cycle_count = 0
         self.preflight_done = False
-        research_dir = str(research_cfg.get("data_dir") or self.owner_context.private_path("research"))
+        research_dir = str(self.owner_context.private_path("research"))
         self.autonomous_research = AutonomousResearchWorker(
             research_dir,
             min_observation_score=float(research_cfg.get("min_observation_score", 70.0)),
