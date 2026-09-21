@@ -12,6 +12,14 @@
     "port": 8765,
     "local_control_token_env": "VST_LOCAL_TOKEN"
   },
+  "shared_intelligence": {
+    "enabled": true,
+    "mode": "LOCAL_ARTIFACTS",
+    "store_path": "PC_ENGINE/data/shared_intelligence/artifacts.jsonl",
+    "sync_enabled": false,
+    "sync_provider": "vercel",
+    "notes": "Shared learning contains statistical/model artifacts only. Financial state, balances, orders, P&L, credentials and REAL authorization never sync. Cloud sync is opt-in and never part of the trading hot path."
+  },
   "identity": {
     "mode": "local",
     "require_device_identity": false,
