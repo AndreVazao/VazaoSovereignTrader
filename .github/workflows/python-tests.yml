@@ -1,6 +1,7 @@
 name: Python tests
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, 'refactor/**', 'feat/**']
   pull_request:
