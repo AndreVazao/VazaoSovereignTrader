@@ -57,6 +57,8 @@ class RuntimeState:
     operational: Dict[str, object] = field(default_factory=dict)
     preflight: Dict[str, object] = field(default_factory=dict)
     account_reconciliation: Dict[str, object] = field(default_factory=dict)
+    financial_reconciliation: Dict[str, object] = field(default_factory=dict)
+    financial_account: Dict[str, object] = field(default_factory=dict)
     champion_challenger: Dict[str, object] = field(default_factory=dict)
     paper_collector: Dict[str, object] = field(default_factory=dict)
     research: Dict[str, object] = field(default_factory=dict)
@@ -164,6 +166,9 @@ class SovereignEngine:
         raw_positions = raw_state.get("positions", {})
         pending = raw_state.get("pending_orders", {})
         intents = raw_state.get("execution_intents", {})
+        financial_account = raw_state.get("financial_account", {})
+        if isinstance(financial_account, dict):
+            self.state.financial_account.update(financial_account)
         self.state.pending_orders.update(pending)
         self.state.execution_intents.update(intents)
         self.order_manager.restore_order_guards(raw_state.get("order_guards", {}))
@@ -184,7 +189,26 @@ class SovereignEngine:
             self.log("RECOVERY_POSITIONS_LOADED", {"symbols": list(recovered.keys())})
 
     def _persist_recovery(self) -> None:
-        self.recovery.save_positions(self.state.open_positions, self.state.pending_orders, self.order_manager.export_order_guards(), self.state.execution_intents)
+        self.recovery.save_positions(
+            self.state.open_positions,
+            self.state.pending_orders,
+            self.order_manager.export_order_guards(),
+            self.state.execution_intents,
+            self.state.financial_account,
+        )
+
+    def _record_financial_fill(self, side: str, symbol: str, qty: float, quote_notional: float, fee: float) -> None:
+        if self.paper or qty <= 0 or quote_notional < 0 or fee < 0:
+            return
+        base_asset = str(symbol).split("/", 1)[0]
+        financial = self.state.financial_account
+        base_flow = financial.setdefault("base_flow", {})
+        signed_qty = float(qty) if side == "buy" else -float(qty) if side == "sell" else 0.0
+        if not signed_qty:
+            return
+        base_flow[base_asset] = float(base_flow.get(base_asset, 0.0) or 0.0) + signed_qty
+        quote_flow = float(financial.get("quote_flow", 0.0) or 0.0)
+        financial["quote_flow"] = quote_flow - float(quote_notional) - float(fee) if side == "buy" else quote_flow + float(quote_notional) - float(fee)
 
     def reconcile_account_state(self) -> dict:
         """Verify local positions, balances, and open orders against the live exchange."""
