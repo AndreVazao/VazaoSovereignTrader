@@ -151,3 +151,76 @@ def test_recovery_load_error_keeps_financial_account_key():
     manager.state_path = BrokenPath()
     state = manager.load_state()
     assert state["financial_account"] == {}
+
+
+def test_restart_after_partial_fill_applies_only_remaining_delta(tmp_path):
+    recovery = RecoveryManager(tmp_path / "runtime_state.json")
+    first = object.__new__(SovereignEngine)
+    first.paper = False
+    first.state = RuntimeState()
+    first.state.open_positions["BTC/USDT"] = Position(
+        "binance", "BTC/USDT", 100.0, 0.4, 98.0, 104.0, 1.0, 0.04
+    )
+    first.state.pending_orders["o1"] = {
+        "exchange": "binance",
+        "symbol": "BTC/USDT",
+        "side": "buy",
+        "requested_qty": 1.0,
+        "known_filled_qty": 0.4,
+        "known_fill_price": 100.0,
+        "known_fee": 0.04,
+        "known_quote_notional": 40.0,
+        "created_ts": 1.0,
+        "client_order_id": "cid-1",
+        "stop_pct": 0.02,
+        "take_profit_pct": 0.04,
+    }
+    first.state.financial_account = {
+        "base_flow": {"BTC": 0.4},
+        "quote_flow": -40.04,
+    }
+    recovery.save_positions(
+        first.state.open_positions,
+        first.state.pending_orders,
+        {},
+        {},
+        first.state.financial_account,
+    )
+
+    second = object.__new__(SovereignEngine)
+    second.paper = False
+    second.state = RuntimeState()
+    second.recovery = recovery
+
+    class OrderGuardStub:
+        def restore_order_guards(self, guards):
+            assert guards == {}
+
+    second.order_manager = OrderGuardStub()
+    second.log = lambda *args, **kwargs: None
+    second._load_recovery_state()
+
+    class RestartExchange(FakeExchange):
+        name = "binance"
+
+    second._main_exchange = lambda: RestartExchange([{
+        "id": "o1", "clientOrderId": "cid-1", "symbol": "BTC/USDT",
+        "side": "buy", "status": "closed", "filled": 1.0,
+        "average": 102.0, "cost": 102.0,
+        "fee": {"cost": 0.10, "currency": "USDT"},
+    }])
+    second.config = {"reconciliation": {"financial_relative_tolerance": 0.002}}
+    second._persist_recovery = lambda: None
+    second.log = lambda *args, **kwargs: None
+    second.risk = RiskStub()
+    second.champion = ChampionStub()
+    second.ledger = LedgerStub()
+
+    second._reconcile_pending_orders()
+
+    assert "o1" not in second.state.pending_orders
+    position = second.state.open_positions["BTC/USDT"]
+    assert position.qty == 1.0
+    assert abs(position.entry - 101.2) < 1e-12
+    assert second.state.financial_account["base_flow"]["BTC"] == 1.0
+    assert abs(second.state.financial_account["quote_flow"] + 102.10) < 1e-12
