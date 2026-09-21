@@ -4,6 +4,7 @@ from bisect import bisect_left
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import time
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class OutcomeStat:
     median_net_bps: float
     lower_ci_bps: float
     eligible: bool
+    observed_at_ms: int = 0
 
 
 class StateOutcomeEngine:
@@ -115,7 +117,7 @@ class StateOutcomeEngine:
             se = (variance ** 0.5) / (samples ** 0.5) if samples > 1 else 0.0
             lower = mean - 1.96 * se
             eligible = samples >= self.min_samples and mean > self.min_mean_net_bps and win_rate >= self.min_win_rate and lower > 0
-            output.append(OutcomeStat(symbol, action, regime, horizon, samples, wins, round(win_rate, 6), round(mean, 6), round(median, 6), round(lower, 6), eligible))
+            output.append(OutcomeStat(symbol, action, regime, horizon, samples, wins, round(win_rate, 6), round(mean, 6), round(median, 6), round(lower, 6), eligible, int(time.time() * 1000)))
         return output
 
     def save(self, stats: list[OutcomeStat], path: str = "PC_ENGINE/data/radar/state_outcomes.jsonl") -> None:
