@@ -78,6 +78,20 @@
     ],
     "notes": "Read-only capital visibility. The engine detects configured private credentials and, when available, reads balances from supported venues. It never transfers funds, creates orders, or persists credentials. Capital remains owner-private."
   },
+  "capital_routing": {
+    "enabled": true,
+    "owner_private_only": true,
+    "allow_cross_owner_transfer": false,
+    "reserve_cash_pct": 0.20,
+    "minimum_transfer_quote": 25,
+    "capital_plus_profit_pct": 0.0,
+    "max_transfer_pct_per_cycle": 0.10,
+    "require_destination_need": true,
+    "require_expected_opportunity": true,
+    "require_destination_ready": true,
+    "require_profit_after_costs": true,
+    "notes": "Automatic transfers are allowed only between venues owned by the same owner. Inter-owner transfers are manual-only. The bot moves capital only when a destination has measured need and a positive net opportunity after transfer/trading costs; reserve cash remains protected."
+  },
   "engine": {
     "cycle_seconds": 20,
     "quote_currency": "USDT",
