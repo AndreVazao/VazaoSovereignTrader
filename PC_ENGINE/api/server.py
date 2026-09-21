@@ -13,8 +13,6 @@ from PC_ENGINE.core.engine import SovereignEngine
 from PC_ENGINE.core.real_mode_guard import RealModeGuard
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
 from PC_ENGINE.tools.run_readiness_pipeline import run as run_readiness_pipeline
-from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
-from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
 from PC_ENGINE.autonomy.paper_reconciliation import PaperAutonomyReconciler
 from PC_ENGINE.research.inbox import TraderResearchInbox
 
@@ -23,9 +21,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     app = Flask(__name__)
     readiness = RealReadinessService(engine.config)
     guard = RealModeGuard(engine.config.get("real_mode_guard", {}))
-    human_cfg = engine.config.get("human_bridge", {})
-    human_bridge = HumanInteractionBridge(human_cfg.get("data_dir", "PC_ENGINE/data/human_bridge"), default_ttl_seconds=int(human_cfg.get("human_interaction_ttl_seconds", 900)))
-    human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
+    human_bridge = engine.human_bridge
+    human_watchdog = engine.human_bridge_watchdog
     research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
 
     def require_token() -> None:
@@ -104,14 +101,15 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_token()
         source = str((request.get_json(force=True) or {}).get("source", "mobile")).lower()
         try:
-            return jsonify({"ok": True, "watchdog": human_watchdog.heartbeat(source)})
+            human_watchdog.heartbeat(source)
+            return jsonify({"ok": True, "watchdog": engine.refresh_human_bridge_operational_state()})
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.get("/human-interaction/watchdog")
     def human_interaction_watchdog():
         require_token()
-        return jsonify(human_watchdog.check())
+        return jsonify(engine.refresh_human_bridge_operational_state())
     @app.get("/human-interaction/pending")
     def human_interaction_pending():
         require_token()
