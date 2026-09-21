@@ -16,6 +16,7 @@
   "reconciliation": {
     "dust_tolerance": 1e-10,
     "relative_tolerance": 0.001,
+    "financial_relative_tolerance": 0.002,
     "notes": "REAL startup/cycle reconciliation blocks on non-dust unexpected assets, balance mismatches, or open orders. These thresholds do not authorize execution."
   },
   "fast_path": {
