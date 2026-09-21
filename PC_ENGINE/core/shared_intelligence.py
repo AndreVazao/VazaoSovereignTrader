@@ -153,6 +153,12 @@ class SharedIntelligenceImporter:
                     rejected += 1
                     continue
                 validated = self.store.validate_public_artifact(payload)
+                supplied_digest = str(row.get("sha256", "")).strip()
+                canonical = json.dumps(validated, sort_keys=True, separators=(",", ":"))
+                expected_digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+                if supplied_digest and supplied_digest != expected_digest:
+                    rejected += 1
+                    continue
                 created_at_ms = int(validated["created_at_ms"])
                 if created_at_ms <= 0 or now_ms - created_at_ms > self.max_age_ms:
                     skipped += 1
