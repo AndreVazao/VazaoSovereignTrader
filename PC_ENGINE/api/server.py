@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-import hmac
 import base64
 
 from flask import Flask, Response, jsonify, request, send_file
@@ -27,7 +26,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     guard_settings["allow_real"] = bool(engine.config.get("autonomous_execution", {}).get("allow_real", False))
     guard = RealModeGuard(guard_settings)
     engine.real_mode_guard = guard
-    identity = IdentityAuthenticator(engine.config, env_value)
+    identity = IdentityAuthenticator(engine.config, env_value, fallback_token_env=token_env)
     human_cfg = engine.config.get("human_bridge", {})
     human_bridge = getattr(engine, "human_bridge", None)
     human_watchdog = getattr(engine, "human_bridge_watchdog", None)
