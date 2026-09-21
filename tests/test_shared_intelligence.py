@@ -53,3 +53,22 @@ def test_tampering_is_detected(tmp_path):
         assert str(exc) == "artifact_integrity_mismatch"
     else:
         raise AssertionError("tampered artifact must be rejected")
+
+def test_duplicate_artifact_is_not_appended_twice(tmp_path):
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    first = store.append(artifact())
+    second = store.append(artifact())
+    assert first == second
+    assert len(store.read()) == 1
+
+
+def test_invalid_source_digest_is_rejected(tmp_path):
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    payload = artifact().to_public_dict()
+    payload["source_digest"] = "not-a-sha"
+    try:
+        store.validate_public_artifact(payload)
+    except ValueError as exc:
+        assert str(exc) == "invalid_source_digest"
+    else:
+        raise AssertionError("invalid provenance must be rejected")
