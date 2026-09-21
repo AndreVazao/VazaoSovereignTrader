@@ -23,6 +23,13 @@ class RealModeGuard:
         return bool(self.settings.get("enabled", True))
 
     @property
+    def allow_real(self) -> bool:
+        # REAL remains explicitly disabled unless the autonomous execution
+        # configuration opts in. The operator phrase is necessary but not
+        # sufficient authorization.
+        return bool(self.settings.get("allow_real", True))
+
+    @property
     def phrase(self) -> str:
         return str(self.settings.get("confirmation_phrase", "EU ACEITO O RISCO"))
 
@@ -33,6 +40,9 @@ class RealModeGuard:
     def arm(self, phrase: str) -> tuple[bool, str]:
         if not self.enabled:
             self.state.last_reason = "REAL mode guard disabled by configuration"
+            return False, self.state.last_reason
+        if not self.allow_real:
+            self.disarm("REAL mode disabled by configuration")
             return False, self.state.last_reason
         if phrase != self.phrase:
             self.disarm("confirmation phrase mismatch")
@@ -50,6 +60,9 @@ class RealModeGuard:
     def can_enable_real(self) -> tuple[bool, str]:
         if not self.enabled:
             return False, "REAL mode guard disabled by configuration"
+        if not self.allow_real:
+            self.disarm("REAL mode disabled by configuration")
+            return False, self.state.last_reason
         if not self.state.armed:
             return False, self.state.last_reason or "REAL not armed"
         if time.time() >= self.state.armed_until:

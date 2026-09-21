@@ -22,7 +22,12 @@ from PC_ENGINE.research.inbox import TraderResearchInbox
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
     app = Flask(__name__)
     readiness = RealReadinessService(engine.config)
-    guard = RealModeGuard(engine.config.get("real_mode_guard", {}))
+    guard_settings = dict(engine.config.get("real_mode_guard", {}))
+    guard_settings["allow_real"] = bool(engine.config.get("autonomous_execution", {}).get("allow_real", False))
+    guard = RealModeGuard(guard_settings)
+    # The guard authorizes the transition; once REAL is active, the engine
+    # owns the continuous fail-safe lifecycle and can revoke this guard.
+    engine.real_mode_guard = guard
     human_cfg = engine.config.get("human_bridge", {})
     human_bridge = getattr(engine, "human_bridge", None)
     human_watchdog = getattr(engine, "human_bridge_watchdog", None)
@@ -221,7 +226,9 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def real_disarm():
         require_token()
         guard.disarm("operator disarmed")
-        return jsonify({"ok": True, "guard": guard.snapshot()})
+        if engine.mode.upper() == "REAL":
+            engine.fail_safe_real("operator_disarmed")
+        return jsonify({"ok": True, "mode": engine.mode, "guard": guard.snapshot()})
 
     @app.post("/preflight")
     def preflight():
@@ -236,9 +243,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
                 return jsonify({"ok": False, "error": "real_start_requires_pending_order_reconciliation", "orders": list(engine.state.pending_orders)}), 409
             reconciliation = engine.reconcile_account_state()
             if not reconciliation.get("ok", False):
+                engine.fail_safe_real("account_reconciliation_failed", reconciliation)
                 return jsonify({"ok": False, "error": "real_account_reconciliation_blocked", "reconciliation": reconciliation}), 409
             report = readiness.collect(engine)
             if not report.get("ready", False):
+                engine.fail_safe_real("real_readiness_failed", {"blockers": report.get("blockers", [])})
                 return jsonify({"ok": False, "error": "real_readiness_blocked", "readiness": report}), 409
             authorized, reason = guard.consume()
             if not authorized:
@@ -279,13 +288,16 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             authorized, reason = guard.can_enable_real()
             if not authorized:
                 return jsonify({"ok": False, "error": "real_mode_not_authorized", "reason": reason, "guard": guard.snapshot()}), 403
-            engine.set_mode("REAL")
+            engine.set_mode("REAL", real_authorized=True)
             preflight = engine.run_preflight()
             reconciliation = engine.reconcile_account_state()
             report = readiness.collect(engine)
             if not preflight.get("ok") or not reconciliation.get("ok", False) or not report.get("ready", False):
-                engine.set_mode("PAPER")
-                guard.disarm("REAL readiness failed; authorization revoked")
+                engine.fail_safe_real("real_readiness_blocked", {
+                    "preflight_ok": preflight.get("ok"),
+                    "reconciliation_ok": reconciliation.get("ok", False),
+                    "readiness_ready": report.get("ready", False),
+                })
                 return jsonify({
                     "ok": False,
                     "error": "real_readiness_blocked",

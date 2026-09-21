@@ -19,6 +19,8 @@ class RealReadinessService:
         self.min_eligible_outcomes = max(1, int(readiness.get("min_eligible_outcomes", 1)))
         self.require_l2_oos = bool(readiness.get("require_l2_oos_validation", True))
         self.require_reconciliation = bool(readiness.get("require_paper_reconciliation", True))
+        self.max_evidence_age_seconds = max(60, int(readiness.get("max_evidence_age_seconds", 900)))
+        self.max_validation_age_seconds = max(300, int(readiness.get("max_validation_age_seconds", 86400)))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -67,9 +69,44 @@ class RealReadinessService:
             return False, f"missing API credentials: {','.join(missing)}"
         return True, "configured enabled exchange credentials present"
 
+
+    @staticmethod
+    def _latest_timestamp_ms(rows: list[dict]) -> int:
+        timestamps = []
+        for row in rows:
+            for key in ("timestamp_ms", "observed_ts_ms", "ts_ms", "created_at_ms"):
+                try:
+                    value = int(row.get(key, 0) or 0)
+                except (TypeError, ValueError):
+                    value = 0
+                if value > 0:
+                    timestamps.append(value)
+                    break
+        return max(timestamps, default=0)
+
+    def _evidence_fresh(self, rows: list[dict], now_ms: int) -> tuple[bool, str]:
+        latest = self._latest_timestamp_ms(rows)
+        if not latest:
+            return False, "missing evidence timestamp"
+        age_ms = max(0, now_ms - latest)
+        limit_ms = self.max_evidence_age_seconds * 1000
+        return age_ms <= limit_ms, f"age_ms={age_ms}; max_ms={limit_ms}"
+
+    def _validation_fresh(self, path: Path, now_ms: int) -> tuple[bool, str]:
+        if not path.exists():
+            return False, "artifact missing"
+        try:
+            age = max(0, now_ms / 1000.0 - path.stat().st_mtime)
+        except OSError:
+            return False, "artifact stat failed"
+        return age <= self.max_validation_age_seconds, f"age_s={int(age)}; max_s={self.max_validation_age_seconds}"
+
     def collect(self, engine) -> dict:
+        now_ms = int(__import__('time').time() * 1000)
         states = self._read_jsonl(self.data_dir / "market_states.jsonl")
         outcomes = self._read_jsonl(self.data_dir / "state_outcomes.jsonl")
+        state_fresh, state_fresh_detail = self._evidence_fresh(states, now_ms)
+        outcome_fresh, outcome_fresh_detail = self._evidence_fresh(outcomes, now_ms)
         outcome_samples = sum(int(row.get("samples", 0) or 0) for row in outcomes)
         eligible = sum(bool(row.get("eligible")) for row in outcomes)
         validation_dir = self.data_dir / "validation"
@@ -82,6 +119,16 @@ class RealReadinessService:
         pending_orders_ok = not bool(engine.state.pending_orders)
         execution_intents_ok = not bool(engine.state.execution_intents)
         critical_errors = sum(1 for line in engine.state.logs if "CRITICAL" in line.upper())
+
+        validation_paths = {
+            "walk_forward": validation_dir / "walk_forward.json",
+            "regime_validation": validation_dir / "regime_validation.json",
+            "execution_test": validation_dir / "execution_test.json",
+            "l2_oos": self.data_dir / "l2_oos_validation.json",
+        }
+        validation_fresh = {}
+        for name, path in validation_paths.items():
+            validation_fresh[name] = self._validation_fresh(path, now_ms)
 
         l2_payload = self._read_json(self.data_dir / "l2_oos_validation.json")
         l2_rows = l2_payload.get("rows", []) if isinstance(l2_payload.get("rows", []), list) else []
@@ -108,17 +155,17 @@ class RealReadinessService:
             state_samples=len(states),
             outcome_samples=outcome_samples,
             eligible_outcomes=eligible,
-            walk_forward_ok=self._validation_status(validation_dir / "walk_forward.json"),
-            regime_validation_ok=self._validation_status(validation_dir / "regime_validation.json"),
+            walk_forward_ok=self._validation_status(validation_dir / "walk_forward.json") and validation_fresh["walk_forward"][0] and state_fresh,
+            regime_validation_ok=self._validation_status(validation_dir / "regime_validation.json") and validation_fresh["regime_validation"][0] and state_fresh,
             watchdog_ok=watchdog_ok,
             recovery_ok=recovery_ok,
             pending_orders_ok=pending_orders_ok,
             execution_intents_ok=execution_intents_ok,
-            execution_test_ok=self._validation_status(validation_dir / "execution_test.json"),
+            execution_test_ok=self._validation_status(validation_dir / "execution_test.json") and validation_fresh["execution_test"][0],
             critical_errors=critical_errors,
             credentials_ok=credentials_ok,
             credentials_detail=credentials_detail,
-            l2_oos_ok=l2_ok,
+            l2_oos_ok=l2_ok and validation_fresh["l2_oos"][0] and outcome_fresh,
             l2_oos_detail=f"stable_rows={l2_stable}",
             reconciliation_ok=reconciliation_ok,
             reconciliation_detail=f"unreconciled_ratio={reconciliation.get('unreconciled_ratio', 'missing')}",
@@ -143,5 +190,12 @@ class RealReadinessService:
             "required_outcome_samples": self.min_outcome_samples,
             "required_eligible_outcomes": self.min_eligible_outcomes,
             "data_dir": str(self.data_dir),
+            "max_evidence_age_seconds": self.max_evidence_age_seconds,
+            "max_validation_age_seconds": self.max_validation_age_seconds,
+            "state_fresh": state_fresh,
+            "state_fresh_detail": state_fresh_detail,
+            "outcome_fresh": outcome_fresh,
+            "outcome_fresh_detail": outcome_fresh_detail,
+            "validation_freshness": validation_fresh,
         }
         return payload

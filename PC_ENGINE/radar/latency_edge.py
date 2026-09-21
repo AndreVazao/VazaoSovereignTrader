@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from statistics import mean
+import time
 from typing import Iterable
 
 
@@ -21,6 +21,7 @@ class LatencyObservation:
     same_direction_ratio: float
     persistence_ratio: float
     eligible: bool
+    observed_ts_ms: int
 
 
 class LatencyEdgeDetector:
@@ -70,9 +71,11 @@ class LatencyEdgeDetector:
         leader_move_bps: float,
         follower_move_bps: float,
         receive_lead_ms: int | None = None,
+        observed_ts_ms: int | None = None,
     ) -> LatencyObservation:
         lead_ms = int(lead_ms)
         receive_lead_ms = lead_ms if receive_lead_ms is None else int(receive_lead_ms)
+        observed_ts_ms = int(time.time() * 1000) if observed_ts_ms is None else int(observed_ts_ms)
         leader_move_bps = float(leader_move_bps)
         follower_move_bps = float(follower_move_bps)
         key = (symbol.upper(), leader.lower(), follower.lower(), direction.upper())
@@ -143,6 +146,7 @@ class LatencyEdgeDetector:
             same_direction_ratio=round(same_ratio, 4),
             persistence_ratio=round(persistence_ratio, 4),
             eligible=eligible,
+            observed_ts_ms=observed_ts_ms,
         )
 
     def observe_event(self, event: object) -> LatencyObservation:

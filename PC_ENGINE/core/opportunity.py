@@ -22,6 +22,9 @@ class OpportunityScore:
     reason: str
     consensus_bonus: float = 0.0
     consensus: bool = False
+    latency_bonus: float = 0.0
+    latency_edge_bps: float = 0.0
+    latency_freshness: float = 0.0
 
 
 class PaperOpportunityEngine:
@@ -47,6 +50,11 @@ class PaperOpportunityEngine:
         self._stats_mtime = 0.0
         self._stats: list[SignatureStat] = []
         self.consensus = PaperLearningConsensus(settings)
+        self.latency_weight = max(0.0, float(settings.get("latency_weight", 0.15)))
+        self.latency_max_bonus = max(0.0, min(0.30, float(settings.get("latency_max_bonus", 0.15))))
+        self.latency_stale_after_ms = max(100, int(settings.get("latency_stale_after_ms", 1000)))
+        self.latency_min_edge_bps = max(0.1, float(settings.get("latency_min_edge_bps", 1.0)))
+        self.latency_path = Path(settings.get("latency_path", "PC_ENGINE/data/radar/websocket_latency_edges.jsonl"))
 
     def _load_stats(self) -> None:
         try:
@@ -71,6 +79,37 @@ class PaperOpportunityEngine:
         self._stats = rows
         self._stats_mtime = mtime
 
+
+    def _latest_latency_edge(self, symbol: str, now_ms: int, direction: str = "UP") -> dict | None:
+        try:
+            with self.latency_path.open("r", encoding="utf-8") as handle:
+                handle.seek(0, 2)
+                size = handle.tell()
+                handle.seek(max(0, size - 131072))
+                lines = handle.read().splitlines()
+        except (FileNotFoundError, OSError):
+            return None
+        for line in reversed(lines):
+            try:
+                row = json.loads(line)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if str(row.get("symbol", "")).upper() != symbol.upper():
+                continue
+            if str(row.get("direction", "")).upper() != direction.upper():
+                continue
+            if not bool(row.get("eligible", False)):
+                continue
+            observed_ts_ms = int(row.get("observed_ts_ms", 0) or 0)
+            if not observed_ts_ms:
+                continue
+            age_ms = max(0, now_ms - observed_ts_ms)
+            if age_ms > self.latency_stale_after_ms:
+                return None
+            row["_freshness"] = max(0.0, 1.0 - age_ms / self.latency_stale_after_ms)
+            return row
+        return None
+
     def score(
         self,
         *,
@@ -93,6 +132,9 @@ class PaperOpportunityEngine:
 
         learning_bonus = 0.0
         consensus_bonus = 0.0
+        latency_bonus = 0.0
+        latency_edge_bps = 0.0
+        latency_freshness = 0.0
         consensus_ok = False
         learning_reason = "sem aprendizagem elegível"
         if state:
@@ -123,9 +165,21 @@ class PaperOpportunityEngine:
         else:
             freshness = 0.0
 
-        final = max(0.0, min(1.0, base + learning_bonus + consensus_bonus - cost_penalty))
+        latency_edge = self._latest_latency_edge(symbol, now_ms, "UP")
+        if latency_edge is not None:
+            latency_edge_bps = max(0.0, float(latency_edge.get("net_expected_edge_bps", 0.0)))
+            latency_freshness = float(latency_edge.get("_freshness", 0.0))
+            edge_strength = max(0.0, min(1.0, latency_edge_bps / self.latency_min_edge_bps))
+            persistence = max(0.0, min(1.0, float(latency_edge.get("persistence_ratio", 0.0))))
+            same_direction = max(0.0, min(1.0, float(latency_edge.get("same_direction_ratio", 0.0))))
+            latency_bonus = min(
+                self.latency_max_bonus,
+                self.latency_weight * edge_strength * persistence * same_direction * latency_freshness,
+            )
+
+        final = max(0.0, min(1.0, base + learning_bonus + consensus_bonus + latency_bonus - cost_penalty))
         confidence = max(0.0, min(1.0, 0.65 * base + 0.35 * (1.0 if learning_bonus > 0 else 0.0)))
-        reason = f"estratégia={base:.3f}; {learning_reason}; custo/spread={cost_penalty:.3f}"
+        reason = f"estratégia={base:.3f}; {learning_reason}; latency={latency_edge_bps:.2f}bps/{latency_freshness:.2f}; custo/spread={cost_penalty:.3f}"
         return OpportunityScore(
             symbol=symbol,
             score=round(final, 6),
@@ -138,4 +192,7 @@ class PaperOpportunityEngine:
             reason=reason,
             consensus_bonus=round(consensus_bonus, 6),
             consensus=consensus_ok,
+            latency_bonus=round(latency_bonus, 6),
+            latency_edge_bps=round(latency_edge_bps, 4),
+            latency_freshness=round(latency_freshness, 6),
         )
