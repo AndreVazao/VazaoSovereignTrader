@@ -88,6 +88,28 @@ class CompoundingController:
             status=status,
         )
 
+    def tier_for_equity(self, *, total_equity: float, seed_capital: float = 1.0, growth_factor: float = 10.0) -> float:
+        """Return the current global compounding tier."""
+        equity = max(0.0, float(total_equity))
+        tier = float(seed_capital)
+        factor = float(growth_factor)
+        if tier <= 0 or factor <= 1:
+            raise ValueError("seed_capital must be positive and growth_factor > 1")
+        while equity >= tier * factor:
+            tier *= factor
+        return round(tier, 8)
+
+    def next_global_base(self, *, total_equity: float, current_base: float, growth_factor: float = 10.0) -> float:
+        """Advance the common base by powers of the configured growth factor."""
+        equity = max(0.0, float(total_equity))
+        base = float(current_base)
+        factor = float(growth_factor)
+        if base <= 0 or factor <= 1:
+            raise ValueError("current_base must be positive and growth_factor > 1")
+        while equity >= base * factor:
+            base *= factor
+        return round(base, 8)
+
     def next_trade_equity(self, *, current_equity: float, realized_pnl: float) -> float:
         """Return the equity base after a completed trade.
 
