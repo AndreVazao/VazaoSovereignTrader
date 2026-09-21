@@ -1174,7 +1174,7 @@ class SovereignEngine:
             price = float(ticker.get("last") or 0.0)
             if price <= 0:
                 continue
-            notional = min(decision.max_notional, self.risk.position_notional(equity, signal.stop_pct))
+            adaptive_cfg = self.config.get("risk", {}).get("adaptive_risk", {})\n            adaptive_horizon = int(adaptive_cfg.get("horizon_seconds", 5))\n            adaptive_notional, adaptive_snapshot = self.risk.adaptive_position_notional_auto(\n                equity, signal.stop_pct, strategy_id="trend_ema_atr", symbol=symbol,\n                regime=signal.regime, horizon_seconds=adaptive_horizon, action="BUY",\n            )\n            notional = min(decision.max_notional, adaptive_notional)\n            self.log("ADAPTIVE_RISK_SIZING", {\n                "symbol": symbol, "context_key": adaptive_snapshot.context_key,\n                "multiplier": adaptive_snapshot.multiplier, "eligible": adaptive_snapshot.eligible,\n                "reason": adaptive_snapshot.reason, "samples": adaptive_snapshot.samples,\n            })
             if notional <= 0:
                 continue
             qty = notional / price
