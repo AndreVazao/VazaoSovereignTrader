@@ -67,9 +67,9 @@ class LatencyEdgeDetector:
         follower: str,
         direction: str,
         lead_ms: int,
-        receive_lead_ms: int | None = None,
-        leader_move_bps: float = 0.0,
+        leader_move_bps: float,
         follower_move_bps: float,
+        receive_lead_ms: int | None = None,
     ) -> LatencyObservation:
         lead_ms = int(lead_ms)
         receive_lead_ms = lead_ms if receive_lead_ms is None else int(receive_lead_ms)
