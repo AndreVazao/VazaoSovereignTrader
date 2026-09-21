@@ -158,10 +158,10 @@ class PaperOpportunityEngine:
         state: dict | None,
         now_ms: int | None = None,
     ) -> OpportunityScore:
-        if not self.enabled or action != "BUY":
+        normalized_action = str(action).upper()\n        if not self.enabled or normalized_action not in {"BUY", "SELL"}:
             return OpportunityScore(
                 symbol, 0.0, 0.0, action, max(0.0, min(1.0, strategy_score)),
-                0.0, 0.0, 0.0, "sem oportunidade BUY",
+                0.0, 0.0, 0.0, "sem oportunidade BUY/SELL",
             )
 
         now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
@@ -236,7 +236,7 @@ class PaperOpportunityEngine:
             symbol=symbol,
             score=round(final, 6),
             confidence=round(confidence, 6),
-            action=action,
+            action=normalized_action,
             strategy_score=round(base, 6),
             learning_bonus=round(learning_bonus, 6),
             cost_penalty=round(cost_penalty, 6),
