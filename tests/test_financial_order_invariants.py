@@ -40,3 +40,20 @@ def test_financial_invariant_uses_incremental_notional_for_partial_fill():
     delta_qty = 1.0 - 0.4
     delta_notional = final_cost - first_cost
     assert abs(delta_notional / delta_qty - (62.0 / 0.6)) < 1e-12
+
+
+def test_financial_invariant_blocks_negative_fee_in_fee_list():
+    result = _engine()._validate_order_financial_invariant(
+        {
+            "cost": 100.0,
+            "fees": [
+                {"cost": 0.1, "currency": "USDT"},
+                {"cost": -0.01, "currency": "USDT"},
+            ],
+        },
+        "BTC/USDT",
+        1.0,
+        100.0,
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "negative_fee"
