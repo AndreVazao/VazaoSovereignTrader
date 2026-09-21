@@ -71,7 +71,7 @@ def test_funding_plan_moves_only_surplus_above_current_base():
         "owner_id": "andre",
         "source_venue": "binance",
         "destination_venue": "bingx",
-        "target_base": 1.0,
-        "amount": 4.0,
+        "target_base": 10.0,
+        "amount": 5.0,
         "reason": "GLOBAL_TIER_CAPITALIZATION",
     }]
