@@ -36,3 +36,21 @@ def test_engine_does_not_recover_verified_browser_order(tmp_path):
     engine.log = lambda *args, **kwargs: None
     engine._recover_browser_submissions()
     assert engine.state.pending_orders == {}
+
+
+def test_engine_recovers_authorized_browser_order_without_external_id(tmp_path):
+    ledger = BrowserExecutionLedger(tmp_path / "browser.jsonl")
+    intent = ExecutionIntent("owner-a", "fake", "acct-a", "BUY", "BTC/USDT", 0.25, ExecutionMethod.BROWSER, "browser-idem-authorized")
+    ledger.append(intent=intent, state="SUBMISSION_AUTHORIZED", external_id=None, page_fingerprint="p1", context_fingerprint="c1")
+
+    engine = object.__new__(SovereignEngine)
+    engine.browser_execution_ledger = ledger
+    engine.state = RuntimeState(status="OFF", mode="PAPER")
+    engine._enter_safe_state = lambda reason: setattr(engine.state, "status", "SAFE_MODE")
+    engine.log = lambda *args, **kwargs: None
+    engine._recover_browser_submissions()
+
+    recovered = engine.state.pending_orders["browser-client:browser-idem-authorized"]
+    assert recovered["client_order_id"] == "browser-idem-authorized"
+    assert recovered["browser_execution"] is True
+    assert engine.state.status == "SAFE_MODE"

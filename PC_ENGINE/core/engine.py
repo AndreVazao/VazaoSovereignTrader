@@ -296,14 +296,15 @@ class SovereignEngine:
             return
         for record in submissions:
             order_id = str(record.external_id or "").strip()
-            if not order_id or order_id in self.state.pending_orders:
+            recovery_id = order_id or ("browser-client:" + record.idempotency_key)
+            if recovery_id in self.state.pending_orders:
                 continue
             side = str(record.action or "").lower()
             if side not in {"buy", "sell"}:
                 self._enter_safe_state("critical_runtime_condition")
                 self.log("BROWSER_RECOVERY_INVALID_SIDE", {"idempotency_key": record.idempotency_key, "side": side})
                 continue
-            self.state.pending_orders[order_id] = {
+            self.state.pending_orders[recovery_id] = {
                 "symbol": record.symbol,
                 "side": side,
                 "requested_qty": float(record.quantity),
@@ -318,7 +319,7 @@ class SovereignEngine:
                 "account_id": record.account_id,
             }
             self._enter_safe_state("critical_runtime_condition")
-            self.log("BROWSER_PENDING_ORDER_RECOVERED", {"order_id": order_id, "symbol": record.symbol, "side": side, "idempotency_key": record.idempotency_key})
+            self.log("BROWSER_PENDING_ORDER_RECOVERED", {"order_id": order_id, "recovery_id": recovery_id, "symbol": record.symbol, "side": side, "idempotency_key": record.idempotency_key})
 
     def _persist_recovery(self) -> None:
         self.recovery.save_positions(
@@ -926,7 +927,15 @@ class SovereignEngine:
                 continue
             try:
                 try:
-                    raw = exchange.fetch_order(order_id, symbol)
+                    client_order_id = str(item.get("client_order_id") or "").strip()
+                    if item.get("browser_execution") and client_order_id and order_id.startswith("browser-client:"):
+                        raw = exchange.fetch_order_by_client_order_id(client_order_id, symbol)
+                        self.log("BROWSER_PENDING_ORDER_RESOLVED_BY_CLIENT_ID", {
+                            "order_id": order_id, "symbol": symbol,
+                            "client_order_id": client_order_id,
+                        })
+                    else:
+                        raw = exchange.fetch_order(order_id, symbol)
                 except Exception as fetch_exc:
                     # Browser submissions have a durable client-order id. If the
                     # browser's external id is not accepted by the exchange's

@@ -138,3 +138,24 @@ def test_non_browser_pending_does_not_use_client_id_fallback():
     engine._reconcile_pending_orders()
     assert exchange.client_lookup_calls == 0
     assert "order-legacy" in engine.state.pending_orders
+
+
+def test_browser_pending_without_external_id_uses_client_order_id():
+    exchange = FakeExchange(client_raw={
+        "id": "exchange-order-10", "symbol": "ETH/USDT", "side": "buy", "status": "closed",
+        "filled": 2.0, "average": 50.0, "cost": 100.0,
+        "fee": {"currency": "USDT", "cost": 0.1}, "clientOrderId": "browser-key-10",
+    })
+    engine = _engine(exchange)
+    engine.state.pending_orders = {
+        "browser-client:browser-key-10": {
+            "venue_id": "binance", "symbol": "ETH/USDT", "side": "buy", "requested_qty": 2.0,
+            "known_filled_qty": 0.0, "known_fee": 0.0, "known_quote_notional": 0.0, "known_fill_price": 0.0,
+            "client_order_id": "browser-key-10", "browser_execution": True,
+            "stop_pct": 0.02, "take_profit_pct": 0.04,
+        }
+    }
+    engine._reconcile_pending_orders()
+    assert exchange.fetch_order_calls == 0
+    assert exchange.client_lookup_calls == 1
+    assert "browser-client:browser-key-10" not in engine.state.pending_orders
