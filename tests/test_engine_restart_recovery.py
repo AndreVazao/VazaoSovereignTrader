@@ -45,3 +45,17 @@ def test_paper_position_survives_process_restart(tmp_path, monkeypatch):
     assert second.state.pending_orders == {}
     assert second.state.execution_intents == {}
     assert second.state.status != "SAFE_MODE"
+
+
+def test_corrupt_recovery_state_enters_safe_mode(tmp_path, monkeypatch):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    state_path = tmp_path / "data" / "owners" / "paper-restart-owner" / "runtime_state.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text("{broken-json", encoding="utf-8")
+
+    engine = SovereignEngine(config)
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.operational["recovery_state_corrupt"] is True
+    assert engine.state.operational["recovery_error"]
