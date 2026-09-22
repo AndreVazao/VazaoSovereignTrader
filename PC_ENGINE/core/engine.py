@@ -434,7 +434,7 @@ class SovereignEngine:
 
     def _enter_real_fail_safe(self, reason: str, data: dict | None = None) -> None:
         """Leave REAL immediately on a critical runtime condition."""
-        if self.mode != "REAL":
+        if getattr(self, "mode", "PAPER") != "REAL":
             self.state.status = "SAFE_MODE"
             self.real_operational = False
             return
@@ -460,7 +460,7 @@ class SovereignEngine:
         self.log("REAL_FAIL_SAFE", payload)
 
     def _enter_safe_state(self, reason: str, data: dict | None = None) -> None:
-        if self.mode == "REAL":
+        if getattr(self, "mode", "PAPER") == "REAL":
             self._enter_real_fail_safe(reason, data)
         else:
             self.state.status = "SAFE_MODE"
