@@ -295,7 +295,7 @@ class SovereignEngine:
         )
 
     def _record_financial_fill(self, side: str, symbol: str, qty: float, quote_notional: float, fee: float) -> None:
-        if self.paper or qty <= 0 or quote_notional < 0 or fee < 0:
+        if getattr(self, "paper", False) or qty <= 0 or quote_notional < 0 or fee < 0:
             return
         base_asset = str(symbol).split("/", 1)[0]
         financial = self.state.financial_account
@@ -427,10 +427,16 @@ class SovereignEngine:
 
     def log(self, message: str, data: dict | None = None) -> None:
         row = message if data is None else f"{message}: {data}"
-        with self.lock:
+        lock = getattr(self, "lock", None)
+        if lock is None:
+            lock = threading.RLock()
+            self.lock = lock
+        with lock:
             self.state.logs.append(row)
             self.state.logs = self.state.logs[-100:]
-        self.ledger.event(message, data or {})
+        ledger = getattr(self, "ledger", None)
+        if ledger is not None and hasattr(ledger, "event"):
+            ledger.event(message, data or {})
 
     def _enter_real_fail_safe(self, reason: str, data: dict | None = None) -> None:
         """Leave REAL immediately on a critical runtime condition."""
@@ -822,7 +828,7 @@ class SovereignEngine:
         return max(0.0, total)
 
     def _validate_order_financial_invariant(self, raw: dict, symbol: str, filled_qty: float, average_price: float) -> dict:
-        cfg = self.config.get("reconciliation", {})
+        cfg = getattr(self, "config", {}).get("reconciliation", {})
         tolerance_pct = max(0.0, float(cfg.get("financial_relative_tolerance", 0.002)))
         cost = raw.get("cost")
         if cost is not None:
@@ -1031,7 +1037,7 @@ class SovereignEngine:
                         net_pnl = gross_pnl - allocated_entry_fee - fee_delta
                         pnl_pct = net_pnl / (position.entry * delta) if position.entry > 0 and delta > 0 else 0.0
                         self.risk.record_trade_result(symbol, pnl_pct)
-                        self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
+                        risk_state = getattr(self.risk, "state", None)\n                        drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))\n                        self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
                         self.ledger.trade({
