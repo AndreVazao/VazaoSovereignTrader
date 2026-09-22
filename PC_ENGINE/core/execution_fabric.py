@@ -91,6 +91,8 @@ class ExecutionFabric:
         symbol: str,
         quantity: float,
         idempotency_key: str,
+        stop_pct: float | None = None,
+        take_profit_pct: float | None = None,
     ) -> ExecutionIntent | None:
         method = self.select_method(target)
         if method is None or quantity <= 0 or not idempotency_key.strip():
@@ -104,6 +106,8 @@ class ExecutionFabric:
             quantity=float(quantity),
             method=method,
             idempotency_key=idempotency_key.strip(),
+            stop_pct=None if stop_pct is None else float(stop_pct),
+            take_profit_pct=None if take_profit_pct is None else float(take_profit_pct),
         )
 
     def execute(self, intent: ExecutionIntent) -> ExecutionResult:
