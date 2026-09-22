@@ -25,6 +25,7 @@ from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
 from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
 from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.storage.ledger import Ledger
+from PC_ENGINE.execution.browser_execution_ledger import BrowserExecutionLedger
 from PC_ENGINE.research.autonomous import AutonomousResearchWorker
 from PC_ENGINE.research.worker import ResearchWorker
 from PC_ENGINE.core.shared_intelligence import SharedIntelligenceStore
@@ -109,6 +110,7 @@ class SovereignEngine:
         )
         self.order_manager = OrderManager(self.rules, self.paper_broker)
         self.recovery = RecoveryManager(state_path=self.owner_context.private_path("runtime_state.json"))
+        self.browser_execution_ledger = BrowserExecutionLedger(self.owner_context.private_path("execution/browser.jsonl"))
         self.watchdog = Watchdog()
         self.ai_council = DisabledAICouncil()
         self.champion = ChampionChallenger()
@@ -268,6 +270,7 @@ class SovereignEngine:
             self.state.financial_account.update(financial_account)
         self.state.pending_orders.update(pending)
         self.state.execution_intents.update(intents)
+        self._recover_browser_submissions()
         self.order_manager.restore_order_guards(raw_state.get("order_guards", {}))
         if pending:
             self._enter_safe_state("critical_runtime_condition")
@@ -284,6 +287,38 @@ class SovereignEngine:
         if recovered:
             self.state.open_positions.update(recovered)
             self.log("RECOVERY_POSITIONS_LOADED", {"symbols": list(recovered.keys())})
+
+    def _recover_browser_submissions(self) -> None:
+        """Promote durable browser submissions into normal pending-order recovery."""
+        try:
+            submissions = self.browser_execution_ledger.pending_submissions()
+        except Exception:
+            return
+        for record in submissions:
+            order_id = str(record.external_id or "").strip()
+            if not order_id or order_id in self.state.pending_orders:
+                continue
+            side = str(record.action or "").lower()
+            if side not in {"buy", "sell"}:
+                self._enter_safe_state("critical_runtime_condition")
+                self.log("BROWSER_RECOVERY_INVALID_SIDE", {"idempotency_key": record.idempotency_key, "side": side})
+                continue
+            self.state.pending_orders[order_id] = {
+                "symbol": record.symbol,
+                "side": side,
+                "requested_qty": float(record.quantity),
+                "known_filled_qty": 0.0,
+                "known_fill_price": 0.0,
+                "known_quote_notional": 0.0,
+                "known_fee": 0.0,
+                "client_order_id": record.idempotency_key,
+                "created_ts": record.recorded_at_ms / 1000.0,
+                "browser_execution": True,
+                "venue_id": record.venue_id,
+                "account_id": record.account_id,
+            }
+            self._enter_safe_state("critical_runtime_condition")
+            self.log("BROWSER_PENDING_ORDER_RECOVERED", {"order_id": order_id, "symbol": record.symbol, "side": side, "idempotency_key": record.idempotency_key})
 
     def _persist_recovery(self) -> None:
         self.recovery.save_positions(
