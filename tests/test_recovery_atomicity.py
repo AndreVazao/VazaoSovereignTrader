@@ -82,3 +82,22 @@ def test_invalid_recovery_schema_is_detectable(tmp_path):
 
     assert "recovery_error" in state
     assert "positions" in state["recovery_error"]
+
+
+def test_risk_state_survives_recovery_snapshot(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    manager = RecoveryManager(state_path=state_path)
+    risk_state = {
+        "pnl_today_pct": -0.0125,
+        "pnl_week_pct": -0.021,
+        "drawdown_pct": -0.01,
+        "equity_peak": 1000.0,
+        "kill_until": 12345.0,
+        "symbol_loss_streak": {"BTC/USDT": 2},
+        "symbol_cooldown_until": {"BTC/USDT": 12346.0},
+    }
+    manager.save_positions({}, risk_state=risk_state)
+
+    recovered = RecoveryManager(state_path=state_path).load_state()
+
+    assert recovered["risk_state"] == risk_state

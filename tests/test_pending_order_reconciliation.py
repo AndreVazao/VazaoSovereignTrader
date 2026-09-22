@@ -16,8 +16,23 @@ class FakeExchange:
 
 
 class FakeRecovery:
-    def save_positions(self, positions, pending_orders=None, order_guards=None, execution_intents=None, financial_account=None):
-        self.saved = (positions, pending_orders, order_guards, execution_intents)
+    def save_positions(
+        self,
+        positions,
+        pending_orders=None,
+        order_guards=None,
+        execution_intents=None,
+        financial_account=None,
+        risk_state=None,
+    ):
+        self.saved = (
+            positions,
+            pending_orders,
+            order_guards,
+            execution_intents,
+            financial_account,
+            risk_state,
+        )
 
 
 class FakeLedger:
@@ -41,6 +56,9 @@ class FakeRisk:
     def record_trade_result(self, symbol, pnl_pct):
         pass
 
+    def snapshot_state(self):
+        return {}
+
 
 class FakeChampion:
     def record(self, *args, **kwargs):
@@ -59,6 +77,7 @@ def make_engine(order, position, pending):
     engine.risk = FakeRisk()
     engine.champion = FakeChampion()
     engine.order_manager = type("OrderManagerStub", (), {"export_order_guards": lambda self: {}})()
+    engine.paper = True
     return engine
 
 
@@ -73,7 +92,6 @@ def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
             "requested_qty": 0.5,
             "known_filled_qty": 0.2,
             "known_fill_price": 100.0,
-            "requested_qty": 0.5,
             "known_quote_notional": 20.0,
             "known_fee": 0.0,
         }},
@@ -96,7 +114,6 @@ def test_reconcile_pending_sell_reduces_position_by_unseen_fill_delta():
             "requested_qty": 0.5,
             "known_filled_qty": 0.2,
             "known_fill_price": 109.0,
-            "requested_qty": 0.5,
             "known_quote_notional": 21.8,
             "known_fee": 0.0,
         }},

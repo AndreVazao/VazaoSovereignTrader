@@ -275,6 +275,16 @@ class SovereignEngine:
         financial_account = raw_state.get("financial_account", {})
         if isinstance(financial_account, dict):
             self.state.financial_account.update(financial_account)
+        risk_state = raw_state.get("risk_state", {})
+        if risk_state:
+            try:
+                self.risk.restore_state(risk_state)
+            except Exception as exc:
+                self._enter_safe_state("recovery_state_corrupt")
+                self.state.operational["recovery_state_corrupt"] = True
+                self.state.operational["recovery_error"] = f"risk_state: {type(exc).__name__}: {exc}"
+                self.log("RECOVERY_RISK_STATE_CORRUPT", {"error": str(exc)})
+                return
         self.state.pending_orders.update(pending)
         self.state.execution_intents.update(intents)
         self._recover_browser_submissions()
@@ -337,6 +347,7 @@ class SovereignEngine:
             self.order_manager.export_order_guards(),
             self.state.execution_intents,
             self.state.financial_account,
+            self.risk.snapshot_state(),
         )
 
     def _record_financial_fill(self, side: str, symbol: str, qty: float, quote_notional: float, fee: float) -> None:
