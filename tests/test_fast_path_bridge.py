@@ -1,6 +1,7 @@
 from PC_ENGINE.core.fast_path import FastPathSignal
 from PC_ENGINE.radar.fast_path_bridge import FastPathWebSocketBridge
 from PC_ENGINE.radar.websocket_radar import MarketEvent
+import time
 
 
 def _event(price_before=100.0, price=101.0):
@@ -10,8 +11,8 @@ def _event(price_before=100.0, price=101.0):
         price=price,
         quantity=1.0,
         side="BUY",
-        exchange_ts_ms=1000,
-        local_ts_ms=1000,
+        exchange_ts_ms=int(time.time() * 1000),
+        local_ts_ms=int(time.time() * 1000),
         local_receive_latency_ms=0,
         price_before=price_before,
     )
