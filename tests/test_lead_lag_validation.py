@@ -6,7 +6,7 @@ from PC_ENGINE.radar.lead_lag_validation import LeadLagValidationEngine
 def test_validation_separates_time_windows(tmp_path: Path):
     candidates=[]; events=[]
     for i in range(20):
-        base=1000+i*1000
+        base=1000+i*2000
         candidates.append({"symbol":"BTC/USDT","leader":"binance","follower":"okx","direction":"UP","leader_exchange_ts_ms":base,"follower_exchange_ts_ms":base+100,"exchange_lag_ms":100})
         events.extend([
             {"exchange":"okx","symbol":"BTC/USDT","exchange_ts_ms":base+100,"price":100.0},
