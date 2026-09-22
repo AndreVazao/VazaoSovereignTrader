@@ -166,13 +166,13 @@ def test_terminal_reconcile_crash_after_marker_persist_recovers_without_duplicat
     real_persist = first._persist_recovery
     persist_calls = {"count": 0}
 
-    def crash_on_terminal_removal_persist():
+    def crash_after_marker_persist():
         persist_calls["count"] += 1
-        if persist_calls["count"] == 2:
-            raise RuntimeError("simulated process crash before terminal pending-order removal")
-        return real_persist()
+        real_persist()
+        if persist_calls["count"] == 1:
+            raise RuntimeError("simulated process crash after durable fill marker")
 
-    monkeypatch.setattr(first, "_persist_recovery", crash_on_terminal_removal_persist)
+    monkeypatch.setattr(first, "_persist_recovery", crash_after_marker_persist)
     first._reconcile_pending_orders()
 
     # The first durable snapshot contains the fully applied fill, but the
