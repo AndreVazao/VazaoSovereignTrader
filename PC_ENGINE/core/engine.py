@@ -899,17 +899,50 @@ class SovereignEngine:
             "relative_tolerance": tolerance_pct,
         }
 
+    def _exchange_for_pending_order(self, item: dict):
+        """Resolve a pending order to its recorded venue when available."""
+        exchanges = getattr(self, "exchanges", {}) or {}
+        venue_id = str(item.get("venue_id") or "").strip()
+        if venue_id:
+            exchange = exchanges.get(venue_id)
+            if exchange is None:
+                self._enter_safe_state("critical_runtime_condition")
+                self.log("PENDING_ORDER_VENUE_UNAVAILABLE", {
+                    "venue_id": venue_id,
+                    "symbol": str(item.get("symbol") or ""),
+                    "order_id": str(item.get("external_id") or ""),
+                })
+            return exchange
+        return self._main_exchange()
+
     def _reconcile_pending_orders(self) -> None:
         """Reconcile exchange fills idempotently, including partial fills and fees."""
-        exchange = self._main_exchange()
-        if exchange is None:
-            return
         for order_id, item in list(self.state.pending_orders.items()):
+            exchange = self._exchange_for_pending_order(item)
+            if exchange is None:
+                continue
             symbol = str(item.get("symbol", ""))
             if not order_id or not symbol:
                 continue
             try:
-                raw = exchange.fetch_order(order_id, symbol)
+                try:
+                    raw = exchange.fetch_order(order_id, symbol)
+                except Exception as fetch_exc:
+                    # Browser submissions have a durable client-order id. If the
+                    # browser's external id is not accepted by the exchange's
+                    # fetch_order endpoint, resolve it through the client-order
+                    # lookup before declaring the order unreconciled.
+                    client_order_id = str(item.get("client_order_id") or "").strip()
+                    if not item.get("browser_execution") or not client_order_id:
+                        raise
+                    try:
+                        raw = exchange.fetch_order_by_client_order_id(client_order_id, symbol)
+                        self.log("BROWSER_PENDING_ORDER_RESOLVED_BY_CLIENT_ID", {
+                            "order_id": order_id, "symbol": symbol,
+                            "client_order_id": client_order_id,
+                        })
+                    except (NotImplementedError, LookupError):
+                        raise fetch_exc
                 expected_client_id = str(item.get("client_order_id") or "").strip()
                 returned_client_id = str(raw.get("clientOrderId") or raw.get("client_order_id") or "").strip()
                 if expected_client_id and returned_client_id != expected_client_id:
