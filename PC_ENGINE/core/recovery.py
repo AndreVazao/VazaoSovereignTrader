@@ -44,13 +44,14 @@ class RecoveryManager:
                 "execution_intents": payload.get("execution_intents", {}) if isinstance(payload, dict) else {},
                 "financial_account": payload.get("financial_account", {}) if isinstance(payload, dict) else {},
             }
-        except Exception:
+        except Exception as exc:
             return {
                 "positions": {},
                 "pending_orders": {},
                 "order_guards": {},
                 "execution_intents": {},
                 "financial_account": {},
+                "recovery_error": f"{type(exc).__name__}: {exc}",
             }
 
     def load_positions(self) -> Dict:

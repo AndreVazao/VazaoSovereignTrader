@@ -262,6 +262,13 @@ class SovereignEngine:
 
     def _load_recovery_state(self) -> None:
         raw_state = self.recovery.load_state()
+        recovery_error = str(raw_state.get("recovery_error", "")).strip()
+        if recovery_error:
+            self._enter_safe_state("recovery_state_corrupt")
+            self.state.operational["recovery_state_corrupt"] = True
+            self.state.operational["recovery_error"] = recovery_error
+            self.log("RECOVERY_STATE_CORRUPT", {"error": recovery_error})
+            return
         raw_positions = raw_state.get("positions", {})
         pending = raw_state.get("pending_orders", {})
         intents = raw_state.get("execution_intents", {})

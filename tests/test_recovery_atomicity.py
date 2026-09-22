@@ -28,3 +28,16 @@ def test_recovery_write_replaces_state_atomically(tmp_path):
     payload = json.loads(state_path.read_text(encoding="utf-8"))
     assert payload["positions"]["BTC/USDT"]["qty"] == 0.01
     assert payload["pending_orders"]["pending-1"]["side"] == "buy"
+
+
+def test_corrupt_recovery_state_is_detectable(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    state_path.write_text("{broken-json", encoding="utf-8")
+
+    manager = RecoveryManager(state_path=state_path)
+    state = manager.load_state()
+
+    assert state["positions"] == {}
+    assert state["pending_orders"] == {}
+    assert "recovery_error" in state
+    assert state["recovery_error"]
