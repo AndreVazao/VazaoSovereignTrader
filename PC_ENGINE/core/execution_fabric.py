@@ -33,6 +33,8 @@ class ExecutionIntent:
     quantity: float
     method: ExecutionMethod
     idempotency_key: str
+    stop_pct: float | None = None
+    take_profit_pct: float | None = None
 
 
 @dataclass(frozen=True)
