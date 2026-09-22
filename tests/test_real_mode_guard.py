@@ -152,3 +152,12 @@ def test_real_fail_safe_switches_to_paper_and_disarms_guard():
     assert engine.state.status == "SAFE_MODE"
     assert engine.real_fail_safe_reason == "watchdog_exchange_failure"
     assert not engine.real_mode_guard.snapshot()["armed"]
+
+
+def test_engine_startup_mode_always_demotes_configured_real_to_paper():
+    from PC_ENGINE.core.engine import SovereignEngine
+
+    assert SovereignEngine._startup_mode("REAL") == "PAPER"
+    assert SovereignEngine._startup_mode("real") == "PAPER"
+    assert SovereignEngine._startup_mode("PAPER") == "PAPER"
+    assert SovereignEngine._startup_mode(None) == "PAPER"
