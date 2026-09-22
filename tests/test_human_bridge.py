@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
 
 def test_request_survives_new_bridge_instance(tmp_path: Path):
@@ -57,7 +58,7 @@ def test_session_binding_and_expiry_metadata(tmp_path):
     )
     assert item.session_id == "session-a"
     assert item.expires_at > item.created_at
-    assert bridge.respond(item.request_id, action="fill", values={"otp": "123456"})
+    assert bridge.respond(item.request_id, action="fill", values={"otp": "123456"}, claim_token=bridge.claim_token(item.request_id))
     assert bridge.get(item.request_id).status == "RESPONDED"
 
 
