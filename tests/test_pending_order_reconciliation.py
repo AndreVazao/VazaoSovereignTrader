@@ -58,6 +58,7 @@ def make_engine(order, position, pending):
     engine.ledger = FakeLedger()
     engine.risk = FakeRisk()
     engine.champion = FakeChampion()
+    engine.order_manager = type("OrderManagerStub", (), {"export_order_guards": lambda self: {}})()
     return engine
 
 
