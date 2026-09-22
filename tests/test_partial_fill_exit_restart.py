@@ -399,3 +399,49 @@ def test_pending_reconciliation_negative_financial_value_fails_closed(
     assert item["known_quote_notional"] == pytest.approx(0.0)
     assert item["known_fee"] == pytest.approx(0.0)
     assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    ("field", "raw_value"),
+    [
+        ("average", float("nan")),
+        ("average", float("inf")),
+        ("cost", float("nan")),
+        ("cost", float("inf")),
+        ("fee", {"cost": float("nan"), "currency": "USDT"}),
+        ("fee", {"cost": float("inf"), "currency": "USDT"}),
+    ],
+)
+def test_pending_reconciliation_nonfinite_financial_value_fails_closed(
+    tmp_path, monkeypatch, field, raw_value
+):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    engine.state.pending_orders["nonfinite-financial-1"] = _pending_exit()
+    engine._persist_recovery()
+
+    raw = {
+        "id": "nonfinite-financial-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "open",
+        "filled": 0.4,
+        "average": 105.0,
+        "cost": 42.0,
+        "fee": {"cost": 0.042, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    raw[field] = raw_value
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(raw))
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    item = engine.state.pending_orders["nonfinite-financial-1"]
+    assert item["known_filled_qty"] == pytest.approx(0.0)
+    assert item["known_quote_notional"] == pytest.approx(0.0)
+    assert item["known_fee"] == pytest.approx(0.0)
+    assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
