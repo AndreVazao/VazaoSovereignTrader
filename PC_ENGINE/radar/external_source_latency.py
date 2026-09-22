@@ -23,6 +23,7 @@ class SourceLatencyObservation:
     delta_bps: float
     same_direction: bool
     eligible: bool
+    observed_ts_ms: int
 
 
 @dataclass(frozen=True)
