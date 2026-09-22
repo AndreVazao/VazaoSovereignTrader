@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from PC_ENGINE.core.adaptive_risk import AdaptiveRiskController, AdaptiveRiskSnapshot
 from PC_ENGINE.core.adaptive_risk_evidence import AdaptiveRiskEvidenceStore
@@ -28,6 +28,26 @@ class RiskEngine:
         self.adaptive_evidence = AdaptiveRiskEvidenceStore(
             str(adaptive_cfg.get("outcome_path", "PC_ENGINE/data/radar/state_outcomes.jsonl"))
         )
+
+    def snapshot_state(self) -> dict:
+        state = asdict(self.state)
+        state["symbol_loss_streak"] = {str(k): int(v) for k, v in self.state.symbol_loss_streak.items()}
+        state["symbol_cooldown_until"] = {str(k): float(v) for k, v in self.state.symbol_cooldown_until.items()}
+        return state
+
+    def restore_state(self, raw: dict) -> None:
+        if not isinstance(raw, dict):
+            raise ValueError("risk_state must be an object")
+        restored = RiskState()
+        for name in ("pnl_today_pct", "pnl_week_pct", "drawdown_pct", "equity_peak", "kill_until"):
+            setattr(restored, name, float(raw.get(name, getattr(restored, name))))
+        streaks = raw.get("symbol_loss_streak", {})
+        cooldowns = raw.get("symbol_cooldown_until", {})
+        if not isinstance(streaks, dict) or not isinstance(cooldowns, dict):
+            raise ValueError("risk_state symbol maps must be objects")
+        restored.symbol_loss_streak.update({str(k): int(v) for k, v in streaks.items()})
+        restored.symbol_cooldown_until.update({str(k): float(v) for k, v in cooldowns.items()})
+        self.state = restored
 
     def update_equity(self, equity: float, starting_equity: float) -> None:
         if self.state.equity_peak <= 0:
@@ -73,13 +93,11 @@ class RiskEngine:
         independent_mean_net_bps: float = 0.0,
     ) -> tuple[float, AdaptiveRiskSnapshot]:
         base = self.position_notional(equity, stop_pct)
-        context = self.adaptive_risk.context_key(
-            strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds
-        )
+        context = self.adaptive_risk.context_key(strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)
         snapshot = self.adaptive_risk.evaluate(
             samples=samples, wins=wins, mean_net_bps=mean_net_bps,
-            drawdown_pct=max(0.0, -self.state.drawdown_pct),
-            context_key=context, lower_ci_bps=lower_ci_bps, evidence_age_ms=evidence_age_ms,
+            drawdown_pct=max(0.0, -self.state.drawdown_pct), context_key=context,
+            lower_ci_bps=lower_ci_bps, evidence_age_ms=evidence_age_ms,
             regime_stability=regime_stability, independent_samples=independent_samples,
             independent_mean_net_bps=independent_mean_net_bps,
         )
@@ -98,19 +116,13 @@ class RiskEngine:
         symbol: str = "unknown", regime: str | None = None, horizon_seconds: int | None = None,
         action: str = "BUY",
     ) -> tuple[float, AdaptiveRiskSnapshot]:
-        evidence = self.adaptive_evidence.lookup(
-            symbol=symbol, regime=regime, horizon_seconds=horizon_seconds, action=action
-        )
+        evidence = self.adaptive_evidence.lookup(symbol=symbol, regime=regime, horizon_seconds=horizon_seconds, action=action)
         if evidence is None:
-            return self.adaptive_position_notional(
-                equity, stop_pct, samples=0, wins=0, mean_net_bps=0.0,
-                strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds,
-            )
+            return self.adaptive_position_notional(equity, stop_pct, samples=0, wins=0, mean_net_bps=0.0, strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)
         return self.adaptive_position_notional(
-            equity, stop_pct, samples=evidence.samples, wins=evidence.wins,
-            mean_net_bps=evidence.mean_net_bps, strategy_id=strategy_id, symbol=symbol,
-            regime=regime, horizon_seconds=horizon_seconds, lower_ci_bps=evidence.lower_ci_bps,
-            evidence_age_ms=evidence.evidence_age_ms, regime_stability=evidence.regime_stability,
-            independent_samples=evidence.independent_samples,
+            equity, stop_pct, samples=evidence.samples, wins=evidence.wins, mean_net_bps=evidence.mean_net_bps,
+            strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds,
+            lower_ci_bps=evidence.lower_ci_bps, evidence_age_ms=evidence.evidence_age_ms,
+            regime_stability=evidence.regime_stability, independent_samples=evidence.independent_samples,
             independent_mean_net_bps=evidence.independent_mean_net_bps,
         )
