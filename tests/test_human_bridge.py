@@ -12,7 +12,7 @@ def test_request_survives_new_bridge_instance(tmp_path: Path):
 def test_secret_response_is_not_written_to_disk(tmp_path: Path):
     bridge = HumanInteractionBridge(str(tmp_path))
     item = bridge.create_request("x", "LOGIN", "Login", "Credenciais necessárias")
-    assert bridge.respond(item.request_id, action="fill", values={"password": "SUPER-SECRET"})
+    assert bridge.respond(item.request_id, action="fill", values={"password": "SUPER-SECRET"}, claim_token=bridge.claim_token(item.request_id))
     raw = (tmp_path / "requests.jsonl").read_text(encoding="utf-8")
     assert "SUPER-SECRET" not in raw
     assert bridge.consume_response(item.request_id)["values"]["password"] == "SUPER-SECRET"
@@ -23,7 +23,7 @@ def test_human_interaction_lifecycle(tmp_path):
     from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
     bridge = HumanInteractionBridge(str(tmp_path))
     item = bridge.create_request("binance", "OTP", "Codigo", "Introduz o codigo", fields=[{"name": "otp", "type": "secret"}])
-    assert bridge.respond(item.request_id, action="fill", values={"otp": "123456"})
+    assert bridge.respond(item.request_id, action="fill", values={"otp": "123456"}, claim_token=bridge.claim_token(item.request_id))
     assert bridge.mark_applied(item.request_id)
     assert bridge.mark_completed(item.request_id)
 
@@ -37,7 +37,7 @@ def test_response_can_be_peeked_without_consuming(tmp_path):
         "Introduz o codigo",
         session_id="browser-session-1",
     )
-    assert bridge.respond(item.request_id, action="press", values={"key": "Enter"})
+    assert bridge.respond(item.request_id, action="press", values={"key": "Enter"}, claim_token=bridge.claim_token(item.request_id))
     first = bridge.peek_response(item.request_id)
     second = bridge.peek_response(item.request_id)
     assert first == second
@@ -64,7 +64,7 @@ def test_session_binding_and_expiry_metadata(tmp_path):
 def test_responded_request_can_be_cancelled_and_secret_removed(tmp_path):
     bridge = HumanInteractionBridge(str(tmp_path))
     item = bridge.create_request("binance", "OTP", "Codigo", "Intervencao")
-    assert bridge.respond(item.request_id, action="fill", values={"otp": "SECRET"})
+    assert bridge.respond(item.request_id, action="fill", values={"otp": "SECRET"}, claim_token=bridge.claim_token(item.request_id))
     assert bridge.cancel(item.request_id)
     assert bridge.get(item.request_id).status == "CANCELLED"
     assert bridge.peek_response(item.request_id) is None
