@@ -16,7 +16,7 @@ def test_signature_learning_finds_positive_pattern():
     stats=StateSignatureLearningEngine(cost_bps=1,min_samples=5).evaluate(_states(), horizons_ms=(5000,)); exact=[r for r in stats if r.signature==StateSignature.build(_states()[0])]; assert exact and exact[0].eligible and exact[0].mean_net_bps>0
 
 def test_signature_learning_reverses_sell_direction():
-    stats=StateSignatureLearningEngine(cost_bps=1,min_samples=5).evaluate(_states("SELL"), horizons_ms=(5000,)); exact=[r for r in stats if r.signature==StateSignature.build(_states()[0])]; assert exact and exact[0].mean_net_bps<0
+    stats=StateSignatureLearningEngine(cost_bps=1,min_samples=5).evaluate(_states("SELL"), horizons_ms=(5000,)); exact=[r for r in stats if r.signature==StateSignature.build(_states("SELL")[0])]; assert exact and exact[0].mean_net_bps<0
 
 def test_rank_uses_fallback():
     states=_states(); engine=StateSignatureLearningEngine(cost_bps=1,min_samples=5); stats=engine.evaluate(states,horizons_ms=(5000,)); changed=dict(states[0]); changed["technical_score"]=-0.9; assert engine.rank(changed,stats,horizon_ms=5000) is not None
