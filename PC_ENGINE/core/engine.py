@@ -303,7 +303,7 @@ class SovereignEngine:
                 self._enter_safe_state("critical_runtime_condition")
                 self.log("BROWSER_RECOVERY_INVALID_SIDE", {"idempotency_key": record.idempotency_key, "side": side})
                 continue
-            self.state.pending_orders[order_id] = {
+            self.state.pending_orders[recovery_id] = {
                 "symbol": record.symbol,
                 "side": side,
                 "requested_qty": float(record.quantity),
@@ -318,7 +318,7 @@ class SovereignEngine:
                 "account_id": record.account_id,
             }
             self._enter_safe_state("critical_runtime_condition")
-            self.log("BROWSER_PENDING_ORDER_RECOVERED", {"order_id": order_id, "symbol": record.symbol, "side": side, "idempotency_key": record.idempotency_key})
+            self.log("BROWSER_PENDING_ORDER_RECOVERED", {"order_id": order_id, "recovery_id": recovery_id, "symbol": record.symbol, "side": side, "idempotency_key": record.idempotency_key})
 
     def _persist_recovery(self) -> None:
         self.recovery.save_positions(
