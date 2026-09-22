@@ -62,7 +62,7 @@ def run_execution_smoke_test() -> dict:
     # Duplicate protection is deterministic at OrderManager level even when
     # an exchange rejects metadata; the call must never become a real order.
     try:
-        manager.last_client_order["paper-smoke:BTC/USDT:buy:0.01"] = time.monotonic()
+        manager.last_client_order["paper-smoke:BTC/USDT:buy:0.01:100.0"] = time.monotonic()
         blocked = manager.buy(exchange, "BTC/USDT", 0.01, 100.0, paper=True)
         checks["duplicate_block"] = blocked.ok is False and "duplicate" in blocked.reason.lower()
     except Exception:
