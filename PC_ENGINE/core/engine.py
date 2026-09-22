@@ -296,7 +296,8 @@ class SovereignEngine:
             return
         for record in submissions:
             order_id = str(record.external_id or "").strip()
-            if not order_id or order_id in self.state.pending_orders:
+            recovery_id = order_id or ("browser-client:" + record.idempotency_key)
+            if recovery_id in self.state.pending_orders:
                 continue
             side = str(record.action or "").lower()
             if side not in {"buy", "sell"}:
