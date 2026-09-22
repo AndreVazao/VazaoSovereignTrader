@@ -77,3 +77,14 @@ def test_confirmed_state_recovers_missing_accounting_after_restart(tmp_path):
     assert bridge.reconcile(request=request).state == "CONFIRMED"
     assert accounting.expected_deltas(owner_id="andre") == {"binance": {"USDT": -10.0}, "bingx": {"USDT": 10.0}}
     assert adapter.calls == 1
+
+
+
+def test_unavailable_adapter_keeps_intent_planned(tmp_path):
+    bridge, request, adapter, states, accounting = _setup(tmp_path, enabled=True)
+    request = TransferExecutionRequest(request.intent, request.account_id, ExecutionMethod.BROWSER)
+    result = bridge.submit(request=request, real_authorized=True)
+    assert result.state == "PLANNED"
+    assert states.get(request.intent.intent_id, "andre") is None
+    assert accounting.snapshot(owner_id="andre")["entries"] == []
+    assert adapter.calls == 0
