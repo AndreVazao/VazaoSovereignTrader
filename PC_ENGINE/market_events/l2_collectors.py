@@ -76,7 +76,8 @@ class PublicL2WebSocketCollector:
             if data.get("e") != "depthUpdate":
                 return []
             ts = int(data["E"]) if data.get("E") is not None else None
-            sequence = int(data["u"]) if data.get("u") is not None else None\n            sequence_start = int(data["U"]) if data.get("U") is not None else None
+            sequence = int(data["u"]) if data.get("u") is not None else None
+            sequence_start = int(data["U"]) if data.get("U") is not None else None
             events.append(self._event(
                 venue=venue, symbol=symbol, event_type="delta",
                 sequence=sequence, sequence_start=sequence_start, exchange_ts_ms=ts, receive_ns=receive_ns,
