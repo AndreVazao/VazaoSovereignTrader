@@ -23,12 +23,7 @@ class BrowserExecutionRecord:
 
 
 class BrowserExecutionLedger:
-    """Append-only, owner-private browser execution journal.
-
-    A browser submission is never erased or rewritten. Repeated calls with the
-    same idempotency key return the latest known record, preventing a blind
-    second click after a timeout.
-    """
+    """Append-only, owner-private browser execution journal."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -61,7 +56,17 @@ class BrowserExecutionLedger:
         return list(latest.values())
 
     def pending_submissions(self) -> list[BrowserExecutionRecord]:
-        return [item for item in self.records() if item.state == "SUBMITTED" and item.external_id]
+        """Return browser actions that may have reached the exchange.
+
+        SUBMISSION_AUTHORIZED is included because a browser click can succeed
+        while the process loses the response before SUBMITTED is appended.
+        Recovery must then resolve the durable client id instead of clicking
+        again.
+        """
+        return [
+            item for item in self.records()
+            if item.state in {"SUBMISSION_AUTHORIZED", "SUBMITTED"}
+        ]
 
     def append(self, *, intent, state: str, external_id: str | None, page_fingerprint: str, context_fingerprint: str) -> BrowserExecutionRecord:
         if not intent.idempotency_key:
