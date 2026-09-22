@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import PC_ENGINE.core.engine as engine_module
 from PC_ENGINE.core.engine import Position, SovereignEngine
 
@@ -90,11 +92,7 @@ def test_partial_exit_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
         "fee": {"cost": 0.042, "currency": "USDT"},
         "clientOrderId": "client-exit-partial-1",
     }
-    monkeypatch.setattr(
-        first,
-        "_exchange_for_pending_order",
-        _exchange_for(first_raw),
-    )
+    monkeypatch.setattr(first, "_exchange_for_pending_order", _exchange_for(first_raw))
     first._reconcile_pending_orders()
 
     position = first.state.open_positions["BTC/USDT"]
@@ -105,8 +103,6 @@ def test_partial_exit_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
     assert first.state.pending_orders["exit-1"]["known_quote_notional"] == 42.0
     assert first.state.pending_orders["exit-1"]["known_fee"] == 0.042
 
-    # Recreate the engine from durable recovery state: the remaining 60% and
-    # the remaining entry fee must survive the restart exactly once.
     second = SovereignEngine(config)
     position = second.state.open_positions["BTC/USDT"]
     assert position.qty == 0.6
@@ -124,31 +120,19 @@ def test_partial_exit_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
         "fee": {"cost": 0.102, "currency": "USDT"},
         "clientOrderId": "client-exit-partial-1",
     }
-    monkeypatch.setattr(
-        second,
-        "_exchange_for_pending_order",
-        _exchange_for(second_raw),
-    )
+    monkeypatch.setattr(second, "_exchange_for_pending_order", _exchange_for(second_raw))
     second._reconcile_pending_orders()
 
     assert second.state.open_positions == {}
     assert second.state.pending_orders == {}
 
-    # The two deltas together represent the full exit:
-    # gross P&L = 0.4*(105-100) + 0.6*(101.666...-100) = 3.0
-    # entry fees = 0.10, exit fees = 0.102, net P&L = 2.798.
-    assert second.risk.state.pnl_today_pct == pytest.approx(
-        ((2.0 - 0.04 - 0.042) / 40.0)
-        + ((1.0 - 0.06 - 0.06) / 60.0)
-    )
-    assert second.risk.state.pnl_week_pct == pytest.approx(second.risk.state.pnl_today_pct)
+    expected_pnl_pct = ((2.0 - 0.04 - 0.042) / 40.0) + ((1.0 - 0.06 - 0.06) / 60.0)
+    assert second.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+    assert second.risk.state.pnl_week_pct == pytest.approx(expected_pnl_pct)
 
     # Terminal removal is durable: another reconciliation cannot book the
     # terminal fill or P&L again.
     second._reconcile_pending_orders()
     assert second.state.open_positions == {}
     assert second.state.pending_orders == {}
-    assert second.risk.state.pnl_today_pct == pytest.approx(
-        ((2.0 - 0.04 - 0.042) / 40.0)
-        + ((1.0 - 0.06 - 0.06) / 60.0)
-    )
+    assert second.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
