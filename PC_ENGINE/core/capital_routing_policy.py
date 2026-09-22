@@ -82,9 +82,6 @@ class CapitalRoutingPolicy:
             return False, "ROUTING_DISABLED"
         if not self.automatic_same_owner_transfer:
             return False, "AUTO_TRANSFER_DISABLED"
-        if self.require_destination_whitelist and not destination_whitelisted:
-            return False, "DESTINATION_NOT_WHITELISTED"
-
         if source_available_quote <= 0 or destination_required_quote <= 0:
             return False, "NO_CAPITAL_OR_NEED"
 
@@ -119,6 +116,9 @@ class CapitalRoutingPolicy:
 
         if amount <= estimated_transfer_cost_quote:
             return False, "TRANSFER_COST_TOO_HIGH"
+
+        if self.require_destination_whitelist and not destination_whitelisted:
+            return False, "DESTINATION_NOT_WHITELISTED"
 
         return True, "ELIGIBLE"
 
