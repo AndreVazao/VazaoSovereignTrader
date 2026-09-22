@@ -25,7 +25,7 @@ def proposal_factory(intent, observation):
 
 
 def intent():
-    return ExecutionIntent("owner-a", "binance", "acct-a", "BUY", "BTCUSDT", 0.01, ExecutionMethod.BROWSER, "idem-1")
+    return ExecutionIntent("owner-a", "binance", "acct-a", "BUY", "BTCUSDT", 0.01, ExecutionMethod.BROWSER, "idem-1", 0.02, 0.04)
 
 
 def test_browser_adapter_requires_independent_exchange_verification():
@@ -75,3 +75,19 @@ def test_browser_adapter_never_blindly_reclicks_existing_submission(tmp_path):
     assert result.status == "RECOVER_EXISTING_BROWSER_SUBMISSION"
     assert result.external_id == "order-1"
     assert driver.submissions == 0
+
+
+def test_browser_ledger_persists_risk_metadata(tmp_path):
+    ledger = BrowserExecutionLedger(tmp_path / "browser.jsonl")
+    item = ledger.append(
+        intent=intent(),
+        state="SUBMISSION_AUTHORIZED",
+        external_id=None,
+        page_fingerprint="page-1",
+        context_fingerprint="ctx-1",
+    )
+    assert item.stop_pct == 0.02
+    assert item.take_profit_pct == 0.04
+    restored = ledger.latest("idem-1")
+    assert restored.stop_pct == 0.02
+    assert restored.take_profit_pct == 0.04
