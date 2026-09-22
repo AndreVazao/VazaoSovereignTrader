@@ -37,13 +37,19 @@ class RecoveryManager:
             return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}, "financial_account": {}}
         try:
             payload = json.loads(self.state_path.read_text(encoding="utf-8"))
-            return {
-                "positions": payload.get("positions", {}) if isinstance(payload, dict) else {},
-                "pending_orders": payload.get("pending_orders", {}) if isinstance(payload, dict) else {},
-                "order_guards": payload.get("order_guards", {}) if isinstance(payload, dict) else {},
-                "execution_intents": payload.get("execution_intents", {}) if isinstance(payload, dict) else {},
-                "financial_account": payload.get("financial_account", {}) if isinstance(payload, dict) else {},
+            if not isinstance(payload, dict):
+                raise ValueError("recovery root must be a JSON object")
+            fields = {
+                "positions": payload.get("positions", {}),
+                "pending_orders": payload.get("pending_orders", {}),
+                "order_guards": payload.get("order_guards", {}),
+                "execution_intents": payload.get("execution_intents", {}),
+                "financial_account": payload.get("financial_account", {}),
             }
+            for name, value in fields.items():
+                if not isinstance(value, dict):
+                    raise ValueError(f"recovery field '{name}' must be an object")
+            return fields
         except Exception as exc:
             return {
                 "positions": {},
