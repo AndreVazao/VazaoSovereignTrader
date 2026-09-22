@@ -66,7 +66,7 @@ class CapitalTransferStateStore:
         item = CapitalTransferState(intent_id, owner_id, state, int(time.time() * 1000), external_reference, reason)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(item), sort_keys=True) + "\\n")
+            handle.write(json.dumps(asdict(item), sort_keys=True) + "\n")
         return item
 
     def get(self, intent_id: str, owner_id: str) -> CapitalTransferState | None:
