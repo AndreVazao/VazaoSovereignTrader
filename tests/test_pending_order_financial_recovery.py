@@ -17,8 +17,12 @@ class FakeExchange:
 
 
 class RiskStub:
+    class State:
+        drawdown_pct = 0.0
+
     def __init__(self):
         self.results = []
+        self.state = self.State()
 
     def record_trade_result(self, symbol, pnl_pct):
         self.results.append((symbol, pnl_pct))
