@@ -4,6 +4,7 @@ from PC_ENGINE.api.server import create_app
 
 
 class FakeEngine:
+    owner_id = "andre"
     mode = "PAPER"
     config = {"real_mode_guard": {"enabled": True}}
 
