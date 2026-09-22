@@ -158,7 +158,8 @@ class PaperOpportunityEngine:
         state: dict | None,
         now_ms: int | None = None,
     ) -> OpportunityScore:
-        normalized_action = str(action).upper()\n        if not self.enabled or normalized_action not in {"BUY", "SELL"}:
+        normalized_action = str(action).upper()
+        if not self.enabled or normalized_action not in {"BUY", "SELL"}:
             return OpportunityScore(
                 symbol, 0.0, 0.0, action, max(0.0, min(1.0, strategy_score)),
                 0.0, 0.0, 0.0, "sem oportunidade BUY/SELL",
