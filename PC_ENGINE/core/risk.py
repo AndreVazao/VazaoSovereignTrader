@@ -25,7 +25,9 @@ class RiskEngine:
         self.state = RiskState()
         adaptive_cfg = settings.get("adaptive_risk", {})
         self.adaptive_risk = AdaptiveRiskController(adaptive_cfg)
-        self.adaptive_evidence = AdaptiveRiskEvidenceStore(str(adaptive_cfg.get("outcome_path", "PC_ENGINE/data/radar/state_outcomes.jsonl")))
+        self.adaptive_evidence = AdaptiveRiskEvidenceStore(
+            str(adaptive_cfg.get("outcome_path", "PC_ENGINE/data/radar/state_outcomes.jsonl"))
+        )
 
     def update_equity(self, equity: float, starting_equity: float) -> None:
         if self.state.equity_peak <= 0:
@@ -64,26 +66,22 @@ class RiskEngine:
         return max(0.0, risk_amount / stop_pct)
 
     def adaptive_position_notional(
-        self,
-        equity: float,
-        stop_pct: float,
-        *,
-        samples: int,
-        wins: int,
-        mean_net_bps: float,
-        strategy_id: str = "unknown",
-        symbol: str = "unknown",
-        regime: str | None = None,
-        horizon_seconds: int | None = None,
+        self, equity: float, stop_pct: float, *, samples: int, wins: int, mean_net_bps: float,
+        strategy_id: str = "unknown", symbol: str = "unknown", regime: str | None = None,
+        horizon_seconds: int | None = None, lower_ci_bps: float = 0.0, evidence_age_ms: int = 0,
+        regime_stability: float = 0.0, independent_samples: int = 0,
+        independent_mean_net_bps: float = 0.0,
     ) -> tuple[float, AdaptiveRiskSnapshot]:
         base = self.position_notional(equity, stop_pct)
-        context = self.adaptive_risk.context_key(strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)
+        context = self.adaptive_risk.context_key(
+            strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds
+        )
         snapshot = self.adaptive_risk.evaluate(
-            samples=samples,
-            wins=wins,
-            mean_net_bps=mean_net_bps,
+            samples=samples, wins=wins, mean_net_bps=mean_net_bps,
             drawdown_pct=max(0.0, -self.state.drawdown_pct),
-            context_key=context,
+            context_key=context, lower_ci_bps=lower_ci_bps, evidence_age_ms=evidence_age_ms,
+            regime_stability=regime_stability, independent_samples=independent_samples,
+            independent_mean_net_bps=independent_mean_net_bps,
         )
         return base * snapshot.multiplier, snapshot
 
@@ -94,4 +92,25 @@ class RiskEngine:
             self.state.symbol_loss_streak[symbol] += 1
         else:
             self.state.symbol_loss_streak[symbol] = 0
-\n    def adaptive_position_notional_auto(self, equity: float, stop_pct: float, *, strategy_id: str = "unknown", symbol: str = "unknown", regime: str | None = None, horizon_seconds: int | None = None, action: str = "BUY") -> tuple[float, AdaptiveRiskSnapshot]:\n        evidence = self.adaptive_evidence.lookup(symbol=symbol, regime=regime, horizon_seconds=horizon_seconds, action=action)\n        if evidence is None:\n            return self.adaptive_position_notional(equity, stop_pct, samples=0, wins=0, mean_net_bps=0.0, strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)\n        return self.adaptive_position_notional(equity, stop_pct, samples=evidence.samples, wins=evidence.wins, mean_net_bps=evidence.mean_net_bps, strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds)\n
+
+    def adaptive_position_notional_auto(
+        self, equity: float, stop_pct: float, *, strategy_id: str = "unknown",
+        symbol: str = "unknown", regime: str | None = None, horizon_seconds: int | None = None,
+        action: str = "BUY",
+    ) -> tuple[float, AdaptiveRiskSnapshot]:
+        evidence = self.adaptive_evidence.lookup(
+            symbol=symbol, regime=regime, horizon_seconds=horizon_seconds, action=action
+        )
+        if evidence is None:
+            return self.adaptive_position_notional(
+                equity, stop_pct, samples=0, wins=0, mean_net_bps=0.0,
+                strategy_id=strategy_id, symbol=symbol, regime=regime, horizon_seconds=horizon_seconds,
+            )
+        return self.adaptive_position_notional(
+            equity, stop_pct, samples=evidence.samples, wins=evidence.wins,
+            mean_net_bps=evidence.mean_net_bps, strategy_id=strategy_id, symbol=symbol,
+            regime=regime, horizon_seconds=horizon_seconds, lower_ci_bps=evidence.lower_ci_bps,
+            evidence_age_ms=evidence.evidence_age_ms, regime_stability=evidence.regime_stability,
+            independent_samples=evidence.independent_samples,
+            independent_mean_net_bps=evidence.independent_mean_net_bps,
+        )
