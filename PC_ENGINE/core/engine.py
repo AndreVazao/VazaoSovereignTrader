@@ -1353,7 +1353,11 @@ class SovereignEngine:
         drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))
         self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
         remaining_qty = max(0.0, position.qty - filled_qty)
-        with self.lock:
+        lock = getattr(self, "lock", None)
+        if lock is None:
+            from contextlib import nullcontext
+            lock = nullcontext()
+        with lock:
             if remaining_qty <= 1e-12:
                 self.state.open_positions.pop(position.symbol, None)
             else:
