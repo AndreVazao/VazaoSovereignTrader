@@ -56,6 +56,7 @@ class PublicL2WebSocketCollector:
             symbol=symbol,
             event_type=event_type,
             sequence=sequence,
+            sequence_start=sequence_start,
             provider_ts_ms=exchange_ts_ms,
             exchange_ts_ms=exchange_ts_ms,
             local_receive_ns=receive_ns,
