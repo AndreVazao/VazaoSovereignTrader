@@ -47,6 +47,22 @@ class BrowserExecutionLedger:
                     found = item
         return found
 
+    def records(self) -> list[BrowserExecutionRecord]:
+        if not self.path.exists():
+            return []
+        latest: dict[str, BrowserExecutionRecord] = {}
+        with self.path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    item = BrowserExecutionRecord(**json.loads(line))
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                latest[item.idempotency_key] = item
+        return list(latest.values())
+
+    def pending_submissions(self) -> list[BrowserExecutionRecord]:
+        return [item for item in self.records() if item.state == "SUBMITTED" and item.external_id]
+
     def append(self, *, intent, state: str, external_id: str | None, page_fingerprint: str, context_fingerprint: str) -> BrowserExecutionRecord:
         if not intent.idempotency_key:
             raise ValueError("idempotency_key is required")
