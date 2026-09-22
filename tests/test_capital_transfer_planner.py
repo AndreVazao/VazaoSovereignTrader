@@ -19,7 +19,7 @@ def test_planner_selects_private_surplus_for_destination_need():
     candidates = planner.plan(owner_id="andre", venues=[{"venue_id": "binance", **base()}, destination], opportunities=[{
         "destination_venue": "okx", "asset": "USDT", "network": "TRC20", "required_quote": 100,
         "expected_net_edge_bps": 20, "estimated_transfer_cost_quote": 1, "estimated_transfer_time_seconds": 30,
-        "destination_ready": True,
+        "destination_ready": True, "destination_whitelisted": True,
     }])
     assert len(candidates) == 1
     assert candidates[0].network == "TRC20"
