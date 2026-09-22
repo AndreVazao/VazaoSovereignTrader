@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import PC_ENGINE.core.engine as engine_module
-from PC_ENGINE.core.engine import Position, SovereignEngine
+from PC_ENGINE.core.engine import SovereignEngine
 
 
 class StagedExchange:
@@ -53,7 +53,7 @@ def _exchange_for(raw):
     def resolve(_item):
         return exchange
 
-    return exchange, resolve
+    return resolve
 
 
 def test_partial_fill_crash_restart_then_terminal_fill_is_idempotent(tmp_path, monkeypatch):
@@ -75,14 +75,18 @@ def test_partial_fill_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
         "fee": {"cost": 0.04, "currency": "USDT"},
         "clientOrderId": "client-partial-1",
     }
-    first_exchange, first_resolver = _exchange_for(first_raw)
-    monkeypatch.setattr(first, "_exchange_for_pending_order", first_resolver)
+    monkeypatch.setattr(
+        first,
+        "_exchange_for_pending_order",
+        _exchange_for(first_raw),
+    )
     first._reconcile_pending_orders()
 
     assert first.state.pending_orders["order-1"]["known_filled_qty"] == 0.4
     assert first.state.pending_orders["order-1"]["known_quote_notional"] == 40.0
     assert first.state.pending_orders["order-1"]["known_fee"] == 0.04
     assert first.state.open_positions["BTC/USDT"].qty == 0.4
+    assert first.state.open_positions["BTC/USDT"].entry == 100.0
     assert first.state.open_positions["BTC/USDT"].entry_fee == 0.04
 
     second = SovereignEngine(config)
@@ -95,13 +99,16 @@ def test_partial_fill_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
         "side": "buy",
         "status": "closed",
         "filled": 1.0,
-        "average": 101.0,
-        "cost": 101.0,
+        "average": 100.6,
+        "cost": 100.6,
         "fee": {"cost": 0.10, "currency": "USDT"},
         "clientOrderId": "client-partial-1",
     }
-    second_exchange, second_resolver = _exchange_for(second_raw)
-    monkeypatch.setattr(second, "_exchange_for_pending_order", second_resolver)
+    monkeypatch.setattr(
+        second,
+        "_exchange_for_pending_order",
+        _exchange_for(second_raw),
+    )
     second._reconcile_pending_orders()
 
     position = second.state.open_positions["BTC/USDT"]
