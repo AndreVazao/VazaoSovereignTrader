@@ -43,7 +43,7 @@ class CapitalTransferExecutionBridge:
         if not self.enabled or not real_authorized:
             return current or CapitalTransferState(intent.intent_id, self.owner_id, "PLANNED", intent.created_at_ms)
         if request.method not in self.adapters:
-            return self.state_store.record(intent_id=intent.intent_id, owner_id=self.owner_id, state="APPROVED", reason="TRANSFER_ADAPTER_UNAVAILABLE")
+            return current or CapitalTransferState(intent.intent_id, self.owner_id, "PLANNED", intent.created_at_ms)
         if current and current.state not in {"PLANNED", "APPROVED"}:
             return current
         if not current or current.state == "PLANNED":
