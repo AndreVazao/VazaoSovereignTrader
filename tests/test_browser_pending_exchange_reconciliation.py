@@ -104,6 +104,8 @@ def test_browser_pending_falls_back_to_client_order_id():
             "known_fill_price": 0.0,
             "client_order_id": "browser-key-9",
             "browser_execution": True,
+            "stop_pct": 0.02,
+            "take_profit_pct": 0.04,
         }
     }
     engine._reconcile_pending_orders()
