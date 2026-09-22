@@ -70,8 +70,11 @@ def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
         {"buy-1": {
             "symbol": "BTC/USDT",
             "side": "buy",
+            "requested_qty": 0.5,
             "known_filled_qty": 0.2,
             "known_fill_price": 100.0,
+            "known_quote_notional": 20.0,
+            "known_fee": 0.0,
         }},
     )
 
@@ -89,8 +92,11 @@ def test_reconcile_pending_sell_reduces_position_by_unseen_fill_delta():
         {"sell-1": {
             "symbol": "BTC/USDT",
             "side": "sell",
+            "requested_qty": 0.5,
             "known_filled_qty": 0.2,
             "known_fill_price": 109.0,
+            "known_quote_notional": 21.8,
+            "known_fee": 0.0,
         }},
     )
 
