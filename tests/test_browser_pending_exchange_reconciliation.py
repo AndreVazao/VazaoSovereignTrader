@@ -67,6 +67,8 @@ def test_browser_pending_uses_recorded_venue():
             "known_fill_price": 0.0,
             "client_order_id": "browser-key",
             "browser_execution": True,
+            "stop_pct": 0.02,
+            "take_profit_pct": 0.04,
         }
     }
     engine._reconcile_pending_orders()
