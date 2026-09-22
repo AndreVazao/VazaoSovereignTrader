@@ -16,7 +16,7 @@ class FakeExchange:
 
 
 class FakeRecovery:
-    def save_positions(self, positions, pending_orders=None, order_guards=None, execution_intents=None):
+    def save_positions(self, positions, pending_orders=None, order_guards=None, execution_intents=None, financial_account=None):
         self.saved = (positions, pending_orders, order_guards, execution_intents)
 
 
