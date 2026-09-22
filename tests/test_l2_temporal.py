@@ -29,9 +29,9 @@ class L2TemporalReplayTests(unittest.TestCase):
                 row("a1", "leader", 1, 1000, 100.0, 100.1),
                 row("b1", "follower", 1, 1001, 100.0, 100.1),
                 row("a2", "leader", 2, 1100, 100.0, 100.21),
-                row("b2", "follower", 2, 1150, 100.0, 100.22, "delta"),
-                row("b3", "follower", 3, 1300, 100.2, 100.3, "delta"),
-                row("b4", "follower", 4, 2200, 100.2, 100.3, "delta"),
+                row("b2", "follower", 2, 1150, 100.0, 100.22),
+                row("b3", "follower", 3, 1300, 100.2, 100.3),
+                row("b4", "follower", 4, 2200, 100.2, 100.3),
             ]
             source.write_text("\n".join(json.dumps(x) for x in rows), encoding="utf-8")
             report = L2TemporalExecutableReplay(L2TemporalConfig(
