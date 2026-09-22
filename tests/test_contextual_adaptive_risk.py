@@ -17,6 +17,6 @@ def test_contextual_evidence_is_required_for_scaling():
 
 def test_risk_engine_accepts_context_for_sizing():
     risk = RiskEngine({"max_daily_loss_pct": -0.02, "max_weekly_loss_pct": -0.06, "kill_cooldown_seconds": 60, "max_symbol_loss_streak": 3, "cooldown_after_loss_seconds": 60, "risk_per_trade_pct": 0.005, "adaptive_risk": {"min_samples": 100, "base_multiplier": 1.0, "max_multiplier": 1.5}})
-    sized, snapshot = risk.adaptive_position_notional(10_000, 0.01, samples=400, wins=320, mean_net_bps=6, strategy_id="latency", symbol="BTC/USDT", regime="trend", horizon_seconds=15)
+    sized, snapshot = risk.adaptive_position_notional(10_000, 0.01, samples=400, wins=320, mean_net_bps=6, strategy_id="latency", symbol="BTC/USDT", regime="trend", horizon_seconds=15, lower_ci_bps=2.0, evidence_age_ms=0, regime_stability=1.0)
     assert snapshot.context_key == "latency|BTC/USDT|trend|15"
     assert sized > risk.position_notional(10_000, 0.01)
