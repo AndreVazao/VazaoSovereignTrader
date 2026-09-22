@@ -19,7 +19,15 @@ class RecoveryManager:
             state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state_path = state_path
 
-    def save_positions(self, positions: Dict, pending_orders: Dict | None = None, order_guards: Dict[str, float] | None = None, execution_intents: Dict[str, dict] | None = None, financial_account: Dict | None = None) -> None:
+    def save_positions(
+        self,
+        positions: Dict,
+        pending_orders: Dict | None = None,
+        order_guards: Dict[str, float] | None = None,
+        execution_intents: Dict[str, dict] | None = None,
+        financial_account: Dict | None = None,
+        risk_state: Dict | None = None,
+    ) -> None:
         payload = {
             "ts": int(time.time()),
             "positions": {symbol: asdict(position) for symbol, position in positions.items()},
@@ -27,6 +35,7 @@ class RecoveryManager:
             "order_guards": {str(key): float(value) for key, value in (order_guards or {}).items()},
             "execution_intents": dict(execution_intents or {}),
             "financial_account": dict(financial_account or {}),
+            "risk_state": dict(risk_state or {}),
         }
         tmp_path = self.state_path.with_suffix(self.state_path.suffix + ".tmp")
         tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -34,7 +43,7 @@ class RecoveryManager:
 
     def load_state(self) -> Dict:
         if not self.state_path.exists():
-            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}, "financial_account": {}}
+            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}, "financial_account": {}, "risk_state": {}}
         try:
             payload = json.loads(self.state_path.read_text(encoding="utf-8"))
             if not isinstance(payload, dict):
@@ -45,6 +54,7 @@ class RecoveryManager:
                 "order_guards": payload.get("order_guards", {}),
                 "execution_intents": payload.get("execution_intents", {}),
                 "financial_account": payload.get("financial_account", {}),
+                "risk_state": payload.get("risk_state", {}),
             }
             for name, value in fields.items():
                 if not isinstance(value, dict):
@@ -57,6 +67,7 @@ class RecoveryManager:
                 "order_guards": {},
                 "execution_intents": {},
                 "financial_account": {},
+                "risk_state": {},
                 "recovery_error": f"{type(exc).__name__}: {exc}",
             }
 
@@ -74,6 +85,9 @@ class RecoveryManager:
 
     def load_financial_account(self) -> Dict:
         return self.load_state().get("financial_account", {})
+
+    def load_risk_state(self) -> Dict:
+        return self.load_state().get("risk_state", {})
 
     def clear(self) -> None:
         if self.state_path.exists():
