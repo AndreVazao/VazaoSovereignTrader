@@ -83,11 +83,15 @@ class OrderBookBuilder:
                 continue
             if event.sequence <= (self._sequence or -1):
                 continue
+            expected_next = (self._sequence or 0) + 1
             if event.sequence_start is not None:
-                if not (event.sequence_start <= (self._sequence or 0) + 1 <= event.sequence):
+                if not (event.sequence_start <= expected_next <= event.sequence):
+                    if bridged:
+                        self.stale = True
+                        return None
                     continue
             else:
-                if event.sequence != (self._sequence or 0) + 1:
+                if event.sequence != expected_next:
                     self.stale = True
                     return None
             self._apply_levels(self._bids, event.bids)
