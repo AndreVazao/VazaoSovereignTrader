@@ -111,9 +111,10 @@ class GlobalCompoundingOrchestrator:
     def current_base(self, equities: dict[str, float]) -> float:
         normalized = {str(k).strip().lower(): max(0.0, float(v)) for k, v in equities.items()}
         minimum_equity = min((normalized.get(v, 0.0) for v in self.venues), default=0.0)
-        return CompoundingController(owner_id=self.owner_id, venue="global").tier_for_equity(
-            total_equity=minimum_equity, seed_capital=self.seed_base, growth_factor=self.growth_factor
-        )
+        base = self.seed_base
+        while minimum_equity > base * self.growth_factor:
+            base *= self.growth_factor
+        return round(base, 8)
 
     def snapshot(self, equities: dict[str, float]) -> GlobalCompoundingSnapshot:
         normalized = {str(k).strip().lower(): max(0.0, float(v)) for k, v in equities.items()}
