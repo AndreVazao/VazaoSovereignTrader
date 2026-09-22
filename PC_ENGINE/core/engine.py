@@ -248,7 +248,7 @@ class SovereignEngine:
             settings=collector_cfg,
             symbols=self.config.get("symbols", []),
             ohlcv_fetcher=self._fetch_ohlcv_for_collector,
-            strategy=self.strategy,
+            strategy=getattr(self, "strategy", None),
             on_error=self.log,
         )
 
@@ -589,7 +589,8 @@ class SovereignEngine:
             return data
 
     def _main_exchange(self) -> CcxtExchangeClient | None:
-        return next(iter(self.exchanges.values()), None)
+        exchanges = getattr(self, "exchanges", {}) or {}
+        return next(iter(exchanges.values()), None)
 
     def _loop(self) -> None:
         while not self.stop_event.is_set():
@@ -1324,6 +1325,8 @@ class SovereignEngine:
                 "known_fee": 0.0,
                 "known_quote_notional": 0.0,
                 "created_ts": time.time(),
+                "stop_pct": max(0.0, (position.entry - position.stop) / position.entry) if position.entry > 0 else 0.0,
+                "take_profit_pct": max(0.0, (position.take_profit - position.entry) / position.entry) if position.entry > 0 else 0.0,
             }
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
@@ -1346,7 +1349,9 @@ class SovereignEngine:
         net_pnl = gross_pnl - allocated_entry_fee - result.fee
         pnl_pct = net_pnl / (position.entry * filled_qty) if position.entry and filled_qty > 0 else 0.0
         self.risk.record_trade_result(position.symbol, pnl_pct)
-        self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
+        risk_state = getattr(self.risk, "state", None)
+        drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))
+        self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
         remaining_qty = max(0.0, position.qty - filled_qty)
         with self.lock:
             if remaining_qty <= 1e-12:
