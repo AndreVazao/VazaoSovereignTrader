@@ -971,6 +971,10 @@ class SovereignEngine:
                     else financial.get("expected_cost") or 0.0
                 )
                 known_notional = float(item.get("known_quote_notional") or 0.0)
+                if known_notional <= 0.0 and known_filled > 0.0:
+                    known_price = float(item.get("known_fill_price") or 0.0)
+                    if known_price > 0.0:
+                        known_notional = known_filled * known_price
                 tolerance_notional = max(
                     1e-12,
                     abs(cumulative_notional) * float(financial.get("relative_tolerance") or 0.002),
