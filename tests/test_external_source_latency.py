@@ -19,7 +19,7 @@ def test_external_source_latency_profile_detects_research_edge():
             source_ts_ms=1_000 + i * 1_000,
             source_price=100.0,
             market_ts_ms=1_080 + i * 1_000,
-            market_price=100.02,
+            market_price=100.08,
             direction="UP",
             observed_ts_ms=2_000 + i,
         )
