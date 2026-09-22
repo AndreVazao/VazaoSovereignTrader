@@ -91,7 +91,8 @@ class PublicL2WebSocketCollector:
             event_type = "delta" if str(payload.get("action", "snapshot")).lower() == "update" else "snapshot"
             for item in payload.get("data", []):
                 ts = int(item["ts"]) if item.get("ts") else None
-                sequence = int(item["seqId"]) if item.get("seqId") is not None else None\n                sequence_start = int(item["prevSeqId"]) + 1 if item.get("prevSeqId") is not None else None
+                sequence = int(item["seqId"]) if item.get("seqId") is not None else None
+                sequence_start = int(item["prevSeqId"]) + 1 if item.get("prevSeqId") is not None else None
                 events.append(self._event(
                     venue=venue, symbol=symbol, event_type=event_type,
                     sequence=sequence, sequence_start=sequence_start, exchange_ts_ms=ts, receive_ns=receive_ns,
