@@ -15,6 +15,7 @@ def route(policy: CapitalRoutingPolicy, **overrides):
         "expected_net_edge_bps": 12,
         "estimated_transfer_cost_quote": 1,
         "destination_ready": True,
+        "destination_whitelisted": True,
     }
     args.update(overrides)
     return policy.can_route(**args)
