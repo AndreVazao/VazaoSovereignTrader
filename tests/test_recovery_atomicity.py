@@ -41,3 +41,30 @@ def test_corrupt_recovery_state_is_detectable(tmp_path):
     assert state["pending_orders"] == {}
     assert "recovery_error" in state
     assert state["recovery_error"]
+
+
+def test_pending_fill_recovery_markers_survive_restart(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    manager = RecoveryManager(state_path=state_path)
+
+    manager.save_positions(
+        {},
+        {
+            "order-1": {
+                "symbol": "BTC/USDT",
+                "side": "buy",
+                "requested_qty": 1.0,
+                "known_filled_qty": 0.4,
+                "known_fill_price": 100.0,
+                "known_quote_notional": 40.0,
+                "known_fee": 0.04,
+            }
+        },
+    )
+
+    recovered = RecoveryManager(state_path=state_path).load_pending_orders()
+    item = recovered["order-1"]
+
+    assert item["known_filled_qty"] == 0.4
+    assert item["known_quote_notional"] == 40.0
+    assert item["known_fee"] == 0.04
