@@ -14,7 +14,7 @@ def test_state_outcomes_handles_large_history_and_horizon_index():
             "action": "BUY",
             "regime": "TREND_UP",
         })
-    stats = StateOutcomeEngine(min_samples=30).evaluate(states, horizons_ms=(1000, 5000))
+    stats = StateOutcomeEngine(min_samples=30, cost_bps=0.0).evaluate(states, horizons_ms=(1000, 5000))
     assert stats
     one_second = next(row for row in stats if row.horizon_ms == 1000)
     assert one_second.samples > 1000

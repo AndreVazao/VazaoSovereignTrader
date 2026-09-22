@@ -68,7 +68,11 @@ class CompoundingRoutingBridge:
                 continue
             item = dict(opportunity)
             requested = float(item.get("required_quote", 0) or 0)
-            item["required_quote"] = min(requested, need) if requested > 0 else need
+            # Compounding establishes that the destination needs funding; the
+            # existing gated planner still decides the economically valid amount.
+            # Do not silently shrink a concrete opportunity below its requested
+            # amount merely because the next global tier is smaller.
+            item["required_quote"] = requested if requested > 0 else need
             item["compounding_global_base"] = snapshot.global_base
             item["compounding_reason"] = "GLOBAL_TIER_CAPITALIZATION"
             bridged.append(item)

@@ -19,7 +19,7 @@ def test_remote_trust_and_source_count_are_not_authoritative():
     )
     result = agg.aggregate([row("node-a", trust=0.0), row("node-b", trust=1.0)])[0]
     assert result.source_count == 2
-    assert result.aggregate_trust == 0.91
+    assert abs(result.aggregate_trust - 0.91) < 1e-12
 
 
 def test_duplicate_source_cannot_amplify_consensus():

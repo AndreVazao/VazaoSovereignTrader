@@ -62,7 +62,7 @@ class OrderManager:
                 except Exception as exc:
                     return OrderResult(
                         False, side, symbol, normalized_qty, price, 0.0,
-                        f"paper-{side}-rejected", f"paper rejection: {exc}",
+                        f"paper-{side}-rejected", f"rejected: paper rejection: {exc}",
                         normalized_qty, "REJECTED",
                     )
                 return OrderResult(True, side, symbol, normalized_qty, fill.fill_price, fill.fee, f"paper-{side}", "paper fill", normalized_qty, "FILLED")

@@ -34,7 +34,8 @@ def test_risk_sizing_scales_after_validated_positive_edge():
     risk = RiskEngine(_settings())
     base = risk.position_notional(10_000, 0.01)
     sized, snapshot = risk.adaptive_position_notional(
-        10_000, 0.01, samples=400, wins=320, mean_net_bps=6
+        10_000, 0.01, samples=400, wins=320, mean_net_bps=6,
+        lower_ci_bps=2.0, evidence_age_ms=0, regime_stability=1.0,
     )
     assert sized > base
     assert sized <= base * 1.5

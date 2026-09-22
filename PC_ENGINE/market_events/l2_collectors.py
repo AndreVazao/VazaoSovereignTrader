@@ -56,6 +56,7 @@ class PublicL2WebSocketCollector:
             symbol=symbol,
             event_type=event_type,
             sequence=sequence,
+            sequence_start=sequence_start,
             provider_ts_ms=exchange_ts_ms,
             exchange_ts_ms=exchange_ts_ms,
             local_receive_ns=receive_ns,
@@ -76,7 +77,8 @@ class PublicL2WebSocketCollector:
             if data.get("e") != "depthUpdate":
                 return []
             ts = int(data["E"]) if data.get("E") is not None else None
-            sequence = int(data["u"]) if data.get("u") is not None else None\n            sequence_start = int(data["U"]) if data.get("U") is not None else None
+            sequence = int(data["u"]) if data.get("u") is not None else None
+            sequence_start = int(data["U"]) if data.get("U") is not None else None
             events.append(self._event(
                 venue=venue, symbol=symbol, event_type="delta",
                 sequence=sequence, sequence_start=sequence_start, exchange_ts_ms=ts, receive_ns=receive_ns,
@@ -90,7 +92,8 @@ class PublicL2WebSocketCollector:
             event_type = "delta" if str(payload.get("action", "snapshot")).lower() == "update" else "snapshot"
             for item in payload.get("data", []):
                 ts = int(item["ts"]) if item.get("ts") else None
-                sequence = int(item["seqId"]) if item.get("seqId") is not None else None\n                sequence_start = int(item["prevSeqId"]) + 1 if item.get("prevSeqId") is not None else None
+                sequence = int(item["seqId"]) if item.get("seqId") is not None else None
+                sequence_start = int(item["prevSeqId"]) + 1 if item.get("prevSeqId") is not None else None
                 events.append(self._event(
                     venue=venue, symbol=symbol, event_type=event_type,
                     sequence=sequence, sequence_start=sequence_start, exchange_ts_ms=ts, receive_ns=receive_ns,

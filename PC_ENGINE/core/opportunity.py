@@ -158,7 +158,8 @@ class PaperOpportunityEngine:
         state: dict | None,
         now_ms: int | None = None,
     ) -> OpportunityScore:
-        normalized_action = str(action).upper()\n        if not self.enabled or normalized_action not in {"BUY", "SELL"}:
+        normalized_action = str(action).upper()
+        if not self.enabled or normalized_action not in {"BUY", "SELL"}:
             return OpportunityScore(
                 symbol, 0.0, 0.0, action, max(0.0, min(1.0, strategy_score)),
                 0.0, 0.0, 0.0, "sem oportunidade BUY/SELL",
@@ -206,7 +207,8 @@ class PaperOpportunityEngine:
         else:
             freshness = 0.0
 
-        latency_edge = self._latest_latency_edge(symbol, now_ms, "UP")
+        direction = "UP" if normalized_action == "BUY" else "DOWN"
+        latency_edge = self._latest_latency_edge(symbol, now_ms, direction)
         if latency_edge is not None:
             latency_edge_bps = max(0.0, float(latency_edge.get("net_expected_edge_bps", 0.0)))
             latency_freshness = float(latency_edge.get("_freshness", 0.0))
@@ -218,7 +220,7 @@ class PaperOpportunityEngine:
                 self.latency_weight * edge_strength * persistence * same_direction * latency_freshness,
             )
 
-        external_profile = self._latest_external_latency_profile(symbol, now_ms, "UP")
+        external_profile = self._latest_external_latency_profile(symbol, now_ms, direction)
         if external_profile is not None:
             external_latency_edge_bps = max(0.0, float(external_profile.get("net_edge_bps", 0.0)))
             external_latency_freshness = float(external_profile.get("_freshness", 0.0))

@@ -219,7 +219,6 @@ class ExternalSourceLatencyProfiler:
             same_direction_ratio=same_ratio,
             net_edge_bps=net_edge,
             eligible=qualifies,
-            observed_ts_ms=int(time.time() * 1000),
         )
 
     def profile(self, source_id: str, symbol: str, direction: str) -> SourceLatencyProfile:

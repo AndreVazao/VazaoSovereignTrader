@@ -47,8 +47,8 @@ class ReplayTrade:
     fees: float
     net_pnl: float
     status: str
-    signal_lag_ms: float | None
-    signal_confidence: float | None
+    signal_lag_ms: float | None = None
+    signal_confidence: float | None = None
 
 
 @dataclass

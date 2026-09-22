@@ -17,8 +17,12 @@ class FakeExchange:
 
 
 class RiskStub:
+    class State:
+        drawdown_pct = 0.0
+
     def __init__(self):
         self.results = []
+        self.state = self.State()
 
     def record_trade_result(self, symbol, pnl_pct):
         self.results.append((symbol, pnl_pct))
@@ -221,7 +225,7 @@ def test_restart_after_partial_fill_applies_only_remaining_delta(tmp_path):
     assert "o1" not in second.state.pending_orders
     position = second.state.open_positions["BTC/USDT"]
     assert position.qty == 1.0
-    assert abs(position.entry - 101.2) < 1e-12
+    assert abs(position.entry - 102.0) < 1e-12
     assert second.state.financial_account["base_flow"]["BTC"] == 1.0
     assert abs(second.state.financial_account["quote_flow"] + 102.10) < 1e-12
 

@@ -14,6 +14,7 @@ class OrderBookBuilderTests(unittest.TestCase):
             symbol="BTC/USDT",
             event_type=kind,
             sequence=seq,
+            sequence_start=seq,
             provider_ts_ms=seq,
             exchange_ts_ms=seq,
             local_receive_ns=seq,

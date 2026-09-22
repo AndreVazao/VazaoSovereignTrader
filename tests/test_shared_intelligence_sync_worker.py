@@ -38,4 +38,4 @@ def test_sync_worker_contract(tmp_path: Path):
 
     assert result["pull"]["accepted"] == 0
     assert provider.pulls[0][0] is None
-    assert w.bootstrap_done is True
+    assert worker.bootstrap_done is True

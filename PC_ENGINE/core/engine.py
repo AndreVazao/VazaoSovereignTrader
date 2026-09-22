@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from PC_ENGINE.ai_council.stub import DisabledAICouncil
 from PC_ENGINE.core.allocator import CapitalAllocator
 from PC_ENGINE.core.opportunity import PaperOpportunityEngine
-from PC_ENGINE.core.config import DATA_DIR
+from PC_ENGINE.core.config import DATA_DIR, env_value
 from PC_ENGINE.core.owner_context import OwnerContext
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.order_manager import OrderManager
@@ -248,7 +248,7 @@ class SovereignEngine:
             settings=collector_cfg,
             symbols=self.config.get("symbols", []),
             ohlcv_fetcher=self._fetch_ohlcv_for_collector,
-            strategy=self.strategy,
+            strategy=getattr(self, "strategy", None),
             on_error=self.log,
         )
 
@@ -295,7 +295,7 @@ class SovereignEngine:
         )
 
     def _record_financial_fill(self, side: str, symbol: str, qty: float, quote_notional: float, fee: float) -> None:
-        if self.paper or qty <= 0 or quote_notional < 0 or fee < 0:
+        if getattr(self, "paper", False) or qty <= 0 or quote_notional < 0 or fee < 0:
             return
         base_asset = str(symbol).split("/", 1)[0]
         financial = self.state.financial_account
@@ -427,14 +427,20 @@ class SovereignEngine:
 
     def log(self, message: str, data: dict | None = None) -> None:
         row = message if data is None else f"{message}: {data}"
-        with self.lock:
+        lock = getattr(self, "lock", None)
+        if lock is None:
+            lock = threading.RLock()
+            self.lock = lock
+        with lock:
             self.state.logs.append(row)
             self.state.logs = self.state.logs[-100:]
-        self.ledger.event(message, data or {})
+        ledger = getattr(self, "ledger", None)
+        if ledger is not None and hasattr(ledger, "event"):
+            ledger.event(message, data or {})
 
     def _enter_real_fail_safe(self, reason: str, data: dict | None = None) -> None:
         """Leave REAL immediately on a critical runtime condition."""
-        if self.mode != "REAL":
+        if getattr(self, "mode", "PAPER") != "REAL":
             self.state.status = "SAFE_MODE"
             self.real_operational = False
             return
@@ -460,7 +466,7 @@ class SovereignEngine:
         self.log("REAL_FAIL_SAFE", payload)
 
     def _enter_safe_state(self, reason: str, data: dict | None = None) -> None:
-        if self.mode == "REAL":
+        if getattr(self, "mode", "PAPER") == "REAL":
             self._enter_real_fail_safe(reason, data)
         else:
             self.state.status = "SAFE_MODE"
@@ -583,7 +589,8 @@ class SovereignEngine:
             return data
 
     def _main_exchange(self) -> CcxtExchangeClient | None:
-        return next(iter(self.exchanges.values()), None)
+        exchanges = getattr(self, "exchanges", {}) or {}
+        return next(iter(exchanges.values()), None)
 
     def _loop(self) -> None:
         while not self.stop_event.is_set():
@@ -822,7 +829,7 @@ class SovereignEngine:
         return max(0.0, total)
 
     def _validate_order_financial_invariant(self, raw: dict, symbol: str, filled_qty: float, average_price: float) -> dict:
-        cfg = self.config.get("reconciliation", {})
+        cfg = getattr(self, "config", {}).get("reconciliation", {})
         tolerance_pct = max(0.0, float(cfg.get("financial_relative_tolerance", 0.002)))
         cost = raw.get("cost")
         if cost is not None:
@@ -964,6 +971,10 @@ class SovereignEngine:
                     else financial.get("expected_cost") or 0.0
                 )
                 known_notional = float(item.get("known_quote_notional") or 0.0)
+                if known_notional <= 0.0 and known_filled > 0.0:
+                    known_price = float(item.get("known_fill_price") or 0.0)
+                    if known_price > 0.0:
+                        known_notional = known_filled * known_price
                 tolerance_notional = max(
                     1e-12,
                     abs(cumulative_notional) * float(financial.get("relative_tolerance") or 0.002),
@@ -1031,7 +1042,9 @@ class SovereignEngine:
                         net_pnl = gross_pnl - allocated_entry_fee - fee_delta
                         pnl_pct = net_pnl / (position.entry * delta) if position.entry > 0 and delta > 0 else 0.0
                         self.risk.record_trade_result(symbol, pnl_pct)
-                        self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
+                        risk_state = getattr(self.risk, "state", None)
+                        drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))
+                        self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
                         self.ledger.trade({
@@ -1181,7 +1194,18 @@ class SovereignEngine:
             price = float(ticker.get("last") or 0.0)
             if price <= 0:
                 continue
-            adaptive_cfg = self.config.get("risk", {}).get("adaptive_risk", {})\n            adaptive_horizon = int(adaptive_cfg.get("horizon_seconds", 5))\n            adaptive_notional, adaptive_snapshot = self.risk.adaptive_position_notional_auto(\n                equity, signal.stop_pct, strategy_id="trend_ema_atr", symbol=symbol,\n                regime=signal.regime, horizon_seconds=adaptive_horizon, action="BUY",\n            )\n            notional = min(decision.max_notional, adaptive_notional)\n            self.log("ADAPTIVE_RISK_SIZING", {\n                "symbol": symbol, "context_key": adaptive_snapshot.context_key,\n                "multiplier": adaptive_snapshot.multiplier, "eligible": adaptive_snapshot.eligible,\n                "reason": adaptive_snapshot.reason, "samples": adaptive_snapshot.samples,\n            })
+            adaptive_cfg = self.config.get("risk", {}).get("adaptive_risk", {})
+            adaptive_horizon = int(adaptive_cfg.get("horizon_seconds", 5))
+            adaptive_notional, adaptive_snapshot = self.risk.adaptive_position_notional_auto(
+                equity, signal.stop_pct, strategy_id="trend_ema_atr", symbol=symbol,
+                regime=signal.regime, horizon_seconds=adaptive_horizon, action="BUY",
+            )
+            notional = min(decision.max_notional, adaptive_notional)
+            self.log("ADAPTIVE_RISK_SIZING", {
+                "symbol": symbol, "context_key": adaptive_snapshot.context_key,
+                "multiplier": adaptive_snapshot.multiplier, "eligible": adaptive_snapshot.eligible,
+                "reason": adaptive_snapshot.reason, "samples": adaptive_snapshot.samples,
+            })
             if notional <= 0:
                 continue
             qty = notional / price
@@ -1305,6 +1329,8 @@ class SovereignEngine:
                 "known_fee": 0.0,
                 "known_quote_notional": 0.0,
                 "created_ts": time.time(),
+                "stop_pct": max(0.0, (position.entry - position.stop) / position.entry) if position.entry > 0 else 0.0,
+                "take_profit_pct": max(0.0, (position.take_profit - position.entry) / position.entry) if position.entry > 0 else 0.0,
             }
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
@@ -1327,9 +1353,15 @@ class SovereignEngine:
         net_pnl = gross_pnl - allocated_entry_fee - result.fee
         pnl_pct = net_pnl / (position.entry * filled_qty) if position.entry and filled_qty > 0 else 0.0
         self.risk.record_trade_result(position.symbol, pnl_pct)
-        self.champion.record("trend_ema_atr", pnl_pct, self.risk.state.drawdown_pct, live=True)
+        risk_state = getattr(self.risk, "state", None)
+        drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))
+        self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
         remaining_qty = max(0.0, position.qty - filled_qty)
-        with self.lock:
+        lock = getattr(self, "lock", None)
+        if lock is None:
+            from contextlib import nullcontext
+            lock = nullcontext()
+        with lock:
             if remaining_qty <= 1e-12:
                 self.state.open_positions.pop(position.symbol, None)
             else:

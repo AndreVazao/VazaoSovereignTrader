@@ -88,7 +88,10 @@ class ExternalSourceSupervisorTests(unittest.TestCase):
                 direction="BUY",
             )
         ])
-        good = FakeAdapter([
+        class GoodAdapter(FakeAdapter):
+            source_id = "feed-b"
+
+        good = GoodAdapter([
             ExternalMarketObservation(
                 source_id="feed-b",
                 symbol="BTC/USDT",

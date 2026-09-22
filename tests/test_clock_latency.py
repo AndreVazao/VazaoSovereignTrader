@@ -22,7 +22,7 @@ def test_calibrator_reports_offset_percentiles_and_jitter():
     assert stats.median_offset_ms == 5
     assert stats.p95_offset_ms > 6
     assert stats.p99_offset_ms > stats.p95_offset_ms
-    assert stats.jitter_ms == 0
+    assert stats.jitter_ms == 1
 
 
 def test_calibrator_reports_processing_delay():

@@ -112,7 +112,7 @@ class LatencyEdgeDetector:
             if relevant else 0.0
         )
 
-        gross_edge_bps = min(abs(leader_move_bps), abs(follower_move_bps))
+        gross_edge_bps = abs(leader_move_bps)
         latency_decay = (
             self.execution_latency_ms / 100.0
         ) * self.latency_decay_bps_per_100ms

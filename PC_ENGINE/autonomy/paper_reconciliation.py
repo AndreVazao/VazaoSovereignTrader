@@ -108,7 +108,7 @@ class PaperAutonomyReconciler:
             elif "REJECTED" in statuses or "INVALID" in statuses:
                 state = "REJECTED"
                 rejected += 1
-            elif filled + max(1e-12, requested * 1e-9) < requested or any(s == "PARTIAL" for s in statuses):
+            elif filled + max(1e-12, requested * 1e-9) < requested:
                 state = "PARTIAL"
                 partial += 1
                 reconciled += 1
