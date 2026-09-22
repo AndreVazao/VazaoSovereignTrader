@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class BrowserExecutionRecord:
+    idempotency_key: str
+    owner_id: str
+    venue_id: str
+    account_id: str
+    symbol: str
+    action: str
+    quantity: float
+    state: str
+    external_id: str | None
+    page_fingerprint: str
+    context_fingerprint: str
+    recorded_at_ms: int
+
+
+class BrowserExecutionLedger:
+    """Append-only, owner-private browser execution journal.
+
+    A browser submission is never erased or rewritten. Repeated calls with the
+    same idempotency key return the latest known record, preventing a blind
+    second click after a timeout.
+    """
+
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+
+    def latest(self, idempotency_key: str) -> BrowserExecutionRecord | None:
+        if not self.path.exists():
+            return None
+        found = None
+        with self.path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    item = BrowserExecutionRecord(**json.loads(line))
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if item.idempotency_key == idempotency_key:
+                    found = item
+        return found
+
+    def append(self, *, intent, state: str, external_id: str | None, page_fingerprint: str, context_fingerprint: str) -> BrowserExecutionRecord:
+        if not intent.idempotency_key:
+            raise ValueError("idempotency_key is required")
+        item = BrowserExecutionRecord(
+            idempotency_key=intent.idempotency_key,
+            owner_id=intent.owner_id,
+            venue_id=intent.venue_id,
+            account_id=intent.account_id,
+            symbol=intent.symbol,
+            action=intent.action,
+            quantity=float(intent.quantity),
+            state=str(state),
+            external_id=external_id,
+            page_fingerprint=page_fingerprint,
+            context_fingerprint=context_fingerprint,
+            recorded_at_ms=int(time.time() * 1000),
+        )
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(item), sort_keys=True) + "\n")
+        return item
