@@ -14,7 +14,7 @@ def test_only_stable_oos_evidence_becomes_intent(tmp_path):
             {
                 "leader": "A", "follower": "B", "symbol": "BTC/USDT", "direction": "UP",
                 "in_expectancy": 2.0, "out_expectancy": 3.0,
-                "out_ci_low": 1.0, "out_ci_high": 5.0,
+                "out_ci_low": 2.8, "out_ci_high": 3.2,
                 "out_completion_rate": 1.0,
                 "out_average_entry_impact_bps": 2.0,
                 "out_average_exit_impact_bps": 2.0,
