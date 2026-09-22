@@ -361,3 +361,41 @@ def test_pending_reconciliation_cumulative_notional_regression_fails_closed(
     assert item["known_quote_notional"] == pytest.approx(known_notional)
     assert item["known_fee"] == pytest.approx(0.042)
     assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    ("raw_cost", "raw_fee"),
+    [(42.0, -0.001), (-42.0, 0.042)],
+)
+def test_pending_reconciliation_negative_financial_value_fails_closed(
+    tmp_path, monkeypatch, raw_cost, raw_fee
+):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    engine.state.pending_orders["negative-financial-1"] = _pending_exit()
+    engine._persist_recovery()
+
+    raw = {
+        "id": "negative-financial-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "open",
+        "filled": 0.4,
+        "average": 105.0,
+        "cost": raw_cost,
+        "fee": {"cost": raw_fee, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(raw))
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    item = engine.state.pending_orders["negative-financial-1"]
+    assert item["known_filled_qty"] == pytest.approx(0.0)
+    assert item["known_quote_notional"] == pytest.approx(0.0)
+    assert item["known_fee"] == pytest.approx(0.0)
+    assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
