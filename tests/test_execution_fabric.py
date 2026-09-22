@@ -29,10 +29,12 @@ def test_prefers_api_then_browser_then_android_then_human():
         methods=(ExecutionMethod.API, ExecutionMethod.BROWSER, ExecutionMethod.ANDROID),
     )
     intent = fabric.build_intent(
-        target=target, action="BUY", symbol="BTC/USDT", quantity=1, idempotency_key="k1"
+        target=target, action="BUY", symbol="BTC/USDT", quantity=1, idempotency_key="k1", stop_pct=0.02, take_profit_pct=0.04
     )
     assert intent is not None
     assert intent.method is ExecutionMethod.BROWSER
+    assert intent.stop_pct == 0.02
+    assert intent.take_profit_pct == 0.04
 
 
 def test_owner_mismatch_fails_closed():

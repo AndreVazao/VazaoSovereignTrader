@@ -317,6 +317,8 @@ class SovereignEngine:
                 "browser_execution": True,
                 "venue_id": record.venue_id,
                 "account_id": record.account_id,
+                "stop_pct": record.stop_pct,
+                "take_profit_pct": record.take_profit_pct,
             }
             self._enter_safe_state("critical_runtime_condition")
             self.log("BROWSER_PENDING_ORDER_RECOVERED", {"order_id": order_id, "recovery_id": recovery_id, "symbol": record.symbol, "side": side, "idempotency_key": record.idempotency_key})

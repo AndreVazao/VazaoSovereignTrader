@@ -20,6 +20,8 @@ class BrowserExecutionRecord:
     page_fingerprint: str
     context_fingerprint: str
     recorded_at_ms: int
+    stop_pct: float | None = None
+    take_profit_pct: float | None = None
 
 
 class BrowserExecutionLedger:
@@ -84,6 +86,8 @@ class BrowserExecutionLedger:
             page_fingerprint=page_fingerprint,
             context_fingerprint=context_fingerprint,
             recorded_at_ms=int(time.time() * 1000),
+            stop_pct=None if getattr(intent, "stop_pct", None) is None else float(intent.stop_pct),
+            take_profit_pct=None if getattr(intent, "take_profit_pct", None) is None else float(intent.take_profit_pct),
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
