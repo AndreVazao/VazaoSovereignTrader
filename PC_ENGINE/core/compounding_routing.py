@@ -5,6 +5,7 @@ from typing import Any
 
 from PC_ENGINE.core.capital_transfer_planner import CapitalRouteCandidate, CapitalTransferPlanner
 from PC_ENGINE.core.compounding import GlobalCompoundingOrchestrator
+from PC_ENGINE.core.capital_transfer_reconciliation import CapitalTransferReconciliationGate
 
 
 @dataclass(frozen=True)
@@ -24,11 +25,12 @@ class CompoundingRoutingBridge:
     settlement constraints. This bridge never executes a transfer.
     """
 
-    def __init__(self, *, orchestrator: GlobalCompoundingOrchestrator, planner: CapitalTransferPlanner):
+    def __init__(self, *, orchestrator: GlobalCompoundingOrchestrator, planner: CapitalTransferPlanner, reconciliation_gate: CapitalTransferReconciliationGate | None = None):
         if orchestrator.owner_id != planner.policy.owner_id:
             raise ValueError("owner mismatch")
         self.orchestrator = orchestrator
         self.planner = planner
+        self.reconciliation_gate = reconciliation_gate
 
     def plan(
         self,
@@ -36,8 +38,13 @@ class CompoundingRoutingBridge:
         owner_id: str,
         venues: list[dict[str, Any]],
         opportunities: list[dict[str, Any]],
+        observed_transfer_deltas: dict[str, dict[str, float]] | None = None,
     ) -> CompoundingRoutePlan:
         if owner_id != self.orchestrator.owner_id:
+            return CompoundingRoutePlan(owner_id=owner_id, global_base=0.0, next_base=0.0,
+                                        all_venues_at_base=False, candidates=())
+
+        if self.reconciliation_gate is not None and not self.reconciliation_gate.allows_routing(observed_transfer_deltas):
             return CompoundingRoutePlan(owner_id=owner_id, global_base=0.0, next_base=0.0,
                                         all_venues_at_base=False, candidates=())
 
