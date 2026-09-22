@@ -139,3 +139,63 @@ def test_partial_exit_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
     assert second.state.open_positions == {}
     assert second.state.pending_orders == {}
     assert second.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+
+def test_terminal_reconcile_crash_after_marker_persist_recovers_without_duplicate_fill(tmp_path, monkeypatch):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+
+    first = SovereignEngine(config)
+    _seed_position(first)
+    first.state.pending_orders["exit-crash-1"] = _pending_exit()
+    first._persist_recovery()
+
+    terminal_raw = {
+        "id": "exit-crash-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "closed",
+        "filled": 1.0,
+        "average": 103.0,
+        "cost": 103.0,
+        "fee": {"cost": 0.102, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(first, "_exchange_for_pending_order", _exchange_for(terminal_raw))
+
+    real_persist = first._persist_recovery
+    persist_calls = {"count": 0}
+
+    def crash_on_terminal_removal_persist():
+        persist_calls["count"] += 1
+        if persist_calls["count"] == 2:
+            raise RuntimeError("simulated process crash before terminal pending-order removal")
+        return real_persist()
+
+    monkeypatch.setattr(first, "_persist_recovery", crash_on_terminal_removal_persist)
+    first._reconcile_pending_orders()
+
+    # The first durable snapshot contains the fully applied fill, but the
+    # terminal pending order still exists because the process died before its
+    # removal could be persisted.
+    assert first.state.open_positions == {}
+    assert first.state.pending_orders["exit-crash-1"]["known_filled_qty"] == pytest.approx(1.0)
+    expected_pnl_pct = (103.0 - 100.0 - 0.10 - 0.102) / 100.0
+    assert first.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+    recovered = SovereignEngine(config)
+    assert recovered.state.open_positions == {}
+    assert recovered.state.pending_orders["exit-crash-1"]["known_filled_qty"] == pytest.approx(1.0)
+    assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+    monkeypatch.setattr(recovered, "_exchange_for_pending_order", _exchange_for(terminal_raw))
+    recovered._reconcile_pending_orders()
+
+    assert recovered.state.open_positions == {}
+    assert recovered.state.pending_orders == {}
+    assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+    assert recovered.risk.state.pnl_week_pct == pytest.approx(expected_pnl_pct)
+
+    # A further reconciliation cannot book the same terminal fill again.
+    recovered._reconcile_pending_orders()
+    assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
