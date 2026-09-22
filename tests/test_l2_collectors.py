@@ -17,7 +17,8 @@ class L2CollectorTests(unittest.TestCase):
             "b": [["100.0", "2.0"]], "a": [["100.2", "3.0"]],
         }), 9000)
         self.assertEqual(events[0].event_type, "delta")
-        self.assertEqual(events[0].sequence_start, 10)\n        self.assertEqual(events[0].sequence, 12)
+        self.assertEqual(events[0].sequence_start, 10)
+        self.assertEqual(events[0].sequence, 12)
         self.assertEqual(events[0].bids[0].quantity, 2.0)
 
     def test_okx_snapshot(self) -> None:
