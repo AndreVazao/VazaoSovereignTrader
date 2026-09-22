@@ -20,6 +20,8 @@ class BrowserExecutionRecord:
     page_fingerprint: str
     context_fingerprint: str
     recorded_at_ms: int
+    stop_pct: float | None = None
+    take_profit_pct: float | None = None
 
 
 class BrowserExecutionLedger:
