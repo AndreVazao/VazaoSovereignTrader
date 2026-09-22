@@ -61,7 +61,7 @@ class CapitalTransferAccounting:
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(item), sort_keys=True) + "\\n")
+            handle.write(json.dumps(asdict(item), sort_keys=True) + "\n")
         return item
 
     def expected_deltas(self, *, owner_id: str) -> dict[str, dict[str, float]]:
