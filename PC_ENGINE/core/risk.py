@@ -30,8 +30,15 @@ class RiskEngine:
         )
 
     def snapshot_state(self) -> dict:
-        state = asdict(self.state)
-        state["symbol_loss_streak"] = {str(k): int(v) for k, v in self.state.symbol_loss_streak.items()}
+        state = {
+            "pnl_today_pct": float(self.state.pnl_today_pct),
+            "pnl_week_pct": float(self.state.pnl_week_pct),
+            "drawdown_pct": float(self.state.drawdown_pct),
+            "equity_peak": float(self.state.equity_peak),
+            "kill_until": float(self.state.kill_until),
+            "symbol_loss_streak": {str(k): int(v) for k, v in self.state.symbol_loss_streak.items()},
+            "symbol_cooldown_until": {str(k): float(v) for k, v in self.state.symbol_cooldown_until.items()},
+        }
         state["symbol_cooldown_until"] = {str(k): float(v) for k, v in self.state.symbol_cooldown_until.items()}
         return state
 
