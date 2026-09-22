@@ -926,7 +926,15 @@ class SovereignEngine:
                 continue
             try:
                 try:
-                    raw = exchange.fetch_order(order_id, symbol)
+                    client_order_id = str(item.get("client_order_id") or "").strip()
+                    if item.get("browser_execution") and client_order_id and order_id.startswith("browser-client:"):
+                        raw = exchange.fetch_order_by_client_order_id(client_order_id, symbol)
+                        self.log("BROWSER_PENDING_ORDER_RESOLVED_BY_CLIENT_ID", {
+                            "order_id": order_id, "symbol": symbol,
+                            "client_order_id": client_order_id,
+                        })
+                    else:
+                        raw = exchange.fetch_order(order_id, symbol)
                 except Exception as fetch_exc:
                     # Browser submissions have a durable client-order id. If the
                     # browser's external id is not accepted by the exchange's
