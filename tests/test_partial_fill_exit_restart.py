@@ -199,3 +199,81 @@ def test_terminal_reconcile_crash_after_marker_persist_recovers_without_duplicat
     # A further reconciliation cannot book the same terminal fill again.
     recovered._reconcile_pending_orders()
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected_log"),
+    [
+        ("symbol", "ETH/USDT", "PENDING_ORDER_SYMBOL_MISMATCH"),
+        ("side", "buy", "PENDING_ORDER_SIDE_MISMATCH"),
+        ("clientOrderId", "wrong-client-id", "PENDING_ORDER_IDENTITY_MISMATCH"),
+    ],
+)
+def test_pending_reconciliation_identity_mismatch_fails_closed(tmp_path, monkeypatch, field, value, expected_log):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    engine.state.pending_orders["identity-1"] = _pending_exit()
+    engine._persist_recovery()
+
+    raw = {
+        "id": "identity-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "closed",
+        "filled": 1.0,
+        "average": 103.0,
+        "cost": 103.0,
+        "fee": {"cost": 0.102, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    raw[field] = value
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(raw))
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    assert engine.state.pending_orders["identity-1"]["known_filled_qty"] == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    ("raw_filled", "raw_cost", "raw_fee", "expected_log"),
+    [
+        (0.2, 20.0, 0.02, "PENDING_ORDER_FILL_REGRESSION"),
+    ],
+)
+def test_pending_reconciliation_cumulative_fill_regression_fails_closed(
+    tmp_path, monkeypatch, raw_filled, raw_cost, raw_fee, expected_log
+):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    pending = _pending_exit()
+    pending["known_filled_qty"] = 0.4
+    pending["known_quote_notional"] = 42.0
+    pending["known_fee"] = 0.042
+    engine.state.pending_orders["regression-1"] = pending
+    engine._persist_recovery()
+
+    raw = {
+        "id": "regression-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "open",
+        "filled": raw_filled,
+        "average": 100.0,
+        "cost": raw_cost,
+        "fee": {"cost": raw_fee, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(raw))
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    assert engine.state.pending_orders["regression-1"]["known_filled_qty"] == pytest.approx(0.4)
+    assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
