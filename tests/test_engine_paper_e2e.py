@@ -61,4 +61,6 @@ def test_engine_paper_round_trip_isolated_and_persisted(tmp_path, monkeypatch):
     assert trades[0]["symbol"] == "BTC/USDT"
     assert trades[0]["qty"] == 0.01
     assert trades[0]["fees"] > 0
-    assert engine.state.financial_account["base_flow"]["BTC"] == 0.0
+    # PAPER accounting is simulated by the paper broker; live financial-flow
+    # reconciliation must not mutate the owner financial account.
+    assert engine.state.financial_account == {}
