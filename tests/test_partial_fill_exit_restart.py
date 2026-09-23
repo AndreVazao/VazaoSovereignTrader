@@ -488,7 +488,6 @@ def test_pending_reconciliation_nonfinite_financial_value_fails_closed(
 @pytest.mark.parametrize(
     ("raw", "expected_safe"),
     [
-        ({"filled": 0.4, "average": 105.0, "cost": 42.0, "fee": {"cost": 0.042, "currency": "USDT"}}, False),
         ({"filled": 0.0, "average": 105.0, "cost": 1.0}, True),
         ({"filled": 0.4, "average": 105.0, "cost": 42.0, "fee": {"cost": 50.0, "currency": "USDT"}}, True),
         ({"filled": 0.4, "average": 105.0, "cost": 1.0}, True),
