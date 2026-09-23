@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import threading
 import time
 from dataclasses import asdict, dataclass, field
@@ -890,6 +891,8 @@ class SovereignEngine:
         cost = raw.get("cost")
         if cost is not None:
             cost = float(cost)
+            if not math.isfinite(cost):
+                return {"ok": False, "reason": "nonfinite_order_cost", "cost": cost}
             expected = float(filled_qty) * float(average_price)
             tolerance = max(1e-12, abs(expected) * tolerance_pct)
             if cost < 0:
@@ -903,13 +906,23 @@ class SovereignEngine:
                     "tolerance": tolerance,
                 }
         fee = raw.get("fee")
-        if isinstance(fee, dict) and fee.get("cost") is not None and float(fee["cost"]) < 0:
-            return {"ok": False, "reason": "negative_fee", "fee": float(fee["cost"])}
+        if isinstance(fee, dict) and fee.get("cost") is not None:
+            fee_cost = float(fee["cost"])
+            if not math.isfinite(fee_cost):
+                return {"ok": False, "reason": "nonfinite_fee", "fee": fee_cost}
+            if fee_cost < 0:
+                return {"ok": False, "reason": "negative_fee", "fee": fee_cost}
         fees = raw.get("fees")
         if isinstance(fees, list):
             for entry in fees:
-                if isinstance(entry, dict) and entry.get("cost") is not None and float(entry["cost"]) < 0:
-                    return {"ok": False, "reason": "negative_fee", "fee": float(entry["cost"])}
+                if isinstance(entry, dict) and entry.get("cost") is not None:
+                    fee_cost = float(entry["cost"])
+                    if not math.isfinite(fee_cost):
+                        return {"ok": False, "reason": "nonfinite_fee", "fee": fee_cost}
+                    if fee_cost < 0:
+                        return {"ok": False, "reason": "negative_fee", "fee": fee_cost}
+        if not math.isfinite(float(filled_qty)) or not math.isfinite(float(average_price)):
+            return {"ok": False, "reason": "nonfinite_fill_or_price"}
         if float(filled_qty) < 0 or float(average_price) < 0:
             return {"ok": False, "reason": "negative_fill_or_price"}
         expected = float(filled_qty) * float(average_price)
