@@ -906,12 +906,14 @@ class SovereignEngine:
                     "tolerance": tolerance,
                 }
         fee = raw.get("fee")
+        fee_costs = []
         if isinstance(fee, dict) and fee.get("cost") is not None:
             fee_cost = float(fee["cost"])
             if not math.isfinite(fee_cost):
                 return {"ok": False, "reason": "nonfinite_fee", "fee": fee_cost}
             if fee_cost < 0:
                 return {"ok": False, "reason": "negative_fee", "fee": fee_cost}
+            fee_costs.append(fee_cost)
         fees = raw.get("fees")
         if isinstance(fees, list):
             for entry in fees:
@@ -921,6 +923,9 @@ class SovereignEngine:
                         return {"ok": False, "reason": "nonfinite_fee", "fee": fee_cost}
                     if fee_cost < 0:
                         return {"ok": False, "reason": "negative_fee", "fee": fee_cost}
+                    fee_costs.append(fee_cost)
+        if fee_costs and cost is not None and any(fee_value > cost + max(1e-12, abs(cost) * tolerance_pct) for fee_value in fee_costs):
+            return {"ok": False, "reason": "fee_exceeds_order_cost", "fee": max(fee_costs), "cost": cost}
         if not math.isfinite(float(filled_qty)) or not math.isfinite(float(average_price)):
             return {"ok": False, "reason": "nonfinite_fill_or_price"}
         if float(filled_qty) < 0 or float(average_price) < 0:
