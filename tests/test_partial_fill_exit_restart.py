@@ -72,6 +72,50 @@ def _exchange_for(raw):
     return resolve
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected_safe"),
+    [
+        ({"filled": 0.0, "average": 105.0, "cost": 1.0}, True),
+        ({"filled": 0.0, "average": 105.0, "cost": 0.0, "fee": {"cost": 0.01, "currency": "USDT"}}, True),
+        ({"filled": 0.0, "average": 0.0, "cost": 0.0, "fee": {"cost": 0.0, "currency": "USDT"}}, True),
+    ],
+)
+def test_pending_reconciliation_zero_fill_financial_values_fail_closed(
+    tmp_path, monkeypatch, raw, expected_safe
+):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    engine.state.pending_orders["zero-fill-financial-1"] = _pending_exit()
+    engine._persist_recovery()
+
+    response = {
+        "id": "zero-fill-financial-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "open",
+        "filled": 0.4,
+        "average": 105.0,
+        "cost": 42.0,
+        "fee": {"cost": 0.042, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    response.update(raw)
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(response))
+
+    engine._reconcile_pending_orders()
+
+    assert (engine.state.status == "SAFE_MODE") is expected_safe
+    if expected_safe:
+        assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+        item = engine.state.pending_orders["zero-fill-financial-1"]
+        assert item["known_filled_qty"] == pytest.approx(0.0)
+        assert item["known_quote_notional"] == pytest.approx(0.0)
+        assert item["known_fee"] == pytest.approx(0.0)
+        assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
+
+
 def test_partial_exit_crash_restart_then_terminal_fill_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
     config = _config()
@@ -133,8 +177,6 @@ def test_partial_exit_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
     assert second.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
     assert second.risk.state.pnl_week_pct == pytest.approx(expected_pnl_pct)
 
-    # Terminal removal is durable: another reconciliation cannot book the
-    # terminal fill or P&L again.
     second._reconcile_pending_orders()
     assert second.state.open_positions == {}
     assert second.state.pending_orders == {}
@@ -175,9 +217,6 @@ def test_terminal_reconcile_crash_after_marker_persist_recovers_without_duplicat
     monkeypatch.setattr(first, "_persist_recovery", crash_after_marker_persist)
     first._reconcile_pending_orders()
 
-    # The first durable snapshot contains the fully applied fill, but the
-    # terminal pending order still exists because the process died before its
-    # removal could be persisted.
     assert first.state.open_positions == {}
     assert first.state.pending_orders["exit-crash-1"]["known_filled_qty"] == pytest.approx(1.0)
     expected_pnl_pct = (103.0 - 100.0 - 0.10 - 0.102) / 100.0
@@ -196,7 +235,6 @@ def test_terminal_reconcile_crash_after_marker_persist_recovers_without_duplicat
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
     assert recovered.risk.state.pnl_week_pct == pytest.approx(expected_pnl_pct)
 
-    # A further reconciliation cannot book the same terminal fill again.
     recovered._reconcile_pending_orders()
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
 
