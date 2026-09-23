@@ -581,3 +581,58 @@ def test_crash_after_financial_application_before_marker_persist_is_recoverable_
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
     recovered._reconcile_pending_orders()
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_safe"),
+    [
+        (
+            {
+                "id": "cumulative-notional-inconsistent-1",
+                "symbol": "BTC/USDT",
+                "side": "sell",
+                "status": "open",
+                "filled": 0.8,
+                "average": 100.0,
+                "cost": 50.0,
+                "fee": {"cost": 0.05, "currency": "USDT"},
+                "clientOrderId": "client-exit-partial-1",
+            },
+            True,
+        ),
+        (
+            {
+                "id": "cumulative-notional-inconsistent-2",
+                "symbol": "BTC/USDT",
+                "side": "sell",
+                "status": "open",
+                "filled": 0.0,
+                "average": 100.0,
+                "cost": 1.0,
+                "fee": {"cost": 0.001, "currency": "USDT"},
+                "clientOrderId": "client-exit-partial-1",
+            },
+            True,
+        ),
+    ],
+)
+def test_pending_reconciliation_cumulative_notional_invariants_fail_closed(
+    tmp_path, monkeypatch, raw, expected_safe
+):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    engine.state.pending_orders["cumulative-notional-1"] = _pending_exit()
+    engine._persist_recovery()
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(raw))
+
+    engine._reconcile_pending_orders()
+
+    assert (engine.state.status == "SAFE_MODE") is expected_safe
+    item = engine.state.pending_orders["cumulative-notional-1"]
+    assert item["known_filled_qty"] == pytest.approx(0.0)
+    assert item["known_quote_notional"] == pytest.approx(0.0)
+    assert item["known_fee"] == pytest.approx(0.0)
+    assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
