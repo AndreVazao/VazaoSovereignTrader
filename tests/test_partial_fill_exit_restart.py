@@ -527,3 +527,57 @@ def test_pending_reconciliation_impossible_financial_relationships_fail_closed(
         assert item["known_quote_notional"] == pytest.approx(0.0)
         assert item["known_fee"] == pytest.approx(0.0)
         assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
+
+
+def test_crash_after_financial_application_before_marker_persist_is_recoverable_without_duplicate_fill(tmp_path, monkeypatch):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+
+    first = SovereignEngine(config)
+    _seed_position(first)
+    first.state.pending_orders["exit-financial-crash-1"] = _pending_exit()
+    first._persist_recovery()
+
+    terminal_raw = {
+        "id": "exit-financial-crash-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "closed",
+        "filled": 1.0,
+        "average": 103.0,
+        "cost": 103.0,
+        "fee": {"cost": 0.102, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(first, "_exchange_for_pending_order", _exchange_for(terminal_raw))
+
+    real_persist = first._persist_recovery
+    persist_calls = {"count": 0}
+
+    def crash_before_marker_persist():
+        persist_calls["count"] += 1
+        if persist_calls["count"] == 1:
+            raise RuntimeError("simulated persistence failure before applied-fill marker")
+        real_persist()
+
+    monkeypatch.setattr(first, "_persist_recovery", crash_before_marker_persist)
+    first._reconcile_pending_orders()
+
+    assert first.state.open_positions == {}
+    assert first.state.pending_orders["exit-financial-crash-1"]["known_filled_qty"] == pytest.approx(1.0)
+    expected_pnl_pct = (103.0 - 100.0 - 0.10 - 0.102) / 100.0
+    assert first.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+    recovered = SovereignEngine(config)
+    assert recovered.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    assert recovered.state.pending_orders["exit-financial-crash-1"]["known_filled_qty"] == pytest.approx(0.0)
+    assert recovered.risk.state.pnl_today_pct == pytest.approx(0.0)
+
+    monkeypatch.setattr(recovered, "_exchange_for_pending_order", _exchange_for(terminal_raw))
+    recovered._reconcile_pending_orders()
+
+    assert recovered.state.open_positions == {}
+    assert recovered.state.pending_orders == {}
+    assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+    recovered._reconcile_pending_orders()
+    assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
