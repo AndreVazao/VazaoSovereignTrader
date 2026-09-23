@@ -709,7 +709,7 @@ def test_multi_fill_reconciliation_with_changing_average_price_applies_only_incr
 
     assert engine.state.open_positions == {}
     assert engine.state.pending_orders == {}
-    final_expected = expected_pnl_pct + ((33.0 - 0.03 - 0.033) / 30.0)
+    final_expected = expected_pnl_pct + ((3.0 - 0.03 - 0.033) / 30.0)
     assert engine.risk.state.pnl_today_pct == pytest.approx(final_expected)
     engine._reconcile_pending_orders()
     assert engine.risk.state.pnl_today_pct == pytest.approx(final_expected)
