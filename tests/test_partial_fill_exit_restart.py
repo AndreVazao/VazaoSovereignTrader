@@ -690,7 +690,7 @@ def test_multi_fill_reconciliation_with_changing_average_price_applies_only_incr
     assert item["known_quote_notional"] == pytest.approx(75.0)
     assert item["known_fee"] == pytest.approx(0.075)
 
-    expected_pnl_pct = ((2.0 - 0.04 - 0.042) / 40.0) + ((33.0 - 0.03 - 0.033) / 30.0)
+    expected_pnl_pct = ((2.0 - 0.04 - 0.042) / 40.0) + ((3.0 - 0.03 - 0.033) / 30.0)
     assert engine.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
 
     third_raw = {
