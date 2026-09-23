@@ -454,6 +454,7 @@ def test_pending_reconciliation_nonfinite_financial_value_fails_closed(
     tmp_path, monkeypatch, field, raw_value
 ):
     monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
     engine = SovereignEngine(config)
     _seed_position(engine)
     engine.state.pending_orders["nonfinite-financial-1"] = _pending_exit()
