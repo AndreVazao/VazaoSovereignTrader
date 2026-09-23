@@ -581,3 +581,43 @@ def test_crash_after_financial_application_before_marker_persist_is_recoverable_
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
     recovered._reconcile_pending_orders()
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+
+@pytest.mark.parametrize(
+    ("fees", "cost"),
+    [
+        ([{"cost": 0.03, "currency": "USDT"}, {"cost": 0.03, "currency": "USDT"}], 0.05),
+    ],
+)
+def test_pending_reconciliation_aggregated_fee_cost_exceeds_order_cost_fails_closed(
+    tmp_path, monkeypatch, fees, cost
+):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    engine.state.pending_orders["fee-list-total-1"] = _pending_exit()
+    engine._persist_recovery()
+
+    raw = {
+        "id": "fee-list-total-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "open",
+        "filled": 0.4,
+        "average": 125.0,
+        "cost": cost,
+        "fees": fees,
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(raw))
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    item = engine.state.pending_orders["fee-list-total-1"]
+    assert item["known_filled_qty"] == pytest.approx(0.0)
+    assert item["known_quote_notional"] == pytest.approx(0.0)
+    assert item["known_fee"] == pytest.approx(0.0)
+    assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
