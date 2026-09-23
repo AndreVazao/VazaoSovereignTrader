@@ -636,3 +636,80 @@ def test_pending_reconciliation_cumulative_notional_invariants_fail_closed(
     assert item["known_fee"] == pytest.approx(0.0)
     assert engine.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
     assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
+
+
+def test_multi_fill_reconciliation_with_changing_average_price_applies_only_incremental_financials(tmp_path, monkeypatch):
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+
+    engine = SovereignEngine(config)
+    _seed_position(engine)
+    engine.state.pending_orders["multi-fill-1"] = _pending_exit()
+    engine._persist_recovery()
+
+    first_raw = {
+        "id": "multi-fill-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "open",
+        "filled": 0.4,
+        "average": 105.0,
+        "cost": 42.0,
+        "fee": {"cost": 0.042, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(first_raw))
+    engine._reconcile_pending_orders()
+
+    position = engine.state.open_positions["BTC/USDT"]
+    assert position.qty == pytest.approx(0.6)
+    assert position.entry_fee == pytest.approx(0.06)
+    assert engine.state.pending_orders["multi-fill-1"]["known_filled_qty"] == pytest.approx(0.4)
+    assert engine.state.pending_orders["multi-fill-1"]["known_quote_notional"] == pytest.approx(42.0)
+    assert engine.state.pending_orders["multi-fill-1"]["known_fee"] == pytest.approx(0.042)
+
+    second_raw = {
+        "id": "multi-fill-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "open",
+        "filled": 0.7,
+        "average": 107.14285714285714,
+        "cost": 75.0,
+        "fee": {"cost": 0.075, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(second_raw))
+    engine._reconcile_pending_orders()
+
+    position = engine.state.open_positions["BTC/USDT"]
+    assert position.qty == pytest.approx(0.3)
+    assert position.entry_fee == pytest.approx(0.03)
+    item = engine.state.pending_orders["multi-fill-1"]
+    assert item["known_filled_qty"] == pytest.approx(0.7)
+    assert item["known_quote_notional"] == pytest.approx(75.0)
+    assert item["known_fee"] == pytest.approx(0.075)
+
+    expected_pnl_pct = ((2.0 - 0.04 - 0.042) / 40.0) + ((0.3 * 100.0 - 0.03 - 0.033) / 30.0)
+    assert engine.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+
+    third_raw = {
+        "id": "multi-fill-1",
+        "symbol": "BTC/USDT",
+        "side": "sell",
+        "status": "closed",
+        "filled": 1.0,
+        "average": 108.0,
+        "cost": 108.0,
+        "fee": {"cost": 0.108, "currency": "USDT"},
+        "clientOrderId": "client-exit-partial-1",
+    }
+    monkeypatch.setattr(engine, "_exchange_for_pending_order", _exchange_for(third_raw))
+    engine._reconcile_pending_orders()
+
+    assert engine.state.open_positions == {}
+    assert engine.state.pending_orders == {}
+    final_expected = expected_pnl_pct + ((0.3 * 108.0 - 0.03 - 0.033) / 30.0)
+    assert engine.risk.state.pnl_today_pct == pytest.approx(final_expected)
+    engine._reconcile_pending_orders()
+    assert engine.risk.state.pnl_today_pct == pytest.approx(final_expected)
