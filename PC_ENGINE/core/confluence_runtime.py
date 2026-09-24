@@ -9,6 +9,7 @@ from PC_ENGINE.core.cost_model import OpportunityCostGate
 from PC_ENGINE.core.mean_reversion_strategy import MeanReversionStrategy
 from PC_ENGINE.core.momentum_strategy import MultiTimeframeMomentumStrategy
 from PC_ENGINE.core.order_flow_strategy import OrderFlowStrategy
+from PC_ENGINE.core.risk import RiskEngine
 from PC_ENGINE.core.strategy_harness import PaperStrategyHarness, StrategyContext, StrategyEvidenceRecord
 from PC_ENGINE.core.paper_confluence_tracker import PaperConfluenceTracker
 from PC_ENGINE.radar.derivatives_radar import DerivativesRadar
@@ -22,6 +23,8 @@ from PC_ENGINE.radar.trade_event_store import WebSocketTradeEventStore
 class ConfluenceRuntimeResult:
     score: ConfluenceScore
     recorded: bool
+    risk_authorized: bool = False
+    risk_reason: str = "not evaluated"
 
 
 class PaperConfluenceRuntime:
@@ -61,6 +64,7 @@ class PaperConfluenceRuntime:
         self.trade_window_ms = max(250, int(settings.get("order_flow_window_ms", 5_000)))
         self.trade_max_events = max(1, int(settings.get("order_flow_max_events", 500)))
         self.min_lead_lag_confidence = float(settings.get("min_lead_lag_confidence", 0.75))
+        self.risk = RiskEngine(settings.get("risk", {}))
         self.cost_gate = OpportunityCostGate(
             minimum_net_edge_bps=float(settings.get("minimum_net_edge_bps", 2.0)),
             minimum_edge_margin_bps=float(settings.get("minimum_edge_margin_bps", 1.0)),
@@ -164,6 +168,32 @@ class PaperConfluenceRuntime:
                     derivatives_score=score.derivatives_score,
                     paper_only=True,
                 )
+        risk_authorized = False
+        risk_reason = "not evaluated"
+        if score.action in {"BUY", "SELL"}:
+            decision = self.risk.authorize_signal(symbol, score.action)
+            risk_authorized = decision.authorized
+            risk_reason = decision.reason
+            if not decision.authorized:
+                score = ConfluenceScore(
+                    symbol=score.symbol,
+                    action="HOLD",
+                    score=0.0,
+                    confidence=0.0,
+                    evidence=score.evidence,
+                    contradictions=score.contradictions + (f"risk engine: {decision.reason}",),
+                    technical_score=score.technical_score,
+                    candlestick_score=score.candlestick_score,
+                    radar_score=score.radar_score,
+                    lead_lag_score=score.lead_lag_score,
+                    regime_score=score.regime_score,
+                    momentum_score=score.momentum_score,
+                    mean_reversion_score=score.mean_reversion_score,
+                    order_flow_score=score.order_flow_score,
+                    breakout_score=score.breakout_score,
+                    derivatives_score=score.derivatives_score,
+                    paper_only=True,
+                )
         self.tracker.record(symbol, price, score, regime=regime.name)
         if record_state:
             state = build_market_state(
@@ -183,7 +213,7 @@ class PaperConfluenceRuntime:
                 strategy_evidence={name: evidence.__dict__ for name, evidence in strategy_evidence.items()},
             )
             self.state_store.append(state)
-        return ConfluenceRuntimeResult(score=score, recorded=record_state)
+        return ConfluenceRuntimeResult(score=score, recorded=record_state, risk_authorized=risk_authorized, risk_reason=risk_reason)
 
     def resolve_outcomes(self, fee_bps_round_trip: float = 28.0) -> int:
         return self.tracker.resolve_from_websocket_events(fee_bps_round_trip)
