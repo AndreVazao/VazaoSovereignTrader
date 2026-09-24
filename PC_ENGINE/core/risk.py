@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 
 from PC_ENGINE.core.adaptive_risk import AdaptiveRiskController, AdaptiveRiskSnapshot
 from PC_ENGINE.core.adaptive_risk_evidence import AdaptiveRiskEvidenceStore
+
+
+@dataclass(frozen=True)
+class RiskDecision:
+    authorized: bool
+    reason: str
 
 
 @dataclass
@@ -21,16 +27,37 @@ class RiskState:
 
 class RiskEngine:
     def __init__(self, settings: dict):
-        self.settings = settings
+        defaults = {
+            "max_daily_loss_pct": -0.03,
+            "max_weekly_loss_pct": -0.08,
+            "kill_cooldown_seconds": 900.0,
+            "max_symbol_loss_streak": 3,
+            "cooldown_after_loss_seconds": 900.0,
+            "risk_per_trade_pct": 0.01,
+        }
+        self.settings = {**defaults, **(settings or {})}
         self.state = RiskState()
-        adaptive_cfg = settings.get("adaptive_risk", {})
+        adaptive_cfg = self.settings.get("adaptive_risk", {})
         self.adaptive_risk = AdaptiveRiskController(adaptive_cfg)
         self.adaptive_evidence = AdaptiveRiskEvidenceStore(
             str(adaptive_cfg.get("outcome_path", "PC_ENGINE/data/radar/state_outcomes.jsonl"))
         )
 
+    def authorize_signal(self, symbol: str, action: str, now: float | None = None) -> RiskDecision:
+        """Final PAPER risk boundary for a proposed BUY/SELL signal."""
+        normalized = str(action).upper()
+        if normalized not in {"BUY", "SELL"}:
+            return RiskDecision(False, "risk engine requires BUY or SELL")
+        global_ok, global_reason = self.can_trade_global(now)
+        if not global_ok:
+            return RiskDecision(False, global_reason)
+        symbol_ok, symbol_reason = self.can_trade_symbol(symbol, now)
+        if not symbol_ok:
+            return RiskDecision(False, symbol_reason)
+        return RiskDecision(True, "risk engine authorized")
+
     def snapshot_state(self) -> dict:
-        state = {
+        return {
             "pnl_today_pct": float(self.state.pnl_today_pct),
             "pnl_week_pct": float(self.state.pnl_week_pct),
             "drawdown_pct": float(self.state.drawdown_pct),
@@ -39,8 +66,6 @@ class RiskEngine:
             "symbol_loss_streak": {str(k): int(v) for k, v in self.state.symbol_loss_streak.items()},
             "symbol_cooldown_until": {str(k): float(v) for k, v in self.state.symbol_cooldown_until.items()},
         }
-        state["symbol_cooldown_until"] = {str(k): float(v) for k, v in self.state.symbol_cooldown_until.items()}
-        return state
 
     def restore_state(self, raw: dict) -> None:
         if not isinstance(raw, dict):
