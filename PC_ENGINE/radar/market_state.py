@@ -29,6 +29,7 @@ class MarketState:
     confluence_score: float
     confluence_confidence: float
     action: str
+    strategy_evidence: dict[str, dict] | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -85,6 +86,7 @@ def build_market_state(
     breakout_score: float,
     derivatives_score: float,
     confluence,
+    strategy_evidence: dict[str, dict] | None = None,
     timestamp_ms: int | None = None,
 ) -> MarketState:
     """Create a normalized immutable state from independent evidence sources."""
@@ -111,4 +113,5 @@ def build_market_state(
         confluence_score=clamp(confluence.score),
         confluence_confidence=max(0.0, min(1.0, float(confluence.confidence))),
         action=str(confluence.action),
+        strategy_evidence=dict(strategy_evidence or {}),
     )
