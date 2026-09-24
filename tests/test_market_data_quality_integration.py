@@ -4,6 +4,7 @@ import pytest
 
 from PC_ENGINE.backtest.replay import ReplayBacktester
 from PC_ENGINE.core.preflight import validate_ohlcv_rows
+from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 
 
 def _candles(count: int = 61) -> list[list[float]]:
@@ -53,3 +54,29 @@ def test_backtest_rejects_invalid_market_data() -> None:
 
     with pytest.raises(ValueError, match="market data quality gate rejected"):
         ReplayBacktester(Strategy()).run("BTC/USDT", candles)
+
+
+def test_paper_collector_blocks_invalid_market_data(tmp_path) -> None:
+    calls = {"strategy": 0}
+
+    class Strategy:
+        def analyse(self, *args, **kwargs):
+            calls["strategy"] += 1
+            raise AssertionError("strategy must not receive invalid candles")
+
+    collector = PaperMarketCollector(
+        settings={
+            "data_dir": str(tmp_path),
+            "polling_exchanges": [],
+            "market_data_quality": {},
+        },
+        symbols=["BTC/USDT"],
+        ohlcv_fetcher=lambda symbol, timeframe, limit: _candles()[:-1] + [[1.0, 100.0, 101.0, 99.0, 100.0, 10.0]],
+        strategy=Strategy(),
+    )
+
+    recorded = collector.collect_once()
+
+    assert recorded == 0
+    assert collector.errors == 1
+    assert calls["strategy"] == 0
