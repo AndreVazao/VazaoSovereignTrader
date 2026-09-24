@@ -5,6 +5,7 @@ from typing import Any
 
 from PC_ENGINE.core.breakout_strategy import BreakoutVolumeStrategy
 from PC_ENGINE.core.confluence import ConfluenceEngine, ConfluenceScore
+from PC_ENGINE.core.cost_model import OpportunityCostGate
 from PC_ENGINE.core.mean_reversion_strategy import MeanReversionStrategy
 from PC_ENGINE.core.momentum_strategy import MultiTimeframeMomentumStrategy
 from PC_ENGINE.core.order_flow_strategy import OrderFlowStrategy
@@ -60,6 +61,11 @@ class PaperConfluenceRuntime:
         self.trade_window_ms = max(250, int(settings.get("order_flow_window_ms", 5_000)))
         self.trade_max_events = max(1, int(settings.get("order_flow_max_events", 500)))
         self.min_lead_lag_confidence = float(settings.get("min_lead_lag_confidence", 0.75))
+        self.cost_gate = OpportunityCostGate(
+            minimum_net_edge_bps=float(settings.get("minimum_net_edge_bps", 2.0)),
+            minimum_edge_margin_bps=float(settings.get("minimum_edge_margin_bps", 1.0)),
+            max_total_cost_bps=float(settings.get("max_total_cost_bps", 100.0)),
+        )
 
     @staticmethod
     def _returns(ohlcv: list[list[float]], limit: int = 20) -> list[float]:
@@ -79,6 +85,7 @@ class PaperConfluenceRuntime:
         timeframes: dict[str, list[list[float]]] | None = None,
         trade_events: list[dict] | None = None,
         record_state: bool = True,
+        cost_context: dict | None = None,
     ) -> ConfluenceRuntimeResult:
         learned = [s for s in self.lead_lag.signals(self.min_lead_lag_confidence) if s.symbol == symbol]
         regime = self.regime.classify(self._returns(ohlcv))
@@ -126,6 +133,37 @@ class PaperConfluenceRuntime:
             breakout_score=breakout,
             derivatives_score=derivatives_score,
         )
+        # Economic viability is evaluated after confluence evidence is assembled.
+        # It never authorizes execution; it only blocks non-viable PAPER opportunities.
+        if cost_context is not None and score.action in {"BUY", "SELL"}:
+            breakdown = self.cost_gate.evaluate(
+                gross_edge_bps=float(cost_context.get("gross_edge_bps", 0.0)),
+                fee_bps=float(cost_context.get("fee_bps", 0.0)),
+                spread_bps=float(cost_context.get("spread_bps", 0.0)),
+                slippage_bps=float(cost_context.get("slippage_bps", 0.0)),
+                liquidity_bps=float(cost_context.get("liquidity_bps", 0.0)),
+                latency_bps=float(cost_context.get("latency_bps", 0.0)),
+            )
+            if not breakdown.viable:
+                score = ConfluenceScore(
+                    symbol=score.symbol,
+                    action="HOLD",
+                    score=0.0,
+                    confidence=0.0,
+                    evidence=score.evidence,
+                    contradictions=score.contradictions + (f"opportunity gate: {breakdown.reason}",),
+                    technical_score=score.technical_score,
+                    candlestick_score=score.candlestick_score,
+                    radar_score=score.radar_score,
+                    lead_lag_score=score.lead_lag_score,
+                    regime_score=score.regime_score,
+                    momentum_score=score.momentum_score,
+                    mean_reversion_score=score.mean_reversion_score,
+                    order_flow_score=score.order_flow_score,
+                    breakout_score=score.breakout_score,
+                    derivatives_score=score.derivatives_score,
+                    paper_only=True,
+                )
         self.tracker.record(symbol, price, score, regime=regime.name)
         if record_state:
             state = build_market_state(
