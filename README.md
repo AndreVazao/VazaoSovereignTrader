@@ -231,3 +231,84 @@ python -m playwright install chromium
 ```
 
 A camada browser não contorna CAPTCHA, 2FA, anti-bot ou outros mecanismos de segurança da plataforma.
+
+
+## Estado técnico consolidado — setembro de 2026
+
+A infraestrutura de segurança e execução evoluiu significativamente além da base inicial. O projeto deve continuar a ser desenvolvido sempre por branch → testes → PR → CI → merge.
+
+### Camadas já implementadas
+
+- PAPER-first e REAL bloqueado por defeito.
+- Risk Engine com limites de risco, drawdown, streaks e cooldowns.
+- RealModeGuard separado da estratégia.
+- Multi-owner com isolamento de capital, execução, P&L, chaves e autorização REAL.
+- Sovereign Market Radar e Capital Opportunity Engine.
+- Order flow/L2, lead/lag, latência e validação OOS.
+- State Signature Learning e State Outcomes.
+- Walk-forward e validação de regimes.
+- Adaptive/contextual risk com gates de evidência.
+- Capital routing, settlement constraints e transferências same-owner.
+- Global compounding por tiers.
+- Execution Fabric API → Browser → Android → Human Bridge.
+- Browser Safety com deteção de contexto alterado, alvo inválido, cobertura e necessidade de intervenção humana.
+- Ledger durável para browser submissions e recuperação após crash.
+- Reconciliação financeira cumulativa, idempotente e fail-closed.
+- Recuperação atómica do estado e Risk State persistente.
+- Proteções contra regressões de quantidade, notional, fees, preços e valores não finitos.
+- Data Quality Gates para OHLCV antes do consumo por estratégias.
+- CI determinístico para a suíte Python.
+
+### Data Quality Gates
+
+A validação de market data está em PC_ENGINE/core/preflight.py e cobre:
+
+- campos obrigatórios;
+- valores não finitos;
+- timestamps duplicados;
+- timestamps não crescentes;
+- gaps temporais configuráveis;
+- OHLC impossível;
+- preços não positivos;
+- volume negativo.
+
+A regra é fail-closed: dados inválidos não devem alimentar uma decisão de trading.
+
+### Execução e reconciliação
+
+O princípio operacional é:
+
+    submitted pelo browser/API ≠ filled confirmado pela exchange ≠ contabilizado
+
+Fills parciais e múltiplos fills são tratados por diferenças cumulativas. O sistema persiste marcadores, posição, fees, notional e estado de risco para permitir recuperação sem duplicar efeitos financeiros depois de crashes/restarts.
+
+### Próxima fase de desenvolvimento
+
+A sequência prevista para completar o objetivo do projeto é:
+
+1. Integrar o Data Quality Gate em todos os consumidores de market data.
+2. Construir um harness PAPER comum para estratégias concorrentes.
+3. Implementar e medir trend, momentum, breakout e mean reversion condicionada ao regime.
+4. Tornar fees, spread, slippage, liquidez e latência gates explícitos da decisão.
+5. Reforçar confluence/ensemble sem permitir bypass do Risk Engine.
+6. Expandir walk-forward, OOS temporal, Monte Carlo, stress tests e regime validation.
+7. Usar Champion/Challenger para promoção exclusivamente baseada em evidência.
+8. Medir oportunidades de lead/lag em streams/WebSockets com timestamps de origem e receção.
+9. Só depois iniciar a preparação formal para readiness REAL.
+
+Nenhum destes passos implica ativar REAL. A promoção para REAL continua a depender de evidência suficiente de dados, estratégia, risco, execução e reconciliação.
+
+### Objetivo operacional
+
+O objetivo não é encontrar uma estratégia mágica. É construir um sistema que:
+
+- encontra oportunidades mensuráveis;
+- elimina dados inválidos antes da decisão;
+- considera custos reais;
+- compara estratégias e regimes;
+- aprende com resultados próprios;
+- sobrevive a falhas e reinícios;
+- não duplica ordens ou contabilização;
+- preserva isolamento de capital;
+- permanece PAPER até haver evidência suficiente para cada gate.
+
