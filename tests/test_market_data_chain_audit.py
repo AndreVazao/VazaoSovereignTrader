@@ -72,3 +72,6 @@ def test_radar_accepts_valid_observation_and_preserves_quality_boundary(tmp_path
     assert snapshots[0].price == 100.0
     assert leads == []
     assert radar.quality_rejections == 0
+
+
+# CI trigger: keep this boundary regression suite synchronized with the audited branch.
