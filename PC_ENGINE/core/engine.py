@@ -14,7 +14,7 @@ from PC_ENGINE.core.owner_context import OwnerContext
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.order_manager import OrderManager
 from PC_ENGINE.core.paper_broker import PaperBroker
-from PC_ENGINE.core.preflight import PreflightChecker, validate_ohlcv_rows
+from PC_ENGINE.core.preflight import PreflightChecker
 from PC_ENGINE.core.recovery import RecoveryManager
 from PC_ENGINE.core.risk import RiskEngine
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
@@ -247,6 +247,7 @@ class SovereignEngine:
         collector_cfg["timeframe"] = self.config.get("strategy", {}).get("timeframe", "1m")
         collector_cfg["candles_limit"] = self.config.get("strategy", {}).get("candles_limit", 120)
         collector_cfg["data_dir"] = self.config.get("confluence", {}).get("data_dir", "PC_ENGINE/data/radar")
+        collector_cfg["market_data_quality"] = dict(self.config.get("market_data_quality", {}))
         self.paper_collector = PaperMarketCollector(
             settings=collector_cfg,
             symbols=self.config.get("symbols", []),
@@ -1247,19 +1248,6 @@ class SovereignEngine:
         for symbol in self.config["symbols"]:
             try:
                 ohlcv = exchange.fetch_ohlcv(symbol, self.config["strategy"]["timeframe"], int(self.config["strategy"]["candles_limit"]))
-                quality_cfg = self.config.get("market_data_quality", {})
-                quality = validate_ohlcv_rows(
-                    ohlcv,
-                    max_gap_seconds=quality_cfg.get("max_gap_seconds"),
-                )
-                if not quality.ok:
-                    self.log("MARKET_DATA_QUALITY_BLOCK", {
-                        "symbol": symbol,
-                        "valid_rows": quality.valid_rows,
-                        "errors": quality.errors[:10],
-                    })
-                    scores[symbol] = 0.0
-                    continue
                 spread_pct = exchange.fetch_spread_pct(symbol)
                 spreads[symbol] = spread_pct
                 signal = self.strategy.analyse(symbol, ohlcv, spread_pct)
