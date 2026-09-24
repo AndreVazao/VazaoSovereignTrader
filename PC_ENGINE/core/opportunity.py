@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from PC_ENGINE.core.cost_model import OpportunityCostGate
 from PC_ENGINE.learning.state_signature import SignatureStat, StateSignature, StateSignatureLearningEngine
 from PC_ENGINE.learning.learning_consensus import PaperLearningConsensus
 
@@ -28,6 +29,9 @@ class OpportunityScore:
     external_latency_bonus: float = 0.0
     external_latency_edge_bps: float = 0.0
     external_latency_freshness: float = 0.0
+    cost_gate_passed: bool | None = None
+    gross_edge_bps: float = 0.0
+    net_edge_bps: float = 0.0
 
 
 class PaperOpportunityEngine:
@@ -63,6 +67,11 @@ class PaperOpportunityEngine:
         self.external_latency_stale_after_ms = max(100, int(settings.get("external_latency_stale_after_ms", 2000)))
         self.external_latency_min_edge_bps = max(0.1, float(settings.get("external_latency_min_edge_bps", 1.0)))
         self.external_latency_path = Path(settings.get("external_latency_profile_path", "PC_ENGINE/data/radar/external_source_latency_profiles.jsonl"))
+        self.cost_gate = OpportunityCostGate(
+            minimum_net_edge_bps=float(settings.get("minimum_net_edge_bps", 2.0)),
+            minimum_edge_margin_bps=float(settings.get("minimum_edge_margin_bps", 1.0)),
+            max_total_cost_bps=float(settings.get("max_total_cost_bps", 100.0)),
+        )
 
     def _load_stats(self) -> None:
         try:
@@ -157,6 +166,7 @@ class PaperOpportunityEngine:
         spread_pct: float,
         state: dict | None,
         now_ms: int | None = None,
+        cost_context: dict | None = None,
     ) -> OpportunityScore:
         normalized_action = str(action).upper()
         if not self.enabled or normalized_action not in {"BUY", "SELL"}:
@@ -168,6 +178,32 @@ class PaperOpportunityEngine:
         now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
         base = max(0.0, min(1.0, float(strategy_score)))
         cost_penalty = max(0.0, min(0.50, float(spread_pct) * self.cost_weight * 100.0))
+
+        cost_gate_passed: bool | None = None
+        gross_edge_bps = 0.0
+        net_edge_bps = 0.0
+        cost_reason = "custo económico não avaliado"
+        if cost_context is not None:
+            gross_edge_bps = float(cost_context.get("gross_edge_bps", 0.0))
+            breakdown = self.cost_gate.evaluate(
+                gross_edge_bps=gross_edge_bps,
+                fee_bps=float(cost_context.get("fee_bps", 0.0)),
+                spread_bps=float(cost_context.get("spread_bps", max(0.0, float(spread_pct) * 10000.0))),
+                slippage_bps=float(cost_context.get("slippage_bps", 0.0)),
+                liquidity_bps=float(cost_context.get("liquidity_bps", 0.0)),
+                latency_bps=float(cost_context.get("latency_bps", 0.0)),
+            )
+            cost_gate_passed = breakdown.viable
+            net_edge_bps = breakdown.net_edge_bps
+            cost_reason = breakdown.reason
+            if not breakdown.viable:
+                return OpportunityScore(
+                    symbol=symbol, score=0.0, confidence=0.0, action=normalized_action,
+                    strategy_score=round(base, 6), learning_bonus=0.0, cost_penalty=round(cost_penalty, 6),
+                    freshness=0.0, reason=f"opportunity gate bloqueou: {cost_reason}",
+                    cost_gate_passed=False, gross_edge_bps=round(gross_edge_bps, 4),
+                    net_edge_bps=round(net_edge_bps, 4),
+                )
 
         learning_bonus = 0.0
         consensus_bonus = 0.0
@@ -233,7 +269,7 @@ class PaperOpportunityEngine:
 
         final = max(0.0, min(1.0, base + learning_bonus + consensus_bonus + latency_bonus + external_latency_bonus - cost_penalty))
         confidence = max(0.0, min(1.0, 0.65 * base + 0.35 * (1.0 if learning_bonus > 0 else 0.0)))
-        reason = f"estratégia={base:.3f}; {learning_reason}; latency={latency_edge_bps:.2f}bps/{latency_freshness:.2f}; external={external_latency_edge_bps:.2f}bps/{external_latency_freshness:.2f}; custo/spread={cost_penalty:.3f}"
+        reason = f"estratégia={base:.3f}; {learning_reason}; latency={latency_edge_bps:.2f}bps/{latency_freshness:.2f}; external={external_latency_edge_bps:.2f}bps/{external_latency_freshness:.2f}; custo/spread={cost_penalty:.3f}; cost_gate={cost_reason}"
         return OpportunityScore(
             symbol=symbol,
             score=round(final, 6),
@@ -252,4 +288,7 @@ class PaperOpportunityEngine:
             external_latency_bonus=round(external_latency_bonus, 6),
             external_latency_edge_bps=round(external_latency_edge_bps, 4),
             external_latency_freshness=round(external_latency_freshness, 6),
+            cost_gate_passed=cost_gate_passed,
+            gross_edge_bps=round(gross_edge_bps, 4),
+            net_edge_bps=round(net_edge_bps, 4),
         )

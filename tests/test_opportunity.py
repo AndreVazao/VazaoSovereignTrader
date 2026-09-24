@@ -90,3 +90,55 @@ def test_stale_latency_edge_does_not_affect_paper_opportunity(tmp_path):
     )
     assert result.latency_bonus == 0.0
     assert result.latency_edge_bps == 0.0
+
+
+def test_cost_aware_opportunity_gate_blocks_trade_when_edge_is_consumed():
+    engine = PaperOpportunityEngine({
+        "minimum_net_edge_bps": 5.0,
+        "minimum_edge_margin_bps": 2.0,
+    })
+    result = engine.score(
+        symbol="BTC/USDT",
+        strategy_score=0.9,
+        action="BUY",
+        spread_pct=0.0005,
+        state=None,
+        now_ms=1_000,
+        cost_context={
+            "gross_edge_bps": 20.0,
+            "fee_bps": 8.0,
+            "spread_bps": 5.0,
+            "slippage_bps": 4.0,
+            "liquidity_bps": 2.0,
+            "latency_bps": 3.0,
+        },
+    )
+    assert result.score == 0.0
+    assert result.cost_gate_passed is False
+    assert result.net_edge_bps == -2.0
+
+
+def test_cost_aware_opportunity_gate_preserves_viable_net_edge():
+    engine = PaperOpportunityEngine({
+        "minimum_net_edge_bps": 5.0,
+        "minimum_edge_margin_bps": 2.0,
+    })
+    result = engine.score(
+        symbol="BTC/USDT",
+        strategy_score=0.9,
+        action="BUY",
+        spread_pct=0.0005,
+        state=None,
+        now_ms=1_000,
+        cost_context={
+            "gross_edge_bps": 50.0,
+            "fee_bps": 8.0,
+            "spread_bps": 5.0,
+            "slippage_bps": 4.0,
+            "liquidity_bps": 2.0,
+            "latency_bps": 3.0,
+        },
+    )
+    assert result.cost_gate_passed is True
+    assert result.net_edge_bps == 28.0
+    assert result.score > 0.0
