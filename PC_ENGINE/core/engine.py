@@ -925,8 +925,11 @@ class SovereignEngine:
                     if fee_cost < 0:
                         return {"ok": False, "reason": "negative_fee", "fee": fee_cost}
                     fee_costs.append(fee_cost)
-        if fee_costs and cost is not None and any(fee_value > cost + max(1e-12, abs(cost) * tolerance_pct) for fee_value in fee_costs):
-            return {"ok": False, "reason": "fee_exceeds_order_cost", "fee": max(fee_costs), "cost": cost}
+        if fee_costs and cost is not None:
+            total_fee = sum(fee_costs)
+            fee_tolerance = max(1e-12, abs(cost) * tolerance_pct)
+            if total_fee > cost + fee_tolerance:
+                return {"ok": False, "reason": "fee_exceeds_order_cost", "fee": total_fee, "cost": cost}
         if not math.isfinite(float(filled_qty)) or not math.isfinite(float(average_price)):
             return {"ok": False, "reason": "nonfinite_fill_or_price"}
         if float(filled_qty) < 0 or float(average_price) < 0:
