@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .candlestick_patterns import CandlestickPatternEngine
+from .preflight import validate_ohlcv_rows
 from .indicators import atr, ema, slope, vwap
 
 Action = Literal["BUY", "SELL", "HOLD"]
@@ -30,6 +31,20 @@ class TrendEmaAtrStrategy:
 
     def analyse(self, symbol: str, ohlcv: list[list[float]], spread_pct: float = 0.0) -> Signal:
         cfg = self.settings
+        quality_cfg = cfg.get("market_data_quality", {})
+        quality = validate_ohlcv_rows(
+            ohlcv,
+            max_gap_seconds=quality_cfg.get("max_gap_seconds"),
+        )
+        if not quality.ok:
+            return Signal(
+                "HOLD",
+                "WARMUP",
+                0.0,
+                "market data quality gate blocked strategy input",
+                0.0,
+                0.0,
+            )
         closes = [float(c[4]) for c in ohlcv]
         price = closes[-1] if closes else 0.0
         if len(closes) < max(cfg["ema_long"], cfg["atr_period"], cfg["vwap_period"]) + 2:
