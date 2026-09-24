@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, List, Mapping
+from typing import Iterable, List, Mapping, Sequence
 
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 
@@ -33,12 +33,7 @@ def validate_market_candles(
     rows = list(candles)
 
     if not rows:
-        return MarketDataQualityResult(
-            ok=False,
-            errors=["no market data rows"],
-            warnings=[],
-            valid_rows=0,
-        )
+        return MarketDataQualityResult(False, ["no market data rows"], [], 0)
 
     previous_timestamp: float | None = None
     seen_timestamps: set[float] = set()
@@ -63,23 +58,13 @@ def validate_market_candles(
             errors.append(f"{prefix}: non-numeric market data")
             continue
 
-        if not all(
-            math.isfinite(value)
-            for value in (
-                timestamp,
-                open_price,
-                high_price,
-                low_price,
-                close_price,
-                volume,
-            )
-        ):
+        if not all(math.isfinite(value) for value in (
+            timestamp, open_price, high_price, low_price, close_price, volume
+        )):
             errors.append(f"{prefix}: non-finite market data")
             continue
 
-        normalized_timestamp = (
-            timestamp / 1000.0 if abs(timestamp) >= 1e11 else timestamp
-        )
+        normalized_timestamp = timestamp / 1000.0 if abs(timestamp) >= 1e11 else timestamp
         if normalized_timestamp in seen_timestamps:
             errors.append(f"{prefix}: duplicate timestamp")
             continue
@@ -118,6 +103,42 @@ def validate_market_candles(
         warnings=warnings,
         valid_rows=valid_rows,
     )
+
+
+def validate_ohlcv_rows(
+    candles: Sequence[Sequence[object]],
+    *,
+    max_gap_seconds: float | None = None,
+) -> MarketDataQualityResult:
+    """Validate CCXT-style [timestamp, open, high, low, close, volume] rows.
+
+    Malformed rows are rejected before any downstream consumer sees them.
+    """
+    mapped: list[Mapping[str, object]] = []
+    errors: list[str] = []
+    for index, row in enumerate(candles):
+        if len(row) != 6:
+            errors.append(f"row {index}: expected 6 OHLCV fields, got {len(row)}")
+            continue
+        mapped.append({
+            "timestamp": row[0],
+            "open": row[1],
+            "high": row[2],
+            "low": row[3],
+            "close": row[4],
+            "volume": row[5],
+        })
+
+    if errors:
+        result = validate_market_candles([], max_gap_seconds=max_gap_seconds)
+        return MarketDataQualityResult(
+            ok=False,
+            errors=errors + ([] if result.errors == ["no market data rows"] and mapped else result.errors),
+            warnings=[],
+            valid_rows=0,
+        )
+
+    return validate_market_candles(mapped, max_gap_seconds=max_gap_seconds)
 
 
 class PreflightChecker:

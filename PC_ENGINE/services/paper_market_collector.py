@@ -7,6 +7,7 @@ import time
 from typing import Callable
 
 from PC_ENGINE.core.candlestick_patterns import CandlestickPatternEngine
+from PC_ENGINE.core.preflight import validate_ohlcv_rows
 from PC_ENGINE.core.confluence_runtime import PaperConfluenceRuntime
 from PC_ENGINE.learning.state_signature import StateSignatureLearningEngine
 from PC_ENGINE.radar.market_radar import MarketRadar
@@ -139,7 +140,22 @@ class PaperMarketCollector:
         for symbol in self.symbols:
             try:
                 ohlcv = self.ohlcv_fetcher(symbol, self.timeframe, self.candles_limit)
-                if len(ohlcv) < 30:
+                quality_cfg = self.settings.get("market_data_quality", {})
+                quality = validate_ohlcv_rows(
+                    ohlcv,
+                    max_gap_seconds=quality_cfg.get("max_gap_seconds"),
+                )
+                if not quality.ok:
+                    self._report_error(
+                        "PAPER_MARKET_DATA_QUALITY_BLOCK",
+                        {
+                            "symbol": symbol,
+                            "valid_rows": quality.valid_rows,
+                            "errors": quality.errors[:10],
+                        },
+                    )
+                    continue
+                if quality.valid_rows < 30:
                     continue
                 ticker_price = prices.get(symbol)
                 if not ticker_price or ticker_price <= 0:

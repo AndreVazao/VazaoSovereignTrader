@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
+from PC_ENGINE.core.preflight import validate_ohlcv_rows
 
 
 @dataclass
@@ -24,6 +25,12 @@ class ReplayBacktester:
         self.slippage_pct = slippage_pct
 
     def run(self, symbol: str, candles: List[List[float]]) -> BacktestResult:
+        quality = validate_ohlcv_rows(candles)
+        if not quality.ok:
+            raise ValueError(
+                "market data quality gate rejected backtest input: "
+                + "; ".join(quality.errors[:10])
+            )
         position_entry = 0.0
         trades = wins = losses = 0
         pnl = 0.0
