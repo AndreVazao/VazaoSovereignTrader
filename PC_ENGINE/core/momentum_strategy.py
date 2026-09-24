@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .indicators import atr, ema, pct_change
+from .preflight import validate_ohlcv_rows
 
 Action = Literal["BUY", "SELL", "HOLD"]
 
@@ -23,9 +24,13 @@ class MultiTimeframeMomentumStrategy:
         self.min_alignment = max(1, int(cfg.get("min_aligned_timeframes", 2)))
         self.min_atr_pct = max(0.0, float(cfg.get("min_atr_pct", 0.0008)))
         self.weights = cfg.get("timeframe_weights", {"5m": 0.25, "15m": 0.30, "1h": 0.30, "4h": 0.15})
+        self.max_gap_seconds = cfg.get("max_gap_seconds")
 
     def _frame_score(self, candles: list[list[float]]) -> float:
         if len(candles) < self.slow_period + 2:
+            return 0.0
+        quality = validate_ohlcv_rows(candles, max_gap_seconds=self.max_gap_seconds)
+        if not quality.ok:
             return 0.0
         closes = [float(c[4]) for c in candles]
         fast, slow = ema(closes, self.fast_period), ema(closes, self.slow_period)

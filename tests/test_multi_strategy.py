@@ -3,7 +3,7 @@ from PC_ENGINE.core.momentum_strategy import MultiTimeframeMomentumStrategy
 
 
 def candles(prices):
-    return [[i, p * 1.002, p * 0.998, p, p, 1000] for i, p in enumerate(prices)]
+    return [[i, p * 0.998, p * 1.002, p * 0.996, p, 1000] for i, p in enumerate(prices)]
 
 
 def test_momentum_requires_alignment():

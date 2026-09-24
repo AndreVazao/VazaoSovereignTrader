@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .indicators import atr, vwap
+from .preflight import validate_ohlcv_rows
 
 Action = Literal["BUY", "SELL", "HOLD"]
 
@@ -24,6 +25,7 @@ class MeanReversionStrategy:
         self.max_deviation = max(self.min_deviation, float(cfg.get("max_deviation_pct", 0.025)))
         self.min_atr_pct = max(0.0, float(cfg.get("min_atr_pct", 0.001)))
         self.max_atr_pct = max(self.min_atr_pct, float(cfg.get("max_atr_pct", 0.012)))
+        self.max_gap_seconds = cfg.get("max_gap_seconds")
 
     def analyse(self, ohlcv: list[list[float]], regime: str | None = None) -> StrategyEvidence:
         if len(ohlcv) < max(self.vwap_period, self.atr_period) + 2:
@@ -34,6 +36,9 @@ class MeanReversionStrategy:
                 return StrategyEvidence("HOLD", 0.0, 0.0, f"regime {regime} desfavorável à reversão")
             if "HIGH" in normalized:
                 return StrategyEvidence("HOLD", 0.0, 0.0, f"regime {regime} demasiado volátil")
+        quality = validate_ohlcv_rows(ohlcv, max_gap_seconds=self.max_gap_seconds)
+        if not quality.ok:
+            return StrategyEvidence("HOLD", 0.0, 0.0, "market data quality gate blocked mean reversion")
         price = float(ohlcv[-1][4])
         vw = vwap(ohlcv, self.vwap_period)
         a = atr(ohlcv, self.atr_period)
