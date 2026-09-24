@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .indicators import atr, vwap
+from .preflight import validate_ohlcv_rows
 
 Action = Literal["BUY", "SELL", "HOLD"]
 
@@ -27,10 +28,14 @@ class BreakoutVolumeStrategy:
         self.atr_period = max(2, int(cfg.get("atr_period", 14)))
         self.min_breakout = max(0.0, float(cfg.get("min_breakout_pct", 0.0015)))
         self.min_volume_ratio = max(1.0, float(cfg.get("min_volume_ratio", 1.25)))
+        self.max_gap_seconds = cfg.get("max_gap_seconds")
 
     def analyse(self, ohlcv: list[list[float]]) -> BreakoutEvidence:
         if len(ohlcv) < max(self.lookback + 2, self.atr_period + 2):
             return BreakoutEvidence("HOLD", 0.0, 0.0, 0.0, 0.0, "warmup breakout")
+        quality = validate_ohlcv_rows(ohlcv, max_gap_seconds=self.max_gap_seconds)
+        if not quality.ok:
+            return BreakoutEvidence("HOLD", 0.0, 0.0, 0.0, 0.0, "market data quality gate blocked breakout")
         current = ohlcv[-1]
         close = float(current[4])
         volume = float(current[5])
