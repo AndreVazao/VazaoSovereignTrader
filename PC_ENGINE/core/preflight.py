@@ -1,55 +1,112 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import List
-
-from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
+from typing import Iterable, List, Mapping
 
 
 @dataclass
-class PreflightResult:
+class MarketDataQualityResult:
     ok: bool
     errors: List[str]
     warnings: List[str]
+    valid_rows: int
 
 
-class PreflightChecker:
-    def __init__(self, config: dict, rules: ExchangeRulesEngine):
-        self.config = config
-        self.rules = rules
+def validate_market_candles(
+    candles: Iterable[Mapping[str, object]],
+    *,
+    max_gap_seconds: float | None = None,
+) -> MarketDataQualityResult:
+    """Fail-closed validation for OHLCV candles before strategy consumption."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    rows = list(candles)
 
-    def run(self, exchanges: dict) -> PreflightResult:
-        errors: List[str] = []
-        warnings: List[str] = []
+    if not rows:
+        return MarketDataQualityResult(
+            ok=False,
+            errors=["no market data rows"],
+            warnings=[],
+            valid_rows=0,
+        )
 
-        if not exchanges:
-            errors.append("no exchange enabled")
+    previous_timestamp: float | None = None
+    seen_timestamps: set[float] = set()
+    valid_rows = 0
 
-        mode = str(self.config.get("mode", "PAPER")).upper()
-        if mode == "REAL":
-            warnings.append("REAL mode configured: confirm manually before start")
+    for index, row in enumerate(rows):
+        prefix = f"row {index}"
+        required = ("timestamp", "open", "high", "low", "close", "volume")
+        missing = [field for field in required if field not in row]
+        if missing:
+            errors.append(f"{prefix}: missing fields: {','.join(missing)}")
+            continue
 
-        symbols = self.config.get("symbols", [])
-        if not symbols:
-            errors.append("no symbols configured")
+        try:
+            timestamp = float(row["timestamp"])
+            open_price = float(row["open"])
+            high_price = float(row["high"])
+            low_price = float(row["low"])
+            close_price = float(row["close"])
+            volume = float(row["volume"])
+        except (TypeError, ValueError):
+            errors.append(f"{prefix}: non-numeric market data")
+            continue
 
-        for name, exchange in exchanges.items():
-            try:
-                exchange.fetch_balance()
-            except Exception as exc:
-                if mode == "REAL":
-                    errors.append(f"{name}: balance check failed: {exc}")
-                else:
-                    warnings.append(f"{name}: balance check unavailable in paper/public mode: {exc}")
+        if not all(
+            math.isfinite(value)
+            for value in (
+                timestamp,
+                open_price,
+                high_price,
+                low_price,
+                close_price,
+                volume,
+            )
+        ):
+            errors.append(f"{prefix}: non-finite market data")
+            continue
 
-            for symbol in symbols:
-                try:
-                    ticker = exchange.fetch_ticker(symbol)
-                    price = float(ticker.get("last") or 0)
-                    if price <= 0:
-                        errors.append(f"{name}:{symbol}: invalid ticker price")
-                    self.rules.load_symbol_rules(exchange, symbol)
-                except Exception as exc:
-                    errors.append(f"{name}:{symbol}: market/rules check failed: {exc}")
+        # Accept common millisecond timestamps while keeping gap checks in seconds.
+        normalized_timestamp = (
+            timestamp / 1000.0 if abs(timestamp) >= 1e11 else timestamp
+        )
+        if normalized_timestamp in seen_timestamps:
+            errors.append(f"{prefix}: duplicate timestamp")
+            continue
+        seen_timestamps.add(normalized_timestamp)
 
-        return PreflightResult(ok=not errors, errors=errors, warnings=warnings)
+        if previous_timestamp is not None:
+            delta = normalized_timestamp - previous_timestamp
+            if delta <= 0:
+                errors.append(f"{prefix}: non-increasing timestamp")
+                continue
+            if max_gap_seconds is not None and delta > max_gap_seconds:
+                errors.append(
+                    f"{prefix}: timestamp gap {delta:g}s exceeds {max_gap_seconds:g}s"
+                )
+                continue
+        previous_timestamp = normalized_timestamp
+
+        if min(open_price, high_price, low_price, close_price) <= 0:
+            errors.append(f"{prefix}: non-positive OHLC price")
+            continue
+        if high_price < max(open_price, close_price, low_price):
+            errors.append(f"{prefix}: impossible high price")
+            continue
+        if low_price > min(open_price, close_price, high_price):
+            errors.append(f"{prefix}: impossible low price")
+            continue
+        if volume < 0:
+            errors.append(f"{prefix}: negative volume")
+            continue
+
+        valid_rows += 1
+
+    return MarketDataQualityResult(
+        ok=not errors,
+        errors=errors,
+        warnings=warnings,
+        valid_rows=valid_rows,
+    )
