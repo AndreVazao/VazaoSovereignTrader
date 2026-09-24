@@ -19,11 +19,11 @@ def test_strategy_fails_closed_before_indicator_access_on_invalid_ohlcv():
     assert "quality gate" in signal.reason
 
 
-def test_radar_rejects_impossible_bid_ask_observation():
+def test_radar_rejects_impossible_bid_ask_observation(tmp_path):
     radar = MarketRadar.__new__(MarketRadar)
     radar.exchanges = ["fake"]
     radar.symbols = ["BTC/USDT"]
-    radar.data_dir = None
+    radar.data_dir = tmp_path
     radar.clients = {
         "fake": SimpleNamespace(
             fetch_ticker=lambda symbol: {
@@ -46,12 +46,11 @@ def test_radar_rejects_impossible_bid_ask_observation():
     assert radar.quality_rejections == 1
 
 
-def test_radar_accepts_valid_observation_and_preserves_quality_boundary():
+def test_radar_accepts_valid_observation_and_preserves_quality_boundary(tmp_path):
     radar = MarketRadar.__new__(MarketRadar)
     radar.exchanges = ["fake"]
     radar.symbols = ["BTC/USDT"]
-    radar.data_dir = __import__("pathlib").Path("/tmp/vst-radar-audit")
-    radar.data_dir.mkdir(parents=True, exist_ok=True)
+    radar.data_dir = tmp_path
     radar.clients = {
         "fake": SimpleNamespace(
             fetch_ticker=lambda symbol: {
