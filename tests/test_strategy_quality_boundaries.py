@@ -43,7 +43,8 @@ def test_order_flow_ignores_malformed_events_without_creating_evidence():
         {"price": "nan", "quantity": 10, "side": "BUY"},
         {"price": 100, "quantity": 1, "side": "BUY"},
         {"price": 100, "quantity": 1, "side": "SELL"},
+        {"price": 100, "quantity": 1, "side": "SELL"},
     ])
     assert evidence.action == "HOLD"
     assert evidence.score == 0.0
-    assert evidence.trades == 2
+    assert evidence.trades == 3
