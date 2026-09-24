@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 Action = Literal["BUY", "SELL", "HOLD"]
@@ -43,6 +44,8 @@ class OrderFlowStrategy:
                 quantity = float(event.get("quantity", 0.0))
                 side = str(event.get("side", "")).upper()
             except (TypeError, ValueError):
+                continue
+            if not math.isfinite(price) or not math.isfinite(quantity):
                 continue
             if price <= 0 or quantity <= 0 or price * quantity < self.min_notional:
                 continue
