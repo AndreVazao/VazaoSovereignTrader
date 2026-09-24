@@ -53,6 +53,7 @@ class MarketRadar:
         self.clients: dict[str, Any] = {}
         self.previous: dict[tuple[str, str], VenueSnapshot] = {}
         self.last_pressure: dict[str, float] = {}
+        self.quality_rejections = 0
         self._build_clients()
 
     def _build_clients(self) -> None:
@@ -75,6 +76,39 @@ class MarketRadar:
         except (TypeError, ValueError):
             return default
 
+    @classmethod
+    def _validate_ticker_snapshot(
+        cls,
+        *,
+        price: Any,
+        bid: Any,
+        ask: Any,
+        volume: Any,
+        exchange_ts_ms: Any,
+    ) -> bool:
+        """Fail closed on malformed venue observations before radar evidence is used."""
+        try:
+            values = [float(price), float(bid), float(ask), float(volume)]
+        except (TypeError, ValueError):
+            return False
+        if not all(math.isfinite(value) for value in values):
+            return False
+        if values[0] <= 0 or values[3] < 0:
+            return False
+        bid_value, ask_value = values[1], values[2]
+        if bid_value < 0 or ask_value < 0:
+            return False
+        if bid_value > 0 and ask_value > 0 and ask_value < bid_value:
+            return False
+        if exchange_ts_ms is not None:
+            try:
+                timestamp = float(exchange_ts_ms)
+            except (TypeError, ValueError):
+                return False
+            if not math.isfinite(timestamp) or timestamp <= 0:
+                return False
+        return True
+
     def snapshot(self) -> tuple[list[VenueSnapshot], list[LeadLagObservation]]:
         snapshots: list[VenueSnapshot] = []
         for exchange_name, client in self.clients.items():
@@ -91,6 +125,15 @@ class MarketRadar:
                         continue
                     exchange_ts = ticker.get("timestamp")
                     exchange_ts_ms = int(exchange_ts) if exchange_ts is not None else None
+                    if not self._validate_ticker_snapshot(
+                        price=price,
+                        bid=bid,
+                        ask=ask,
+                        volume=volume,
+                        exchange_ts_ms=exchange_ts_ms,
+                    ):
+                        self.quality_rejections += 1
+                        continue
                     latency = local_ts_ms - exchange_ts_ms if exchange_ts_ms is not None else local_ts_ms - request_start_ms
                     snapshots.append(VenueSnapshot(exchange_name, symbol, price, bid, ask, volume, exchange_ts_ms, local_ts_ms, latency))
                 except Exception:
