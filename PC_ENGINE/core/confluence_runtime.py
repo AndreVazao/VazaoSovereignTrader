@@ -8,6 +8,7 @@ from PC_ENGINE.core.confluence import ConfluenceEngine, ConfluenceScore
 from PC_ENGINE.core.mean_reversion_strategy import MeanReversionStrategy
 from PC_ENGINE.core.momentum_strategy import MultiTimeframeMomentumStrategy
 from PC_ENGINE.core.order_flow_strategy import OrderFlowStrategy
+from PC_ENGINE.core.strategy_harness import PaperStrategyHarness, StrategyContext, StrategyEvidenceRecord
 from PC_ENGINE.core.paper_confluence_tracker import PaperConfluenceTracker
 from PC_ENGINE.radar.derivatives_radar import DerivativesRadar
 from PC_ENGINE.radar.lead_lag_signal import LeadLagSignalEngine
@@ -40,6 +41,11 @@ class PaperConfluenceRuntime:
         self.mean_reversion = MeanReversionStrategy(settings.get("mean_reversion", {}))
         self.order_flow = OrderFlowStrategy(settings.get("order_flow", {}))
         self.breakout = BreakoutVolumeStrategy(settings.get("breakout", {}))
+        self.strategy_harness = PaperStrategyHarness()
+        self.strategy_harness.register("momentum", lambda ctx: self.momentum.analyse(ctx.timeframes))
+        self.strategy_harness.register("mean_reversion", lambda ctx: self.mean_reversion.analyse(ctx.ohlcv, ctx.regime))
+        self.strategy_harness.register("order_flow", lambda ctx: self.order_flow.analyse(ctx.trade_events or []))
+        self.strategy_harness.register("breakout", lambda ctx: self.breakout.analyse(ctx.ohlcv))
         derivatives_settings = settings.get("derivatives", {})
         self.derivatives = DerivativesRadar(
             exchanges=derivatives_settings.get("exchanges", ["binance", "bingx", "okx", "bybit"]),
@@ -76,11 +82,33 @@ class PaperConfluenceRuntime:
     ) -> ConfluenceRuntimeResult:
         learned = [s for s in self.lead_lag.signals(self.min_lead_lag_confidence) if s.symbol == symbol]
         regime = self.regime.classify(self._returns(ohlcv))
-        momentum = self.momentum.analyse(timeframes or {}).score if timeframes else 0.0
-        mean_rev = self.mean_reversion.analyse(ohlcv, regime.name).score
         events = trade_events if trade_events is not None else self.trade_store.recent(symbol, self.trade_window_ms, self.trade_max_events)
-        order_flow = self.order_flow.analyse(events).score
-        breakout = self.breakout.analyse(ohlcv).score
+        strategy_evidence = self.strategy_harness.evaluate(
+            StrategyContext(
+                symbol=symbol,
+                ohlcv=ohlcv,
+                timeframes=timeframes or {},
+                regime=regime.name,
+                trade_events=events,
+            )
+        )
+        momentum = strategy_evidence["momentum"].score
+        mean_rev = strategy_evidence["mean_reversion"].score
+        order_flow = strategy_evidence["order_flow"].score
+        breakout = strategy_evidence["breakout"].score
+        trend_score = max(-1.0, min(1.0, float(technical_strength)))
+        if str(technical_action).upper() == "SELL":
+            trend_score = -trend_score
+        elif str(technical_action).upper() == "HOLD":
+            trend_score = 0.0
+        strategy_evidence["trend_following"] = StrategyEvidenceRecord(
+            strategy="trend_following",
+            action=str(technical_action).upper() if str(technical_action).upper() in {"BUY", "SELL", "HOLD"} else "HOLD",
+            score=round(trend_score, 6),
+            confidence=round(max(0.0, min(1.0, float(technical_strength))), 6),
+            reason="technical trend evidence supplied by engine",
+            metadata={},
+        )
         derivatives_score = 0.0
         if self.derivatives_enabled:
             derivatives_score = self.derivatives.evidence(symbol, price).score
@@ -114,6 +142,7 @@ class PaperConfluenceRuntime:
                 breakout_score=breakout,
                 derivatives_score=derivatives_score,
                 confluence=score,
+                strategy_evidence={name: evidence.__dict__ for name, evidence in strategy_evidence.items()},
             )
             self.state_store.append(state)
         return ConfluenceRuntimeResult(score=score, recorded=record_state)
