@@ -31,6 +31,7 @@ class OrderFlowStrategy:
         self.min_imbalance = min(0.95, max(0.0, float(cfg.get("min_imbalance", 0.12))))
         self.max_imbalance = min(1.0, max(self.min_imbalance, float(cfg.get("max_imbalance", 0.85))))
         self.min_notional = max(0.0, float(cfg.get("min_notional", 0.0)))
+        self.max_event_age_ms = max(0, int(cfg.get("max_event_age_ms", 0)))
 
     def analyse(self, events: list[dict]) -> OrderFlowEvidence:
         buy = 0.0
