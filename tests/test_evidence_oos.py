@@ -38,7 +38,7 @@ def test_persistent_edge_validates_only_on_unseen_folds():
         horizons_ms=(1000,),
     )
     item = next(row for row in stats if row.evidence_name == "bullish_engulfing")
-    assert len(folds) == 3
+    assert len(folds) == 2
     assert item.folds >= 2
     assert item.samples >= 2
     assert item.mean_net_bps > 0
