@@ -5,6 +5,18 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class EvidenceObservation:
+    evidence_type: str
+    evidence_name: str
+    symbol: str
+    regime: str
+    horizon_ms: int
+    anchor_timestamp_ms: int
+    outcome_timestamp_ms: int
+    net_bps: float
+
+
+@dataclass(frozen=True)
 class EvidenceOutcomeStat:
     evidence_type: str
     evidence_name: str
@@ -93,13 +105,13 @@ class EvidenceOutcomeEngine:
                 extracted.append(("amd_phase", phase, 1.0 if score > 0 else -1.0))
         return extracted
 
-    def evaluate(
+    def observations(
         self,
         states: list[dict],
         horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000, 300000),
-    ) -> list[EvidenceOutcomeStat]:
+    ) -> list[EvidenceObservation]:
         index = self._index(states)
-        observations: list[EvidenceOutcomeStat] = []
+        observations: list[EvidenceObservation] = []
         for state in sorted(states, key=lambda row: int(row.get("timestamp_ms", 0))):
             try:
                 symbol = str(state.get("symbol", ""))
@@ -119,21 +131,41 @@ class EvidenceOutcomeEngine:
                     future = prices[pos]
                     gross_bps = (future / price - 1.0) * 10000.0
                     net_bps = gross_bps * direction - self.cost_bps
-                    observations.append(EvidenceOutcomeStat(
+                    observations.append(EvidenceObservation(
                         evidence_type=evidence_type,
                         evidence_name=evidence_name,
                         symbol=symbol,
                         regime=regime,
                         horizon_ms=int(horizon),
-                        samples=1,
-                        wins=int(net_bps > 0),
-                        win_rate=float(net_bps > 0),
-                        mean_net_bps=net_bps,
-                        median_net_bps=net_bps,
-                        lower_ci_bps=net_bps,
-                        eligible=False,
+                        anchor_timestamp_ms=ts,
+                        outcome_timestamp_ms=timestamps[pos],
+                        net_bps=net_bps,
                     ))
-        return self.aggregate(observations)
+        return observations
+
+    def evaluate(
+        self,
+        states: list[dict],
+        horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000, 300000),
+    ) -> list[EvidenceOutcomeStat]:
+        observations = self.observations(states, horizons_ms)
+        return self.aggregate([
+            EvidenceOutcomeStat(
+                evidence_type=item.evidence_type,
+                evidence_name=item.evidence_name,
+                symbol=item.symbol,
+                regime=item.regime,
+                horizon_ms=item.horizon_ms,
+                samples=1,
+                wins=int(item.net_bps > 0),
+                win_rate=float(item.net_bps > 0),
+                mean_net_bps=item.net_bps,
+                median_net_bps=item.net_bps,
+                lower_ci_bps=item.net_bps,
+                eligible=False,
+            )
+            for item in observations
+        ])
 
     def aggregate(self, observations: list[EvidenceOutcomeStat]) -> list[EvidenceOutcomeStat]:
         groups: dict[tuple[str, str, str, str, int], list[EvidenceOutcomeStat]] = {}
