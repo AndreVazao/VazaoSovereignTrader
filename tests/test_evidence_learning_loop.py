@@ -37,13 +37,13 @@ def test_learning_loop_detects_recent_degradation():
 def test_learning_loop_marks_latest_candidate_observation_for_investigation():
     records = [
         _record(1, True),
-        _record(2, False),
+        _record(2, True),
         _record(3, True),
         _record(4, False),
     ]
     snapshot = PaperEvidenceLearningLoop(recent_records=2, degradation_threshold=0.20).evaluate(records)
     assert snapshot.degradation_detected
-    assert snapshot.actions[0].action == "OBSERVE"
+    assert snapshot.actions[0].action == "INVESTIGATE"
 
 
 def test_learning_loop_never_mutates_or_authorizes_evidence():
