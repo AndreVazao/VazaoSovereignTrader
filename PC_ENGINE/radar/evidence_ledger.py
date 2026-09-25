@@ -70,6 +70,20 @@ class EvidenceLedgerRecord:
         )
 
 
+
+
+@dataclass(frozen=True)
+class EvidenceLedgerSummary:
+    """Compact historical PAPER evidence report."""
+
+    records: int
+    eligible_records: int
+    rejected_records: int
+    candidate_versions: tuple[str, ...]
+    reason_counts: tuple[tuple[str, int], ...]
+    latest_created_at_ms: int | None
+
+
 class EvidenceLedger:
     """Durable append-only PAPER evidence ledger.
 
@@ -174,4 +188,56 @@ class EvidenceLedger:
             part.strip()
             for part in reason.split(";")
             if part.strip()
+        )
+
+    @classmethod
+    def query(
+        cls,
+        path: str | Path,
+        *,
+        candidate_id: str | None = None,
+        version: str | None = None,
+        symbol: str | None = None,
+        regime: str | None = None,
+        eligible: bool | None = None,
+    ) -> list[EvidenceLedgerRecord]:
+        """Load and filter immutable PAPER evidence records.
+
+        Loading always validates every record first, so a query cannot silently
+        operate on a tampered ledger.
+        """
+        records = cls.load(path)
+        return [
+            record
+            for record in records
+            if (candidate_id is None or record.candidate_id == candidate_id)
+            and (version is None or record.version == version)
+            and (symbol is None or record.symbol == symbol)
+            and (regime is None or record.regime == regime)
+            and (eligible is None or record.eligible is eligible)
+        ]
+
+    @classmethod
+    def summarize(cls, records: list[EvidenceLedgerRecord]) -> EvidenceLedgerSummary:
+        """Return deterministic aggregate metadata for a verified record set."""
+        reason_counts: dict[str, int] = {}
+        candidate_versions: set[str] = set()
+        latest: int | None = None
+        eligible_records = 0
+
+        for record in records:
+            candidate_versions.add(f"{record.candidate_id}@{record.version}")
+            if record.eligible:
+                eligible_records += 1
+            latest = record.created_at_ms if latest is None else max(latest, record.created_at_ms)
+            for reason_code in record.reason_codes:
+                reason_counts[reason_code] = reason_counts.get(reason_code, 0) + 1
+
+        return EvidenceLedgerSummary(
+            records=len(records),
+            eligible_records=eligible_records,
+            rejected_records=len(records) - eligible_records,
+            candidate_versions=tuple(sorted(candidate_versions)),
+            reason_counts=tuple(sorted(reason_counts.items())),
+            latest_created_at_ms=latest,
         )
