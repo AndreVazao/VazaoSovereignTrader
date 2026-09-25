@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import random
 
 from PC_ENGINE.radar.evidence_outcomes import (
     EvidenceObservation,
@@ -35,6 +37,8 @@ class EvidenceOOSStat:
     mean_net_bps: float
     median_net_bps: float
     lower_ci_bps: float
+    bootstrap_lower_ci_bps: float
+    positive_fold_ratio: float
     validated: bool
 
 
@@ -103,6 +107,25 @@ class EvidenceWalkForwardValidator:
         ]
 
     @staticmethod
+    def _bootstrap_lower_ci(values: list[float], *, seed_key: str, samples: int) -> float:
+        if not values:
+            return 0.0
+        if len(values) == 1:
+            return float(values[0])
+        samples = max(200, int(samples))
+        seed = int.from_bytes(hashlib.sha256(seed_key.encode("utf-8")).digest()[:8], "big")
+        rng = random.Random(seed)
+        means: list[float] = []
+        size = len(values)
+        for _ in range(samples):
+            total = 0.0
+            for _ in range(size):
+                total += values[rng.randrange(size)]
+            means.append(total / size)
+        means.sort()
+        return means[max(0, int(0.025 * len(means)) - 1)]
+
+    @staticmethod
     def _summary(values: list[float]) -> tuple[int, int, float, float, float, float]:
         if not values:
             return 0, 0, 0.0, 0.0, 0.0, 0.0
@@ -145,6 +168,7 @@ class EvidenceWalkForwardValidator:
         folds: list[EvidenceOOSFold] = []
         oos_values: dict[tuple[str, str, str, str, int], list[float]] = {}
         oos_fold_ids: dict[tuple[str, str, str, str, int], set[int]] = {}
+        oos_fold_values: dict[tuple[str, str, str, str, int], dict[int, list[float]]] = {}
         train_fold_counts: dict[tuple[str, str, str, str, int], int] = {}
 
         fold_id = 0
@@ -182,6 +206,7 @@ class EvidenceWalkForwardValidator:
                     continue
                 oos_values.setdefault(key, []).append(item.net_bps)
                 oos_fold_ids.setdefault(key, set()).add(fold_id)
+                oos_fold_values.setdefault(key, {}).setdefault(fold_id, []).append(item.net_bps)
 
             folds.append(
                 EvidenceOOSFold(
@@ -200,7 +225,11 @@ class EvidenceWalkForwardValidator:
         results: list[EvidenceOOSStat] = []
         for key, values in sorted(oos_values.items()):
             samples, wins, win_rate, mean, median, lower = self._summary(values)
-            fold_count = len(oos_fold_ids.get(key, set()))
+            fold_ids = oos_fold_ids.get(key, set())
+            fold_count = len(fold_ids)
+            fold_values = oos_fold_values.get(key, {})
+            positive_fold_ratio = (sum(1 for values_for_fold in fold_values.values() if sum(values_for_fold) / len(values_for_fold) > 0) / fold_count) if fold_count else 0.0
+            bootstrap_lower = self._bootstrap_lower_ci(values, seed_key="|".join(map(str, key)), samples=2000)
             train_eligible_folds = train_fold_counts.get(key, 0)
             validated = (
                 fold_count >= self.min_oos_folds
@@ -209,6 +238,8 @@ class EvidenceWalkForwardValidator:
                 and mean > self.min_oos_mean_net_bps
                 and win_rate >= self.min_oos_win_rate
                 and lower > self.min_oos_lower_ci_bps
+                and bootstrap_lower > self.min_oos_lower_ci_bps
+                and positive_fold_ratio >= 0.50
             )
             results.append(
                 EvidenceOOSStat(
@@ -225,6 +256,8 @@ class EvidenceWalkForwardValidator:
                     mean_net_bps=round(mean, 6),
                     median_net_bps=round(median, 6),
                     lower_ci_bps=round(lower, 6),
+                    bootstrap_lower_ci_bps=round(bootstrap_lower, 6),
+                    positive_fold_ratio=round(positive_fold_ratio, 6),
                     validated=validated,
                 )
             )
