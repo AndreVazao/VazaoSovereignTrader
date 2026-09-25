@@ -261,100 +261,6 @@ class ChampionChallengerBook:
         )
         self.audit.append(decision)
 
-        if evidence_ledger_path is not None:
-            durable_rows = [row for row in outcome_stress if (
-                row.candidate_id == candidate.candidate_id
-                and row.version == candidate.version
-                and row.symbol == candidate.symbol
-                and row.regime == candidate.regime
-                and row.horizon_ms == candidate.horizon_ms
-            )]
-            durable_summary = EvidencePlaneSummary(
-                name="durable_outcome",
-                status="PASS" if outcome_decision.eligible else "FAIL",
-                samples=outcome_metrics.samples if outcome_metrics else 0,
-                scenarios=len(durable_rows),
-                validated_scenarios=sum(row.validated for row in durable_rows),
-                mean_net_bps=outcome_metrics.mean_net_bps if outcome_metrics else 0.0,
-                lower_ci_bps=outcome_metrics.lower_ci_bps if outcome_metrics else 0.0,
-                bootstrap_lower_ci_bps=outcome_metrics.bootstrap_lower_ci_bps if outcome_metrics else 0.0,
-                positive_fold_ratio=outcome_metrics.positive_fold_ratio if outcome_metrics else 0.0,
-                folds=outcome_metrics.folds if outcome_metrics else 0,
-            )
-
-            oos_tester = EvidenceStatisticalStressTester(
-                costs_bps=costs_bps,
-                validator_kwargs=dict(validator_kwargs or {}),
-            )
-            oos_stress = oos_tester.validate(
-                states,
-                train_size=train_size,
-                test_size=test_size,
-                step_size=step_size,
-                horizons_ms=horizons_ms,
-            )
-            oos_key = (
-                candidate.evidence_type,
-                candidate.evidence_name,
-                candidate.symbol,
-                candidate.regime,
-                candidate.horizon_ms,
-            )
-            oos_rows = [row for row in oos_stress if (
-                row.evidence_type, row.evidence_name, row.symbol,
-                row.regime, row.horizon_ms,
-            ) == oos_key]
-            base_oos = oos_rows[0] if oos_rows else None
-            oos_summary = EvidencePlaneSummary(
-                name="chronological_oos",
-                status="PASS" if oos_decision.eligible else "FAIL",
-                samples=base_oos.samples if base_oos else 0,
-                scenarios=len(oos_rows),
-                validated_scenarios=sum(row.validated for row in oos_rows),
-                mean_net_bps=base_oos.mean_net_bps if base_oos else 0.0,
-                lower_ci_bps=0.0,
-                bootstrap_lower_ci_bps=base_oos.bootstrap_lower_ci_bps if base_oos else 0.0,
-                positive_fold_ratio=base_oos.positive_fold_ratio if base_oos else 0.0,
-                folds=0,
-            )
-            timestamps = [
-                int(state.get("timestamp_ms", 0) or 0)
-                for state in states
-                if int(state.get("timestamp_ms", 0) or 0) > 0
-            ]
-            outcome_timestamps = [
-                int(row[key])
-                for row in outcome_rows
-                if row.get("candidate_id") == candidate.candidate_id
-                and row.get("version") == candidate.version
-                for key in ("entry_timestamp_ms", "exit_timestamp_ms")
-                if int(row.get(key, 0) or 0) > 0
-            ]
-            all_timestamps = timestamps + outcome_timestamps
-            data_start_ms = min(all_timestamps) if all_timestamps else 1
-            data_end_ms = max(all_timestamps) if all_timestamps else data_start_ms
-            EvidenceLedger.append(
-                evidence_ledger_path,
-                EvidenceLedgerRecord(
-                    created_at_ms=data_end_ms,
-                    candidate_id=candidate.candidate_id,
-                    version=candidate.version,
-                    strategy=candidate.strategy,
-                    symbol=candidate.symbol,
-                    regime=candidate.regime,
-                    horizon_ms=candidate.horizon_ms,
-                    eligible=decision.eligible,
-                    reason=decision.reason,
-                    reason_codes=EvidenceLedger.reason_codes(decision.reason),
-                    data_start_ms=data_start_ms,
-                    data_end_ms=data_end_ms,
-                    state_count=len(states),
-                    outcome_count=len(outcome_rows),
-                    durable_outcome=durable_summary,
-                    chronological_oos=oos_summary,
-                    source_digest="0" * 64,
-                ),
-            )
         return decision
 
 
@@ -542,6 +448,88 @@ class ChampionChallengerBook:
             metrics=metrics,
         )
         self.audit.append(decision)
+        if evidence_ledger_path is not None:
+            durable_rows = [row for row in outcome_stress if (
+                row.candidate_id == candidate.candidate_id
+                and row.version == candidate.version
+                and row.symbol == candidate.symbol
+                and row.regime == candidate.regime
+                and row.horizon_ms == candidate.horizon_ms
+            )]
+            durable_summary = EvidencePlaneSummary(
+                name="durable_outcome",
+                status="PASS" if outcome_decision.eligible else "FAIL",
+                samples=outcome_metrics.samples if outcome_metrics else 0,
+                scenarios=len(durable_rows),
+                validated_scenarios=sum(row.validated for row in durable_rows),
+                mean_net_bps=outcome_metrics.mean_net_bps if outcome_metrics else 0.0,
+                lower_ci_bps=outcome_metrics.lower_ci_bps if outcome_metrics else 0.0,
+                bootstrap_lower_ci_bps=outcome_metrics.bootstrap_lower_ci_bps if outcome_metrics else 0.0,
+                positive_fold_ratio=outcome_metrics.positive_fold_ratio if outcome_metrics else 0.0,
+                folds=outcome_metrics.folds if outcome_metrics else 0,
+            )
+            oos_tester = EvidenceStatisticalStressTester(
+                costs_bps=costs_bps,
+                validator_kwargs=dict(validator_kwargs or {}),
+            )
+            oos_stress = oos_tester.validate(
+                states, train_size=train_size, test_size=test_size,
+                step_size=step_size, horizons_ms=horizons_ms,
+            )
+            oos_key = (
+                candidate.evidence_type, candidate.evidence_name,
+                candidate.symbol, candidate.regime, candidate.horizon_ms,
+            )
+            oos_rows = [row for row in oos_stress if (
+                row.evidence_type, row.evidence_name, row.symbol,
+                row.regime, row.horizon_ms,
+            ) == oos_key]
+            base_oos = oos_rows[0] if oos_rows else None
+            oos_summary = EvidencePlaneSummary(
+                name="chronological_oos",
+                status="PASS" if oos_decision.eligible else "FAIL",
+                samples=base_oos.samples if base_oos else 0,
+                scenarios=len(oos_rows),
+                validated_scenarios=sum(row.validated for row in oos_rows),
+                mean_net_bps=base_oos.mean_net_bps if base_oos else 0.0,
+                lower_ci_bps=0.0,
+                bootstrap_lower_ci_bps=base_oos.bootstrap_lower_ci_bps if base_oos else 0.0,
+                positive_fold_ratio=base_oos.positive_fold_ratio if base_oos else 0.0,
+                folds=0,
+            )
+            timestamps = [int(state.get("timestamp_ms", 0) or 0) for state in states if int(state.get("timestamp_ms", 0) or 0) > 0]
+            outcome_timestamps = [
+                int(row[key]) for row in outcome_rows
+                if row.get("candidate_id") == candidate.candidate_id
+                and row.get("version") == candidate.version
+                for key in ("entry_timestamp_ms", "exit_timestamp_ms")
+                if int(row.get(key, 0) or 0) > 0
+            ]
+            all_timestamps = timestamps + outcome_timestamps
+            data_start_ms = min(all_timestamps) if all_timestamps else 1
+            data_end_ms = max(all_timestamps) if all_timestamps else data_start_ms
+            EvidenceLedger.append(
+                evidence_ledger_path,
+                EvidenceLedgerRecord(
+                    created_at_ms=data_end_ms,
+                    candidate_id=candidate.candidate_id,
+                    version=candidate.version,
+                    strategy=candidate.strategy,
+                    symbol=candidate.symbol,
+                    regime=candidate.regime,
+                    horizon_ms=candidate.horizon_ms,
+                    eligible=decision.eligible,
+                    reason=decision.reason,
+                    reason_codes=EvidenceLedger.reason_codes(decision.reason),
+                    data_start_ms=data_start_ms,
+                    data_end_ms=data_end_ms,
+                    state_count=len(states),
+                    outcome_count=len(outcome_rows),
+                    durable_outcome=durable_summary,
+                    chronological_oos=oos_summary,
+                    source_digest="0" * 64,
+                ),
+            )
         return decision
 
 
