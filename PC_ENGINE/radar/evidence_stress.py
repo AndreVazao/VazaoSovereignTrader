@@ -47,6 +47,9 @@ class EvidenceStatisticalStressTester:
         horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000, 300000),
     ) -> list[EvidenceStressStat]:
         results: list[EvidenceStressStat] = []
+        scenario_rows: dict[float, dict[tuple[str, str, str, str, int], EvidenceStressStat]] = {}
+        keys: set[tuple[str, str, str, str, int]] = set()
+
         for cost_bps in self.costs_bps:
             validator = EvidenceWalkForwardValidator(
                 cost_bps=cost_bps,
@@ -59,22 +62,46 @@ class EvidenceStatisticalStressTester:
                 step_size=step_size,
                 horizons_ms=horizons_ms,
             )
+            rows: dict[tuple[str, str, str, str, int], EvidenceStressStat] = {}
             for stat in stats:
-                results.append(
-                    EvidenceStressStat(
-                        evidence_type=stat.evidence_type,
-                        evidence_name=stat.evidence_name,
-                        symbol=stat.symbol,
-                        regime=stat.regime,
-                        horizon_ms=stat.horizon_ms,
-                        cost_bps=cost_bps,
-                        samples=stat.samples,
-                        mean_net_bps=stat.mean_net_bps,
-                        bootstrap_lower_ci_bps=stat.bootstrap_lower_ci_bps,
-                        positive_fold_ratio=stat.positive_fold_ratio,
-                        validated=stat.validated,
-                    )
+                key = (stat.evidence_type, stat.evidence_name, stat.symbol, stat.regime, stat.horizon_ms)
+                rows[key] = EvidenceStressStat(
+                    evidence_type=stat.evidence_type,
+                    evidence_name=stat.evidence_name,
+                    symbol=stat.symbol,
+                    regime=stat.regime,
+                    horizon_ms=stat.horizon_ms,
+                    cost_bps=cost_bps,
+                    samples=stat.samples,
+                    mean_net_bps=stat.mean_net_bps,
+                    bootstrap_lower_ci_bps=stat.bootstrap_lower_ci_bps,
+                    positive_fold_ratio=stat.positive_fold_ratio,
+                    validated=stat.validated,
                 )
+                keys.add(key)
+            scenario_rows[cost_bps] = rows
+
+        for cost_bps in self.costs_bps:
+            for key in sorted(keys):
+                row = scenario_rows[cost_bps].get(key)
+                if row is not None:
+                    results.append(row)
+                else:
+                    results.append(
+                        EvidenceStressStat(
+                            evidence_type=key[0],
+                            evidence_name=key[1],
+                            symbol=key[2],
+                            regime=key[3],
+                            horizon_ms=key[4],
+                            cost_bps=cost_bps,
+                            samples=0,
+                            mean_net_bps=0.0,
+                            bootstrap_lower_ci_bps=0.0,
+                            positive_fold_ratio=0.0,
+                            validated=False,
+                        )
+                    )
         return results
 
     @staticmethod
