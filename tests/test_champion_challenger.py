@@ -190,3 +190,86 @@ def test_durable_outcome_gate_ignores_unauthorized_rows():
     )
     assert decision.eligible is False
     assert metrics is None
+
+
+def test_unified_evidence_gate_requires_both_durable_outcomes_and_chronological_oos():
+    book = ChampionChallengerBook()
+    book.register(candidate("challenger"))
+    outcome_rows = []
+    for index in range(60):
+        outcome_rows.append({
+            "candidate_id": "challenger", "version": "1.0", "strategy": "paper_strategy",
+            "symbol": "BTC/USDT", "regime": "TREND",
+            "entry_timestamp_ms": index * 600_000 + 1,
+            "exit_timestamp_ms": index * 600_000 + 1000, "horizon_ms": 1000,
+            "action": "BUY", "gross_bps": 50.0, "cost_bps": 28.0, "net_bps": 22.0,
+            "risk_authorized": True, "paper_only": True,
+        })
+    states = [
+        {
+            "symbol": "BTC/USDT",
+            "timestamp_ms": index * 1000 + 1,
+            "price": 100.0 + index,
+            "regime": "TREND",
+            "strategy_evidence": {
+                "candlestick": {
+                    "patterns": [
+                        {"name": "bullish_engulfing", "direction": "BUY", "score": 0.9}
+                    ]
+                }
+            },
+        }
+        for index in range(20)
+    ]
+
+    decision = book.assess_unified_evidence(
+        "challenger",
+        states,
+        outcome_rows,
+        costs_bps=(10.0, 20.0, 30.0),
+        min_cost_scenarios=3,
+        validator_kwargs={
+            "min_train_samples": 3,
+            "min_train_mean_net_bps": 0.0,
+            "min_train_win_rate": 0.5,
+            "min_oos_samples": 2,
+            "min_oos_folds": 2,
+        },
+        train_size=8,
+        test_size=4,
+        horizons_ms=(1000,),
+        min_samples=30,
+        min_folds=2,
+    )
+
+    assert decision.eligible is False
+    assert "chronological OOS gate failed" in decision.reason
+    assert len(book.audit) == 1
+    assert book.champion is None
+
+
+def test_unified_evidence_gate_does_not_accept_wrong_candidate_version():
+    book = ChampionChallengerBook()
+    book.register(candidate("challenger"))
+    rows = [{
+        "candidate_id": "challenger", "version": "2.0", "strategy": "paper_strategy",
+        "symbol": "BTC/USDT", "regime": "TREND", "entry_timestamp_ms": 1000,
+        "exit_timestamp_ms": 2000, "horizon_ms": 1000, "action": "BUY",
+        "gross_bps": 100.0, "cost_bps": 28.0, "net_bps": 72.0,
+        "risk_authorized": True, "paper_only": True,
+    }]
+    decision = book.assess_unified_evidence(
+        "challenger",
+        [],
+        rows,
+        min_samples=1,
+        min_folds=1,
+        min_cost_scenarios=1,
+        costs_bps=(28.0,),
+        train_size=2,
+        test_size=1,
+        horizons_ms=(1000,),
+    )
+    assert decision.eligible is False
+    assert "durable outcome gate failed" in decision.reason
+    assert book.champion is None
