@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from PC_ENGINE.radar.evidence_stress import EvidenceStatisticalStressTester
+
 
 @dataclass(frozen=True)
 class CandidateSpec:
@@ -12,6 +14,11 @@ class CandidateSpec:
     version: str
     strategy: str
     configuration: tuple[tuple[str, str], ...] = ()
+    evidence_type: str = ""
+    evidence_name: str = ""
+    symbol: str = ""
+    regime: str = ""
+    horizon_ms: int = 0
 
     def __post_init__(self) -> None:
         if not self.candidate_id.strip():
@@ -173,6 +180,85 @@ class ChampionChallengerBook:
             )
             for candidate in self.candidates.values()
         ]
+
+    def assess_with_evidence(
+        self,
+        candidate_id: str,
+        states: list[dict],
+        *,
+        costs_bps: tuple[float, ...] = (28.0, 35.0, 42.0, 56.0),
+        min_cost_scenarios: int = 3,
+        validator_kwargs: dict | None = None,
+        train_size: int = 200,
+        test_size: int = 100,
+        step_size: int | None = None,
+        horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000, 300000),
+        min_samples: int = 30,
+        min_mean_net_bps: float = 0.0,
+        max_drawdown_bps: float = 100.0,
+        max_risk_violations: int = 0,
+    ) -> PromotionDecision:
+        """Assess a challenger through chronological OOS and cost-stress gates.
+
+        PAPER research only. This never promotes or authorizes execution.
+        """
+        candidate = self.candidates.get(candidate_id)
+        if candidate is None:
+            raise KeyError(f"unknown candidate: {candidate_id}")
+        metrics = self._metrics(
+            candidate,
+            (row for row in self.observations if row.candidate_id == candidate_id),
+            min_samples=min_samples,
+            min_mean_net_bps=min_mean_net_bps,
+            max_drawdown_bps=max_drawdown_bps,
+            max_risk_violations=max_risk_violations,
+        )
+        key = (
+            candidate.evidence_type,
+            candidate.evidence_name,
+            candidate.symbol,
+            candidate.regime,
+            int(candidate.horizon_ms),
+        )
+        reasons: list[str] = []
+        if not metrics.validated:
+            reasons.append("base PAPER metrics gate failed")
+        if not all(key):
+            reasons.append("candidate evidence identity is incomplete")
+        else:
+            tester = EvidenceStatisticalStressTester(
+                costs_bps=costs_bps,
+                validator_kwargs=dict(validator_kwargs or {}),
+            )
+            stress = tester.validate(
+                states,
+                train_size=train_size,
+                test_size=test_size,
+                step_size=step_size,
+                horizons_ms=horizons_ms,
+            )
+            matching = [row for row in stress if (
+                row.evidence_type,
+                row.evidence_name,
+                row.symbol,
+                row.regime,
+                row.horizon_ms,
+            ) == key]
+            robust = tester.robustness(stress, min_cost_scenarios=min_cost_scenarios).get(key, False)
+            if not matching or not robust:
+                reasons.append("OOS cost-stress evidence gate failed")
+            elif not all(row.validated for row in matching):
+                reasons.append("one or more required cost scenarios failed validation")
+        eligible = not reasons
+        decision = PromotionDecision(
+            candidate_id,
+            candidate.version,
+            eligible,
+            "eligible for human-reviewed PAPER promotion" if eligible else "; ".join(reasons),
+            metrics,
+        )
+        self.audit.append(decision)
+        return decision
 
     def assess(
         self,
