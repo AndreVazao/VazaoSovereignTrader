@@ -173,3 +173,58 @@ def test_summary_is_deterministic_and_counts_reason_codes(tmp_path):
         ("durable outcome gate failed", 1),
     )
     assert summary.latest_created_at_ms == first.created_at_ms + 10
+
+def test_audit_report_is_deterministic_and_tracks_temporal_coverage(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    first = EvidenceLedger.append(path, make_record())
+    EvidenceLedger.append(
+        path,
+        EvidenceLedgerRecord(
+            **{
+                **first.to_dict(),
+                "created_at_ms": first.created_at_ms + 10,
+                "candidate_id": "candidate-b",
+                "version": "v1",
+                "symbol": "ETHUSDT",
+                "regime": "range",
+                "strategy": "breakout",
+                "eligible": True,
+                "reason": "",
+                "reason_codes": (),
+                "data_start_ms": first.data_start_ms + 10,
+                "data_end_ms": first.data_end_ms + 10,
+            }
+        ),
+    )
+
+    records = EvidenceLedger.query(path)
+    report = EvidenceLedger.audit_report(records)
+
+    assert report.records == 2
+    assert report.eligible_records == 1
+    assert report.rejected_records == 1
+    assert report.eligibility_ratio == 0.5
+    assert report.candidate_versions == ("candidate-a@v3", "candidate-b@v1")
+    assert report.symbols == ("BTCUSDT", "ETHUSDT")
+    assert report.regimes == ("range", "trend")
+    assert report.strategies == ("breakout", "momentum")
+    assert report.eligible_by_candidate_version == (("candidate-a@v3", 0), ("candidate-b@v1", 1))
+    assert report.records_by_symbol == (("BTCUSDT", 1), ("ETHUSDT", 1))
+    assert report.records_by_regime == (("range", 1), ("trend", 1))
+    assert report.first_created_at_ms == first.created_at_ms
+    assert report.latest_created_at_ms == first.created_at_ms + 10
+    assert report.data_start_ms == first.data_start_ms
+    assert report.data_end_ms == first.data_end_ms + 10
+
+
+def test_audit_report_is_empty_for_empty_verified_ledger():
+    report = EvidenceLedger.audit_report([])
+
+    assert report.records == 0
+    assert report.eligible_records == 0
+    assert report.eligibility_ratio == 0.0
+    assert report.candidate_versions == ()
+    assert report.symbols == ()
+    assert report.regimes == ()
+    assert report.strategies == ()
+    assert report.latest_created_at_ms is None
