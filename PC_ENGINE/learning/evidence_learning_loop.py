@@ -92,10 +92,7 @@ class PaperEvidenceLearningLoop:
         for (candidate_version, symbol, regime), rows in sorted(grouped.items()):
             ratio = self._ratio(rows)
             latest = rows[-1]
-            if not latest.eligible:
-                action = "OBSERVE"
-                reason = "latest evidence record is not eligible"
-            elif len(rows) < 2:
+            if len(rows) < 2:
                 action = "OBSERVE"
                 reason = "insufficient temporal history for degradation check"
             else:
@@ -103,6 +100,9 @@ class PaperEvidenceLearningLoop:
                 if prior_ratio - ratio >= self.degradation_threshold:
                     action = "INVESTIGATE"
                     reason = "candidate/symbol/regime eligibility degraded in latest observation"
+                elif not latest.eligible:
+                    action = "OBSERVE"
+                    reason = "latest evidence record is not eligible"
                 else:
                     action = "RETAIN"
                     reason = "latest evidence remains eligible without detected degradation"
