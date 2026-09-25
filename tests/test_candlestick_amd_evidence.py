@@ -1,6 +1,7 @@
 from PC_ENGINE.core.amd_phase import analyze_amd
 from PC_ENGINE.core.candlestick_evidence import analyze_candlesticks, detect_candlestick_patterns
 from PC_ENGINE.core.confluence_runtime import PaperConfluenceRuntime
+from PC_ENGINE.core.strategy_harness import StrategyContext
 
 
 def candle(ts, o, h, l, c, v=10):
@@ -44,7 +45,7 @@ def test_amd_detects_low_sweep_and_bullish_displacement():
     rows = []
     for i in range(20):
         rows.append(candle(i, 100, 102, 98, 100.5))
-    rows.append(candle(21, 100, 101, 97, 100.5))
+    rows.append(candle(21, 100, 102, 97, 101))
     evidence = analyze_amd(rows, lookback=20)
     assert evidence.sweep == "LOW"
     assert evidence.phase == "MANIPULATION"
@@ -96,14 +97,9 @@ def test_runtime_records_candlestick_and_amd_evidence(tmp_path):
         trade_events=[],
         record_state=False,
     )
-    assert "candlestick" in runtime.strategy_harness.evaluate(
-        __import__("PC_ENGINE.core.strategy_harness", fromlist=["StrategyContext"]).StrategyContext(
-            symbol="BTC/USDT", ohlcv=rows, timeframes={"1m": rows}, trade_events=[]
-        )
+    evidence = runtime.strategy_harness.evaluate(
+        StrategyContext(symbol="BTC/USDT", ohlcv=rows, timeframes={"1m": rows}, trade_events=[])
     )
-    assert "amd_phase" in runtime.strategy_harness.evaluate(
-        __import__("PC_ENGINE.core.strategy_harness", fromlist=["StrategyContext"]).StrategyContext(
-            symbol="BTC/USDT", ohlcv=rows, timeframes={"1m": rows}, trade_events=[]
-        )
-    )
+    assert "candlestick" in evidence
+    assert "amd_phase" in evidence
     assert result.score.paper_only is True
