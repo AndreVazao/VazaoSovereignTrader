@@ -38,7 +38,16 @@ def test_cost_stress_runs_same_oos_protocol_at_multiple_costs():
 
 
 def test_cost_stress_robustness_requires_all_requested_scenarios():
-    tester = EvidenceStatisticalStressTester(costs_bps=(10.0, 50.0))
+    tester = EvidenceStatisticalStressTester(
+        costs_bps=(10.0, 50.0),
+        validator_kwargs={
+            "min_train_samples": 3,
+            "min_train_mean_net_bps": 0,
+            "min_train_win_rate": 0.5,
+            "min_oos_samples": 2,
+            "min_oos_folds": 2,
+        },
+    )
     stats = tester.validate(
         make_states(),
         train_size=8,
