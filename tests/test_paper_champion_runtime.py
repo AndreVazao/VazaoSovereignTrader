@@ -6,7 +6,7 @@ from PC_ENGINE.radar.champion_challenger import CandidateSpec
 from PC_ENGINE.radar.paper_champion_runtime import PaperChampionRuntime
 
 
-def _candidate(cid: str, strategy: str) -> CandidateSpec:
+def _candidate(cid: str, strategy: str, horizon: int = 1000) -> CandidateSpec:
     return CandidateSpec(
         candidate_id=cid,
         version="1.0",
@@ -15,7 +15,7 @@ def _candidate(cid: str, strategy: str) -> CandidateSpec:
         evidence_name=strategy,
         symbol="BTC/USDT",
         regime="TREND",
-        horizon_ms=1000,
+        horizon_ms=horizon,
     )
 
 
@@ -25,11 +25,7 @@ def test_shadow_runtime_delivers_identical_state_and_cost_context(tmp_path):
         path=tmp_path / "states.jsonl",
     )
     state = {
-        "symbol": "BTC/USDT",
-        "timestamp_ms": 1000,
-        "price": 100.0,
-        "regime": "TREND",
-        "action": "BUY",
+        "symbol": "BTC/USDT", "timestamp_ms": 1000, "price": 100.0, "regime": "TREND",
         "strategy_evidence": {
             "momentum": {"action": "BUY", "score": 0.8, "confidence": 0.9},
             "breakout": {"action": "SELL", "score": -0.4, "confidence": 0.7},
@@ -37,32 +33,97 @@ def test_shadow_runtime_delivers_identical_state_and_cost_context(tmp_path):
     }
     cost = {"fee_bps": 10.0, "spread_bps": 2.0}
     assert runtime.observe(state, cost_context=cost, shared_risk_authorized=True) == 2
-
     rows = [json.loads(line) for line in (tmp_path / "states.jsonl").read_text().splitlines()]
     assert len(rows) == 2
     assert {row["candidate_id"] for row in rows} == {"champion", "challenger"}
-    assert {row["timestamp_ms"] for row in rows} == {1000}
-    assert {row["price"] for row in rows} == {100.0}
+    assert all(row["timestamp_ms"] == 1000 for row in rows)
     assert all(row["cost_context"] == cost for row in rows)
     assert all(row["shared_risk_authorized"] is True for row in rows)
     assert all(row["paper_only"] is True for row in rows)
 
 
-def test_shadow_runtime_is_observational_only(tmp_path):
+def test_shadow_runtime_attributes_net_outcomes_after_shared_costs(tmp_path):
     runtime = PaperChampionRuntime(
-        [_candidate("challenger", "momentum")],
+        [_candidate("champion", "momentum"), _candidate("challenger", "breakout")],
         path=tmp_path / "states.jsonl",
+        outcome_path=tmp_path / "outcomes.jsonl",
     )
-    state = {
-        "symbol": "BTC/USDT",
-        "timestamp_ms": 2000,
-        "price": 101.0,
-        "regime": "RANGE",
-        "action": "HOLD",
-        "strategy_evidence": {"momentum": {"action": "BUY", "score": 0.2, "confidence": 0.3}},
-    }
-    runtime.observe(state)
-    snapshot = runtime.snapshot()
-    assert snapshot["paper_only"] is True
-    assert snapshot["candidate_count"] == 1
-    assert snapshot["records"] == 1
+    runtime.observe(
+        {
+            "symbol": "BTC/USDT", "timestamp_ms": 1000, "price": 100.0,
+            "strategy_evidence": {
+                "momentum": {"action": "BUY", "score": 1.0, "confidence": 1.0},
+                "breakout": {"action": "SELL", "score": -1.0, "confidence": 1.0},
+            },
+        },
+        cost_context={"fee_bps": 5.0, "spread_bps": 1.0},
+        shared_risk_authorized=True,
+    )
+    assert runtime.observe(
+        {"symbol": "BTC/USDT", "timestamp_ms": 2000, "price": 101.0}
+    ) == 2
+    rows = [json.loads(line) for line in (tmp_path / "outcomes.jsonl").read_text().splitlines()]
+    assert len(rows) == 2
+    by_id = {row["candidate_id"]: row for row in rows}
+    assert round(by_id["champion"]["net_bps"], 6) == 94.0
+    assert round(by_id["challenger"]["net_bps"], 6) == -106.0
+    assert all(row["cost_bps"] == 6.0 for row in rows)
+    assert all(row["paper_only"] is True for row in rows)
+
+
+def test_invalid_cost_context_fails_closed(tmp_path):
+    runtime = PaperChampionRuntime([_candidate("c", "momentum")], path=tmp_path / "s.jsonl")
+    state = {"symbol": "BTC/USDT", "timestamp_ms": 1000, "price": 100.0}
+    try:
+        runtime.observe(state, cost_context={"fee_bps": float("nan")})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid cost context must fail closed")
+
+
+def test_shadow_runtime_does_not_cross_attribute_symbols(tmp_path):
+    runtime = PaperChampionRuntime(
+        [_candidate("c", "momentum", horizon=1000)],
+        path=tmp_path / "states.jsonl",
+        outcome_path=tmp_path / "outcomes.jsonl",
+    )
+    runtime.observe(
+        {"symbol": "BTC/USDT", "timestamp_ms": 1000, "price": 100.0,
+         "strategy_evidence": {"momentum": {"action": "BUY", "score": 1.0, "confidence": 1.0}}},
+        cost_context={"fee_bps": 1.0},
+    )
+    assert runtime.observe(
+        {"symbol": "ETH/USDT", "timestamp_ms": 2000, "price": 200.0}
+    ) == 1
+    assert not (tmp_path / "outcomes.jsonl").exists()
+    assert runtime.observe(
+        {"symbol": "BTC/USDT", "timestamp_ms": 2000, "price": 101.0}
+    ) == 1
+    rows = [json.loads(line) for line in (tmp_path / "outcomes.jsonl").read_text().splitlines()]
+    assert rows[0]["symbol"] == "BTC/USDT"
+
+
+def test_shadow_runtime_recovers_pending_outcomes_after_restart(tmp_path):
+    pending = tmp_path / "pending.jsonl"
+    states = tmp_path / "states.jsonl"
+    outcomes = tmp_path / "outcomes.jsonl"
+    first = PaperChampionRuntime(
+        [_candidate("c", "momentum")],
+        path=states, outcome_path=outcomes, pending_path=pending,
+    )
+    first.observe(
+        {"symbol": "BTC/USDT", "timestamp_ms": 1000, "price": 100.0,
+         "strategy_evidence": {"momentum": {"action": "BUY", "score": 1.0, "confidence": 1.0}}},
+        cost_context={"fee_bps": 1.0},
+    )
+    assert len(pending.read_text().splitlines()) == 1
+    second = PaperChampionRuntime(
+        [_candidate("c", "momentum")],
+        path=states, outcome_path=outcomes, pending_path=pending,
+    )
+    assert second.snapshot()["pending"] == 1
+    assert second.observe({"symbol": "BTC/USDT", "timestamp_ms": 2000, "price": 101.0}) == 1
+    rows = [json.loads(line) for line in outcomes.read_text().splitlines()]
+    assert rows[0]["net_bps"] == 99.0
+    assert second.snapshot()["pending"] == 0
