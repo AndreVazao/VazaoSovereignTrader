@@ -106,3 +106,19 @@ def test_costs_can_turn_gross_oos_edge_into_failure():
     item = next(row for row in stats if row.evidence_name == "bullish_engulfing")
     assert item.mean_net_bps < 0
     assert item.validated is False
+
+def test_bootstrap_ci_and_fold_stability_are_recorded():
+    states = make_states([100 + index for index in range(20)])
+    validator = EvidenceWalkForwardValidator(
+        cost_bps=10,
+        min_train_samples=3,
+        min_train_mean_net_bps=0,
+        min_train_win_rate=0.5,
+        min_oos_samples=2,
+        min_oos_folds=2,
+    )
+    _, stats = validator.validate(states, train_size=8, test_size=4, horizons_ms=(1000,))
+    item = next(row for row in stats if row.evidence_name == "bullish_engulfing")
+    assert item.bootstrap_lower_ci_bps > 0
+    assert item.positive_fold_ratio == 1.0
+    assert item.validated is True
