@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -54,6 +55,66 @@ class RiskEngine:
         symbol_ok, symbol_reason = self.can_trade_symbol(symbol, now)
         if not symbol_ok:
             return RiskDecision(False, symbol_reason)
+        return RiskDecision(True, "risk engine authorized")
+
+    def authorize_order(
+        self,
+        symbol: str,
+        action: str,
+        *,
+        equity: float,
+        proposed_notional: float,
+        current_exposure: float,
+        current_symbol_exposure: float,
+        current_open_positions: int,
+        max_open_positions: int,
+        max_total_exposure_pct: float,
+        max_symbol_exposure_pct: float,
+        stop_pct: float,
+        now: float | None = None,
+    ) -> RiskDecision:
+        """Final PAPER/REAL entry authorization including sizing and exposure limits."""
+        decision = self.authorize_signal(symbol, action, now)
+        if not decision.authorized:
+            return decision
+
+        values = {
+            "equity": equity,
+            "proposed_notional": proposed_notional,
+            "current_exposure": current_exposure,
+            "current_symbol_exposure": current_symbol_exposure,
+            "max_total_exposure_pct": max_total_exposure_pct,
+            "max_symbol_exposure_pct": max_symbol_exposure_pct,
+            "stop_pct": stop_pct,
+        }
+        if any(not isinstance(value, (int, float)) or not math.isfinite(float(value)) for value in values.values()):
+            return RiskDecision(False, "risk engine rejected non-finite order risk values")
+        if equity <= 0 or proposed_notional <= 0:
+            return RiskDecision(False, "risk engine requires positive equity and proposed notional")
+        if current_exposure < 0 or current_symbol_exposure < 0:
+            return RiskDecision(False, "risk engine rejected negative exposure")
+        if max_open_positions <= 0 or current_open_positions < 0:
+            return RiskDecision(False, "risk engine rejected invalid position limits")
+        if current_open_positions >= max_open_positions:
+            return RiskDecision(False, "max open positions reached")
+        if stop_pct <= 0:
+            return RiskDecision(False, "risk engine requires a positive stop")
+        if max_total_exposure_pct <= 0 or max_symbol_exposure_pct <= 0:
+            return RiskDecision(False, "risk engine requires positive exposure limits")
+
+        tolerance = max(1e-12, equity * 1e-9)
+        max_total_notional = equity * max_total_exposure_pct
+        if current_exposure + proposed_notional > max_total_notional + tolerance:
+            return RiskDecision(False, "total exposure limit reached")
+
+        max_symbol_notional = equity * max_symbol_exposure_pct
+        if current_symbol_exposure + proposed_notional > max_symbol_notional + tolerance:
+            return RiskDecision(False, f"{symbol} exposure limit reached")
+
+        risk_cap = self.position_notional(equity, stop_pct)
+        if proposed_notional > risk_cap + tolerance:
+            return RiskDecision(False, "per-trade risk cap exceeded")
+
         return RiskDecision(True, "risk engine authorized")
 
     def snapshot_state(self) -> dict:

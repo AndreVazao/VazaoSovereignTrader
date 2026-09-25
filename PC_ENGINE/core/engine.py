@@ -1327,6 +1327,38 @@ class SovereignEngine:
             })
             if notional <= 0:
                 continue
+
+            current_exposure = sum(
+                float(position.entry) * float(position.qty)
+                for position in self.state.open_positions.values()
+            )
+            current_symbol_exposure = 0.0
+            if symbol in self.state.open_positions:
+                current_position = self.state.open_positions[symbol]
+                current_symbol_exposure = float(current_position.entry) * float(current_position.qty)
+
+            symbol_limit = self.config.get("symbol_limits", {}).get(symbol, {})
+            risk_decision = self.risk.authorize_order(
+                symbol,
+                "BUY",
+                equity=equity,
+                proposed_notional=notional,
+                current_exposure=current_exposure,
+                current_symbol_exposure=current_symbol_exposure,
+                current_open_positions=len(self.state.open_positions),
+                max_open_positions=int(self.config["engine"]["max_open_positions"]),
+                max_total_exposure_pct=float(self.config["engine"]["max_total_exposure_pct"]),
+                max_symbol_exposure_pct=float(symbol_limit.get("max_exposure_pct", 0.10)),
+                stop_pct=float(signal.stop_pct),
+            )
+            if not risk_decision.authorized:
+                self.log("FINAL_RISK_BLOCK", {
+                    "symbol": symbol,
+                    "reason": risk_decision.reason,
+                    "notional": notional,
+                })
+                continue
+
             qty = notional / price
             self._open_position(exchange, symbol, price, qty, signal.stop_pct, signal.take_profit_pct, signal.reason, spreads.get(symbol, 0.0))
 
