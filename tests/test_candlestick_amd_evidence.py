@@ -11,7 +11,7 @@ def candle(ts, o, h, l, c, v=10):
 def test_bullish_engulfing_is_detected():
     rows = [
         candle(1, 105, 106, 97, 98),
-        candle(2, 97, 104, 96, 103),
+        candle(2, 97, 107, 96, 106),
     ]
     patterns = detect_candlestick_patterns(rows)
     names = {item.name for item in patterns}
@@ -95,11 +95,10 @@ def test_runtime_records_candlestick_and_amd_evidence(tmp_path):
         radar_pressure=0.0,
         timeframes={"1m": rows},
         trade_events=[],
-        record_state=False,
+        record_state=True,
     )
-    evidence = runtime.strategy_harness.evaluate(
-        StrategyContext(symbol="BTC/USDT", ohlcv=rows, timeframes={"1m": rows}, trade_events=[])
-    )
-    assert "candlestick" in evidence
-    assert "amd_phase" in evidence
+    state = runtime.latest_state("BTC/USDT")
+    assert state is not None
+    assert "candlestick" in state["strategy_evidence"]
+    assert "amd_phase" in state["strategy_evidence"]
     assert result.score.paper_only is True
