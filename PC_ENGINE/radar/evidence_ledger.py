@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass
 import hashlib
 import json
 from pathlib import Path
-from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -97,10 +96,23 @@ class EvidenceLedger:
     @classmethod
     def with_digest(cls, record: EvidenceLedgerRecord) -> EvidenceLedgerRecord:
         return EvidenceLedgerRecord(
-            **{
-                **record.to_dict(),
-                "source_digest": cls.digest(record),
-            }
+            created_at_ms=record.created_at_ms,
+            candidate_id=record.candidate_id,
+            version=record.version,
+            strategy=record.strategy,
+            symbol=record.symbol,
+            regime=record.regime,
+            horizon_ms=record.horizon_ms,
+            eligible=record.eligible,
+            reason=record.reason,
+            reason_codes=record.reason_codes,
+            data_start_ms=record.data_start_ms,
+            data_end_ms=record.data_end_ms,
+            state_count=record.state_count,
+            outcome_count=record.outcome_count,
+            durable_outcome=record.durable_outcome,
+            chronological_oos=record.chronological_oos,
+            source_digest=cls.digest(record),
         )
 
     @staticmethod
