@@ -214,4 +214,3 @@ class PaperChampionRuntime:
             "pending_path": str(self.pending_path),
             "paper_only": True,
         }
-}
