@@ -342,6 +342,112 @@ class ChampionChallengerBook:
         self.audit.append(decision)
         return decision, metrics, stress
 
+    def assess_unified_evidence(
+        self,
+        candidate_id: str,
+        states: list[dict],
+        outcome_rows: list[dict],
+        *,
+        costs_bps: tuple[float, ...] = (28.0, 35.0, 42.0, 56.0),
+        min_cost_scenarios: int = 3,
+        validator_kwargs: dict | None = None,
+        train_size: int = 200,
+        test_size: int = 100,
+        step_size: int | None = None,
+        horizons_ms: tuple[int, ...] = (1000, 5000, 15000, 60000, 300000),
+        min_samples: int = 30,
+        min_folds: int = 2,
+        min_mean_net_bps: float = 0.0,
+        min_lower_ci_bps: float = 0.0,
+        min_positive_fold_ratio: float = 0.50,
+        fold_duration_ms: int = 300_000,
+    ) -> PromotionDecision:
+        """Single PAPER evidence gate combining durable outcomes and OOS stress.
+
+        The candidate must pass both independent evidence planes. Identity is
+        exact (candidate/version/evidence identity), outcomes are restricted to
+        Risk-authorized PAPER rows, and all requested cost scenarios must pass.
+        This method only records an audit decision; it never changes champion
+        state and never authorizes execution.
+        """
+        candidate = self.candidates.get(candidate_id)
+        if candidate is None:
+            raise KeyError(f"unknown candidate: {candidate_id}")
+
+        reasons: list[str] = []
+        audit_len = len(self.audit)
+
+        outcome_decision, outcome_metrics, outcome_stress = self.assess_outcomes(
+            candidate_id,
+            outcome_rows,
+            costs_bps=costs_bps,
+            min_cost_scenarios=min_cost_scenarios,
+            min_samples=min_samples,
+            min_folds=min_folds,
+            min_mean_net_bps=min_mean_net_bps,
+            min_lower_ci_bps=min_lower_ci_bps,
+            min_positive_fold_ratio=min_positive_fold_ratio,
+            fold_duration_ms=fold_duration_ms,
+        )
+        if not outcome_decision.eligible:
+            reasons.append(f"durable outcome gate failed: {outcome_decision.reason}")
+
+        oos_decision = self.assess_with_evidence(
+            candidate_id,
+            states,
+            costs_bps=costs_bps,
+            min_cost_scenarios=min_cost_scenarios,
+            validator_kwargs=validator_kwargs,
+            train_size=train_size,
+            test_size=test_size,
+            step_size=step_size,
+            horizons_ms=horizons_ms,
+            min_samples=1,
+            min_mean_net_bps=-float("inf"),
+            max_drawdown_bps=float("inf"),
+            max_risk_violations=10**9,
+        )
+        if not oos_decision.eligible:
+            reasons.append(f"chronological OOS gate failed: {oos_decision.reason}")
+
+        # The two component assessments are evidence calculations, not separate
+        # audit events. Replace them with this single combined decision.
+        del self.audit[audit_len:]
+
+        metrics = self._metrics(
+            candidate,
+            (
+                row for row in self.observations
+                if row.candidate_id == candidate_id
+                and row.version == candidate.version
+                and row.risk_authorized
+                and not row.risk_violation
+            ),
+            min_samples=1,
+            min_mean_net_bps=-float("inf"),
+            max_drawdown_bps=float("inf"),
+            max_risk_violations=10**9,
+        )
+        if outcome_metrics is None:
+            reasons.append("no matching Risk-authorized durable outcome metrics")
+        if len(outcome_stress) < max(1, int(min_cost_scenarios)):
+            reasons.append("durable outcome stress scenarios are incomplete")
+
+        eligible = not reasons
+        decision = PromotionDecision(
+            candidate_id=candidate.candidate_id,
+            version=candidate.version,
+            eligible=eligible,
+            reason=(
+                "eligible for human-reviewed PAPER promotion"
+                if eligible else "; ".join(reasons)
+            ),
+            metrics=metrics,
+        )
+        self.audit.append(decision)
+        return decision
+
+
     def assess(
         self,
         candidate_id: str,
