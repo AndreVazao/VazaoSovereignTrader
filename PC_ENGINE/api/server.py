@@ -107,6 +107,22 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         ).reconcile()
         return jsonify(report)
 
+    @app.get("/evidence-ledger/audit")
+    def evidence_ledger_audit():
+        require_scope("read_private_state")
+        evidence_cfg = engine.config.get("evidence", {})
+        ledger_path = evidence_cfg.get("ledger_path", "PC_ENGINE/data/radar/evidence_ledger.jsonl")
+        try:
+            records = EvidenceLedger.load(ledger_path)
+            report = EvidenceLedger.audit_report(records)
+        except (OSError, ValueError, TypeError) as exc:
+            return jsonify({"ok": False, "error": "evidence_ledger_invalid", "detail": str(exc)}), 409
+        return jsonify({
+            "ok": True,
+            "ledger_path": str(ledger_path),
+            "report": asdict(report),
+        })
+
     @app.get("/evidence-ledger")
     def evidence_ledger_snapshot():
         require_scope("read_private_state")
