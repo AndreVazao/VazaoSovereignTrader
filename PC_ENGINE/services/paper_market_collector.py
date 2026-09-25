@@ -13,6 +13,8 @@ from PC_ENGINE.learning.state_signature import StateSignatureLearningEngine
 from PC_ENGINE.radar.market_radar import MarketRadar
 from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.radar.state_outcomes import StateOutcomeEngine
+from PC_ENGINE.radar.champion_challenger import CandidateSpec
+from PC_ENGINE.radar.paper_champion_runtime import PaperChampionRuntime
 
 
 class PaperMarketCollector:
@@ -75,7 +77,38 @@ class PaperMarketCollector:
                 str(self.data_dir / "state_outcomes.jsonl"),
             )
         )
+
         self.state_store = MarketStateStore(str(self.data_dir))
+        candidate_specs = []
+        for raw in settings.get("champion_challenger", {}).get("candidates", []):
+            if not isinstance(raw, dict):
+                continue
+            try:
+                candidate_specs.append(
+                    CandidateSpec(
+                        candidate_id=str(raw["candidate_id"]),
+                        version=str(raw["version"]),
+                        strategy=str(raw["strategy"]),
+                        configuration=tuple(
+                            (str(key), str(value))
+                            for key, value in dict(raw.get("configuration", {})).items()
+                        ),
+                        evidence_type=str(raw.get("evidence_type", "")),
+                        evidence_name=str(raw.get("evidence_name", "")),
+                        symbol=str(raw.get("symbol", "")),
+                        regime=str(raw.get("regime", "")),
+                        horizon_ms=int(raw.get("horizon_ms", 0)),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        self.champion_runtime = PaperChampionRuntime(
+            candidate_specs,
+            path=settings.get("champion_challenger", {}).get(
+                "state_path",
+                str(self.data_dir / "champion_challenger_states.jsonl"),
+            ),
+        )
         self.learning_cycles = 0
         self.outcome_cycles = 0
         self.last_learning_stats = 0
@@ -114,6 +147,7 @@ class PaperMarketCollector:
             "outcome_cycles": self.outcome_cycles,
             "last_learning_stats": self.last_learning_stats,
             "last_outcome_stats": self.last_outcome_stats,
+            "champion_challenger": self.champion_runtime.snapshot(),
         }
 
     def _report_error(self, message: str, data: dict) -> None:
@@ -172,6 +206,13 @@ class PaperMarketCollector:
                     radar_pressure=float(pressure.get(symbol, 0.0)),
                     timeframes={self.timeframe: ohlcv},
                 )
+                state_snapshot = self.state_store.snapshot(symbol)
+                if state_snapshot is not None:
+                    self.champion_runtime.observe(
+                        state_snapshot,
+                        cost_context=self.settings.get("confluence", {}).get("cost_context"),
+                        shared_risk_authorized=result.risk_authorized,
+                    )
                 recorded += 1
                 if self.on_error and not result.recorded:
                     self.on_error("PAPER_STATE_NOT_RECORDED", {"symbol": symbol})
