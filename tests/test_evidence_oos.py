@@ -88,7 +88,7 @@ def test_training_observation_touching_oos_boundary_is_purged():
 
 
 def test_costs_can_turn_gross_oos_edge_into_failure():
-    states = make_states([100.00, 100.01, 100.02, 100.03, 100.04, 100.05, 100.06, 100.07, 100.08, 100.09, 100.10, 100.11])
+    states = make_states([100.00, 101.00, 102.00, 103.00, 104.00, 105.00, 106.00, 106.01, 106.02, 106.03, 106.04, 106.05])
     validator = EvidenceWalkForwardValidator(
         cost_bps=10,
         min_train_samples=2,
