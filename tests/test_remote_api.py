@@ -203,3 +203,22 @@ def test_evidence_ledger_audit_endpoint_rejects_tampering(tmp_path, monkeypatch)
 
     assert response.status_code == 409
     assert response.get_json()["error"] == "evidence_ledger_invalid"
+
+def test_evidence_learning_endpoint_returns_paper_guidance(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    ledger_path = tmp_path / "evidence.jsonl"
+    EvidenceLedger.append(ledger_path, _ledger_record(eligible=True))
+    engine = FakeEngine()
+    engine.config = {
+        "real_mode_guard": {"enabled": True},
+        "evidence": {"ledger_path": str(ledger_path)},
+    }
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+
+    response = client.get("/evidence-learning", headers={"X-Token": "secret-token"})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["paper_only"] is True
+    assert payload["snapshot"]["records"] == 1
+    assert payload["snapshot"]["actions"][0]["action"] == "OBSERVE"
