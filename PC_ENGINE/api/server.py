@@ -18,6 +18,7 @@ from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
 from PC_ENGINE.autonomy.paper_reconciliation import PaperAutonomyReconciler
 from PC_ENGINE.research.inbox import TraderResearchInbox
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
+from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -153,6 +154,28 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             "filters": filters,
             "summary": asdict(summary),
             "records": [record.to_dict() for record in records],
+        })
+
+    @app.get("/evidence-learning")
+    def evidence_learning():
+        require_scope("read_private_state")
+        evidence_cfg = engine.config.get("evidence", {})
+        ledger_path = evidence_cfg.get("ledger_path", "PC_ENGINE/data/radar/evidence_ledger.jsonl")
+        learning_cfg = dict(evidence_cfg.get("learning_loop", {}))
+        try:
+            records = EvidenceLedger.load(ledger_path)
+            loop = PaperEvidenceLearningLoop(
+                recent_records=int(learning_cfg.get("recent_records", 20)),
+                degradation_threshold=float(learning_cfg.get("degradation_threshold", 0.20)),
+            )
+            snapshot = loop.evaluate(records)
+        except (OSError, ValueError, TypeError) as exc:
+            return jsonify({"ok": False, "error": "evidence_learning_invalid", "detail": str(exc)}), 409
+        return jsonify({
+            "ok": True,
+            "ledger_path": str(ledger_path),
+            "paper_only": True,
+            "snapshot": snapshot.to_dict(),
         })
 
     @app.get("/readiness")
