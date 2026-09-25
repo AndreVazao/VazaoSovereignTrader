@@ -109,6 +109,8 @@ class EvidenceLedger:
 
     @classmethod
     def with_digest(cls, record: EvidenceLedgerRecord) -> EvidenceLedgerRecord:
+        durable = record.durable_outcome if isinstance(record.durable_outcome, EvidencePlaneSummary) else EvidencePlaneSummary(**record.durable_outcome)
+        oos = record.chronological_oos if isinstance(record.chronological_oos, EvidencePlaneSummary) else EvidencePlaneSummary(**record.chronological_oos)
         return EvidenceLedgerRecord(
             created_at_ms=record.created_at_ms,
             candidate_id=record.candidate_id,
@@ -124,8 +126,8 @@ class EvidenceLedger:
             data_end_ms=record.data_end_ms,
             state_count=record.state_count,
             outcome_count=record.outcome_count,
-            durable_outcome=record.durable_outcome,
-            chronological_oos=record.chronological_oos,
+            durable_outcome=durable,
+            chronological_oos=oos,
             source_digest=cls.digest(record),
         )
 
