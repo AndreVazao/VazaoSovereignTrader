@@ -80,3 +80,50 @@ def test_invalid_cost_context_fails_closed(tmp_path):
         pass
     else:
         raise AssertionError("invalid cost context must fail closed")
+
+
+def test_shadow_runtime_does_not_cross_attribute_symbols(tmp_path):
+    runtime = PaperChampionRuntime(
+        [_candidate("c", "momentum", horizon=1000)],
+        path=tmp_path / "states.jsonl",
+        outcome_path=tmp_path / "outcomes.jsonl",
+    )
+    runtime.observe(
+        {"symbol": "BTC/USDT", "timestamp_ms": 1000, "price": 100.0,
+         "strategy_evidence": {"momentum": {"action": "BUY", "score": 1.0, "confidence": 1.0}}},
+        cost_context={"fee_bps": 1.0},
+    )
+    assert runtime.observe(
+        {"symbol": "ETH/USDT", "timestamp_ms": 2000, "price": 200.0}
+    ) == 1
+    assert not (tmp_path / "outcomes.jsonl").exists()
+    assert runtime.observe(
+        {"symbol": "BTC/USDT", "timestamp_ms": 2000, "price": 101.0}
+    ) == 1
+    rows = [json.loads(line) for line in (tmp_path / "outcomes.jsonl").read_text().splitlines()]
+    assert rows[0]["symbol"] == "BTC/USDT"
+
+
+def test_shadow_runtime_recovers_pending_outcomes_after_restart(tmp_path):
+    pending = tmp_path / "pending.jsonl"
+    states = tmp_path / "states.jsonl"
+    outcomes = tmp_path / "outcomes.jsonl"
+    first = PaperChampionRuntime(
+        [_candidate("c", "momentum")],
+        path=states, outcome_path=outcomes, pending_path=pending,
+    )
+    first.observe(
+        {"symbol": "BTC/USDT", "timestamp_ms": 1000, "price": 100.0,
+         "strategy_evidence": {"momentum": {"action": "BUY", "score": 1.0, "confidence": 1.0}}},
+        cost_context={"fee_bps": 1.0},
+    )
+    assert len(pending.read_text().splitlines()) == 1
+    second = PaperChampionRuntime(
+        [_candidate("c", "momentum")],
+        path=states, outcome_path=outcomes, pending_path=pending,
+    )
+    assert second.snapshot()["pending"] == 1
+    assert second.observe({"symbol": "BTC/USDT", "timestamp_ms": 2000, "price": 101.0}) == 1
+    rows = [json.loads(line) for line in outcomes.read_text().splitlines()]
+    assert rows[0]["net_bps"] == 99.0
+    assert second.snapshot()["pending"] == 0
