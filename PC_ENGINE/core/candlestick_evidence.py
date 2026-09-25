@@ -94,8 +94,6 @@ def detect_candlestick_patterns(rows: list[list[float]]) -> list[CandlestickPatt
         pb, pr, pu, pl, ps = prev
         po, ph, p_low, pc = _candle(valid[-2])  # type: ignore[misc]
         co, ch, cl, cc = _candle(valid[-1])  # type: ignore[misc]
-        if bearish and bullish and False:
-            pass
         if ps < 0 and signed > 0 and co <= pc and cc >= po and body >= pb * 0.9:
             out.append(CandlestickPattern("bullish_engulfing", "BUY", 0.86, 0.84, i))
         if ps > 0 and signed < 0 and co >= pc and cc <= po and body >= pb * 0.9:
@@ -105,8 +103,13 @@ def detect_candlestick_patterns(rows: list[list[float]]) -> list[CandlestickPatt
             out.append(CandlestickPattern("piercing_line", "BUY", 0.68, 0.72, i))
         if ps > 0 and signed < 0 and cc < prev_mid and cc > po:
             out.append(CandlestickPattern("dark_cloud_cover", "SELL", -0.68, 0.72, i))
-        if pb > 0 and body <= pb * 0.65 and min(po, pc) <= min(co, cc) <= max(po, pc) and min(po, pc) <= min(co, cc) and max(co, cc) <= max(po, pc):
-            out.append(CandlestickPattern("bullish_harami" if signed > 0 else "bearish_harami", "BUY" if signed > 0 else "SELL", 0.64 if signed > 0 else -0.64, 0.70, i))
+        previous_bullish = ps > 0
+        previous_bearish = ps < 0
+        inside = min(po, pc) <= min(co, cc) and max(co, cc) <= max(po, pc)
+        if previous_bearish and signed > 0 and body <= pb * 0.65 and inside:
+            out.append(CandlestickPattern("bullish_harami", "BUY", 0.64, 0.70, i))
+        if previous_bullish and signed < 0 and body <= pb * 0.65 and inside:
+            out.append(CandlestickPattern("bearish_harami", "SELL", -0.64, 0.70, i))
         if ps < 0 and signed > 0 and cc > pc:
             out.append(CandlestickPattern("three_inside_up_candidate", "BUY", 0.52, 0.60, i))
         if ps > 0 and signed < 0 and cc < pc:
