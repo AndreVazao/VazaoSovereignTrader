@@ -17,6 +17,7 @@ from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
 from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
 from PC_ENGINE.autonomy.paper_reconciliation import PaperAutonomyReconciler
 from PC_ENGINE.research.inbox import TraderResearchInbox
+from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -105,6 +106,38 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             output_path=paper_cfg.get("reconciliation_path", "PC_ENGINE/data/paper/autonomous_reconciliation.json"),
         ).reconcile()
         return jsonify(report)
+
+    @app.get("/evidence-ledger")
+    def evidence_ledger_snapshot():
+        require_scope("read_private_state")
+        evidence_cfg = engine.config.get("evidence", {})
+        ledger_path = evidence_cfg.get("ledger_path", "PC_ENGINE/data/radar/evidence_ledger.jsonl")
+        raw_eligible = request.args.get("eligible")
+        eligible = None
+        if raw_eligible is not None:
+            normalized = raw_eligible.strip().lower()
+            if normalized not in {"true", "false"}:
+                return jsonify({"ok": False, "error": "eligible_must_be_boolean"}), 400
+            eligible = normalized == "true"
+        filters = {
+            "candidate_id": request.args.get("candidate_id"),
+            "version": request.args.get("version"),
+            "symbol": request.args.get("symbol"),
+            "regime": request.args.get("regime"),
+            "eligible": eligible,
+        }
+        try:
+            records = EvidenceLedger.query(ledger_path, **filters)
+        except (OSError, ValueError, TypeError) as exc:
+            return jsonify({"ok": False, "error": "evidence_ledger_invalid", "detail": str(exc)}), 409
+        summary = EvidenceLedger.summarize(records)
+        return jsonify({
+            "ok": True,
+            "ledger_path": str(ledger_path),
+            "filters": filters,
+            "summary": asdict(summary),
+            "records": [record.to_dict() for record in records],
+        })
 
     @app.get("/readiness")
     @app.get("/real-readiness")
