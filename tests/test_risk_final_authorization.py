@@ -14,7 +14,7 @@ def test_authorize_order_accepts_within_all_risk_limits():
         max_open_positions=2,
         max_total_exposure_pct=0.35,
         max_symbol_exposure_pct=0.25,
-        stop_pct=0.01,
+        stop_pct=0.02,
         now=100.0,
     )
     assert decision.authorized is True
@@ -66,7 +66,7 @@ def test_authorize_order_blocks_per_trade_risk_cap():
         "BTC/USDT",
         "BUY",
         equity=1000.0,
-        proposed_notional=120.0,
+        proposed_notional=60.0,
         current_exposure=0.0,
         current_symbol_exposure=0.0,
         current_open_positions=0,
