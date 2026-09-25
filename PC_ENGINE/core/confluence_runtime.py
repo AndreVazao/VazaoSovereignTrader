@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from PC_ENGINE.core.breakout_strategy import BreakoutVolumeStrategy
+from PC_ENGINE.core.candlestick_evidence import analyze_candlesticks
+from PC_ENGINE.core.amd_phase import analyze_amd
 from PC_ENGINE.core.confluence import ConfluenceEngine, ConfluenceScore
 from PC_ENGINE.core.cost_model import OpportunityCostGate
 from PC_ENGINE.core.mean_reversion_strategy import MeanReversionStrategy
@@ -45,6 +47,8 @@ class PaperConfluenceRuntime:
         self.mean_reversion = MeanReversionStrategy(settings.get("mean_reversion", {}))
         self.order_flow = OrderFlowStrategy(settings.get("order_flow", {}))
         self.breakout = BreakoutVolumeStrategy(settings.get("breakout", {}))
+        self.auto_candlestick = bool(settings.get("auto_candlestick", True))
+        self.amd_lookback = max(8, int(settings.get("amd_lookback", 20)))
         self.strategy_harness = PaperStrategyHarness()
         self.strategy_harness.register("momentum", lambda ctx: self.momentum.analyse(ctx.timeframes))
         self.strategy_harness.register("mean_reversion", lambda ctx: self.mean_reversion.analyse(ctx.ohlcv, ctx.regime))
@@ -120,6 +124,26 @@ class PaperConfluenceRuntime:
             reason="technical trend evidence supplied by engine",
             metadata={},
         )
+        candle_evidence = analyze_candlesticks(ohlcv)
+        amd_evidence = analyze_amd(ohlcv, self.amd_lookback)
+        strategy_evidence["candlestick"] = StrategyEvidenceRecord(
+            strategy="candlestick",
+            action="BUY" if candle_evidence.bias > 0.10 else "SELL" if candle_evidence.bias < -0.10 else "HOLD",
+            score=candle_evidence.bias,
+            confidence=candle_evidence.confidence,
+            reason=f"dominant pattern: {candle_evidence.dominant}",
+            metadata={"patterns": [item.__dict__ for item in candle_evidence.patterns]},
+        )
+        strategy_evidence["amd_phase"] = StrategyEvidenceRecord(
+            strategy="amd_phase",
+            action="BUY" if amd_evidence.score > 0.10 else "SELL" if amd_evidence.score < -0.10 else "HOLD",
+            score=amd_evidence.score,
+            confidence=amd_evidence.confidence,
+            reason=f"phase: {amd_evidence.phase}; sweep: {amd_evidence.sweep}",
+            metadata={"range_high": amd_evidence.range_high, "range_low": amd_evidence.range_low, "displacement": amd_evidence.displacement},
+        )
+        if self.auto_candlestick and abs(float(pattern_bias)) < 1e-12:
+            pattern_bias = candle_evidence.bias
         derivatives_score = 0.0
         if self.derivatives_enabled:
             derivatives_score = self.derivatives.evidence(symbol, price).score
