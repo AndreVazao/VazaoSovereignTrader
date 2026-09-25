@@ -6,7 +6,17 @@ from PC_ENGINE.radar.champion_challenger import (
 
 
 def candidate(cid: str) -> CandidateSpec:
-    return CandidateSpec(cid, "1.0", "paper_strategy", (("cost_model", "stress"),))
+    return CandidateSpec(
+        cid,
+        "1.0",
+        "paper_strategy",
+        (("cost_model", "stress"),),
+        "candlestick",
+        "bullish_engulfing",
+        "BTC/USDT",
+        "TREND",
+        1000,
+    )
 
 
 def record(book: ChampionChallengerBook, cid: str, base: float) -> None:
@@ -98,3 +108,45 @@ def test_risk_violation_blocks_candidate_even_with_positive_results():
     )
     assert decision.eligible is False
     assert "base PAPER metrics gate failed" in decision.reason
+
+
+def test_evidence_assessment_requires_shared_oos_cost_stress_evidence():
+    book = ChampionChallengerBook()
+    book.register(candidate("challenger"))
+    record(book, "challenger", 1.0)
+    states = [
+        {
+            "symbol": "BTC/USDT",
+            "timestamp_ms": index * 1000 + 1,
+            "price": 100.0 + index,
+            "regime": "TREND",
+            "strategy_evidence": {
+                "candlestick": {
+                    "patterns": [
+                        {"name": "bullish_engulfing", "direction": "BUY", "score": 0.9}
+                    ]
+                }
+            },
+        }
+        for index in range(20)
+    ]
+    decision = book.assess_with_evidence(
+        "challenger",
+        states,
+        costs_bps=(10.0, 50.0, 100.0),
+        min_cost_scenarios=3,
+        validator_kwargs={
+            "min_train_samples": 3,
+            "min_train_mean_net_bps": 0.0,
+            "min_train_win_rate": 0.5,
+            "min_oos_samples": 2,
+            "min_oos_folds": 2,
+        },
+        train_size=8,
+        test_size=4,
+        horizons_ms=(1000,),
+        min_samples=6,
+    )
+    assert decision.eligible is False
+    assert "OOS cost-stress evidence gate failed" in decision.reason
+    assert book.champion is None
