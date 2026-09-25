@@ -1,3 +1,4 @@
+from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.radar.champion_challenger import (
     CandidateObservation,
     CandidateSpec,
@@ -240,11 +241,19 @@ def test_unified_evidence_gate_requires_both_durable_outcomes_and_chronological_
         horizons_ms=(1000,),
         min_samples=30,
         min_folds=2,
+        evidence_ledger_path=str(tmp_path / "evidence.jsonl"),
     )
 
     assert decision.eligible is False
     assert "chronological OOS gate failed" in decision.reason
     assert len(book.audit) == 1
+    records = EvidenceLedger.load(tmp_path / "evidence.jsonl")
+    assert len(records) == 1
+    assert records[0].candidate_id == "challenger"
+    assert records[0].version == "1.0"
+    assert records[0].eligible is False
+    assert records[0].durable_outcome.scenarios == 3
+    assert records[0].chronological_oos.status == "FAIL"
     assert book.champion is None
 
 
