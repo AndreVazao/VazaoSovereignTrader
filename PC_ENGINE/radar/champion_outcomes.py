@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 import math
-import random
+from PC_ENGINE.radar.evidence_statistics import bootstrap_lower_ci, summary
 from pathlib import Path
 from statistics import median
 from typing import Iterable
@@ -120,31 +119,12 @@ class ChampionOutcomeAggregator:
                 rows.append(row)
         return rows
 
-    @staticmethod
-    def _bootstrap_lower(values: list[float], seed_key: str, samples: int) -> float:
-        if not values:
-            return 0.0
-        if len(values) == 1:
-            return values[0]
-        seed = int.from_bytes(hashlib.sha256(seed_key.encode()).digest()[:8], "big")
-        rng = random.Random(seed)
-        means = []
-        for _ in range(samples):
-            means.append(sum(values[rng.randrange(len(values))] for _ in values) / len(values))
-        means.sort()
-        return means[max(0, int(0.025 * len(means)) - 1)]
-
     def _metrics(self, rows: list[dict], *, risk_authorized_only: bool) -> ChampionOutcomeMetrics:
         rows = sorted(rows, key=lambda row: int(row["exit_timestamp_ms"]))
         if risk_authorized_only:
             rows = [row for row in rows if bool(row["risk_authorized"])]
         values = [float(row["net_bps"]) for row in rows]
-        samples = len(values)
-        wins = sum(value > 0 for value in values)
-        mean = sum(values) / samples if samples else 0.0
-        med = median(values) if values else 0.0
-        variance = sum((value - mean) ** 2 for value in values) / samples if samples else 0.0
-        lower = mean - 1.96 * math.sqrt(variance / samples) if samples > 1 else mean
+        samples, wins, win_rate, mean, med, lower = summary(values)
         folds: dict[int, list[float]] = {}
         for row, value in zip(rows, values):
             fold = int(row["exit_timestamp_ms"]) // self.fold_duration_ms
@@ -154,7 +134,7 @@ class ChampionOutcomeAggregator:
             if folds else 0.0
         )
         key = self._key(rows[0]) if rows else ("", "", "", "", "", 0)
-        bootstrap = self._bootstrap_lower(values, "|".join(map(str, key)), self.bootstrap_samples)
+        bootstrap = bootstrap_lower_ci(values, seed_key="|".join(map(str, key)), samples=self.bootstrap_samples)
         validated = (
             samples >= self.min_samples
             and len(folds) >= self.min_folds
@@ -224,9 +204,7 @@ class ChampionOutcomeAggregator:
                     sum(sum(v) / len(v) > 0 for v in folds.values()) / len(folds)
                     if folds else 0.0
                 )
-                bootstrap = self._bootstrap_lower(
-                    values, f"{'|'.join(map(str, key))}|{cost:g}", self.bootstrap_samples
-                )
+                bootstrap = bootstrap_lower_ci(values, seed_key=f"{'|'.join(map(str, key))}|{cost:g}", samples=self.bootstrap_samples)
                 validated = (
                     samples >= self.min_samples
                     and len(folds) >= self.min_folds
