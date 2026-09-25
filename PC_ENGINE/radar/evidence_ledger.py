@@ -72,6 +72,28 @@ class EvidenceLedgerRecord:
 
 
 
+
+@dataclass(frozen=True)
+class EvidenceAuditReport:
+    """Deterministic aggregate audit over an already verified PAPER ledger."""
+
+    records: int
+    eligible_records: int
+    rejected_records: int
+    eligibility_ratio: float
+    candidate_versions: tuple[str, ...]
+    symbols: tuple[str, ...]
+    regimes: tuple[str, ...]
+    strategies: tuple[str, ...]
+    reason_counts: tuple[tuple[str, int], ...]
+    eligible_by_candidate_version: tuple[tuple[str, int], ...]
+    records_by_symbol: tuple[tuple[str, int], ...]
+    records_by_regime: tuple[tuple[str, int], ...]
+    first_created_at_ms: int | None
+    latest_created_at_ms: int | None
+    data_start_ms: int | None
+    data_end_ms: int | None
+
 @dataclass(frozen=True)
 class EvidenceLedgerSummary:
     """Compact historical PAPER evidence report."""
@@ -218,6 +240,50 @@ class EvidenceLedger:
             and (regime is None or record.regime == regime)
             and (eligible is None or record.eligible is eligible)
         ]
+
+    @classmethod
+    def audit_report(cls, records: list[EvidenceLedgerRecord]) -> EvidenceAuditReport:
+        """Build deterministic audit aggregates from verified records only."""
+        summary = cls.summarize(records)
+        candidate_counts: dict[str, int] = {}
+        symbol_counts: dict[str, int] = {}
+        regime_counts: dict[str, int] = {}
+        strategies: set[str] = set()
+        first: int | None = None
+        latest: int | None = None
+        data_start: int | None = None
+        data_end: int | None = None
+
+        for record in records:
+            key = f"{record.candidate_id}@{record.version}"
+            candidate_counts[key] = candidate_counts.get(key, 0) + int(record.eligible)
+            symbol_counts[record.symbol] = symbol_counts.get(record.symbol, 0) + 1
+            regime_counts[record.regime] = regime_counts.get(record.regime, 0) + 1
+            strategies.add(record.strategy)
+            first = record.created_at_ms if first is None else min(first, record.created_at_ms)
+            latest = record.created_at_ms if latest is None else max(latest, record.created_at_ms)
+            data_start = record.data_start_ms if data_start is None else min(data_start, record.data_start_ms)
+            data_end = record.data_end_ms if data_end is None else max(data_end, record.data_end_ms)
+
+        ratio = summary.eligible_records / summary.records if summary.records else 0.0
+        return EvidenceAuditReport(
+            records=summary.records,
+            eligible_records=summary.eligible_records,
+            rejected_records=summary.rejected_records,
+            eligibility_ratio=ratio,
+            candidate_versions=summary.candidate_versions,
+            symbols=tuple(sorted(symbol_counts)),
+            regimes=tuple(sorted(regime_counts)),
+            strategies=tuple(sorted(strategies)),
+            reason_counts=summary.reason_counts,
+            eligible_by_candidate_version=tuple(sorted(candidate_counts.items())),
+            records_by_symbol=tuple(sorted(symbol_counts.items())),
+            records_by_regime=tuple(sorted(regime_counts.items())),
+            first_created_at_ms=first,
+            latest_created_at_ms=latest,
+            data_start_ms=data_start,
+            data_end_ms=data_end,
+        )
 
     @classmethod
     def summarize(cls, records: list[EvidenceLedgerRecord]) -> EvidenceLedgerSummary:
