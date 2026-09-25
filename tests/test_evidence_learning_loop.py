@@ -31,7 +31,7 @@ def test_learning_loop_detects_recent_degradation():
     assert snapshot.degradation_detected
     assert snapshot.recent_eligibility_ratio == 0.0
     assert snapshot.historical_eligibility_ratio == 1.0
-    assert snapshot.actions[0].action == "OBSERVE"
+    assert snapshot.actions[0].action == "INVESTIGATE"
 
 
 def test_learning_loop_marks_latest_candidate_observation_for_investigation():
