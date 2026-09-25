@@ -150,3 +150,43 @@ def test_evidence_assessment_requires_shared_oos_cost_stress_evidence():
     assert decision.eligible is False
     assert "OOS cost-stress evidence gate failed" in decision.reason
     assert book.champion is None
+
+
+def test_durable_outcome_gate_requires_matching_candidate_version_and_regime():
+    book = ChampionChallengerBook()
+    book.register(candidate("challenger"))
+    rows = []
+    for index in range(60):
+        rows.append({
+            "candidate_id": "challenger", "version": "1.0", "strategy": "paper_strategy",
+            "symbol": "BTC/USDT", "regime": "TREND", "entry_timestamp_ms": index * 600_000 + 1,
+            "exit_timestamp_ms": index * 600_000 + 1000, "horizon_ms": 1000,
+            "action": "BUY", "gross_bps": 50.0, "cost_bps": 28.0, "net_bps": 22.0,
+            "risk_authorized": True, "paper_only": True,
+        })
+    decision, metrics, stress = book.assess_outcomes(
+        "challenger", rows, costs_bps=(10.0, 20.0, 30.0),
+        min_cost_scenarios=3, min_samples=30, min_folds=2,
+        min_mean_net_bps=0.0, min_lower_ci_bps=0.0,
+    )
+    assert decision.eligible is True
+    assert metrics is not None and metrics.samples == 60
+    assert len(stress) == 3
+    assert book.champion is None
+
+
+def test_durable_outcome_gate_ignores_unauthorized_rows():
+    book = ChampionChallengerBook()
+    book.register(candidate("challenger"))
+    rows = [{
+        "candidate_id": "challenger", "version": "1.0", "strategy": "paper_strategy",
+        "symbol": "BTC/USDT", "regime": "TREND", "entry_timestamp_ms": 1000,
+        "exit_timestamp_ms": 2000, "horizon_ms": 1000, "action": "BUY",
+        "gross_bps": 100.0, "cost_bps": 28.0, "net_bps": 72.0,
+        "risk_authorized": False, "paper_only": True,
+    }]
+    decision, metrics, _ = book.assess_outcomes(
+        "challenger", rows, min_samples=1, min_folds=1
+    )
+    assert decision.eligible is False
+    assert metrics is None
