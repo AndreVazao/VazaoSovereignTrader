@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import time
 from pathlib import Path
 from typing import Iterable
 
@@ -10,23 +9,24 @@ from PC_ENGINE.radar.champion_challenger import CandidateSpec
 
 
 class PaperChampionRuntime:
-    """PAPER-only shadow runner for champion/challenger state parity.
-
-    Every registered candidate receives the same normalized market state and
-    cost context. This layer never submits orders, never promotes a candidate,
-    and never changes Risk Engine authorization.
-    """
+    """PAPER-only shadow runner with chronological candidate outcome attribution."""
 
     def __init__(
         self,
         candidates: Iterable[CandidateSpec] = (),
         *,
         path: str | Path = "PC_ENGINE/data/radar/champion_challenger_states.jsonl",
+        outcome_path: str | Path | None = None,
     ) -> None:
         self.path = Path(path)
+        self.outcome_path = Path(outcome_path) if outcome_path else self.path.with_name(
+            "champion_challenger_outcomes.jsonl"
+        )
         self.candidates: dict[str, CandidateSpec] = {}
         self.cycles = 0
         self.records = 0
+        self.outcomes = 0
+        self._pending: list[dict] = []
         for candidate in candidates:
             self.register(candidate)
 
@@ -35,6 +35,52 @@ class PaperChampionRuntime:
         if existing is not None and existing.version != candidate.version:
             raise ValueError("candidate_id already exists with a different version")
         self.candidates[candidate.candidate_id] = candidate
+
+    @staticmethod
+    def _cost_bps(cost_context: dict | None) -> float:
+        context = cost_context or {}
+        total = 0.0
+        for key in ("fee_bps", "spread_bps", "slippage_bps", "latency_bps"):
+            value = float(context.get(key, 0.0))
+            if not math.isfinite(value) or value < 0:
+                raise ValueError("cost context must contain finite non-negative bps")
+            total += value
+        return total
+
+    def _resolve(self, timestamp_ms: int, price: float) -> int:
+        resolved = 0
+        remaining: list[dict] = []
+        for row in self._pending:
+            if timestamp_ms < row["target_timestamp_ms"]:
+                remaining.append(row)
+                continue
+            direction = 1.0 if row["action"] == "BUY" else -1.0 if row["action"] == "SELL" else 0.0
+            gross_bps = ((price - row["entry_price"]) / row["entry_price"]) * 10000.0 * direction
+            net_bps = gross_bps - row["cost_bps"] if direction else 0.0
+            outcome = {
+                "candidate_id": row["candidate_id"],
+                "version": row["version"],
+                "strategy": row["strategy"],
+                "symbol": row["symbol"],
+                "entry_timestamp_ms": row["entry_timestamp_ms"],
+                "exit_timestamp_ms": timestamp_ms,
+                "horizon_ms": row["horizon_ms"],
+                "action": row["action"],
+                "entry_price": row["entry_price"],
+                "exit_price": price,
+                "gross_bps": round(gross_bps, 8),
+                "cost_bps": round(row["cost_bps"], 8),
+                "net_bps": round(net_bps, 8),
+                "risk_authorized": row["shared_risk_authorized"],
+                "paper_only": True,
+            }
+            self.outcome_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.outcome_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(outcome, separators=(",", ":"), sort_keys=True) + "\n")
+            self.outcomes += 1
+            resolved += 1
+        self._pending = remaining
+        return resolved
 
     def observe(
         self,
@@ -51,6 +97,7 @@ class PaperChampionRuntime:
         if not symbol or timestamp_ms <= 0 or not math.isfinite(price) or price <= 0:
             raise ValueError("invalid market state for champion/challenger observation")
 
+        self._resolve(timestamp_ms, price)
         evidence = state.get("strategy_evidence") or {}
         rows = []
         for candidate in self.candidates.values():
@@ -62,6 +109,7 @@ class PaperChampionRuntime:
             confidence = float(record.get("confidence", 0.0))
             if not math.isfinite(score) or not math.isfinite(confidence):
                 raise ValueError("candidate evidence must be finite")
+            candidate_cost = self._cost_bps(cost_context)
             rows.append(
                 {
                     "candidate_id": candidate.candidate_id,
@@ -79,6 +127,22 @@ class PaperChampionRuntime:
                     "paper_only": True,
                 }
             )
+            if action in {"BUY", "SELL"} and candidate.horizon_ms > 0:
+                self._pending.append(
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "version": candidate.version,
+                        "strategy": candidate.strategy,
+                        "symbol": symbol,
+                        "entry_timestamp_ms": timestamp_ms,
+                        "target_timestamp_ms": timestamp_ms + candidate.horizon_ms,
+                        "horizon_ms": candidate.horizon_ms,
+                        "action": action,
+                        "entry_price": price,
+                        "cost_bps": candidate_cost,
+                        "shared_risk_authorized": bool(shared_risk_authorized),
+                    }
+                )
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
@@ -88,6 +152,12 @@ class PaperChampionRuntime:
         self.records += len(rows)
         return len(rows)
 
+    def flush(self) -> int:
+        """Discard unresolved observations without inventing future prices."""
+        count = len(self._pending)
+        self._pending.clear()
+        return count
+
     def snapshot(self) -> dict:
         return {
             "enabled": bool(self.candidates),
@@ -95,6 +165,9 @@ class PaperChampionRuntime:
             "candidate_ids": sorted(self.candidates),
             "cycles": self.cycles,
             "records": self.records,
+            "outcomes": self.outcomes,
+            "pending": len(self._pending),
             "path": str(self.path),
+            "outcome_path": str(self.outcome_path),
             "paper_only": True,
         }
