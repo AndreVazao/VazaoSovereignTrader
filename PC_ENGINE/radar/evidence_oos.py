@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
-import random
+from PC_ENGINE.radar.evidence_statistics import bootstrap_lower_ci, summary
 
 from PC_ENGINE.radar.evidence_outcomes import (
     EvidenceObservation,
@@ -106,40 +105,6 @@ class EvidenceWalkForwardValidator:
             for item in observations
         ]
 
-    @staticmethod
-    def _bootstrap_lower_ci(values: list[float], *, seed_key: str, samples: int) -> float:
-        if not values:
-            return 0.0
-        if len(values) == 1:
-            return float(values[0])
-        samples = max(200, int(samples))
-        seed = int.from_bytes(hashlib.sha256(seed_key.encode("utf-8")).digest()[:8], "big")
-        rng = random.Random(seed)
-        means: list[float] = []
-        size = len(values)
-        for _ in range(samples):
-            total = 0.0
-            for _ in range(size):
-                total += values[rng.randrange(size)]
-            means.append(total / size)
-        means.sort()
-        return means[max(0, int(0.025 * len(means)) - 1)]
-
-    @staticmethod
-    def _summary(values: list[float]) -> tuple[int, int, float, float, float, float]:
-        if not values:
-            return 0, 0, 0.0, 0.0, 0.0, 0.0
-        ordered = sorted(values)
-        samples = len(ordered)
-        wins = sum(value > 0 for value in ordered)
-        mean = sum(ordered) / samples
-        mid = samples // 2
-        median = ordered[mid] if samples % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
-        variance = sum((value - mean) ** 2 for value in ordered) / samples
-        se = variance ** 0.5 / samples ** 0.5 if samples > 1 else 0.0
-        lower = mean - 1.96 * se
-        return samples, wins, wins / samples, mean, median, lower
-
     def validate(
         self,
         states: list[dict],
@@ -224,12 +189,12 @@ class EvidenceWalkForwardValidator:
 
         results: list[EvidenceOOSStat] = []
         for key, values in sorted(oos_values.items()):
-            samples, wins, win_rate, mean, median, lower = self._summary(values)
+            samples, wins, win_rate, mean, median, lower = summary(values)
             fold_ids = oos_fold_ids.get(key, set())
             fold_count = len(fold_ids)
             fold_values = oos_fold_values.get(key, {})
             positive_fold_ratio = (sum(1 for values_for_fold in fold_values.values() if sum(values_for_fold) / len(values_for_fold) > 0) / fold_count) if fold_count else 0.0
-            bootstrap_lower = self._bootstrap_lower_ci(values, seed_key="|".join(map(str, key)), samples=2000)
+            bootstrap_lower = bootstrap_lower_ci(values, seed_key="|".join(map(str, key)), samples=2000)
             train_eligible_folds = train_fold_counts.get(key, 0)
             validated = (
                 fold_count >= self.min_oos_folds
