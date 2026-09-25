@@ -193,7 +193,7 @@ def test_durable_outcome_gate_ignores_unauthorized_rows():
     assert metrics is None
 
 
-def test_unified_evidence_gate_requires_both_durable_outcomes_and_chronological_oos():
+def test_unified_evidence_gate_requires_both_durable_outcomes_and_chronological_oos(tmp_path):
     book = ChampionChallengerBook()
     book.register(candidate("challenger"))
     outcome_rows = []
