@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Iterable
 
 from PC_ENGINE.radar.evidence_stress import EvidenceStatisticalStressTester
+from PC_ENGINE.radar.champion_outcomes import ChampionOutcomeAggregator, ChampionOutcomeMetrics, ChampionOutcomeStressStat
 
 
 @dataclass(frozen=True)
@@ -259,6 +260,87 @@ class ChampionChallengerBook:
         )
         self.audit.append(decision)
         return decision
+
+
+    def assess_outcomes(
+        self,
+        candidate_id: str,
+        outcome_rows: list[dict],
+        *,
+        costs_bps: tuple[float, ...] = (28.0, 35.0, 42.0, 56.0),
+        min_cost_scenarios: int = 3,
+        min_samples: int = 30,
+        min_folds: int = 2,
+        min_mean_net_bps: float = 0.0,
+        min_lower_ci_bps: float = 0.0,
+        min_positive_fold_ratio: float = 0.50,
+        fold_duration_ms: int = 300_000,
+    ) -> tuple[PromotionDecision, ChampionOutcomeMetrics | None, list[ChampionOutcomeStressStat]]:
+        """Gate a candidate using durable PAPER outcomes only."""
+        candidate = self.candidates.get(candidate_id)
+        if candidate is None:
+            raise KeyError(f"unknown candidate: {candidate_id}")
+        aggregator = ChampionOutcomeAggregator(
+            min_samples=min_samples,
+            min_folds=min_folds,
+            min_mean_net_bps=min_mean_net_bps,
+            min_lower_ci_bps=min_lower_ci_bps,
+            min_positive_fold_ratio=min_positive_fold_ratio,
+            fold_duration_ms=fold_duration_ms,
+        )
+        matching = [
+            row for row in outcome_rows
+            if row.get("candidate_id") == candidate.candidate_id
+            and row.get("version") == candidate.version
+        ]
+        metrics_rows = aggregator.aggregate(matching, risk_authorized_only=True)
+        metrics = next(
+            (
+                row for row in metrics_rows
+                if row.symbol == candidate.symbol
+                and row.regime == candidate.regime
+                and row.horizon_ms == candidate.horizon_ms
+            ),
+            None,
+        )
+        stress = aggregator.stress(
+            matching, costs_bps=costs_bps, risk_authorized_only=True
+        )
+        key = (
+            candidate.candidate_id,
+            candidate.version,
+            candidate.strategy,
+            candidate.symbol,
+            candidate.regime,
+            candidate.horizon_ms,
+        )
+        robust = aggregator.robustness(
+            stress, min_cost_scenarios=min_cost_scenarios
+        ).get(key, False)
+        reasons = []
+        if metrics is None or not metrics.validated:
+            reasons.append("durable PAPER outcome gate failed")
+        if not robust:
+            reasons.append("durable PAPER cost-stress gate failed")
+        eligible = not reasons
+        decision = PromotionDecision(
+            candidate.candidate_id,
+            candidate.version,
+            eligible,
+            "eligible for human-reviewed PAPER promotion"
+            if eligible
+            else "; ".join(reasons),
+            self._metrics(
+                candidate,
+                (row for row in self.observations if row.candidate_id == candidate.candidate_id),
+                min_samples=1,
+                min_mean_net_bps=-float("inf"),
+                max_drawdown_bps=float("inf"),
+                max_risk_violations=10**9,
+            ),
+        )
+        self.audit.append(decision)
+        return decision, metrics, stress
 
     def assess(
         self,
