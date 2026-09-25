@@ -108,3 +108,68 @@ def test_plane_counts_cannot_be_inconsistent(tmp_path):
 
     with pytest.raises(ValueError, match="validated scenarios"):
         EvidenceLedger.append(tmp_path / "evidence.jsonl", invalid)
+
+
+def test_query_filters_only_verified_records(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    first = EvidenceLedger.append(path, make_record())
+    second = EvidenceLedger.append(
+        path,
+        EvidenceLedgerRecord(
+            **{
+                **first.to_dict(),
+                "created_at_ms": first.created_at_ms + 1,
+                "candidate_id": "candidate-b",
+                "version": "v1",
+                "symbol": "ETHUSDT",
+                "eligible": True,
+                "reason": "",
+                "reason_codes": (),
+            }
+        ),
+    )
+
+    selected = EvidenceLedger.query(
+        path,
+        candidate_id="candidate-b",
+        symbol="ETHUSDT",
+        eligible=True,
+    )
+    assert selected == [second]
+
+    path.write_text(
+        path.read_text(encoding="utf-8").replace('"eligible":true', '"eligible":false', 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="source digest mismatch"):
+        EvidenceLedger.query(path)
+
+
+def test_summary_is_deterministic_and_counts_reason_codes(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    first = EvidenceLedger.append(path, make_record())
+    EvidenceLedger.append(
+        path,
+        EvidenceLedgerRecord(
+            **{
+                **first.to_dict(),
+                "created_at_ms": first.created_at_ms + 10,
+                "candidate_id": "candidate-b",
+                "version": "v1",
+                "eligible": True,
+                "reason": "",
+                "reason_codes": (),
+            }
+        ),
+    )
+
+    summary = EvidenceLedger.summarize(EvidenceLedger.load(path))
+    assert summary.records == 2
+    assert summary.eligible_records == 1
+    assert summary.rejected_records == 1
+    assert summary.candidate_versions == ("candidate-a@v3", "candidate-b@v1")
+    assert summary.reason_counts == (
+        ("chronological OOS gate failed", 1),
+        ("durable outcome gate failed", 1),
+    )
+    assert summary.latest_created_at_ms == first.created_at_ms + 10
