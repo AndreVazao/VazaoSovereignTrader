@@ -69,3 +69,32 @@ def test_gate_blocks_unresolved_execution_state():
     )
     assert not intent.ready
     assert "EXECUTION_INTENTS_CLEAR" in intent.blockers
+
+
+def test_paper_review_distinguishes_missing_evidence_from_blockers():
+    from PC_ENGINE.core.paper_review import PaperReview
+
+    result = PaperReview.evaluate(
+        {"ready": True, "status": "ok"},
+        audit={"records": 0},
+        learning={"degradation_detected": False},
+        champion={"eligible": True},
+        execution={"ok": True},
+    )
+    assert result["status"] == "INSUFFICIENT_EVIDENCE"
+    assert result["insufficient"] == ("AUDIT",)
+    assert result["blockers"] == ()
+
+
+def test_paper_review_blocks_learning_degradation():
+    from PC_ENGINE.core.paper_review import PaperReview
+
+    result = PaperReview.evaluate(
+        {"ready": True, "status": "ok"},
+        audit={"records": 10},
+        learning={"degradation_detected": True},
+        champion={"eligible": True},
+        execution={"ok": True},
+    )
+    assert result["status"] == "BLOCKED"
+    assert "LEARNING" in result["blockers"]
