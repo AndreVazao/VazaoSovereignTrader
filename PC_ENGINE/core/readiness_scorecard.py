@@ -35,7 +35,7 @@ class ReadinessScorecardItem:
 
 
 @dataclass(frozen=True)
-class ReadinessStabilityScorecard:
+class ReadinessStabilityScorecardReport:
     status: str
     records: int
     analyzed_records: int
@@ -73,8 +73,8 @@ class ReadinessStabilityScorecard:
         self.min_pass_ratio = min(1.0, max(0.0, float(min_pass_ratio)))
 
     @classmethod
-    def _invalid(cls, count: int, reason: str) -> ReadinessStabilityScorecard:
-        return ReadinessStabilityScorecard(
+    def _invalid(cls, count: int, reason: str) -> ReadinessStabilityScorecardReport:
+        return ReadinessStabilityScorecardReport(
             "INVALID_HISTORY", count, 0, 0, tuple(), tuple(), reason, 0, 0
         )
 
@@ -118,7 +118,7 @@ class ReadinessStabilityScorecard:
         if len(ordered) < self.min_samples:
             first = int(ordered[0]["timestamp_ms"]) if ordered else 0
             latest = int(ordered[-1]["timestamp_ms"]) if ordered else 0
-            return ReadinessStabilityScorecard(
+            return ReadinessStabilityScorecardReport(
                 "INSUFFICIENT_HISTORY", len(raw), len(ordered), min(self.recent_window, len(ordered)),
                 tuple(), tuple(), "minimum scorecard history samples not reached", first, latest
             )
@@ -182,7 +182,7 @@ class ReadinessStabilityScorecard:
                 "one or more components are not sustaining the required recent pass ratio"
             )
 
-        return ReadinessStabilityScorecard(
+        return ReadinessStabilityScorecardReport(
             status=status,
             records=len(raw),
             analyzed_records=len(ordered),
