@@ -98,3 +98,22 @@ def test_paper_review_blocks_learning_degradation():
     )
     assert result["status"] == "BLOCKED"
     assert "LEARNING" in result["blockers"]
+
+
+def test_readiness_history_persists_and_limits_snapshots(tmp_path):
+    from PC_ENGINE.core.real_readiness_service import RealReadinessService
+
+    service = RealReadinessService({
+        "real_readiness": {
+            "history_enabled": True,
+            "history_path": str(tmp_path / "history.jsonl"),
+            "history_limit": 2,
+        }
+    })
+    service._persist_history({"status": "LOCKED", "ready": False, "blockers": ["X"]}, 1)
+    service._persist_history({"status": "LOCKED", "ready": False, "blockers": ["Y"]}, 2)
+    service._persist_history({"status": "READY_FOR_PROTECTED_REAL_REVIEW", "ready": True, "blockers": [], "paper_review": {"status": "READY_FOR_REVIEW"}}, 3)
+    history = service.history()
+    assert history["records"] == 2
+    assert history["ready_count"] == 1
+    assert history["latest"]["timestamp_ms"] == 3
