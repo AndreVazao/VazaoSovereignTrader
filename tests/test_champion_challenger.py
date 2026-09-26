@@ -298,7 +298,7 @@ def _learning_record(ts: int, eligible: bool) -> EvidenceLedgerRecord:
         2,
     )
     return EvidenceLedger.with_digest(EvidenceLedgerRecord(
-        created_at_ms=ts,
+        created_at_ms=ts + 10000,
         candidate_id="challenger",
         version="1.0",
         strategy="paper_strategy",
@@ -308,8 +308,8 @@ def _learning_record(ts: int, eligible: bool) -> EvidenceLedgerRecord:
         eligible=eligible,
         reason="ok" if eligible else "degraded",
         reason_codes=() if eligible else ("degraded_evidence",),
-        data_start_ms=ts - 1000,
-        data_end_ms=ts,
+        data_start_ms=ts + 9000,
+        data_end_ms=ts + 10000,
         state_count=30,
         outcome_count=30,
         durable_outcome=plane,
