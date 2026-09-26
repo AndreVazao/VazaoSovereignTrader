@@ -119,7 +119,7 @@ class RealReadinessService:
             rows.append(row)
             rows = rows[-self.history_limit:]
             tmp = self.history_path.with_suffix(self.history_path.suffix + ".tmp")
-            tmp.write_text("".join(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\\n" for item in rows), encoding="utf-8")
+            tmp.write_text("".join(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\n" for item in rows), encoding="utf-8")
             os.replace(tmp, self.history_path)
         except OSError:
             return
