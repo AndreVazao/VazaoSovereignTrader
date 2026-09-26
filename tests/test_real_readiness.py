@@ -117,3 +117,29 @@ def test_readiness_history_persists_and_limits_snapshots(tmp_path):
     assert history["records"] == 2
     assert history["ready_count"] == 1
     assert history["latest"]["timestamp_ms"] == 3
+
+
+def test_readiness_service_exposes_trend_from_persisted_history(tmp_path):
+    from PC_ENGINE.core.real_readiness_service import RealReadinessService
+
+    service = RealReadinessService({
+        "real_readiness": {
+            "history_enabled": True,
+            "history_path": str(tmp_path / "history.jsonl"),
+            "history_limit": 20,
+            "trend_min_samples": 5,
+            "trend_recent_window": 2,
+            "trend_min_span_seconds": 1,
+            "trend_degradation_threshold": 0.20,
+            "trend_recovery_threshold": 0.20,
+        }
+    })
+    for index, ready in enumerate([True, True, True, False, False]):
+        service._persist_history(
+            {"status": "READY_FOR_PROTECTED_REAL_REVIEW" if ready else "LOCKED", "ready": ready, "blockers": [] if ready else ["X"]},
+            1_000_000 + index * 1_000,
+        )
+    trend = service.trend()
+    assert trend["status"] == "DEGRADING"
+    assert trend["paper_only"] is True
+    assert trend["history_path"].endswith("history.jsonl")
