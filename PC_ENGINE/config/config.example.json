@@ -196,6 +196,16 @@
     "lead_lag_response_threshold_bps": 2,
     "collector_learning_minutes": 5
   },
+  "evidence": {
+    "ledger_path": "PC_ENGINE/data/radar/evidence_ledger.jsonl",
+    "learning_loop": {
+      "enabled": true,
+      "recent_records": 20,
+      "degradation_threshold": 0.20,
+      "snapshot_path": "PC_ENGINE/data/radar/evidence_learning_snapshot.json"
+    },
+    "notes": "PAPER-only verified evidence learning. The loop is descriptive/advisory, fail-closed on invalid ledgers, and never promotes candidates, changes risk, authorizes capital or executes orders."
+  },
   "candlestick": {
     "enabled": true,
     "min_confidence": 0.7,

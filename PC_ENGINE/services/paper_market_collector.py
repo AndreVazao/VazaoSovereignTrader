@@ -10,6 +10,8 @@ from PC_ENGINE.core.candlestick_patterns import CandlestickPatternEngine
 from PC_ENGINE.core.preflight import validate_ohlcv_rows
 from PC_ENGINE.core.confluence_runtime import PaperConfluenceRuntime
 from PC_ENGINE.learning.state_signature import StateSignatureLearningEngine
+from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
+from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.radar.market_radar import MarketRadar
 from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.radar.state_outcomes import StateOutcomeEngine
@@ -65,6 +67,29 @@ class PaperMarketCollector:
         )
         self.learning_min_samples = max(1, int(settings.get("learning_min_samples", 30)))
         self.learning_cost_bps = max(0.0, float(settings.get("learning_cost_bps", 28.0)))
+        evidence_cfg = dict(settings.get("evidence", {}))
+        learning_cfg = dict(evidence_cfg.get("learning_loop", {}))
+        self.evidence_ledger_path = Path(
+            evidence_cfg.get(
+                "ledger_path",
+                str(self.data_dir / "evidence_ledger.jsonl"),
+            )
+        )
+        self.evidence_learning_recent_records = max(
+            1, int(learning_cfg.get("recent_records", 20))
+        )
+        self.evidence_learning_threshold = max(
+            0.0, min(1.0, float(learning_cfg.get("degradation_threshold", 0.20)))
+        )
+        self.evidence_learning_snapshot_path = Path(
+            learning_cfg.get(
+                "snapshot_path",
+                str(self.data_dir / "evidence_learning_snapshot.json"),
+            )
+        )
+        self.evidence_learning_enabled = bool(learning_cfg.get("enabled", True))
+        self.last_evidence_learning_snapshot: dict | None = None
+        self.evidence_learning_errors = 0
         self.learning_path = Path(
             settings.get(
                 "learning_path",
@@ -147,6 +172,15 @@ class PaperMarketCollector:
             "outcome_cycles": self.outcome_cycles,
             "last_learning_stats": self.last_learning_stats,
             "last_outcome_stats": self.last_outcome_stats,
+            "evidence_learning": {
+                "enabled": self.evidence_learning_enabled,
+                "ledger_path": str(self.evidence_ledger_path),
+                "snapshot_path": str(self.evidence_learning_snapshot_path),
+                "recent_records": self.evidence_learning_recent_records,
+                "degradation_threshold": self.evidence_learning_threshold,
+                "errors": self.evidence_learning_errors,
+                "snapshot": self.last_evidence_learning_snapshot,
+            },
             "champion_challenger": self.champion_runtime.snapshot(),
         }
 
@@ -226,6 +260,7 @@ class PaperMarketCollector:
         self.cycles += 1
         if self.cycles % self.learning_interval_cycles == 0:
             self._refresh_learning()
+            self._refresh_evidence_learning()
         self.last_cycle_ms = int(time.time() * 1000)
         return recorded
 
@@ -241,6 +276,36 @@ class PaperMarketCollector:
                 )
         tmp.replace(path)
         return len(rows)
+
+    def _refresh_evidence_learning(self) -> dict | None:
+        """Evaluate the verified PAPER evidence ledger and persist its learning snapshot."""
+        if not self.evidence_learning_enabled:
+            return None
+        try:
+            records = EvidenceLedger.load(self.evidence_ledger_path)
+            loop = PaperEvidenceLearningLoop(
+                recent_records=self.evidence_learning_recent_records,
+                degradation_threshold=self.evidence_learning_threshold,
+            )
+            snapshot = loop.evaluate(records)
+            payload = snapshot.to_dict()
+            self.evidence_learning_snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.evidence_learning_snapshot_path.with_suffix(
+                self.evidence_learning_snapshot_path.suffix + ".tmp"
+            )
+            with tmp.open("w", encoding="utf-8") as handle:
+                json.dump(payload, handle, separators=(",", ":"), sort_keys=True)
+                handle.flush()
+            tmp.replace(self.evidence_learning_snapshot_path)
+            self.last_evidence_learning_snapshot = payload
+            return payload
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            self.evidence_learning_errors += 1
+            self._report_error(
+                "PAPER_EVIDENCE_LEARNING_INVALID",
+                {"ledger_path": str(self.evidence_ledger_path), "error": str(exc)},
+            )
+            return None
 
     def _refresh_learning(self) -> int:
         """Refresh descriptive signature and state-outcome evidence from PAPER data."""
