@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 import os
 from pathlib import Path
 
 from PC_ENGINE.core.real_readiness import RealReadinessGate
+from PC_ENGINE.core.paper_review import PaperReview
+from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
+from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 
 
 class RealReadinessService:
@@ -198,4 +202,28 @@ class RealReadinessService:
             "outcome_fresh_detail": outcome_fresh_detail,
             "validation_freshness": validation_fresh,
         }
+        try:
+            ledger_path = engine.config.get("evidence", {}).get(
+                "ledger_path", "PC_ENGINE/data/radar/evidence_ledger.jsonl"
+            )
+            ledger_records = EvidenceLedger.load(ledger_path)
+            audit = EvidenceLedger.audit_report(ledger_records)
+            learning = PaperEvidenceLearningLoop().evaluate(ledger_records).to_dict()
+            champion = {"eligible": audit.eligible_records > 0, "reason": "eligible evidence records present"}
+            execution = {
+                "ok": pending_orders_ok and execution_intents_ok and reconciliation_ok,
+                "detail": "paper execution state reconciled",
+            }
+            payload["paper_review"] = PaperReview.evaluate(
+                payload, audit=asdict(audit), learning=learning,
+                champion=champion, execution=execution,
+            )
+        except (OSError, ValueError, TypeError):
+            payload["paper_review"] = PaperReview.evaluate(
+                payload, audit={}, learning={}, champion={},
+                execution={
+                    "ok": pending_orders_ok and execution_intents_ok and reconciliation_ok,
+                    "detail": "paper execution state reconciled",
+                },
+            )
         return payload
