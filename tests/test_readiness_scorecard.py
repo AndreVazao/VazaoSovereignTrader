@@ -22,7 +22,7 @@ def _rows(pattern, start=1_000_000, step=60_000):
 def test_scorecard_detects_stable_component_set():
     result = ReadinessStabilityScorecard(min_samples=5, recent_window=3).analyze(_rows(["PASS"] * 6))
     assert result.status == "STABLE"
-    assert result.paper_only is not None if hasattr(result, "paper_only") else True
+    assert result.to_dict()["paper_only"] is True
     assert len(result.components) == 6
     assert all(item.status == "PASS" for item in result.components)
     assert all(item.recent_pass_ratio == 1.0 for item in result.components)
