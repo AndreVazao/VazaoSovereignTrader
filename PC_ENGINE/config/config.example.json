@@ -126,7 +126,12 @@
     "history_enabled": true,
     "history_path": "PC_ENGINE/data/radar/readiness_history.jsonl",
     "history_limit": 1000,
-    "notes": "Missing validation artifacts block protected REAL review. This section never authorizes orders."
+    "trend_min_samples": 10,
+    "trend_recent_window": 5,
+    "trend_min_span_seconds": 300,
+    "trend_degradation_threshold": 0.20,
+    "trend_recovery_threshold": 0.20,
+    "notes": "Readiness trend is PAPER-only evidence analysis. It detects stable, degrading and recovering readiness over time; it never authorizes orders."
   },
   "real_mode_guard": {
     "enabled": true,
