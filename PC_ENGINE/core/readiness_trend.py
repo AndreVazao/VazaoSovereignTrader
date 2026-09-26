@@ -96,7 +96,7 @@ class ReadinessTrendEngine:
         if len(ordered) != len({int(row["timestamp_ms"]) for row in ordered}):
             return ReadinessTrend(
                 "INVALID_HISTORY", len(raw), 0, 0.0, 0.0, 0.0, 0.0,
-                0, 0, 0, 0, 0, (), "history contains duplicate timestamps",
+                0, 0, 0, 0, 0, 0, (), "history contains duplicate timestamps",
             )
         if len(ordered) < self.min_samples:
             return self._insufficient(len(ordered), ordered, "minimum history samples not reached")
@@ -116,12 +116,12 @@ class ReadinessTrendEngine:
         ready_streak = self._consecutive(ordered, True)
         blockers = sorted({str(code) for row in recent for code in row.get("blockers", []) if str(code)})
 
-        if ready_streak >= self.recent_window and recent_ratio == 1.0:
-            status, reason = "STABLE", "recent readiness snapshots are continuously ready"
-        elif degradation >= self.degradation_threshold and recent_ratio < baseline_ratio:
+        if degradation >= self.degradation_threshold and recent_ratio < baseline_ratio:
             status, reason = "DEGRADING", "recent readiness ratio declined materially versus baseline"
         elif improvement >= self.recovery_threshold and recent_ratio > baseline_ratio:
             status, reason = "RECOVERING", "recent readiness ratio improved materially versus baseline"
+        elif ready_streak >= self.recent_window and recent_ratio == 1.0:
+            status, reason = "STABLE", "recent readiness snapshots are continuously ready"
         else:
             status, reason = "STABLE", "no material readiness deterioration or recovery detected"
 
