@@ -28,7 +28,7 @@ class RealReadinessService:
         self.max_validation_age_seconds = max(300, int(readiness.get("max_validation_age_seconds", 86400)))
         self.history_path = Path(readiness.get("history_path", "PC_ENGINE/data/radar/readiness_history.jsonl"))
         self.history_enabled = bool(readiness.get("history_enabled", True))
-        self.history_limit = max(10, int(readiness.get("history_limit", 1000)))
+        self.history_limit = max(1, int(readiness.get("history_limit", 1000)))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
