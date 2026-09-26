@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+
 
 @dataclass(frozen=True)
 class ReviewItem:
@@ -6,21 +7,33 @@ class ReviewItem:
     status: str
     detail: str
 
+    def to_dict(self):
+        return asdict(self)
+
+
 class PaperReview:
+    """Deterministic PAPER evidence aggregation; it never authorizes execution."""
+
     @staticmethod
-    def evaluate(base, audit=None, learning=None, candidate=None, ops=None):
+    def evaluate(base, audit=None, learning=None, champion=None, execution=None):
         audit = audit or {}
         learning = learning or {}
-        candidate = candidate or {}
-        ops = ops or {}
-        items = [
+        champion = champion or {}
+        execution = execution or {}
+        items = (
             ReviewItem("BASE", "PASS" if base.get("ready") else "BLOCKED", str(base.get("status", "missing"))),
-            ReviewItem("AUDIT", "PASS" if audit.get("records", 0) else "INSUFFICIENT_EVIDENCE", "records=%s" % audit.get("records", 0)),
-            ReviewItem("LEARNING", "PASS" if learning and not learning.get("degradation_detected", False) else "BLOCKED", "learning state"),
-            ReviewItem("CANDIDATE", "PASS" if candidate.get("eligible") else "BLOCKED", str(candidate.get("reason", "missing"))),
-            ReviewItem("OPS", "PASS" if ops.get("ok") else "BLOCKED", str(ops.get("detail", "missing"))),
-        ]
-        blockers = tuple(x.name for x in items if x.status == "BLOCKED")
-        missing = tuple(x.name for x in items if x.status == "INSUFFICIENT_EVIDENCE")
-        status = "BLOCKED" if blockers else ("INSUFFICIENT_EVIDENCE" if missing else "READY_FOR_REVIEW")
-        return {"status": status, "ready": status == "READY_FOR_REVIEW", "items": items, "blockers": blockers, "insufficient": missing}
+            ReviewItem("AUDIT", "PASS" if audit.get("records", 0) > 0 else "INSUFFICIENT_EVIDENCE", f"records={audit.get('records', 0)}"),
+            ReviewItem("LEARNING", "BLOCKED" if not learning or learning.get("degradation_detected", False) else "PASS", "learning state"),
+            ReviewItem("CHAMPION", "PASS" if champion.get("eligible") else "BLOCKED", str(champion.get("reason", "missing"))),
+            ReviewItem("EXECUTION", "PASS" if execution.get("ok") else "BLOCKED", str(execution.get("detail", "missing"))),
+        )
+        blockers = tuple(item.name for item in items if item.status == "BLOCKED")
+        insufficient = tuple(item.name for item in items if item.status == "INSUFFICIENT_EVIDENCE")
+        status = "BLOCKED" if blockers else ("INSUFFICIENT_EVIDENCE" if insufficient else "READY_FOR_REVIEW")
+        return {
+            "status": status,
+            "ready": status == "READY_FOR_REVIEW",
+            "items": [item.to_dict() for item in items],
+            "blockers": blockers,
+            "insufficient": insufficient,
+        }
