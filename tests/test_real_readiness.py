@@ -143,3 +143,57 @@ def test_readiness_service_exposes_trend_from_persisted_history(tmp_path):
     assert trend["status"] == "DEGRADING"
     assert trend["paper_only"] is True
     assert trend["history_path"].endswith("history.jsonl")
+
+
+def test_paper_review_requires_stable_temporal_readiness():
+    from PC_ENGINE.core.paper_review import PaperReview
+
+    common = {
+        "audit": {"records": 10},
+        "learning": {"degradation_detected": False},
+        "champion": {"eligible": True},
+        "execution": {"ok": True},
+    }
+    degraded = PaperReview.evaluate(
+        {"ready": True, "status": "ok"},
+        readiness_trend={
+            "status": "DEGRADING",
+            "recent_ready_ratio": 0.0,
+            "consecutive_ready": 0,
+            "required_consecutive_ready": 3,
+        },
+        **common,
+    )
+    assert degraded["status"] == "BLOCKED"
+    assert "READINESS_TREND" in degraded["blockers"]
+
+    stable = PaperReview.evaluate(
+        {"ready": True, "status": "ok"},
+        readiness_trend={
+            "status": "STABLE",
+            "recent_ready_ratio": 1.0,
+            "consecutive_ready": 3,
+            "required_consecutive_ready": 3,
+        },
+        **common,
+    )
+    assert stable["status"] == "READY_FOR_REVIEW"
+    assert "READINESS_TREND" not in stable["blockers"]
+
+
+def test_paper_review_marks_temporal_history_insufficient():
+    from PC_ENGINE.core.paper_review import PaperReview
+
+    result = PaperReview.evaluate(
+        {"ready": True, "status": "ok"},
+        audit={"records": 10},
+        learning={"degradation_detected": False},
+        champion={"eligible": True},
+        execution={"ok": True},
+        readiness_trend={
+            "status": "INSUFFICIENT_HISTORY",
+            "reason": "minimum history samples not reached",
+        },
+    )
+    assert result["status"] == "INSUFFICIENT_EVIDENCE"
+    assert "READINESS_TREND" in result["insufficient"]
