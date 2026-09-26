@@ -114,12 +114,15 @@ class RealReadinessService:
             return
         row = {"timestamp_ms": now_ms, "status": payload.get("status"), "ready": bool(payload.get("ready")), "blockers": list(payload.get("blockers", [])), "paper_review": payload.get("paper_review", {})}
         self.history_path.parent.mkdir(parents=True, exist_ok=True)
-        rows = self._read_jsonl(self.history_path)
-        rows.append(row)
-        rows = rows[-self.history_limit:]
-        tmp = self.history_path.with_suffix(self.history_path.suffix + ".tmp")
-        tmp.write_text("".join(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\\n" for item in rows), encoding="utf-8")
-        os.replace(tmp, self.history_path)
+        try:
+            rows = self._read_jsonl(self.history_path)
+            rows.append(row)
+            rows = rows[-self.history_limit:]
+            tmp = self.history_path.with_suffix(self.history_path.suffix + ".tmp")
+            tmp.write_text("".join(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\\n" for item in rows), encoding="utf-8")
+            os.replace(tmp, self.history_path)
+        except OSError:
+            return
 
     def history(self) -> dict:
         rows = self._read_jsonl(self.history_path)
