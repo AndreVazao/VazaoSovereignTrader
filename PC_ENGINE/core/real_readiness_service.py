@@ -11,6 +11,7 @@ from PC_ENGINE.core.paper_review import PaperReview
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 from PC_ENGINE.core.readiness_trend import ReadinessTrendEngine
+from PC_ENGINE.core.readiness_scorecard import ReadinessStabilityScorecard
 
 
 class RealReadinessService:
@@ -37,6 +38,9 @@ class RealReadinessService:
         self.trend_recovery_threshold = max(0.0, float(readiness.get("trend_recovery_threshold", 0.20)))
         self.trend_required_consecutive_ready = max(1, int(readiness.get("trend_required_consecutive_ready", self.trend_recent_window)))
         self.require_temporal_stability = bool(readiness.get("require_temporal_stability", True))
+        self.scorecard_min_samples = max(1, int(readiness.get("scorecard_min_samples", 10)))
+        self.scorecard_recent_window = max(1, int(readiness.get("scorecard_recent_window", 5)))
+        self.scorecard_min_pass_ratio = min(1.0, max(0.0, float(readiness.get("scorecard_min_pass_ratio", 1.0))))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -153,6 +157,20 @@ class RealReadinessService:
         result["temporal_stability_required"] = self.require_temporal_stability
         return result
 
+    def scorecard(self) -> dict:
+        rows = self._read_jsonl(self.history_path)
+        result = ReadinessStabilityScorecard(
+            min_samples=self.scorecard_min_samples,
+            recent_window=self.scorecard_recent_window,
+            min_pass_ratio=self.scorecard_min_pass_ratio,
+        ).analyze(rows).to_dict()
+        result["history_path"] = str(self.history_path)
+        result["history_enabled"] = self.history_enabled
+        result["min_samples"] = self.scorecard_min_samples
+        result["configured_recent_window"] = self.scorecard_recent_window
+        result["min_pass_ratio"] = self.scorecard_min_pass_ratio
+        return result
+
     def collect(self, engine, persist_history: bool = True) -> dict:
         now_ms = int(__import__('time').time() * 1000)
         states = self._read_jsonl(self.data_dir / "market_states.jsonl")
@@ -228,6 +246,7 @@ class RealReadinessService:
         )
         payload = report.to_dict()
         payload["readiness_trend"] = self.trend()
+        payload["readiness_scorecard"] = self.scorecard()
         payload["evidence"] = {
             "market_state_rows": len(states),
             "outcome_rows": len(outcomes),
