@@ -188,6 +188,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("read_private_state")
         return jsonify(readiness.trend())
 
+    @app.get("/readiness/scorecard")
+    def readiness_scorecard():
+        require_scope("read_private_state")
+        return jsonify(readiness.scorecard())
+
     @app.get("/readiness")
     @app.get("/real-readiness")
     def real_readiness():
