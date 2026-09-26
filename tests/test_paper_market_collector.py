@@ -89,7 +89,7 @@ def _evidence_record(ts: int, eligible: bool = True):
         symbol="BTC/USDT", regime="BULL", horizon_ms=5000,
         eligible=eligible, reason="ok" if eligible else "failed",
         reason_codes=() if eligible else ("failed",),
-        data_start_ms=ts - 10000, data_end_ms=ts,
+        data_start_ms=max(1, ts - 10000), data_end_ms=ts,
         state_count=30, outcome_count=30,
         durable_outcome=plane, chronological_oos=plane,
         source_digest="0" * 64,
