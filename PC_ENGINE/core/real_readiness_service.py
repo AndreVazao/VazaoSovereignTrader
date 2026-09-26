@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 import os
+import time
 from pathlib import Path
 
 from PC_ENGINE.core.real_readiness import RealReadinessGate
@@ -25,6 +26,9 @@ class RealReadinessService:
         self.require_reconciliation = bool(readiness.get("require_paper_reconciliation", True))
         self.max_evidence_age_seconds = max(60, int(readiness.get("max_evidence_age_seconds", 900)))
         self.max_validation_age_seconds = max(300, int(readiness.get("max_validation_age_seconds", 86400)))
+        self.history_path = Path(readiness.get("history_path", "PC_ENGINE/data/radar/readiness_history.jsonl"))
+        self.history_enabled = bool(readiness.get("history_enabled", True))
+        self.history_limit = max(10, int(readiness.get("history_limit", 1000)))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -105,7 +109,23 @@ class RealReadinessService:
             return False, "artifact stat failed"
         return age <= self.max_validation_age_seconds, f"age_s={int(age)}; max_s={self.max_validation_age_seconds}"
 
-    def collect(self, engine) -> dict:
+    def _persist_history(self, payload: dict, now_ms: int) -> None:
+        if not self.history_enabled:
+            return
+        row = {"timestamp_ms": now_ms, "status": payload.get("status"), "ready": bool(payload.get("ready")), "blockers": list(payload.get("blockers", [])), "paper_review": payload.get("paper_review", {})}
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
+        rows = self._read_jsonl(self.history_path)
+        rows.append(row)
+        rows = rows[-self.history_limit:]
+        tmp = self.history_path.with_suffix(self.history_path.suffix + ".tmp")
+        tmp.write_text("".join(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\\n" for item in rows), encoding="utf-8")
+        os.replace(tmp, self.history_path)
+
+    def history(self) -> dict:
+        rows = self._read_jsonl(self.history_path)
+        return {"enabled": self.history_enabled, "path": str(self.history_path), "records": len(rows), "latest": rows[-1] if rows else None, "ready_count": sum(bool(x.get("ready")) for x in rows), "blocked_count": sum(x.get("status") == "LOCKED" for x in rows)}
+
+    def collect(self, engine, persist_history: bool = True) -> dict:
         now_ms = int(__import__('time').time() * 1000)
         states = self._read_jsonl(self.data_dir / "market_states.jsonl")
         outcomes = self._read_jsonl(self.data_dir / "state_outcomes.jsonl")
@@ -226,4 +246,6 @@ class RealReadinessService:
                     "detail": "paper execution state reconciled",
                 },
             )
+        if persist_history:
+            self._persist_history(payload, now_ms)
         return payload
