@@ -1,4 +1,4 @@
-from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
+from PC_ENGINE.radar.evidence_ledger import EvidenceLedger, EvidenceLedgerRecord, EvidencePlaneSummary
 from PC_ENGINE.radar.champion_challenger import (
     CandidateObservation,
     CandidateSpec,
@@ -282,3 +282,64 @@ def test_unified_evidence_gate_does_not_accept_wrong_candidate_version():
     assert decision.eligible is False
     assert "durable outcome gate failed" in decision.reason
     assert book.champion is None
+
+
+def _learning_record(ts: int, eligible: bool) -> EvidenceLedgerRecord:
+    plane = EvidencePlaneSummary(
+        "durable_outcome",
+        "PASS" if eligible else "FAIL",
+        30,
+        3,
+        3 if eligible else 1,
+        10.0 if eligible else -1.0,
+        1.0 if eligible else -2.0,
+        1.0 if eligible else -2.0,
+        1.0 if eligible else 0.0,
+        2,
+    )
+    return EvidenceLedger.with_digest(EvidenceLedgerRecord(
+        created_at_ms=ts,
+        candidate_id="challenger",
+        version="1.0",
+        strategy="paper_strategy",
+        symbol="BTC/USDT",
+        regime="TREND",
+        horizon_ms=1000,
+        eligible=eligible,
+        reason="ok" if eligible else "degraded",
+        reason_codes=() if eligible else ("degraded_evidence",),
+        data_start_ms=ts - 1000,
+        data_end_ms=ts,
+        state_count=30,
+        outcome_count=30,
+        durable_outcome=plane,
+        chronological_oos=plane,
+        source_digest="0" * 64,
+    ))
+
+
+def test_unified_evidence_gate_blocks_candidate_under_learning_degradation(tmp_path):
+    ledger_path = tmp_path / "evidence-learning.jsonl"
+    for index, eligible in enumerate((True, True, False), start=1):
+        EvidenceLedger.append(ledger_path, _learning_record(index, eligible))
+
+    book = ChampionChallengerBook()
+    book.register(candidate("challenger"))
+
+    decision = book.assess_unified_evidence(
+        "challenger",
+        [],
+        [],
+        min_samples=1,
+        min_folds=1,
+        min_cost_scenarios=1,
+        costs_bps=(28.0,),
+        train_size=2,
+        test_size=1,
+        horizons_ms=(1000,),
+        evidence_learning_path=str(ledger_path),
+    )
+
+    assert decision.eligible is False
+    assert "PAPER learning loop requires investigation" in decision.reason
+    assert "candidate/symbol/regime eligibility degraded" in decision.reason
