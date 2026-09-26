@@ -6,6 +6,7 @@ from typing import Iterable
 from PC_ENGINE.radar.evidence_stress import EvidenceStatisticalStressTester
 from PC_ENGINE.radar.champion_outcomes import ChampionOutcomeAggregator, ChampionOutcomeMetrics, ChampionOutcomeStressStat
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger, EvidenceLedgerRecord, EvidencePlaneSummary
+from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 
 
 @dataclass(frozen=True)
@@ -364,6 +365,7 @@ class ChampionChallengerBook:
         min_positive_fold_ratio: float = 0.50,
         fold_duration_ms: int = 300_000,
         evidence_ledger_path: str | None = None,
+        evidence_learning_path: str | None = None,
     ) -> PromotionDecision:
         """Single PAPER evidence gate combining durable outcomes and OOS stress.
 
@@ -435,6 +437,25 @@ class ChampionChallengerBook:
             reasons.append("no matching Risk-authorized durable outcome metrics")
         if len(outcome_stress) < max(1, int(min_cost_scenarios)):
             reasons.append("durable outcome stress scenarios are incomplete")
+
+        if evidence_learning_path is not None:
+            try:
+                learning_records = EvidenceLedger.load(evidence_learning_path)
+                learning_snapshot = PaperEvidenceLearningLoop().evaluate(learning_records)
+                learning_action = PaperEvidenceLearningLoop.action_for(
+                    learning_snapshot,
+                    candidate.candidate_id,
+                    candidate.version,
+                    candidate.symbol,
+                    candidate.regime,
+                )
+                if learning_action is not None and learning_action.action == "INVESTIGATE":
+                    reasons.append(
+                        "PAPER learning loop requires investigation: "
+                        + learning_action.reason
+                    )
+            except (OSError, ValueError, TypeError) as exc:
+                reasons.append(f"PAPER learning evidence invalid: {exc}")
 
         eligible = not reasons
         decision = PromotionDecision(

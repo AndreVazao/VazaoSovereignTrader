@@ -60,6 +60,24 @@ class PaperEvidenceLearningLoop:
             else 0.0
         )
 
+    @staticmethod
+    def action_for(
+        snapshot: PaperEvidenceLearningSnapshot,
+        candidate_id: str,
+        version: str,
+        symbol: str,
+        regime: str,
+    ) -> LearningAction | None:
+        candidate_version = f"{candidate_id}@{version}"
+        for action in snapshot.actions:
+            if (
+                action.candidate_version == candidate_version
+                and action.symbol == symbol
+                and action.regime == regime
+            ):
+                return action
+        return None
+
     def evaluate(
         self,
         records: Iterable[EvidenceLedgerRecord],
