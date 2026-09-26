@@ -35,6 +35,8 @@ class RealReadinessService:
         self.trend_min_span_seconds = max(0, int(readiness.get("trend_min_span_seconds", 300)))
         self.trend_degradation_threshold = max(0.0, float(readiness.get("trend_degradation_threshold", 0.20)))
         self.trend_recovery_threshold = max(0.0, float(readiness.get("trend_recovery_threshold", 0.20)))
+        self.trend_required_consecutive_ready = max(1, int(readiness.get("trend_required_consecutive_ready", self.trend_recent_window)))
+        self.require_temporal_stability = bool(readiness.get("require_temporal_stability", True))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -147,6 +149,8 @@ class RealReadinessService:
         result["history_path"] = str(self.history_path)
         result["history_enabled"] = self.history_enabled
         result["paper_only"] = True
+        result["required_consecutive_ready"] = self.trend_required_consecutive_ready
+        result["temporal_stability_required"] = self.require_temporal_stability
         return result
 
     def collect(self, engine, persist_history: bool = True) -> dict:
@@ -262,6 +266,7 @@ class RealReadinessService:
             payload["paper_review"] = PaperReview.evaluate(
                 payload, audit=asdict(audit), learning=learning,
                 champion=champion, execution=execution,
+                readiness_trend=payload["readiness_trend"] if self.require_temporal_stability else {"status": "STABLE", "recent_ready_ratio": 1.0, "consecutive_ready": 1, "required_consecutive_ready": 1},
             )
         except (OSError, ValueError, TypeError):
             payload["paper_review"] = PaperReview.evaluate(
@@ -270,6 +275,7 @@ class RealReadinessService:
                     "ok": pending_orders_ok and execution_intents_ok and reconciliation_ok,
                     "detail": "paper execution state reconciled",
                 },
+                readiness_trend=payload["readiness_trend"] if self.require_temporal_stability else {"status": "STABLE", "recent_ready_ratio": 1.0, "consecutive_ready": 1, "required_consecutive_ready": 1},
             )
         if persist_history:
             self._persist_history(payload, now_ms)
