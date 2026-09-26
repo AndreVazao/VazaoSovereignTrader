@@ -131,7 +131,9 @@
     "trend_min_span_seconds": 300,
     "trend_degradation_threshold": 0.20,
     "trend_recovery_threshold": 0.20,
-    "notes": "Readiness trend is PAPER-only evidence analysis. It detects stable, degrading and recovering readiness over time; it never authorizes orders."
+    "trend_required_consecutive_ready": 5,
+    "require_temporal_stability": true,
+    "notes": "Readiness trend is PAPER-only evidence analysis. Protected REAL review requires stable readiness across the configured temporal window; trend analysis never authorizes orders."
   },
   "real_mode_guard": {
     "enabled": true,
