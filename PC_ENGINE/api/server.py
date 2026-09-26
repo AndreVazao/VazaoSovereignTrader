@@ -178,6 +178,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             "snapshot": snapshot.to_dict(),
         })
 
+    @app.get("/readiness/history")
+    def readiness_history():
+        require_scope("read_private_state")
+        return jsonify(readiness.history())
+
     @app.get("/readiness")
     @app.get("/real-readiness")
     def real_readiness():
