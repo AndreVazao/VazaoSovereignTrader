@@ -133,7 +133,10 @@
     "trend_recovery_threshold": 0.20,
     "trend_required_consecutive_ready": 5,
     "require_temporal_stability": true,
-    "notes": "Readiness trend is PAPER-only evidence analysis. Protected REAL review requires stable readiness across the configured temporal window; trend analysis never authorizes orders."
+    "scorecard_min_samples": 10,
+    "scorecard_recent_window": 5,
+    "scorecard_min_pass_ratio": 1.0,
+    "notes": "Readiness trend and stability scorecard are PAPER-only evidence analyses. The scorecard decomposes readiness by component and never authorizes orders."
   },
   "real_mode_guard": {
     "enabled": true,
