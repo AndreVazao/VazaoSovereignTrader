@@ -10,6 +10,7 @@ from PC_ENGINE.core.real_readiness import RealReadinessGate
 from PC_ENGINE.core.paper_review import PaperReview
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
+from PC_ENGINE.core.readiness_trend import ReadinessTrendEngine
 
 
 class RealReadinessService:
@@ -29,6 +30,11 @@ class RealReadinessService:
         self.history_path = Path(readiness.get("history_path", "PC_ENGINE/data/radar/readiness_history.jsonl"))
         self.history_enabled = bool(readiness.get("history_enabled", True))
         self.history_limit = max(1, int(readiness.get("history_limit", 1000)))
+        self.trend_min_samples = max(1, int(readiness.get("trend_min_samples", 10)))
+        self.trend_recent_window = max(1, int(readiness.get("trend_recent_window", 5)))
+        self.trend_min_span_seconds = max(0, int(readiness.get("trend_min_span_seconds", 300)))
+        self.trend_degradation_threshold = max(0.0, float(readiness.get("trend_degradation_threshold", 0.20)))
+        self.trend_recovery_threshold = max(0.0, float(readiness.get("trend_recovery_threshold", 0.20)))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -128,6 +134,21 @@ class RealReadinessService:
         rows = self._read_jsonl(self.history_path)
         return {"enabled": self.history_enabled, "path": str(self.history_path), "records": len(rows), "latest": rows[-1] if rows else None, "ready_count": sum(bool(x.get("ready")) for x in rows), "blocked_count": sum(x.get("status") == "LOCKED" for x in rows)}
 
+    def trend(self) -> dict:
+        rows = self._read_jsonl(self.history_path)
+        engine = ReadinessTrendEngine(
+            min_samples=self.trend_min_samples,
+            recent_window=self.trend_recent_window,
+            min_span_seconds=self.trend_min_span_seconds,
+            degradation_threshold=self.trend_degradation_threshold,
+            recovery_threshold=self.trend_recovery_threshold,
+        )
+        result = engine.analyze(rows).to_dict()
+        result["history_path"] = str(self.history_path)
+        result["history_enabled"] = self.history_enabled
+        result["paper_only"] = True
+        return result
+
     def collect(self, engine, persist_history: bool = True) -> dict:
         now_ms = int(__import__('time').time() * 1000)
         states = self._read_jsonl(self.data_dir / "market_states.jsonl")
@@ -202,6 +223,7 @@ class RealReadinessService:
             min_eligible_outcomes=self.min_eligible_outcomes,
         )
         payload = report.to_dict()
+        payload["readiness_trend"] = self.trend()
         payload["evidence"] = {
             "market_state_rows": len(states),
             "outcome_rows": len(outcomes),
