@@ -47,3 +47,31 @@ def test_order_flow_ignores_malformed_events_without_creating_evidence():
     assert evidence.action == "HOLD"
     assert evidence.score == 0.0
     assert evidence.trades == 2
+
+
+
+def test_trend_strategy_blocks_stale_market_data():
+    from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
+
+    data = candles(40)
+    data[-1][0] = 1_700_000_000_000 - 300_000
+    strategy = TrendEmaAtrStrategy({
+        "ema_short": 9,
+        "ema_long": 21,
+        "atr_period": 14,
+        "vwap_period": 30,
+        "atr_pct_min": 0.001,
+        "slope_threshold": 0.00025,
+        "stop_atr_mult": 1.5,
+        "take_profit_atr_mult": 2.2,
+        "spread_max_pct": 0.0015,
+        "candlestick_patterns": {},
+        "market_data_quality": {
+            "max_gap_seconds": 180,
+            "max_age_seconds": 120,
+        },
+    })
+    signal = strategy.analyse("BTC/USDT", data)
+    assert signal.action == "HOLD"
+    assert signal.regime == "WARMUP"
+    assert "quality gate" in signal.reason
