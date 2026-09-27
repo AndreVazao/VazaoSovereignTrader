@@ -32,3 +32,15 @@ Quando o PC encontrar login, 2FA/OTP, CAPTCHA ou outra interação humana, o ped
 - O telefone não precisa de estar ligado quando o pedido é criado.
 - Passwords/OTP introduzidos no telefone são enviados apenas para a intervenção atual e não são gravados pelo Human Interaction Bridge.
 - CAPTCHA é resolvido manualmente pelo utilizador; não existe bypass.
+
+
+## Readiness PAPER
+
+O cockpit pode consumir a readiness autenticada do PC para acompanhamento remoto. A readiness é informativa e PAPER-only: histórico, tendência temporal e scorecard não autorizam execução REAL.
+
+Endpoints de diagnóstico disponíveis no PC:
+- /readiness/history
+- /readiness/trend
+- /readiness/scorecard
+
+A autenticação continua a usar VST_LOCAL_TOKEN e o acesso remoto recomendado é Tailscale.
