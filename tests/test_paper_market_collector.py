@@ -163,3 +163,37 @@ def test_collector_fails_closed_on_tampered_evidence_learning_ledger(tmp_path: P
         assert not Path(state["snapshot_path"]).exists()
     finally:
         collector.stop()
+
+
+def test_collector_blocks_stale_ohlcv_with_freshness_gate(tmp_path: Path):
+    now_ms = 1_700_000_000_000
+    stale_start_ms = now_ms - 300_000 - (39 * 60_000)
+    stale_rows = [
+        [stale_start_ms + i * 60_000, 100.0, 101.0, 99.0, 100.5, 1000.0]
+        for i in range(40)
+    ]
+    settings = {
+        "polling_exchanges": [],
+        "data_dir": str(tmp_path),
+        "market_data_quality": {
+            "max_gap_seconds": 180,
+            "max_age_seconds": 120,
+        },
+        "confluence": {
+            "data_dir": str(tmp_path),
+            "derivatives": {"enabled": False, "observational_only": True},
+        },
+    }
+
+    collector = PaperMarketCollector(
+        settings=settings,
+        symbols=["BTC/USDT"],
+        ohlcv_fetcher=lambda symbol, timeframe, limit: stale_rows,
+        strategy=FakeStrategy(),
+    )
+    try:
+        recorded = collector.collect_once()
+        assert recorded == 0
+        assert collector.snapshot()["errors"] >= 1
+    finally:
+        collector.stop()

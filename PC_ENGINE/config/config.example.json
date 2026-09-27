@@ -220,6 +220,11 @@
     },
     "notes": "PAPER-only verified evidence learning. The loop is descriptive/advisory, fail-closed on invalid ledgers, and never promotes candidates, changes risk, authorizes capital or executes orders."
   },
+  "market_data_quality": {
+    "max_gap_seconds": 180,
+    "max_age_seconds": 120,
+    "notes": "Fail-closed freshness and continuity gate. Tune max_age_seconds to the configured strategy timeframe; timestamps are normalized from seconds/milliseconds."
+  },
   "candlestick": {
     "enabled": true,
     "min_confidence": 0.7,

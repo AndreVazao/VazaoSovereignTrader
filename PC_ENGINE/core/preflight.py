@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Iterable, List, Mapping, Sequence
 
@@ -26,6 +27,8 @@ def validate_market_candles(
     candles: Iterable[Mapping[str, object]],
     *,
     max_gap_seconds: float | None = None,
+    max_age_seconds: float | None = None,
+    now_seconds: float | None = None,
 ) -> MarketDataQualityResult:
     """Fail-closed validation for OHLCV candles before strategy consumption."""
     errors: List[str] = []
@@ -36,6 +39,7 @@ def validate_market_candles(
         return MarketDataQualityResult(False, ["no market data rows"], [], 0)
 
     previous_timestamp: float | None = None
+    latest_timestamp: float | None = None
     seen_timestamps: set[float] = set()
     valid_rows = 0
 
@@ -79,8 +83,8 @@ def validate_market_candles(
                 errors.append(
                     f"{prefix}: timestamp gap {delta:g}s exceeds {max_gap_seconds:g}s"
                 )
-                continue
         previous_timestamp = normalized_timestamp
+        latest_timestamp = normalized_timestamp
 
         if min(open_price, high_price, low_price, close_price) <= 0:
             errors.append(f"{prefix}: non-positive OHLC price")
@@ -97,6 +101,19 @@ def validate_market_candles(
 
         valid_rows += 1
 
+    if latest_timestamp is not None and max_age_seconds is not None:
+        reference_now = float(now_seconds) if now_seconds is not None else time.time()
+        if not math.isfinite(reference_now) or max_age_seconds < 0:
+            errors.append("market data freshness configuration invalid")
+        else:
+            age = reference_now - latest_timestamp
+            if age < -5.0:
+                errors.append(f"latest timestamp is in the future by {-age:g}s")
+            elif age > max_age_seconds:
+                errors.append(
+                    f"latest market data age {age:g}s exceeds {max_age_seconds:g}s"
+                )
+
     return MarketDataQualityResult(
         ok=not errors,
         errors=errors,
@@ -109,6 +126,8 @@ def validate_ohlcv_rows(
     candles: Sequence[Sequence[object]],
     *,
     max_gap_seconds: float | None = None,
+    max_age_seconds: float | None = None,
+    now_seconds: float | None = None,
 ) -> MarketDataQualityResult:
     """Validate CCXT-style [timestamp, open, high, low, close, volume] rows.
 
@@ -129,16 +148,23 @@ def validate_ohlcv_rows(
             "volume": row[5],
         })
 
+    result = validate_market_candles(
+        mapped,
+        max_gap_seconds=max_gap_seconds,
+        max_age_seconds=max_age_seconds,
+        now_seconds=now_seconds,
+    )
     if errors:
-        result = validate_market_candles([], max_gap_seconds=max_gap_seconds)
+        # Any malformed CCXT row makes the batch fail-closed. Keep the
+        # downstream diagnostics from the remaining rows, but do not report
+        # a partially valid batch as consumable market data.
         return MarketDataQualityResult(
             ok=False,
-            errors=errors + ([] if result.errors == ["no market data rows"] and mapped else result.errors),
-            warnings=[],
+            errors=errors + result.errors,
+            warnings=result.warnings,
             valid_rows=0,
         )
-
-    return validate_market_candles(mapped, max_gap_seconds=max_gap_seconds)
+    return result
 
 
 class PreflightChecker:
