@@ -109,7 +109,7 @@
   },
   "fast_path": {
     "enabled": false,
-    "allow_real": false,
+    "allow_real": true,
     "min_confidence": 0.75,
     "min_expectancy_bps": 2,
     "max_signal_age_ms": 1000,
@@ -144,7 +144,7 @@
     "enabled": true,
     "confirmation_phrase": "EU ACEITO O RISCO",
     "arm_seconds": 300,
-    "notes": "Temporary operator authorization. One-time consumption is required to request REAL mode."
+    "notes": "Human phrase remains available for manual review. Autonomous REAL promotion uses the readiness gate and consumes a one-time internal authorization; it never skips preflight, reconciliation, risk or fail-safe controls."
   },
   "risk": {
     "risk_per_trade_pct": 0.005,
@@ -479,6 +479,7 @@
     "multi_venue": true,
     "multi_opportunity": true,
     "simultaneous_execution": true,
+    "auto_promote_real": true,
     "max_parallel_orders": 4,
     "require_all_prerequisites": true,
     "allow_real": false,
