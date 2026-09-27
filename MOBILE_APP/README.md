@@ -42,5 +42,6 @@ Endpoints de diagnóstico disponíveis no PC:
 - /readiness/history
 - /readiness/trend
 - /readiness/scorecard
+- /readiness/timeline
 
 A autenticação continua a usar VST_LOCAL_TOKEN e o acesso remoto recomendado é Tailscale.
