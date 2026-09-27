@@ -148,21 +148,20 @@ def validate_ohlcv_rows(
             "volume": row[5],
         })
 
-    if errors:
-        result = validate_market_candles([], max_gap_seconds=max_gap_seconds)
-        return MarketDataQualityResult(
-            ok=False,
-            errors=errors + ([] if result.errors == ["no market data rows"] and mapped else result.errors),
-            warnings=[],
-            valid_rows=0,
-        )
-
-    return validate_market_candles(
+    result = validate_market_candles(
         mapped,
         max_gap_seconds=max_gap_seconds,
         max_age_seconds=max_age_seconds,
         now_seconds=now_seconds,
     )
+    if errors:
+        return MarketDataQualityResult(
+            ok=False,
+            errors=errors + result.errors,
+            warnings=result.warnings,
+            valid_rows=result.valid_rows,
+        )
+    return result
 
 
 class PreflightChecker:
