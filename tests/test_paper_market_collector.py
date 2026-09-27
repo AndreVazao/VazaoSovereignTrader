@@ -167,8 +167,9 @@ def test_collector_fails_closed_on_tampered_evidence_learning_ledger(tmp_path: P
 
 def test_collector_blocks_stale_ohlcv_with_freshness_gate(tmp_path: Path):
     now_ms = 1_700_000_000_000
+    stale_start_ms = now_ms - 300_000 - (39 * 60_000)
     stale_rows = [
-        [now_ms - 300_000 + i * 60_000, 100.0, 101.0, 99.0, 100.5, 1000.0]
+        [stale_start_ms + i * 60_000, 100.0, 101.0, 99.0, 100.5, 1000.0]
         for i in range(40)
     ]
     settings = {
