@@ -282,19 +282,41 @@ O princípio operacional é:
 
 Fills parciais e múltiplos fills são tratados por diferenças cumulativas. O sistema persiste marcadores, posição, fees, notional e estado de risco para permitir recuperação sem duplicar efeitos financeiros depois de crashes/restarts.
 
+### Readiness, evidência e diagnóstico PAPER
+
+A camada de readiness é agora uma cadeia explícita e persistente, ainda exclusivamente PAPER/read-only:
+
+- Evidence Ledger durável, append-only e autenticado por digest SHA-256.
+- Evidence Audit Report com agregação determinística por candidato, versão, símbolo, regime e janela temporal.
+- PAPER Evidence Learning Loop que distingue retenção, observação e investigação.
+- Champion/Challenger unificado com outcomes duráveis + OOS cronológico + stress de custos.
+- Readiness Review agregada, distinguindo PASS, INSUFFICIENT_EVIDENCE e BLOCKED.
+- Readiness History persistente em JSONL e limitada por configuração.
+- Readiness Trend Engine para estabilidade temporal, degradação e recuperação.
+- Temporal Readiness Review Gate que exige estabilidade sustentada antes de considerar a revisão pronta.
+- Readiness Stability Scorecard com diagnóstico por componente, direção, estado persistente e bloqueadores.
+- Endpoints autenticados: /evidence-ledger, /evidence-ledger/audit, /evidence-learning, /readiness/history, /readiness/trend e /readiness/scorecard.
+
+Estas camadas não promovem candidatos, não alteram o Risk Engine, não executam ordens e não autorizam REAL. O próximo passo de diagnóstico é construir uma timeline cronológica de transições da readiness, para explicar quando cada componente começou a degradar, recuperar ou permanecer bloqueado.
+
+### Validação Windows EXE
+
+O workflow .github/workflows/windows-exe.yml executa build + smoke test do executável em windows-latest. O smoke usa uma configuração isolada sem Radar, Research, Shared Intelligence ou Confluence, verifica se o processo não termina prematuramente e exige resposta HTTP 200 em /health. O workflow corre em PRs que alteram o runtime Windows relevante, além de main, tags pc-v* e execução manual.
+
+Documentação: docs/WINDOWS_EXE_SMOKE.md.
+
 ### Próxima fase de desenvolvimento
 
 A sequência prevista para completar o objetivo do projeto é:
 
-1. Integrar o Data Quality Gate em todos os consumidores de market data.
-2. Construir um harness PAPER comum para estratégias concorrentes.
-3. Implementar e medir trend, momentum, breakout e mean reversion condicionada ao regime.
-4. Tornar fees, spread, slippage, liquidez e latência gates explícitos da decisão.
-5. Reforçar confluence/ensemble sem permitir bypass do Risk Engine.
+1. Fechar e manter a validação Windows EXE com smoke determinístico em PR e pós-merge.
+2. Construir a Readiness Diagnostic Timeline sobre History + Scorecard.
+3. Completar a cobertura do Data Quality Gate em todos os consumidores de market data.
+4. Expandir o harness PAPER comum e a comparação entre estratégias concorrentes.
+5. Medir trend, momentum, breakout e mean reversion por regime com custos completos.
 6. Expandir walk-forward, OOS temporal, Monte Carlo, stress tests e regime validation.
-7. Usar Champion/Challenger para promoção exclusivamente baseada em evidência.
-8. Medir oportunidades de lead/lag em streams/WebSockets com timestamps de origem e receção.
-9. Só depois iniciar a preparação formal para readiness REAL.
+7. Medir lead/lag em streams/WebSockets com timestamps de origem e receção.
+8. Consolidar a preparação formal para readiness REAL sem ativar execução REAL automaticamente.
 
 Nenhum destes passos implica ativar REAL. A promoção para REAL continua a depender de evidência suficiente de dados, estratégia, risco, execução e reconciliação.
 
