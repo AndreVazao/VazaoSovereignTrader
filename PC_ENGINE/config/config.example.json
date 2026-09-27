@@ -109,7 +109,7 @@
   },
   "fast_path": {
     "enabled": false,
-    "allow_real": true,
+    "allow_real": false,
     "min_confidence": 0.75,
     "min_expectancy_bps": 2,
     "max_signal_age_ms": 1000,
@@ -479,10 +479,10 @@
     "multi_venue": true,
     "multi_opportunity": true,
     "simultaneous_execution": true,
-    "auto_promote_real": true,
     "max_parallel_orders": 4,
     "require_all_prerequisites": true,
-    "allow_real": false,
+    "allow_real": true,
+    "auto_promote_real": true,
     "capital_allocation": {
       "mode": "DYNAMIC_EFFICIENCY",
       "max_total_exposure_pct": 0.35,
