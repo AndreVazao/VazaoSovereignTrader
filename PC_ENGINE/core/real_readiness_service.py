@@ -76,9 +76,10 @@ class RealReadinessService:
         payload = RealReadinessService._read_json(path)
         return bool(payload.get("ok") is True or payload.get("passed") is True)
 
-    def _live_credentials_ok(self, engine) -> tuple[bool, str]:
-        if str(engine.mode).upper() != "REAL":
-            return True, "not required while in PAPER"
+    def _live_credentials_ok(self, engine, target_mode: str | None = None) -> tuple[bool, str]:
+        effective_mode = str(target_mode or engine.mode).upper()
+        if effective_mode != "REAL":
+            return True, "not required while target mode is PAPER"
         missing = []
         for name, cfg in engine.config.get("exchanges", {}).items():
             if not cfg.get("enabled", False):
@@ -177,7 +178,7 @@ class RealReadinessService:
         rows = self._read_jsonl(self.history_path)
         return ReadinessDiagnosticTimeline(max_events=self.timeline_max_events).query(rows, component=component, direction=direction, from_status=from_status, to_status=to_status, limit=limit)
 
-    def collect(self, engine, persist_history: bool = True) -> dict:
+    def collect(self, engine, persist_history: bool = True, target_mode: str | None = None) -> dict:
         now_ms = int(__import__('time').time() * 1000)
         states = self._read_jsonl(self.data_dir / "market_states.jsonl")
         outcomes = self._read_jsonl(self.data_dir / "state_outcomes.jsonl")
@@ -224,9 +225,9 @@ class RealReadinessService:
         if not self.require_reconciliation:
             reconciliation_ok = True
 
-        credentials_ok, credentials_detail = self._live_credentials_ok(engine)
+        credentials_ok, credentials_detail = self._live_credentials_ok(engine, target_mode=target_mode)
         report = self.gate.evaluate(
-            mode=engine.mode,
+            mode=str(target_mode or engine.mode).upper(),
             preflight_ok=preflight_ok,
             state_samples=len(states),
             outcome_samples=outcome_samples,

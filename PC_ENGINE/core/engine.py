@@ -17,6 +17,7 @@ from PC_ENGINE.core.paper_broker import PaperBroker
 from PC_ENGINE.core.preflight import PreflightChecker
 from PC_ENGINE.core.recovery import RecoveryManager
 from PC_ENGINE.core.risk import RiskEngine
+from PC_ENGINE.core.real_readiness_service import RealReadinessService
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
@@ -91,6 +92,8 @@ class SovereignEngine:
         self.real_operational = False
         self.real_fail_safe_reason = ""
         self.real_mode_guard = None
+        self.real_readiness_service = RealReadinessService(config)
+        self._autonomous_real_promotion_attempted = False
         self.state = RuntimeState(mode=self.mode)
         self.state.operational["owner_id"] = self.owner_id
         self.ledger = Ledger(
@@ -611,7 +614,7 @@ class SovereignEngine:
         self._persist_recovery()
         self.log("ENGINE_STOPPED")
 
-    def set_mode(self, mode: str, *, real_authorized: bool = False) -> None:
+    def set_mode(self, mode: str, *, real_authorized: bool = False, autonomous: bool = False) -> None:
         mode = mode.upper()
         if mode not in {"PAPER", "REAL"}:
             raise ValueError("mode must be PAPER or REAL")
@@ -619,7 +622,7 @@ class SovereignEngine:
             raise RuntimeError("REAL mode requires guarded operator authorization")
         if mode == "REAL" and not bool(self.config.get("autonomous_execution", {}).get("allow_real", False)):
             raise RuntimeError("REAL mode disabled by configuration")
-        if mode == "REAL" and self.state.status == "RUNNING":
+        if mode == "REAL" and self.state.status == "RUNNING" and not autonomous:
             raise RuntimeError("Stop the engine before switching to REAL")
         if mode == "REAL" and self.paper_collector is not None:
             self.paper_collector.stop()
@@ -1217,6 +1220,56 @@ class SovereignEngine:
             self._enter_safe_state("critical_runtime_condition")
 
 
+    def _maybe_autonomous_real_promotion(self) -> bool:
+        """Promote PAPER to REAL only when the full readiness contract is satisfied."""
+        if self.mode != "PAPER":
+            return False
+        auto_cfg = self.config.get("autonomous_execution", {})
+        if not bool(auto_cfg.get("allow_real", False)) or not bool(auto_cfg.get("auto_promote_real", False)):
+            return False
+        # Re-evaluate on every cycle so the trader can wait for evidence rather
+        # than relying on a stale readiness snapshot. This call is PAPER-only
+        # and does not create orders.
+        try:
+            report = self.real_readiness_service.collect(self, target_mode="REAL")
+        except Exception as exc:
+            self.log("AUTONOMOUS_REAL_READINESS_ERROR", {"error": str(exc)})
+            return False
+        self.state.operational["real_readiness"] = report
+        if not bool(report.get("ready")) or not bool((report.get("paper_review") or {}).get("ready")):
+            return False
+        guard = getattr(self, "real_mode_guard", None)
+        if guard is None:
+            self.log("AUTONOMOUS_REAL_PROMOTION_BLOCKED", {"reason": "real_mode_guard_not_initialized"})
+            return False
+        ok, reason = guard.authorize_from_readiness(report)
+        if not ok:
+            self.log("AUTONOMOUS_REAL_PROMOTION_BLOCKED", {"reason": reason})
+            return False
+        if not guard.consume()[0]:
+            self.log("AUTONOMOUS_REAL_PROMOTION_BLOCKED", {"reason": "readiness authorization could not be consumed"})
+            return False
+        try:
+            self.set_mode("REAL", real_authorized=True, autonomous=True)
+            preflight = self.run_preflight()
+            if not preflight.get("ok"):
+                self._enter_real_fail_safe("autonomous_real_preflight_failed", preflight)
+                return False
+            reconciliation = self.reconcile_account_state()
+            if not reconciliation.get("ok", False):
+                self._enter_real_fail_safe("autonomous_real_reconciliation_failed", reconciliation)
+                return False
+            self.real_operational = True
+            self.state.status = "RUNNING"
+            self.log("AUTONOMOUS_REAL_PROMOTION", {
+                "reason": "real readiness gate satisfied",
+                "readiness_status": report.get("status"),
+            })
+            return True
+        except Exception as exc:
+            self._enter_real_fail_safe("autonomous_real_promotion_error", {"error": str(exc)})
+            return False
+
     def cycle(self) -> None:
         exchange = self._main_exchange()
         if exchange is None:
@@ -1225,6 +1278,10 @@ class SovereignEngine:
         self.refresh_human_bridge_operational_state()
         if not self._watchdog_gate(exchange):
             return
+        if self.mode == "PAPER" and self._maybe_autonomous_real_promotion():
+            exchange = self._main_exchange()
+            if exchange is None:
+                return
         if self.mode == "REAL" and not self.state.account_reconciliation.get("ok", False):
             self.reconcile_account_state()
             return
