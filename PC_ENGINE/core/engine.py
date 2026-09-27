@@ -614,7 +614,7 @@ class SovereignEngine:
         self._persist_recovery()
         self.log("ENGINE_STOPPED")
 
-    def set_mode(self, mode: str, *, real_authorized: bool = False) -> None:
+    def set_mode(self, mode: str, *, real_authorized: bool = False, autonomous: bool = False) -> None:
         mode = mode.upper()
         if mode not in {"PAPER", "REAL"}:
             raise ValueError("mode must be PAPER or REAL")
@@ -622,7 +622,7 @@ class SovereignEngine:
             raise RuntimeError("REAL mode requires guarded operator authorization")
         if mode == "REAL" and not bool(self.config.get("autonomous_execution", {}).get("allow_real", False)):
             raise RuntimeError("REAL mode disabled by configuration")
-        if mode == "REAL" and self.state.status == "RUNNING":
+        if mode == "REAL" and self.state.status == "RUNNING" and not autonomous:
             raise RuntimeError("Stop the engine before switching to REAL")
         if mode == "REAL" and self.paper_collector is not None:
             self.paper_collector.stop()
@@ -1236,7 +1236,7 @@ class SovereignEngine:
             self.log("AUTONOMOUS_REAL_READINESS_ERROR", {"error": str(exc)})
             return False
         self.state.operational["real_readiness"] = report
-        if not bool(report.get("ready")):
+        if not bool(report.get("ready")) or not bool((report.get("paper_review") or {}).get("ready")):
             return False
         guard = getattr(self, "real_mode_guard", None)
         if guard is None:
@@ -1250,7 +1250,7 @@ class SovereignEngine:
             self.log("AUTONOMOUS_REAL_PROMOTION_BLOCKED", {"reason": "readiness authorization could not be consumed"})
             return False
         try:
-            self.set_mode("REAL", real_authorized=True)
+            self.set_mode("REAL", real_authorized=True, autonomous=True)
             preflight = self.run_preflight()
             if not preflight.get("ok"):
                 self._enter_real_fail_safe("autonomous_real_preflight_failed", preflight)
