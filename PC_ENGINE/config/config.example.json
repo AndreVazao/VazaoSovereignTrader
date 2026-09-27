@@ -98,7 +98,8 @@
     "max_open_positions": 2,
     "max_total_exposure_pct": 0.35,
     "paper_starting_balance": 1000,
-    "preflight_required": true
+    "preflight_required": true,
+    "auto_start_paper": true
   },
   "reconciliation": {
     "dust_tolerance": 1e-10,

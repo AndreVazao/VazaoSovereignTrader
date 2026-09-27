@@ -222,3 +222,12 @@ def test_evidence_learning_endpoint_returns_paper_guidance(tmp_path, monkeypatch
     assert payload["paper_only"] is True
     assert payload["snapshot"]["records"] == 1
     assert payload["snapshot"]["actions"][0]["action"] == "OBSERVE"
+
+
+def test_paper_autostart_policy_is_safe():
+    from PC_ENGINE.main import _should_auto_start_paper
+
+    assert _should_auto_start_paper({"engine": {"auto_start_paper": True}}, "PAPER")
+    assert not _should_auto_start_paper({"engine": {"auto_start_paper": False}}, "PAPER")
+    assert not _should_auto_start_paper({"engine": {"auto_start_paper": True}}, "REAL")
+    assert not _should_auto_start_paper({}, "PAPER")

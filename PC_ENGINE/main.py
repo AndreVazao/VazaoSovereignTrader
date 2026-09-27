@@ -14,6 +14,13 @@ from PC_ENGINE.core.engine import SovereignEngine
 from PC_ENGINE.core.paper_confluence_engine import PaperConfluenceEngine
 
 
+def _should_auto_start_paper(config: dict, mode: str) -> bool:
+    """Allow unattended PAPER startup, never unattended REAL startup."""
+    return str(mode).upper() == "PAPER" and bool(
+        config.get("engine", {}).get("auto_start_paper", False)
+    )
+
+
 def main() -> None:
     config = load_config()
     mode = str(config.get("mode", "PAPER")).upper()
@@ -27,8 +34,13 @@ def main() -> None:
     app = create_app(engine, config.get("server", {}).get("local_control_token_env", "VST_LOCAL_TOKEN"))
     host = config.get("server", {}).get("host", "0.0.0.0")
     port = int(config.get("server", {}).get("port", 8765))
+    if _should_auto_start_paper(config, mode):
+        engine.start()
+        print("PAPER engine auto-start: ENABLED")
+    else:
+        print("PAPER engine auto-start: DISABLED")
     print(f"VazaoSovereignTrader PC_ENGINE online at http://{host}:{port}")
-    print("Default mode is PAPER. Use the API, dashboard, or mobile cockpit to start.")
+    print("Default mode is PAPER. Use the API, dashboard, or mobile cockpit to control the engine.")
     print(f"Local dashboard: http://127.0.0.1:{port}/dashboard")
     app.run(host=host, port=port, debug=False, use_reloader=False)
 
