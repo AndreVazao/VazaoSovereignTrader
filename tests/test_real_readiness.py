@@ -197,3 +197,39 @@ def test_paper_review_marks_temporal_history_insufficient():
     )
     assert result["status"] == "INSUFFICIENT_EVIDENCE"
     assert "READINESS_TREND" in result["insufficient"]
+
+
+def test_readiness_service_exposes_diagnostic_timeline(tmp_path):
+    from PC_ENGINE.core.real_readiness_service import RealReadinessService
+    from PC_ENGINE.core.readiness_timeline import ReadinessDiagnosticTimeline
+
+    service = RealReadinessService({
+        "real_readiness": {
+            "history_enabled": True,
+            "history_path": str(tmp_path / "history.jsonl"),
+            "history_limit": 20,
+            "timeline_max_events": 20,
+        }
+    })
+    names = ReadinessDiagnosticTimeline.COMPONENTS
+    for index, state in enumerate(["PASS", "PASS", "BLOCKED", "PASS"]):
+        service._persist_history(
+            {
+                "status": "READY_FOR_PROTECTED_REAL_REVIEW" if state == "PASS" else "LOCKED",
+                "ready": state == "PASS",
+                "blockers": [] if state == "PASS" else ["AUDIT"],
+                "paper_review": {
+                    "items": [
+                        {"name": name, "status": state, "detail": "state change"}
+                        for name in names
+                    ]
+                },
+            },
+            1_000_000 + index * 1_000,
+        )
+
+    timeline = service.timeline(component="AUDIT")
+    assert timeline["paper_only"] is True
+    assert timeline["returned_events"] == 2
+    assert timeline["events"][0]["direction"] == "DEGRADING"
+    assert timeline["events"][1]["direction"] == "RECOVERING"
