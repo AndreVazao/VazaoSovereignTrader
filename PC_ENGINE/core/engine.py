@@ -116,7 +116,12 @@ class SovereignEngine:
         self.ai_council = DisabledAICouncil()
         self.champion = ChampionChallenger()
         self.risk = RiskEngine(config["risk"])
-        self.strategy = TrendEmaAtrStrategy(config["strategy"])
+        strategy_config = dict(config["strategy"])
+        # Market-data quality is a global contract shared by every OHLCV consumer.
+        # Propagate it into the strategy so the primary engine cycle cannot bypass
+        # the same freshness/continuity gate used by the PAPER collector.
+        strategy_config["market_data_quality"] = dict(config.get("market_data_quality", {}))
+        self.strategy = TrendEmaAtrStrategy(strategy_config)
         self.allocator = CapitalAllocator(config["engine"], config.get("symbol_limits", {}))
         self.opportunity = PaperOpportunityEngine(config.get("opportunity", {}))
         self.market_states = MarketStateStore(config.get("opportunity", {}).get("data_dir", "PC_ENGINE/data/radar"))
