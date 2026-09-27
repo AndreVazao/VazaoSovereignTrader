@@ -35,6 +35,7 @@ class TrendEmaAtrStrategy:
         quality = validate_ohlcv_rows(
             ohlcv,
             max_gap_seconds=quality_cfg.get("max_gap_seconds"),
+            max_age_seconds=quality_cfg.get("max_age_seconds"),
         )
         if not quality.ok:
             return Signal(
