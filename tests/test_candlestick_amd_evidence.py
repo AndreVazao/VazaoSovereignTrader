@@ -10,6 +10,7 @@ def candle(ts, o, h, l, c, v=10):
 
 def test_bullish_engulfing_is_detected():
     rows = [
+        candle(0, 100, 101, 99, 100),
         candle(1, 105, 106, 97, 98),
         candle(2, 97, 107, 96, 106),
     ]
