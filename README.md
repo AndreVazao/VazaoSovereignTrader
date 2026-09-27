@@ -28,6 +28,14 @@ Esta versão entrega uma base funcional e segura:
 - Integração futura com TradingAgents como conselho opcional, não executor.
 - **Sovereign Market Radar** em Fase 1 observacional, com recolha cross-exchange e deteção de eventos candidatos de lead/lag.
 
+## Candlestick Pattern Library
+
+A camada PAPER de candlesticks foi expandida e alinhada com a camada de evidência. O detector cobre reversões, indecisão e continuação, incluindo engulfing, harami, tweezers, piercing/dark cloud, stars, three soldiers/crows e rising/falling three methods.
+
+Os padrões são features contextuais e passam por custos, confluence, evidence e Risk Engine. Não autorizam ordens nem REAL.
+
+Documentação: docs/CANDLESTICK_PATTERN_LIBRARY.md.
+
 ## Sovereign Market Radar
 
 O Radar é uma camada central de observação que combina dados públicos de múltiplas exchanges e, futuramente, derivados, order flow e fontes externas.
