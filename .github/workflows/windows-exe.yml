@@ -30,6 +30,13 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force test-runtime\config | Out-Null
           Copy-Item PC_ENGINE\config\config.example.json test-runtime\config\config.example.json
+          $configPath = (Resolve-Path test-runtime\config\config.example.json)
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $config.radar.enabled = $false
+          $config.shared_intelligence.enabled = $false
+          $config.research.enabled = $false
+          $config.confluence.enabled = $false
+          $config | ConvertTo-Json -Depth 30 | Set-Content $configPath -Encoding utf8
           $proc = Start-Process -FilePath dist\VazaoSovereignTrader.exe -WorkingDirectory (Resolve-Path test-runtime) -PassThru
           try {
             $ready = $false
