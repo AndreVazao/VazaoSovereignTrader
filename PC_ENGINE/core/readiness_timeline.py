@@ -29,7 +29,7 @@ class ReadinessTimelineEvent:
 
 
 @dataclass(frozen=True)
-class ReadinessDiagnosticTimeline:
+class ReadinessDiagnosticTimelineReport:
     status: str
     records: int
     analyzed_records: int
@@ -96,10 +96,10 @@ class ReadinessDiagnosticTimeline:
             return "DEGRADING"
         return "CHANGING"
 
-    def analyze(self, rows: Iterable[dict]) -> ReadinessDiagnosticTimeline:
+    def analyze(self, rows: Iterable[dict]) -> ReadinessDiagnosticTimelineReport:
         raw = list(rows)
         if any(not self._valid_row(row) for row in raw):
-            return ReadinessDiagnosticTimeline(
+            return ReadinessDiagnosticTimelineReport(
                 "INVALID_HISTORY", len(raw), 0, tuple(), tuple(), 0, 0,
                 "history contains malformed PAPER readiness snapshots",
             )
