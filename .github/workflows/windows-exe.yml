@@ -28,9 +28,10 @@ jobs:
       - name: EXE smoke test
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force test-runtime\config | Out-Null
-          Copy-Item PC_ENGINE\config\config.example.json test-runtime\config\config.example.json
-          $configPath = (Resolve-Path test-runtime\config\config.example.json)
+          New-Item -ItemType Directory -Force test-runtime | Out-Null
+          New-Item -ItemType Directory -Force dist\config | Out-Null
+          Copy-Item PC_ENGINE\config\config.example.json dist\config\config.example.json
+          $configPath = (Resolve-Path dist\config\config.example.json)
           $config = Get-Content $configPath -Raw | ConvertFrom-Json
           $config.radar.enabled = $false
           $config.shared_intelligence.enabled = $false
