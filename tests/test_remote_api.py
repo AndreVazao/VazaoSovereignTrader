@@ -230,4 +230,4 @@ def test_paper_autostart_policy_is_safe():
     assert _should_auto_start_paper({"engine": {"auto_start_paper": True}}, "PAPER")
     assert not _should_auto_start_paper({"engine": {"auto_start_paper": False}}, "PAPER")
     assert not _should_auto_start_paper({"engine": {"auto_start_paper": True}}, "REAL")
-    assert _should_auto_start_paper({}, "PAPER")
+    assert not _should_auto_start_paper({}, "PAPER")
