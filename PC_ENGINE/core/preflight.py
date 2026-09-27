@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Iterable, List, Mapping, Sequence
 
@@ -102,7 +103,7 @@ def validate_market_candles(
         valid_rows += 1
 
     if latest_timestamp is not None and max_age_seconds is not None:
-        reference_now = float(now_seconds) if now_seconds is not None else __import__("time").time()
+        reference_now = float(now_seconds) if now_seconds is not None else time.time()
         if not math.isfinite(reference_now) or max_age_seconds < 0:
             errors.append("market data freshness configuration invalid")
         else:
