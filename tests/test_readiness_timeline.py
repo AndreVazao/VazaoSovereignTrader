@@ -68,4 +68,4 @@ def test_timeline_fails_closed_on_missing_component():
 def test_timeline_empty_history_is_insufficient():
     result = ReadinessDiagnosticTimeline().analyze([])
     assert result.status == "INSUFFICIENT_HISTORY"
-    assert result.paper_only if hasattr(result, "paper_only") else True
+    assert result.to_dict()["paper_only"] is True
