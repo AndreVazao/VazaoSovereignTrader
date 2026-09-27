@@ -1,6 +1,13 @@
 name: Windows EXE
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-exe.yml"
+      - "PC_ENGINE/**"
+      - "requirements-pc.txt"
+      - "scripts/**"
+      - "README.md"
   push:
     branches:
       - main
