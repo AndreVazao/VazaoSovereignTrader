@@ -17,7 +17,7 @@ from PC_ENGINE.core.paper_confluence_engine import PaperConfluenceEngine
 def _should_auto_start_paper(config: dict, mode: str) -> bool:
     """Allow unattended PAPER startup, never unattended REAL startup."""
     return str(mode).upper() == "PAPER" and bool(
-        config.get("engine", {}).get("auto_start_paper", True)
+        config.get("engine", {}).get("auto_start_paper", False)
     )
 
 
