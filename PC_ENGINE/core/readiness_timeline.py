@@ -106,12 +106,12 @@ class ReadinessDiagnosticTimeline:
         ordered = sorted(raw, key=lambda row: int(row["timestamp_ms"]))
         timestamps = [int(row["timestamp_ms"]) for row in ordered]
         if len(timestamps) != len(set(timestamps)):
-            return ReadinessDiagnosticTimeline(
+            return ReadinessDiagnosticTimelineReport(
                 "INVALID_HISTORY", len(raw), 0, tuple(), tuple(), 0, 0,
                 "history contains duplicate timestamps",
             )
         if not ordered:
-            return ReadinessDiagnosticTimeline(
+            return ReadinessDiagnosticTimelineReport(
                 "INSUFFICIENT_HISTORY", 0, 0, tuple(), tuple(self.COMPONENTS), 0, 0,
                 "no readiness history available",
             )
@@ -144,7 +144,7 @@ class ReadinessDiagnosticTimeline:
 
         events.sort(key=lambda event: (event.timestamp_ms, event.component, event.to_status))
         events = events[-self.max_events:]
-        return ReadinessDiagnosticTimeline(
+        return ReadinessDiagnosticTimelineReport(
             "STABLE" if not events else "TRANSITIONS",
             len(raw),
             len(ordered),
