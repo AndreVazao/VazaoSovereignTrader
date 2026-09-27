@@ -50,7 +50,7 @@ class CandlestickPatternTests(unittest.TestCase):
         self.assertIn("dark_cloud_cover", [x.name for x in self.engine.detect(bearish)])
 
     def test_harami_and_tweezers(self) -> None:
-        bullish = [candle(110, 112, 100, 102), candle(101, 106, 100, 104), candle(104, 106, 101, 105)]
+        bullish = [candle(110, 112, 100, 102), candle(103, 106, 100, 104), candle(104, 106, 101, 105)]
         bearish = [candle(100, 112, 99, 110), candle(109, 111, 106, 108), candle(108, 110, 105, 106)]
         self.assertIn("bullish_harami", [x.name for x in self.engine.detect(bullish)])
         self.assertIn("bearish_harami", [x.name for x in self.engine.detect(bearish)])
@@ -62,7 +62,7 @@ class CandlestickPatternTests(unittest.TestCase):
     def test_evening_star_and_three_inside_patterns(self) -> None:
         evening = [candle(100, 112, 99, 110), candle(110, 111, 108, 109.5), candle(109, 110, 100, 101)]
         inside_up = [candle(110, 112, 100, 102), candle(101, 107, 100, 106), candle(106, 114, 105, 113)]
-        inside_down = [candle(100, 112, 99, 110), candle(109, 111, 105, 106), candle(106, 107, 96, 98)]
+        inside_down = [candle(100, 112, 99, 110), candle(109, 111, 105, 104), candle(104, 107, 96, 98)]
         self.assertIn("evening_star", [x.name for x in self.engine.detect(evening)])
         self.assertIn("three_inside_up", [x.name for x in self.engine.detect(inside_up)])
         self.assertIn("three_inside_down", [x.name for x in self.engine.detect(inside_down)])
@@ -80,7 +80,7 @@ class CandlestickPatternTests(unittest.TestCase):
         self.assertIn("falling_three_methods", [x.name for x in self.engine.detect(falling)])
 
     def test_spinning_top_and_marubozu(self) -> None:
-        spinning = [candle(100, 105, 95, 102)]
+        spinning = [candle(110, 112, 108, 109), candle(105, 107, 103, 105.5), candle(100, 105, 95, 102)]
         bullish = [candle(100, 110, 100, 109.5), candle(100, 110, 100, 109.5), candle(100, 110, 100, 109.5)]
         self.assertIn("spinning_top", [x.name for x in self.engine.detect(spinning)])
         self.assertIn("bullish_marubozu", [x.name for x in self.engine.detect(bullish)])
