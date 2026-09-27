@@ -38,8 +38,9 @@ def test_market_data_freshness_blocks_future_timestamp():
 def test_market_data_quality_remains_fail_closed_for_gap_and_invalid_ohlc():
     result = validate_ohlcv_rows(
         [
-            candle(100_000),
-            candle(100_300, o=100, h=99, l=98, c=98.5),
+            candle(99_800),
+            candle(99_900, o=100, h=99, l=98, c=98.5),
+            candle(100_300),
         ],
         max_gap_seconds=180,
         max_age_seconds=120,
