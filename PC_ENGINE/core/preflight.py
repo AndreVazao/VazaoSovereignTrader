@@ -155,11 +155,14 @@ def validate_ohlcv_rows(
         now_seconds=now_seconds,
     )
     if errors:
+        # Any malformed CCXT row makes the batch fail-closed. Keep the
+        # downstream diagnostics from the remaining rows, but do not report
+        # a partially valid batch as consumable market data.
         return MarketDataQualityResult(
             ok=False,
             errors=errors + result.errors,
             warnings=result.warnings,
-            valid_rows=result.valid_rows,
+            valid_rows=0,
         )
     return result
 
