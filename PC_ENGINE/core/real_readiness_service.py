@@ -12,6 +12,7 @@ from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 from PC_ENGINE.core.readiness_trend import ReadinessTrendEngine
 from PC_ENGINE.core.readiness_scorecard import ReadinessStabilityScorecard
+from PC_ENGINE.core.readiness_timeline import ReadinessDiagnosticTimeline
 
 
 class RealReadinessService:
@@ -41,6 +42,7 @@ class RealReadinessService:
         self.scorecard_min_samples = max(1, int(readiness.get("scorecard_min_samples", 10)))
         self.scorecard_recent_window = max(1, int(readiness.get("scorecard_recent_window", 5)))
         self.scorecard_min_pass_ratio = min(1.0, max(0.0, float(readiness.get("scorecard_min_pass_ratio", 1.0))))
+        self.timeline_max_events = max(1, int(readiness.get("timeline_max_events", 200)))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -170,6 +172,10 @@ class RealReadinessService:
         result["configured_recent_window"] = self.scorecard_recent_window
         result["min_pass_ratio"] = self.scorecard_min_pass_ratio
         return result
+
+    def timeline(self, component=None, direction=None, from_status=None, to_status=None, limit=None) -> dict:
+        rows = self._read_jsonl(self.history_path)
+        return ReadinessDiagnosticTimeline(max_events=self.timeline_max_events).query(rows, component=component, direction=direction, from_status=from_status, to_status=to_status, limit=limit)
 
     def collect(self, engine, persist_history: bool = True) -> dict:
         now_ms = int(__import__('time').time() * 1000)
