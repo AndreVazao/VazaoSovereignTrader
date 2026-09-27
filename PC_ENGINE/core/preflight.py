@@ -83,7 +83,6 @@ def validate_market_candles(
                 errors.append(
                     f"{prefix}: timestamp gap {delta:g}s exceeds {max_gap_seconds:g}s"
                 )
-                continue
         previous_timestamp = normalized_timestamp
         latest_timestamp = normalized_timestamp
 
