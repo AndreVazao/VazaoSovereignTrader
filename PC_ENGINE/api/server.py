@@ -193,6 +193,24 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("read_private_state")
         return jsonify(readiness.scorecard())
 
+    @app.get("/readiness/timeline")
+    def readiness_timeline():
+        require_scope("read_private_state")
+        raw_limit = request.args.get("limit")
+        limit = None
+        if raw_limit is not None:
+            try:
+                limit = max(1, int(raw_limit))
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "limit_must_be_integer"}), 400
+        return jsonify(readiness.timeline(
+            component=request.args.get("component"),
+            direction=request.args.get("direction"),
+            from_status=request.args.get("from_status"),
+            to_status=request.args.get("to_status"),
+            limit=limit,
+        ))
+
     @app.get("/readiness")
     @app.get("/real-readiness")
     def real_readiness():
