@@ -295,9 +295,9 @@ A camada de readiness é agora uma cadeia explícita e persistente, ainda exclus
 - Readiness Trend Engine para estabilidade temporal, degradação e recuperação.
 - Temporal Readiness Review Gate que exige estabilidade sustentada antes de considerar a revisão pronta.
 - Readiness Stability Scorecard com diagnóstico por componente, direção, estado persistente e bloqueadores.
-- Endpoints autenticados: /evidence-ledger, /evidence-ledger/audit, /evidence-learning, /readiness/history, /readiness/trend e /readiness/scorecard.
+- Endpoints autenticados: /evidence-ledger, /evidence-ledger/audit, /evidence-learning, /readiness/history, /readiness/trend, /readiness/scorecard e /readiness/timeline.
 
-Estas camadas não promovem candidatos, não alteram o Risk Engine, não executam ordens e não autorizam REAL. O próximo passo de diagnóstico é construir uma timeline cronológica de transições da readiness, para explicar quando cada componente começou a degradar, recuperar ou permanecer bloqueado.
+Estas camadas não promovem candidatos, não alteram o Risk Engine, não executam ordens e não autorizam REAL. A Readiness Diagnostic Timeline já está integrada sobre o histórico persistente e mostra transições cronológicas por componente, direção, duração no estado anterior e detalhe da mudança.
 
 ### Validação Windows EXE
 
@@ -310,7 +310,7 @@ Documentação: docs/WINDOWS_EXE_SMOKE.md.
 A sequência prevista para completar o objetivo do projeto é:
 
 1. Fechar e manter a validação Windows EXE com smoke determinístico em PR e pós-merge.
-2. Construir a Readiness Diagnostic Timeline sobre History + Scorecard.
+2. Usar a Readiness Diagnostic Timeline para investigação operacional e auditoria de degradações/recuperações.
 3. Completar a cobertura do Data Quality Gate em todos os consumidores de market data.
 4. Expandir o harness PAPER comum e a comparação entre estratégias concorrentes.
 5. Medir trend, momentum, breakout e mean reversion por regime com custos completos.
@@ -334,3 +334,11 @@ O objetivo não é encontrar uma estratégia mágica. É construir um sistema qu
 - preserva isolamento de capital;
 - permanece PAPER até haver evidência suficiente para cada gate.
 
+
+## Readiness Diagnostic Timeline
+
+A timeline é uma camada PAPER/read-only sobre `readiness_history.jsonl`. Compara snapshots consecutivos e regista mudanças de estado de `BASE`, `AUDIT`, `LEARNING`, `CHAMPION`, `EXECUTION` e `READINESS_TREND`.
+
+Cada evento contém timestamp, estado anterior, estado novo, direção (`DEGRADING`, `RECOVERING` ou `CHANGING`), detalhe e duração do estado anterior. A API autenticada é `/readiness/timeline` e aceita filtros por componente, direção, estado de origem/destino e limite.
+
+Documentação: `docs/READINESS_DIAGNOSTIC_TIMELINE.md`.
