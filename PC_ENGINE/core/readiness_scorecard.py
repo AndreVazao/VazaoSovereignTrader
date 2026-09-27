@@ -35,12 +35,39 @@ class ReadinessScorecardItem:
 
 
 @dataclass(frozen=True)
+class ReadinessComponentDiagnostic:
+    name: str
+    status: str
+    direction: str
+    baseline_pass_ratio: float
+    recent_pass_ratio: float
+    pass_ratio_delta: float
+    consecutive_status: int
+    status_since_timestamp_ms: int
+    latest_detail: str
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "status": self.status,
+            "direction": self.direction,
+            "baseline_pass_ratio": self.baseline_pass_ratio,
+            "recent_pass_ratio": self.recent_pass_ratio,
+            "pass_ratio_delta": self.pass_ratio_delta,
+            "consecutive_status": self.consecutive_status,
+            "status_since_timestamp_ms": self.status_since_timestamp_ms,
+            "latest_detail": self.latest_detail,
+        }
+
+
+@dataclass(frozen=True)
 class ReadinessStabilityScorecardReport:
     status: str
     records: int
     analyzed_records: int
     recent_window: int
     components: tuple[ReadinessScorecardItem, ...]
+    diagnostics: tuple[ReadinessComponentDiagnostic, ...]
     blockers: tuple[str, ...]
     reason: str
     first_timestamp_ms: int
@@ -53,6 +80,10 @@ class ReadinessStabilityScorecardReport:
             "analyzed_records": self.analyzed_records,
             "recent_window": self.recent_window,
             "components": [item.to_dict() for item in self.components],
+            "diagnostics": [item.to_dict() for item in self.diagnostics],
+            "degrading_components": [item.name for item in self.diagnostics if item.direction == "DEGRADING"],
+            "recovering_components": [item.name for item in self.diagnostics if item.direction == "RECOVERING"],
+            "persistent_blockers": [item.name for item in self.diagnostics if item.status == "BLOCKED" and item.consecutive_status > 1],
             "blockers": list(self.blockers),
             "reason": self.reason,
             "first_timestamp_ms": self.first_timestamp_ms,
@@ -75,7 +106,7 @@ class ReadinessStabilityScorecard:
     @classmethod
     def _invalid(cls, count: int, reason: str) -> ReadinessStabilityScorecardReport:
         return ReadinessStabilityScorecardReport(
-            "INVALID_HISTORY", count, 0, 0, tuple(), tuple(), reason, 0, 0
+            "INVALID_HISTORY", count, 0, 0, tuple(), tuple(), tuple(), reason, 0, 0
         )
 
     @classmethod
@@ -120,12 +151,13 @@ class ReadinessStabilityScorecard:
             latest = int(ordered[-1]["timestamp_ms"]) if ordered else 0
             return ReadinessStabilityScorecardReport(
                 "INSUFFICIENT_HISTORY", len(raw), len(ordered), min(self.recent_window, len(ordered)),
-                tuple(), tuple(), "minimum scorecard history samples not reached", first, latest
+                tuple(), tuple(), tuple(), "minimum scorecard history samples not reached", first, latest
             )
 
         window = min(self.recent_window, len(ordered))
         recent = ordered[-window:]
         items: list[ReadinessScorecardItem] = []
+        diagnostics: list[ReadinessComponentDiagnostic] = []
         blockers: list[str] = []
 
         for name in self.COMPONENTS:
@@ -158,6 +190,29 @@ class ReadinessStabilityScorecard:
                 latest_detail=details[-1],
             )
             items.append(item)
+            consecutive_status = self._consecutive(statuses, current)
+            streak_start = len(statuses) - consecutive_status
+            status_since = int(ordered[streak_start]["timestamp_ms"])
+            delta = recent_pass_ratio - pass_ratio
+            if delta <= -0.20:
+                direction = "DEGRADING"
+            elif delta >= 0.20:
+                direction = "RECOVERING"
+            else:
+                direction = "STABLE"
+            diagnostics.append(
+                ReadinessComponentDiagnostic(
+                    name=name,
+                    status=current,
+                    direction=direction,
+                    baseline_pass_ratio=pass_ratio,
+                    recent_pass_ratio=recent_pass_ratio,
+                    pass_ratio_delta=delta,
+                    consecutive_status=consecutive_status,
+                    status_since_timestamp_ms=status_since,
+                    latest_detail=details[-1],
+                )
+            )
             if current == "BLOCKED":
                 blockers.append(name)
 
@@ -188,6 +243,7 @@ class ReadinessStabilityScorecard:
             analyzed_records=len(ordered),
             recent_window=window,
             components=tuple(items),
+            diagnostics=tuple(diagnostics),
             blockers=tuple(sorted(blockers)),
             reason=reason,
             first_timestamp_ms=int(ordered[0]["timestamp_ms"]),
