@@ -52,6 +52,31 @@ class RealModeGuard:
         self.state.last_reason = "armed"
         return True, "REAL mode armed temporarily"
 
+    def authorize_from_readiness(self, report: dict) -> tuple[bool, str]:
+        """Authorize a one-time REAL transition from an objective readiness report.
+
+        This is the autonomous path: no human phrase is required. It remains
+        gated by explicit allow_real configuration and a complete readiness
+        report, and the authorization is consumed by the mode transition.
+        """
+        if not self.enabled:
+            self.state.last_reason = "REAL mode guard disabled by configuration"
+            return False, self.state.last_reason
+        if not self.allow_real:
+            self.disarm("REAL mode disabled by configuration")
+            return False, self.state.last_reason
+        if not isinstance(report, dict) or not bool(report.get("ready")):
+            self.disarm("readiness report is not ready")
+            return False, self.state.last_reason
+        blockers = report.get("blockers") or []
+        if blockers:
+            self.disarm("readiness blockers remain: " + ",".join(str(x) for x in blockers))
+            return False, self.state.last_reason
+        self.state.armed = True
+        self.state.armed_until = time.time() + self.arm_seconds
+        self.state.last_reason = "autonomous readiness authorization"
+        return True, "REAL mode autonomously authorized by readiness"
+
     def disarm(self, reason: str = "disarmed") -> None:
         self.state.armed = False
         self.state.armed_until = 0.0
