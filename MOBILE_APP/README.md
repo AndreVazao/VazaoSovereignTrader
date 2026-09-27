@@ -2,6 +2,14 @@
 
 Cockpit Android para controlar o PC_ENGINE à distância.
 
+## Candlestick Pattern Library
+
+A camada PAPER de candlesticks foi expandida e alinhada com a camada de evidência. O detector cobre reversões, indecisão e continuação, incluindo engulfing, harami, tweezers, piercing/dark cloud, stars, three soldiers/crows e rising/falling three methods.
+
+Os padrões são features contextuais e passam por custos, confluence, evidence e Risk Engine. Não autorizam ordens nem REAL.
+
+Documentação: docs/CANDLESTICK_PATTERN_LIBRARY.md.
+
 ## Segurança
 
 - O APK não contém chaves Binance/BingX.
