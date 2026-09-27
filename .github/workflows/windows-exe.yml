@@ -40,6 +40,10 @@ jobs:
           $config | ConvertTo-Json -Depth 30 | Set-Content $configPath -Encoding utf8
           $proc = Start-Process -FilePath dist\VazaoSovereignTrader.exe -WorkingDirectory (Resolve-Path test-runtime) -PassThru
           try {
+            Start-Sleep -Seconds 3
+            if ($proc.HasExited) {
+              throw "EXE exited before health check (exit code $($proc.ExitCode))"
+            }
             $ready = $false
             for ($i = 0; $i -lt 20; $i++) {
               Start-Sleep -Seconds 1
