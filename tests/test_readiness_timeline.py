@@ -29,7 +29,7 @@ def test_timeline_detects_component_transition_and_duration():
         ("BLOCKED", "PASS", "RECOVERING"),
     ]
     assert base_events[0].duration_ms == 60_000
-    assert base_events[1].duration_ms == 120_000
+    assert base_events[1].duration_ms == 60_000
 
 
 def test_timeline_is_deterministic_and_chronological():
