@@ -38,8 +38,8 @@ class CandlestickPatternTests(unittest.TestCase):
         self.assertIn("hanging_man", [x.name for x in self.engine.detect(uptrend)])
 
     def test_inverted_hammer_and_shooting_star_depend_on_context(self) -> None:
-        downtrend = [candle(110, 111, 109, 109.5), candle(105, 106, 104, 104.5), candle(99, 110, 98, 100)]
-        uptrend = [candle(90, 91, 89, 90.5), candle(95, 96, 94, 95.5), candle(99, 110, 98, 100)]
+        downtrend = [candle(110, 111, 109, 109.5), candle(105, 106, 104, 104.5), candle(99, 110, 98, 102)]
+        uptrend = [candle(90, 91, 89, 90.5), candle(95, 96, 94, 95.5), candle(99, 110, 98, 102)]
         self.assertIn("inverted_hammer", [x.name for x in self.engine.detect(downtrend)])
         self.assertIn("shooting_star", [x.name for x in self.engine.detect(uptrend)])
 
@@ -61,8 +61,8 @@ class CandlestickPatternTests(unittest.TestCase):
 
     def test_evening_star_and_three_inside_patterns(self) -> None:
         evening = [candle(100, 112, 99, 110), candle(110, 111, 108, 109.5), candle(109, 110, 100, 101)]
-        inside_up = [candle(110, 112, 100, 102), candle(101, 107, 100, 106), candle(106, 110, 105, 109)]
-        inside_down = [candle(100, 112, 99, 110), candle(109, 111, 105, 106), candle(106, 107, 98, 100)]
+        inside_up = [candle(110, 112, 100, 102), candle(101, 107, 100, 106), candle(106, 114, 105, 113)]
+        inside_down = [candle(100, 112, 99, 110), candle(109, 111, 105, 106), candle(106, 107, 96, 98)]
         self.assertIn("evening_star", [x.name for x in self.engine.detect(evening)])
         self.assertIn("three_inside_up", [x.name for x in self.engine.detect(inside_up)])
         self.assertIn("three_inside_down", [x.name for x in self.engine.detect(inside_down)])
@@ -80,7 +80,7 @@ class CandlestickPatternTests(unittest.TestCase):
         self.assertIn("falling_three_methods", [x.name for x in self.engine.detect(falling)])
 
     def test_spinning_top_and_marubozu(self) -> None:
-        spinning = [candle(100, 105, 95, 101)]
+        spinning = [candle(100, 105, 95, 102)]
         bullish = [candle(100, 110, 100, 109.5), candle(100, 110, 100, 109.5), candle(100, 110, 100, 109.5)]
         self.assertIn("spinning_top", [x.name for x in self.engine.detect(spinning)])
         self.assertIn("bullish_marubozu", [x.name for x in self.engine.detect(bullish)])
