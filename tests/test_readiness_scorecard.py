@@ -97,3 +97,43 @@ def test_scorecard_service_reads_persisted_history(tmp_path):
     assert scorecard["status"] == "STABLE"
     assert scorecard["paper_only"] is True
     assert scorecard["records"] == 5
+
+
+def test_scorecard_reports_degradation_and_recovery_by_component():
+    rows = _rows(["PASS"] * 6)
+    for row in rows[-3:]:
+        item = row["paper_review"]["items"][1]
+        item["status"] = "BLOCKED"
+        item["detail"] = "audit degraded"
+    for row in rows[-2:]:
+        item = row["paper_review"]["items"][2]
+        item["status"] = "BLOCKED"
+        item["detail"] = "learning degraded"
+    rows[-1]["paper_review"]["items"][2]["status"] = "PASS"
+    rows[-1]["paper_review"]["items"][2]["detail"] = "learning recovering"
+
+    result = ReadinessStabilityScorecard(min_samples=5, recent_window=3).analyze(rows)
+    audit = next(item for item in result.diagnostics if item.name == "AUDIT")
+    learning = next(item for item in result.diagnostics if item.name == "LEARNING")
+
+    assert audit.direction == "DEGRADING"
+    assert audit.status == "BLOCKED"
+    assert audit.consecutive_status == 3
+    assert audit.status_since_timestamp_ms == rows[-3]["timestamp_ms"]
+    assert "AUDIT" in result.to_dict()["degrading_components"]
+    assert learning.direction == "RECOVERING"
+    assert learning.status == "PASS"
+    assert learning.consecutive_status == 1
+    assert "LEARNING" in result.to_dict()["recovering_components"]
+    assert "AUDIT" in result.to_dict()["persistent_blockers"]
+
+
+def test_scorecard_status_since_tracks_latest_component_transition():
+    rows = _rows(["PASS"] * 6)
+    for row in rows[3:5]:
+        row["paper_review"]["items"][0]["status"] = "BLOCKED"
+    result = ReadinessStabilityScorecard(min_samples=5, recent_window=3).analyze(rows)
+    base = next(item for item in result.diagnostics if item.name == "BASE")
+    assert base.status == "PASS"
+    assert base.consecutive_status == 1
+    assert base.status_since_timestamp_ms == rows[-1]["timestamp_ms"]
