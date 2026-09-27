@@ -152,7 +152,13 @@ class CandlestickPatternEngine:
             elif signed < 0:
                 matches.append(PatternMatch("bearish_marubozu", "BEARISH", 0.78))
 
-        matches.extend(self._two_candle_patterns(prev, last))
+        pair_candidates = ((prev2, prev), (prev, last))
+        seen_pairs: set[str] = set()
+        for pair_prev, pair_last in pair_candidates:
+            for pattern in self._two_candle_patterns(pair_prev, pair_last):
+                if pattern.name not in seen_pairs:
+                    matches.append(pattern)
+                    seen_pairs.add(pattern.name)
 
         o1, h1, l1, c1 = self._candle(prev2)
         o2, h2, l2, c2 = self._candle(prev)
