@@ -105,14 +105,16 @@ def test_scorecard_reports_degradation_and_recovery_by_component():
         item = row["paper_review"]["items"][1]
         item["status"] = "BLOCKED"
         item["detail"] = "audit degraded"
-    for row in rows[-2:]:
+    for row in rows[2:4]:
         item = row["paper_review"]["items"][2]
         item["status"] = "BLOCKED"
         item["detail"] = "learning degraded"
-    rows[-1]["paper_review"]["items"][2]["status"] = "PASS"
-    rows[-1]["paper_review"]["items"][2]["detail"] = "learning recovering"
+    for row in rows[4:]:
+        item = row["paper_review"]["items"][2]
+        item["status"] = "PASS"
+        item["detail"] = "learning recovering"
 
-    result = ReadinessStabilityScorecard(min_samples=5, recent_window=3).analyze(rows)
+    result = ReadinessStabilityScorecard(min_samples=5, recent_window=2).analyze(rows)
     audit = next(item for item in result.diagnostics if item.name == "AUDIT")
     learning = next(item for item in result.diagnostics if item.name == "LEARNING")
 
@@ -123,7 +125,7 @@ def test_scorecard_reports_degradation_and_recovery_by_component():
     assert "AUDIT" in result.to_dict()["degrading_components"]
     assert learning.direction == "RECOVERING"
     assert learning.status == "PASS"
-    assert learning.consecutive_status == 1
+    assert learning.consecutive_status == 2
     assert "LEARNING" in result.to_dict()["recovering_components"]
     assert "AUDIT" in result.to_dict()["persistent_blockers"]
 
