@@ -18,6 +18,7 @@ from PC_ENGINE.core.preflight import PreflightChecker
 from PC_ENGINE.core.recovery import RecoveryManager
 from PC_ENGINE.core.risk import RiskEngine
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
+from PC_ENGINE.core.real_mode_guard import RealModeGuard
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
@@ -91,7 +92,7 @@ class SovereignEngine:
         self.paper = self.mode != "REAL"
         self.real_operational = False
         self.real_fail_safe_reason = ""
-        self.real_mode_guard = None
+        self.real_mode_guard = RealModeGuard(config.get("real_mode_guard", {}))
         self.real_readiness_service = RealReadinessService(config)
         self._autonomous_real_promotion_attempted = False
         self.state = RuntimeState(mode=self.mode)
