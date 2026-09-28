@@ -20,7 +20,7 @@ def test_engine_initializes_real_mode_guard_from_config(tmp_path):
     assert isinstance(engine.real_mode_guard, RealModeGuard)
     snapshot = engine.real_mode_guard.snapshot()
     assert snapshot["armed"] is False
-    assert snapshot["allow_real"] is True
+    assert engine.real_mode_guard.allow_real is True
 
 
 def test_engine_startup_still_normalizes_configured_real_to_paper(tmp_path):
