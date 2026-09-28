@@ -114,3 +114,75 @@ def test_engine_readiness_error_replaces_stale_ready_snapshot():
     assert report["ready"] is False
     assert report["status"] == "READINESS_EVALUATION_FAILED"
     assert "readiness_evaluation_failed" in report["blockers"]
+
+
+def test_engine_autonomous_promotion_fails_safe_when_preflight_fails():
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.mode = "PAPER"
+    engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
+    engine.state = SimpleNamespace(operational={}, status="RUNNING", mode="PAPER")
+    engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
+    engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: {
+        "ready": True,
+        "status": "READY_FOR_PROTECTED_REAL_REVIEW",
+        "blockers": [],
+        "paper_review": {"ready": True},
+    })
+    engine.log = lambda *args, **kwargs: None
+    engine.set_mode = lambda mode, **kwargs: (setattr(engine, "mode", mode), setattr(engine.state, "mode", mode))
+    engine.run_preflight = lambda: {"ok": False, "errors": ["credentials/preflight failure"]}
+    engine.reconcile_account_state = lambda: {"ok": True}
+    engine.real_operational = False
+    fail_safe_calls = []
+    def fail_safe(reason, data=None):
+        fail_safe_calls.append((reason, data))
+        engine.mode = "PAPER"
+        engine.state.mode = "PAPER"
+        engine.real_operational = False
+        engine.state.status = "SAFE_MODE"
+        engine.real_mode_guard.disarm(reason)
+    engine._enter_real_fail_safe = fail_safe
+
+    assert not engine._maybe_autonomous_real_promotion()
+    assert engine.mode == "PAPER"
+    assert engine.state.mode == "PAPER"
+    assert not engine.real_operational
+    assert engine.state.status == "SAFE_MODE"
+    assert fail_safe_calls
+    assert fail_safe_calls[0][0] == "autonomous_real_preflight_failed"
+
+
+def test_engine_autonomous_promotion_fails_safe_when_reconciliation_fails():
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.mode = "PAPER"
+    engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
+    engine.state = SimpleNamespace(operational={}, status="RUNNING", mode="PAPER")
+    engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
+    engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: {
+        "ready": True,
+        "status": "READY_FOR_PROTECTED_REAL_REVIEW",
+        "blockers": [],
+        "paper_review": {"ready": True},
+    })
+    engine.log = lambda *args, **kwargs: None
+    engine.set_mode = lambda mode, **kwargs: (setattr(engine, "mode", mode), setattr(engine.state, "mode", mode))
+    engine.run_preflight = lambda: {"ok": True}
+    engine.reconcile_account_state = lambda: {"ok": False, "reason": "account mismatch"}
+    engine.real_operational = False
+    fail_safe_calls = []
+    def fail_safe(reason, data=None):
+        fail_safe_calls.append((reason, data))
+        engine.mode = "PAPER"
+        engine.state.mode = "PAPER"
+        engine.real_operational = False
+        engine.state.status = "SAFE_MODE"
+        engine.real_mode_guard.disarm(reason)
+    engine._enter_real_fail_safe = fail_safe
+
+    assert not engine._maybe_autonomous_real_promotion()
+    assert engine.mode == "PAPER"
+    assert engine.state.mode == "PAPER"
+    assert not engine.real_operational
+    assert engine.state.status == "SAFE_MODE"
+    assert fail_safe_calls
+    assert fail_safe_calls[0][0] == "autonomous_real_reconciliation_failed"
