@@ -132,6 +132,31 @@ class RealReadinessService:
             return False, "artifact stat failed"
         return age <= self.max_validation_age_seconds, f"age_s={int(age)}; max_s={self.max_validation_age_seconds}"
 
+    @staticmethod
+    def _recovery_state_health(engine) -> tuple[bool, str]:
+        """Require durable recovery state to cover every currently open position."""
+        positions = getattr(getattr(engine, "state", None), "open_positions", {}) or {}
+        if not positions:
+            return True, "no open positions require recovery state"
+        recovery = getattr(engine, "recovery", None)
+        state_path = getattr(recovery, "state_path", None)
+        if state_path is None:
+            return False, "recovery state path unavailable"
+        path = Path(state_path)
+        if not path.is_file():
+            return False, "persisted recovery state missing"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return False, f"persisted recovery state unreadable: {type(exc).__name__}"
+        if not isinstance(payload, dict) or not isinstance(payload.get("positions"), dict):
+            return False, "persisted recovery positions invalid"
+        persisted = payload["positions"]
+        missing = sorted(str(symbol) for symbol in positions if symbol not in persisted)
+        if missing:
+            return False, "open positions absent from recovery state: " + ",".join(missing)
+        return True, f"persisted recovery covers {len(positions)} open positions"
+
     def _persist_history(self, payload: dict, now_ms: int) -> None:
         if not self.history_enabled:
             return
@@ -262,10 +287,7 @@ class RealReadinessService:
         validation_dir = self.data_dir / "validation"
         preflight_ok = bool(engine.state.preflight.get("ok")) if engine.state.preflight else False
         watchdog_ok = bool(engine.state.watchdog.get("ok", False)) if engine.state.watchdog else False
-        recovery_ok = (
-            not bool(engine.state.open_positions)
-            or (self.data_dir / "recovery_heartbeat.json").exists()
-        )
+        recovery_ok, recovery_detail = self._recovery_state_health(engine)
         pending_orders_ok = not bool(engine.state.pending_orders)
         execution_intents_ok = not bool(engine.state.execution_intents)
         critical_errors = sum(1 for line in engine.state.logs if "CRITICAL" in line.upper())
@@ -367,6 +389,8 @@ class RealReadinessService:
             "state_fresh_detail": state_fresh_detail,
             "outcome_fresh": outcome_fresh,
             "outcome_fresh_detail": outcome_fresh_detail,
+            "recovery_state_ok": recovery_ok,
+            "recovery_state_detail": recovery_detail,
             "validation_freshness": validation_fresh,
         }
         try:
