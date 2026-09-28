@@ -1227,7 +1227,11 @@ class SovereignEngine:
         if self.mode != "PAPER":
             return False
         auto_cfg = self.config.get("autonomous_execution", {})
-        if not bool(auto_cfg.get("allow_real", False)) or not bool(auto_cfg.get("auto_promote_real", False)):
+        if (
+            not bool(auto_cfg.get("enabled", False))
+            or not bool(auto_cfg.get("allow_real", False))
+            or not bool(auto_cfg.get("auto_promote_real", False))
+        ):
             return False
         # Re-evaluate on every cycle so the trader can wait for evidence rather
         # than relying on a stale readiness snapshot. This call is PAPER-only
