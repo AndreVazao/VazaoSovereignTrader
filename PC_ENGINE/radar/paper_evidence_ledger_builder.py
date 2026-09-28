@@ -8,7 +8,7 @@ from PC_ENGINE.radar.evidence_ledger import (
     EvidenceLedgerRecord,
     EvidencePlaneSummary,
 )
-from PC_ENGINE.radar.evidence_outcomes import EvidenceOutcomeEngine
+from PC_ENGINE.radar.evidence_outcomes import EvidenceOutcomeEngine, EvidenceOutcomeStat
 from PC_ENGINE.radar.evidence_statistics import bootstrap_lower_ci
 from PC_ENGINE.radar.evidence_stress import EvidenceStatisticalStressTester
 
@@ -28,6 +28,7 @@ class PaperEvidenceLedgerBuilder:
         self.enabled = bool(evidence.get("ledger_writer_enabled", True))
         self.interval_cycles = max(1, int(evidence.get("ledger_writer_interval_cycles", 12)))
         self.min_states = max(30, int(evidence.get("ledger_min_states", 300)))
+        self.max_states = max(self.min_states, int(evidence.get("ledger_max_states", 2000)))
         self.train_size = max(2, int(evidence.get("ledger_train_size", 200)))
         self.test_size = max(1, int(evidence.get("ledger_test_size", 100)))
         self.step_size = max(1, int(evidence.get("ledger_step_size", self.test_size)))
@@ -44,7 +45,7 @@ class PaperEvidenceLedgerBuilder:
         self.min_cost_scenarios = max(
             1, int(evidence.get("ledger_min_cost_scenarios", 3))
         )
-        self._last_state_count = 0
+        self._last_data_end_ms = 0
 
     @staticmethod
     def _candidate_id(evidence_type: str, evidence_name: str, horizon_ms: int) -> str:
@@ -80,8 +81,13 @@ class PaperEvidenceLedgerBuilder:
     def refresh(self, states: list[dict], *, force: bool = False) -> int:
         if not self.enabled or len(states) < self.min_states:
             return 0
-        if not force and len(states) < self._last_state_count + self.test_size:
-            return 0
+        if not force:
+            current_end = max(
+                (int(row.get("timestamp_ms", 0) or 0) for row in states),
+                default=0,
+            )
+            if current_end <= self._last_data_end_ms:
+                return 0
 
         clean_states = sorted(
             (
@@ -106,25 +112,25 @@ class PaperEvidenceLedgerBuilder:
         )
         stats = outcome_engine.aggregate(
             [
-                type("_Row", (), {
-                    "evidence_type": item.evidence_type,
-                    "evidence_name": item.evidence_name,
-                    "symbol": item.symbol,
-                    "regime": item.regime,
-                    "horizon_ms": item.horizon_ms,
-                    "samples": 1,
-                    "wins": int(item.net_bps > 0),
-                    "win_rate": float(item.net_bps > 0),
-                    "mean_net_bps": item.net_bps,
-                    "median_net_bps": item.net_bps,
-                    "lower_ci_bps": item.net_bps,
-                    "eligible": False,
-                })()
+                EvidenceOutcomeStat(
+                    evidence_type=item.evidence_type,
+                    evidence_name=item.evidence_name,
+                    symbol=item.symbol,
+                    regime=item.regime,
+                    horizon_ms=item.horizon_ms,
+                    samples=1,
+                    wins=int(item.net_bps > 0),
+                    win_rate=float(item.net_bps > 0),
+                    mean_net_bps=item.net_bps,
+                    median_net_bps=item.net_bps,
+                    lower_ci_bps=item.net_bps,
+                    eligible=False,
+                )
                 for item in observations
             ]
         )
         if not stats:
-            self._last_state_count = len(clean_states)
+            self._last_data_end_ms = max(int(row.get("timestamp_ms", 0) or 0) for row in clean_states)
             return 0
 
         stress = EvidenceStatisticalStressTester(
@@ -258,5 +264,5 @@ class PaperEvidenceLedgerBuilder:
             )
             written += 1
 
-        self._last_state_count = len(clean_states)
+        self._last_data_end_ms = max(int(row.get("timestamp_ms", 0) or 0) for row in clean_states)
         return written
