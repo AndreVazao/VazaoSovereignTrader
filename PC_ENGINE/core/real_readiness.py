@@ -69,8 +69,21 @@ class RealReadinessGate:
             GateCheck(
                 "ELIGIBLE_OUTCOMES",
                 eligible_outcomes >= min_eligible_outcomes,
-                f"eligible={eligible_outcomes}/{min_eligible_outcomes}",
+                f"eligible_records={eligible_outcomes}/{min_eligible_outcomes}",
             ),
+            GateCheck(
+                "ELIGIBLE_OUTCOME_SAMPLES",
+                (
+                    True if eligible_outcome_samples is None
+                    else eligible_outcome_samples >= min_eligible_outcomes
+                ),
+                (
+                    "legacy record-count gate only"
+                    if eligible_outcome_samples is None
+                    else f"samples={eligible_outcome_samples}/{min_eligible_outcomes}"
+                ),
+            ),
+            GateCheck("EVIDENCE_QUALITY", bool(evidence_quality_ok), evidence_quality_detail),
             GateCheck("WALK_FORWARD", bool(walk_forward_ok), "chronological validation"),
             GateCheck("REGIME_VALIDATION", bool(regime_validation_ok), "regime validation"),
             GateCheck("L2_OOS", bool(l2_oos_ok), l2_oos_detail),
