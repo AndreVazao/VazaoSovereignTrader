@@ -217,6 +217,40 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("read_private_state")
         return jsonify(readiness.collect(engine))
 
+    @app.get("/autonomous-readiness")
+    def autonomous_readiness():
+        """Read-only preview of the REAL promotion gates; never arms or changes mode."""
+        require_scope("read_private_state")
+        auto_cfg = engine.config.get("autonomous_execution", {})
+        try:
+            report = readiness.collect(
+                engine,
+                persist_history=False,
+                target_mode="REAL",
+            )
+        except Exception as exc:
+            return jsonify({
+                "ok": False,
+                "mode": engine.mode,
+                "autonomous_enabled": bool(auto_cfg.get("enabled", False)),
+                "auto_promote_real": bool(auto_cfg.get("auto_promote_real", False)),
+                "allow_real": bool(auto_cfg.get("allow_real", False)),
+                "error": "readiness_evaluation_failed",
+                "detail": str(exc),
+                "promotion_attempted": False,
+            }), 503
+        return jsonify({
+            "ok": True,
+            "mode": engine.mode,
+            "target_mode": "REAL",
+            "autonomous_enabled": bool(auto_cfg.get("enabled", False)),
+            "auto_promote_real": bool(auto_cfg.get("auto_promote_real", False)),
+            "allow_real": bool(auto_cfg.get("allow_real", False)),
+            "promotion_attempted": False,
+            "readiness": report,
+            "paper_only": engine.mode.upper() == "PAPER",
+        })
+
     @app.post("/readiness/run")
     def readiness_run():
         require_scope("trade_paper")
