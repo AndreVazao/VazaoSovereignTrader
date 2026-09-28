@@ -231,3 +231,50 @@ def test_paper_autostart_policy_is_safe():
     assert not _should_auto_start_paper({"engine": {"auto_start_paper": False}}, "PAPER")
     assert not _should_auto_start_paper({"engine": {"auto_start_paper": True}}, "REAL")
     assert not _should_auto_start_paper({}, "PAPER")
+
+
+
+def test_autonomous_readiness_endpoint_is_read_only_preview(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    import PC_ENGINE.api.server as server
+
+    class FakeReadiness:
+        def __init__(self, _config):
+            self.called = False
+
+        def collect(self, engine, *, persist_history=True, target_mode=None):
+            assert persist_history is False
+            assert target_mode == "REAL"
+            assert engine.mode == "PAPER"
+            self.called = True
+            return {
+                "ready": False,
+                "status": "LOCKED",
+                "blockers": ["EVIDENCE_QUALITY"],
+                "paper_review": {"ready": False},
+            }
+
+    monkeypatch.setattr(server, "RealReadinessService", FakeReadiness)
+    engine = FakeEngine()
+    engine.config = {
+        "real_mode_guard": {"enabled": True},
+        "autonomous_execution": {
+            "enabled": True,
+            "allow_real": True,
+            "auto_promote_real": True,
+        },
+    }
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+
+    response = client.get(
+        "/autonomous-readiness",
+        headers={"X-Token": "secret-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["target_mode"] == "REAL"
+    assert payload["promotion_attempted"] is False
+    assert payload["readiness"]["ready"] is False
+    assert payload["readiness"]["blockers"] == ["EVIDENCE_QUALITY"]
+    assert engine.mode == "PAPER"
