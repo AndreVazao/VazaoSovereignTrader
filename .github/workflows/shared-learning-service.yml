@@ -1,0 +1,29 @@
+name: Shared Learning Service
+on:
+  pull_request:
+    paths:
+      - "cloud/shared-learning/**"
+      - ".github/workflows/shared-learning-service.yml"
+  push:
+    branches: [main]
+    paths:
+      - "cloud/shared-learning/**"
+      - ".github/workflows/shared-learning-service.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloud/shared-learning
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloud/shared-learning/package.json
+      - run: npm install
+      - run: npm test
+      - run: npm run build
