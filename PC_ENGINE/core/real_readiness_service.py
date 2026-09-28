@@ -186,6 +186,66 @@ class RealReadinessService:
         rows = self._read_jsonl(self.history_path)
         return ReadinessDiagnosticTimeline(max_events=self.timeline_max_events).query(rows, component=component, direction=direction, from_status=from_status, to_status=to_status, limit=limit)
 
+    def _evidence_quality(self, records: list, now_ms: int) -> tuple[bool, str, dict]:
+        eligible = [record for record in records if bool(record.eligible)]
+        ordered = sorted(records, key=lambda record: record.created_at_ms)
+        eligible_ordered = sorted(eligible, key=lambda record: record.created_at_ms)
+        symbols = {str(record.symbol) for record in eligible if str(record.symbol)}
+        regimes = {str(record.regime) for record in eligible if str(record.regime)}
+        if eligible_ordered:
+            span_start = min(int(record.data_start_ms) for record in eligible_ordered)
+            span_end = max(int(record.data_end_ms) for record in eligible_ordered)
+            span_seconds = max(0.0, (span_end - span_start) / 1000.0)
+        else:
+            span_seconds = 0.0
+        recent = ordered[-self.min_recent_evidence_records:]
+        recent_ratio = (
+            sum(bool(record.eligible) for record in recent) / len(recent)
+            if recent else 0.0
+        )
+        economic_failures = []
+        if self.require_positive_economic_ci:
+            for record in eligible_ordered:
+                durable = record.durable_outcome
+                oos = record.chronological_oos
+                if float(durable.lower_ci_bps) <= 0.0 or float(durable.bootstrap_lower_ci_bps) <= 0.0:
+                    economic_failures.append(f"{record.candidate_id}@{record.version}:{record.symbol}:{record.regime}:durable_ci")
+                if float(oos.bootstrap_lower_ci_bps) <= 0.0:
+                    economic_failures.append(f"{record.candidate_id}@{record.version}:{record.symbol}:{record.regime}:oos_ci")
+        stats = {
+            "eligible_records": len(eligible_ordered),
+            "required_eligible_records": self.min_eligible_evidence_records,
+            "symbols": len(symbols),
+            "required_symbols": self.min_evidence_symbols,
+            "regimes": len(regimes),
+            "required_regimes": self.min_evidence_regimes,
+            "span_seconds": round(span_seconds, 3),
+            "required_span_seconds": self.min_evidence_span_seconds,
+            "recent_records": len(recent),
+            "recent_eligible_ratio": round(recent_ratio, 6),
+            "required_recent_eligible_ratio": self.min_recent_eligible_ratio,
+            "economic_failures": economic_failures[:10],
+        }
+        blockers = []
+        if len(eligible_ordered) < self.min_eligible_evidence_records:
+            blockers.append("insufficient eligible evidence records")
+        if len(symbols) < self.min_evidence_symbols:
+            blockers.append("insufficient evidence symbol diversity")
+        if len(regimes) < self.min_evidence_regimes:
+            blockers.append("insufficient evidence regime diversity")
+        if span_seconds < self.min_evidence_span_seconds:
+            blockers.append("insufficient evidence time span")
+        if len(recent) < self.min_recent_evidence_records:
+            blockers.append("insufficient recent evidence history")
+        if recent_ratio < self.min_recent_eligible_ratio:
+            blockers.append("recent evidence eligibility degraded")
+        if economic_failures:
+            blockers.append("economic confidence interval gate failed")
+        if not records:
+            blockers.append("evidence ledger empty")
+        detail = "; ".join(blockers) if blockers else "eligible PAPER evidence has breadth, duration, recent stability and positive net economics"
+        return not blockers, detail, stats
+
     def collect(self, engine, persist_history: bool = True, target_mode: str | None = None) -> dict:
         now_ms = int(__import__('time').time() * 1000)
         states = self._read_jsonl(self.data_dir / "market_states.jsonl")
