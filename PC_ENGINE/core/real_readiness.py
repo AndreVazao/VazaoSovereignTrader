@@ -39,7 +39,7 @@ class RealReadinessGate:
         pending_orders_ok: bool = True,
         execution_intents_ok: bool = True,
         min_state_samples: int = 1000, min_outcome_samples: int = 1000,
-        min_eligible_outcomes: int = 1,
+        min_eligible_outcomes: int = 1, min_eligible_outcome_samples: int = 300,
     ) -> ReadinessReport:
         if account_reconciliation:
             reconciliation_ok = bool(account_reconciliation.get("ok", False))
@@ -75,12 +75,12 @@ class RealReadinessGate:
                 "ELIGIBLE_OUTCOME_SAMPLES",
                 (
                     True if eligible_outcome_samples is None
-                    else eligible_outcome_samples >= min_eligible_outcomes
+                    else eligible_outcome_samples >= min_eligible_outcome_samples
                 ),
                 (
                     "legacy record-count gate only"
                     if eligible_outcome_samples is None
-                    else f"samples={eligible_outcome_samples}/{min_eligible_outcomes}"
+                    else f"samples={eligible_outcome_samples}/{min_eligible_outcome_samples}"
                 ),
             ),
             GateCheck("EVIDENCE_QUALITY", bool(evidence_quality_ok), evidence_quality_detail),
