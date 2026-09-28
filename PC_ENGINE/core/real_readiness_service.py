@@ -339,6 +339,7 @@ class RealReadinessService:
             min_state_samples=self.min_state_samples,
             min_outcome_samples=self.min_outcome_samples,
             min_eligible_outcomes=self.min_eligible_outcomes,
+            min_eligible_outcome_samples=self.min_eligible_outcome_samples,
         )
         payload = report.to_dict()
         payload["readiness_trend"] = self.trend()
