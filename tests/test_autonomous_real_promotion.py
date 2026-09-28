@@ -98,3 +98,19 @@ def test_engine_autonomous_promotion_stays_paper_when_autonomy_disabled():
     engine.log = lambda *args, **kwargs: None
     assert not engine._maybe_autonomous_real_promotion()
     assert engine.mode == "PAPER"
+
+    
+def test_engine_readiness_error_replaces_stale_ready_snapshot():
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.mode = "PAPER"
+    engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
+    engine.state = SimpleNamespace(operational={"real_readiness": {"ready": True, "status": "READY"}}, status="RUNNING")
+    engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
+    engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("temporary evidence store failure")))
+    engine.log = lambda *args, **kwargs: None
+    assert not engine._maybe_autonomous_real_promotion()
+    assert engine.mode == "PAPER"
+    report = engine.state.operational["real_readiness"]
+    assert report["ready"] is False
+    assert report["status"] == "READINESS_EVALUATION_FAILED"
+    assert "readiness_evaluation_failed" in report["blockers"]
