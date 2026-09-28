@@ -413,8 +413,13 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
                 engine.fail_safe_real("account_reconciliation_failed", reconciliation)
                 return jsonify({"ok": False, "error": "real_account_reconciliation_blocked", "reconciliation": reconciliation}), 409
             report = readiness.collect(engine)
-            if not report.get("ready", False):
-                engine.fail_safe_real("real_readiness_failed", {"blockers": report.get("blockers", [])})
+            paper_review_ready = bool(report.get("paper_review", {}).get("ready", False))
+            if not report.get("ready", False) or not paper_review_ready:
+                engine.fail_safe_real("real_readiness_failed", {
+                    "blockers": report.get("blockers", []),
+                    "paper_review_ready": paper_review_ready,
+                    "paper_review_blockers": report.get("paper_review", {}).get("blockers", []),
+                })
                 return jsonify({"ok": False, "error": "real_readiness_blocked", "readiness": report}), 409
             authorized, reason = guard.consume()
             if not authorized:
@@ -461,11 +466,19 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             preflight = engine.run_preflight()
             reconciliation = engine.reconcile_account_state()
             report = readiness.collect(engine)
-            if not preflight.get("ok") or not reconciliation.get("ok", False) or not report.get("ready", False):
+            paper_review_ready = bool(report.get("paper_review", {}).get("ready", False))
+            if (
+                not preflight.get("ok")
+                or not reconciliation.get("ok", False)
+                or not report.get("ready", False)
+                or not paper_review_ready
+            ):
                 engine.fail_safe_real("real_readiness_blocked", {
                     "preflight_ok": preflight.get("ok"),
                     "reconciliation_ok": reconciliation.get("ok", False),
                     "readiness_ready": report.get("ready", False),
+                    "paper_review_ready": paper_review_ready,
+                    "paper_review_blockers": report.get("paper_review", {}).get("blockers", []),
                 })
                 return jsonify({
                     "ok": False,
