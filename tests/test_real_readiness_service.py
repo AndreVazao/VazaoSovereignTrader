@@ -38,3 +38,41 @@ def test_validation_freshness_rejects_missing_artifact(tmp_path: Path):
     ok, detail = service._validation_fresh(tmp_path / "missing.json", 100_000)
     assert not ok
     assert detail == "artifact missing"
+
+
+def test_recovery_health_requires_persisted_open_positions(tmp_path: Path):
+    import json
+    from types import SimpleNamespace
+
+    service = RealReadinessService({"real_readiness": {"data_dir": str(tmp_path)}})
+    state_path = tmp_path / "runtime_state.json"
+    engine = SimpleNamespace(
+        state=SimpleNamespace(open_positions={"BTC/USDT": object()}),
+        recovery=SimpleNamespace(state_path=state_path),
+    )
+    ok, detail = service._recovery_state_health(engine)
+    assert not ok
+    assert "missing" in detail
+
+    state_path.write_text(json.dumps({"positions": {}}), encoding="utf-8")
+    ok, detail = service._recovery_state_health(engine)
+    assert not ok
+    assert "BTC/USDT" in detail
+
+    state_path.write_text(json.dumps({"positions": {"BTC/USDT": {"symbol": "BTC/USDT"}}}), encoding="utf-8")
+    ok, detail = service._recovery_state_health(engine)
+    assert ok
+    assert "covers 1 open positions" in detail
+
+
+def test_recovery_health_allows_no_open_positions_without_state_file(tmp_path: Path):
+    from types import SimpleNamespace
+
+    service = RealReadinessService({"real_readiness": {"data_dir": str(tmp_path)}})
+    engine = SimpleNamespace(
+        state=SimpleNamespace(open_positions={}),
+        recovery=SimpleNamespace(state_path=tmp_path / "missing.json"),
+    )
+    ok, detail = service._recovery_state_health(engine)
+    assert ok
+    assert "no open positions" in detail
