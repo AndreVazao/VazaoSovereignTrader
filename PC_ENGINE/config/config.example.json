@@ -224,6 +224,7 @@
     "ledger_writer_enabled": true,
     "ledger_writer_interval_cycles": 12,
     "ledger_min_states": 300,
+    "ledger_max_states": 2000,
     "ledger_train_size": 200,
     "ledger_test_size": 100,
     "ledger_step_size": 100,
