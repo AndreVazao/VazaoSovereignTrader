@@ -291,10 +291,7 @@ class PaperMarketCollector:
         """Materialize current PAPER observations into the immutable evidence ledger."""
         try:
             states = self.state_store.recent(
-                limit=max(
-                    self.learning_state_limit,
-                    self.evidence_ledger_builder.min_states * 2,
-                )
+                limit=self.evidence_ledger_builder.max_states
             )
             return self.evidence_ledger_builder.refresh(states)
         except (OSError, ValueError, TypeError, KeyError) as exc:
