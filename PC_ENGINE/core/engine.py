@@ -257,6 +257,7 @@ class SovereignEngine:
         collector_cfg["candles_limit"] = self.config.get("strategy", {}).get("candles_limit", 120)
         collector_cfg["data_dir"] = self.config.get("confluence", {}).get("data_dir", "PC_ENGINE/data/radar")
         collector_cfg["market_data_quality"] = dict(self.config.get("market_data_quality", {}))
+        collector_cfg["evidence"] = dict(self.config.get("evidence", {}))
         self.paper_collector = PaperMarketCollector(
             settings=collector_cfg,
             symbols=self.config.get("symbols", []),
