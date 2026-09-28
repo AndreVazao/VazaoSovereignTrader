@@ -254,6 +254,11 @@ class RealReadinessService:
         outcome_fresh, outcome_fresh_detail = self._evidence_fresh(outcomes, now_ms)
         outcome_samples = sum(int(row.get("samples", 0) or 0) for row in outcomes)
         eligible = sum(bool(row.get("eligible")) for row in outcomes)
+        eligible_outcome_samples = sum(
+            int(row.get("samples", 0) or 0)
+            for row in outcomes
+            if bool(row.get("eligible"))
+        )
         validation_dir = self.data_dir / "validation"
         preflight_ok = bool(engine.state.preflight.get("ok")) if engine.state.preflight else False
         watchdog_ok = bool(engine.state.watchdog.get("ok", False)) if engine.state.watchdog else False
@@ -294,12 +299,28 @@ class RealReadinessService:
             reconciliation_ok = True
 
         credentials_ok, credentials_detail = self._live_credentials_ok(engine, target_mode=target_mode)
+        evidence_quality_ok = False
+        evidence_quality_detail = "evidence ledger unavailable"
+        evidence_quality = {}
+        try:
+            ledger_path = engine.config.get("evidence", {}).get(
+                "ledger_path", "PC_ENGINE/data/radar/evidence_ledger.jsonl"
+            )
+            ledger_records_for_gate = EvidenceLedger.load(ledger_path)
+            evidence_quality_ok, evidence_quality_detail, evidence_quality = self._evidence_quality(
+                ledger_records_for_gate, now_ms
+            )
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            evidence_quality_detail = f"evidence ledger invalid: {exc}"
         report = self.gate.evaluate(
             mode=str(target_mode or engine.mode).upper(),
             preflight_ok=preflight_ok,
             state_samples=len(states),
             outcome_samples=outcome_samples,
             eligible_outcomes=eligible,
+            eligible_outcome_samples=eligible_outcome_samples,
+            evidence_quality_ok=evidence_quality_ok,
+            evidence_quality_detail=evidence_quality_detail,
             walk_forward_ok=self._validation_status(validation_dir / "walk_forward.json") and validation_fresh["walk_forward"][0] and state_fresh,
             regime_validation_ok=self._validation_status(validation_dir / "regime_validation.json") and validation_fresh["regime_validation"][0] and state_fresh,
             watchdog_ok=watchdog_ok,
@@ -327,6 +348,8 @@ class RealReadinessService:
             "outcome_rows": len(outcomes),
             "outcome_samples": outcome_samples,
             "eligible_outcomes": eligible,
+            "eligible_outcome_samples": eligible_outcome_samples,
+            "evidence_quality": evidence_quality,
             "l2_stable_rows": l2_stable,
             "l2_oos_required": self.require_l2_oos,
             "paper_reconciliation_required": self.require_reconciliation,
