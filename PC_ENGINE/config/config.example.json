@@ -221,6 +221,16 @@
   },
   "evidence": {
     "ledger_path": "PC_ENGINE/data/radar/evidence_ledger.jsonl",
+    "ledger_writer_enabled": true,
+    "ledger_writer_interval_cycles": 12,
+    "ledger_min_states": 300,
+    "ledger_max_states": 2000,
+    "ledger_train_size": 200,
+    "ledger_test_size": 100,
+    "ledger_step_size": 100,
+    "ledger_horizons_ms": [5000, 15000, 60000],
+    "ledger_costs_bps": [28, 35, 42, 56],
+    "ledger_min_cost_scenarios": 3,
     "learning_loop": {
       "enabled": true,
       "recent_records": 20,
