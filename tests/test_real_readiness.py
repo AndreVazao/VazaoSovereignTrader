@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from PC_ENGINE.core.real_readiness import RealReadinessGate
 
 
@@ -233,3 +235,91 @@ def test_readiness_service_exposes_diagnostic_timeline(tmp_path):
     assert timeline["returned_events"] == 2
     assert timeline["events"][0]["direction"] == "DEGRADING"
     assert timeline["events"][1]["direction"] == "RECOVERING"
+
+
+def test_gate_requires_eligible_outcome_samples_when_supplied():
+    report = RealReadinessGate().evaluate(
+        mode="PAPER", preflight_ok=True, state_samples=1000,
+        outcome_samples=1000, eligible_outcomes=1,
+        eligible_outcome_samples=299,
+        evidence_quality_ok=True,
+        walk_forward_ok=True, regime_validation_ok=True,
+        watchdog_ok=True, recovery_ok=True, execution_test_ok=True,
+    )
+    assert not report.ready
+    assert "ELIGIBLE_OUTCOME_SAMPLES" in report.blockers
+
+
+def test_evidence_quality_requires_breadth_duration_and_positive_economics(tmp_path):
+    from PC_ENGINE.core.real_readiness_service import RealReadinessService
+
+    service = RealReadinessService({
+        "real_readiness": {
+            "min_eligible_evidence_records": 3,
+            "min_evidence_symbols": 2,
+            "min_evidence_regimes": 2,
+            "min_evidence_span_seconds": 3600,
+            "min_recent_evidence_records": 3,
+            "min_recent_eligible_ratio": 1.0,
+            "require_positive_economic_ci": True,
+        }
+    })
+
+    def record(symbol, regime, created, eligible=True):
+        plane = SimpleNamespace(
+            lower_ci_bps=1.0,
+            bootstrap_lower_ci_bps=1.0,
+        )
+        oos = SimpleNamespace(
+            bootstrap_lower_ci_bps=1.0,
+        )
+        return SimpleNamespace(
+            eligible=eligible,
+            symbol=symbol,
+            regime=regime,
+            created_at_ms=created,
+            data_start_ms=created - 3_600_000,
+            data_end_ms=created,
+            candidate_id="candidate",
+            version="1",
+            durable_outcome=plane,
+            chronological_oos=oos,
+        )
+
+    rows = [
+        record("BTC/USDT", "TREND", 4_000_000),
+        record("ETH/USDT", "TREND", 4_001_000),
+        record("BTC/USDT", "MEAN_REVERSION", 4_002_000),
+    ]
+    ok, detail, stats = service._evidence_quality(rows, 4_003_000)
+    assert ok
+    assert detail.startswith("eligible PAPER evidence")
+    assert stats["eligible_records"] == 3
+
+
+def test_evidence_quality_blocks_negative_oos_confidence(tmp_path):
+    from PC_ENGINE.core.real_readiness_service import RealReadinessService
+
+    service = RealReadinessService({
+        "real_readiness": {
+            "min_eligible_evidence_records": 1,
+            "min_evidence_symbols": 1,
+            "min_evidence_regimes": 1,
+            "min_evidence_span_seconds": 0,
+            "min_recent_evidence_records": 1,
+            "min_recent_eligible_ratio": 1.0,
+            "require_positive_economic_ci": True,
+        }
+    })
+    plane = SimpleNamespace(lower_ci_bps=1.0, bootstrap_lower_ci_bps=1.0)
+    bad_oos = SimpleNamespace(bootstrap_lower_ci_bps=-0.1)
+    row = SimpleNamespace(
+        eligible=True, symbol="BTC/USDT", regime="TREND",
+        created_at_ms=2_000_000, data_start_ms=2_000_000, data_end_ms=2_000_000,
+        candidate_id="candidate", version="1",
+        durable_outcome=plane, chronological_oos=bad_oos,
+    )
+    ok, detail, stats = service._evidence_quality([row], 2_001_000)
+    assert not ok
+    assert "economic confidence interval gate failed" in detail
+    assert stats["economic_failures"]
