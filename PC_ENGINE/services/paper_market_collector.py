@@ -12,6 +12,7 @@ from PC_ENGINE.core.confluence_runtime import PaperConfluenceRuntime
 from PC_ENGINE.learning.state_signature import StateSignatureLearningEngine
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
+from PC_ENGINE.radar.paper_evidence_ledger_builder import PaperEvidenceLedgerBuilder
 from PC_ENGINE.radar.market_radar import MarketRadar
 from PC_ENGINE.radar.market_state import MarketStateStore
 from PC_ENGINE.radar.state_outcomes import StateOutcomeEngine
@@ -88,6 +89,7 @@ class PaperMarketCollector:
             )
         )
         self.evidence_learning_enabled = bool(learning_cfg.get("enabled", True))
+        self.evidence_ledger_builder = PaperEvidenceLedgerBuilder(settings)
         self.last_evidence_learning_snapshot: dict | None = None
         self.evidence_learning_errors = 0
         self.learning_path = Path(
@@ -172,6 +174,12 @@ class PaperMarketCollector:
             "outcome_cycles": self.outcome_cycles,
             "last_learning_stats": self.last_learning_stats,
             "last_outcome_stats": self.last_outcome_stats,
+            "evidence_ledger_writer": {
+                "enabled": self.evidence_ledger_builder.enabled,
+                "interval_cycles": self.evidence_ledger_builder.interval_cycles,
+                "min_states": self.evidence_ledger_builder.min_states,
+                "path": str(self.evidence_ledger_builder.path),
+            },
             "evidence_learning": {
                 "enabled": self.evidence_learning_enabled,
                 "ledger_path": str(self.evidence_ledger_path),
@@ -261,6 +269,7 @@ class PaperMarketCollector:
         self.cycles += 1
         if self.cycles % self.learning_interval_cycles == 0:
             self._refresh_learning()
+            self._refresh_evidence_ledger()
             self._refresh_evidence_learning()
         self.last_cycle_ms = int(time.time() * 1000)
         return recorded
@@ -277,6 +286,23 @@ class PaperMarketCollector:
                 )
         tmp.replace(path)
         return len(rows)
+
+    def _refresh_evidence_ledger(self) -> int:
+        """Materialize current PAPER observations into the immutable evidence ledger."""
+        try:
+            states = self.state_store.recent(
+                limit=max(
+                    self.learning_state_limit,
+                    self.evidence_ledger_builder.min_states * 2,
+                )
+            )
+            return self.evidence_ledger_builder.refresh(states)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            self._report_error(
+                "PAPER_EVIDENCE_LEDGER_WRITE_ERROR",
+                {"ledger_path": str(self.evidence_ledger_builder.path), "error": str(exc)},
+            )
+            return 0
 
     def _refresh_evidence_learning(self) -> dict | None:
         """Evaluate the verified PAPER evidence ledger and persist its learning snapshot."""
