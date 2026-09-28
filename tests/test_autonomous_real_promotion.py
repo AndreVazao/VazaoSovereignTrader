@@ -50,7 +50,7 @@ def test_autonomous_guard_accepts_only_ready_report():
 def test_engine_autonomous_promotion_requires_stable_paper_review():
     engine = SovereignEngine.__new__(SovereignEngine)
     engine.mode = "PAPER"
-    engine.config = {"autonomous_execution": {"allow_real": True, "auto_promote_real": True}}
+    engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
     engine.state = SimpleNamespace(operational={}, status="RUNNING")
     engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
     engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: {
@@ -67,7 +67,7 @@ def test_engine_autonomous_promotion_requires_stable_paper_review():
 def test_engine_autonomous_promotion_runs_only_after_stable_review():
     engine = SovereignEngine.__new__(SovereignEngine)
     engine.mode = "PAPER"
-    engine.config = {"autonomous_execution": {"allow_real": True, "auto_promote_real": True}}
+    engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
     engine.state = SimpleNamespace(operational={}, status="RUNNING")
     engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
     engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: {
@@ -86,3 +86,15 @@ def test_engine_autonomous_promotion_runs_only_after_stable_review():
     assert engine.mode == "REAL"
     assert engine.real_operational
     assert not engine.real_mode_guard.snapshot()["armed"]
+
+
+def test_engine_autonomous_promotion_stays_paper_when_autonomy_disabled():
+    engine = SovereignEngine.__new__(SovereignEngine)
+    engine.mode = "PAPER"
+    engine.config = {"autonomous_execution": {"enabled": False, "allow_real": True, "auto_promote_real": True}}
+    engine.state = SimpleNamespace(operational={}, status="RUNNING")
+    engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
+    engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("readiness must not run when autonomy is disabled")))
+    engine.log = lambda *args, **kwargs: None
+    assert not engine._maybe_autonomous_real_promotion()
+    assert engine.mode == "PAPER"
