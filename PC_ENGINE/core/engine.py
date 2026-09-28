@@ -1239,6 +1239,17 @@ class SovereignEngine:
         try:
             report = self.real_readiness_service.collect(self, target_mode="REAL")
         except Exception as exc:
+            # Replace any previously displayed READY snapshot immediately. A
+            # transient evaluation failure must never leave stale green status
+            # in the cockpit while the promotion path is fail-closed.
+            failed_report = {
+                "ready": False,
+                "status": "READINESS_EVALUATION_FAILED",
+                "blockers": ["readiness_evaluation_failed"],
+                "error": f"{type(exc).__name__}: {exc}",
+                "promotion_attempted": False,
+            }
+            self.state.operational["real_readiness"] = failed_report
             self.log("AUTONOMOUS_REAL_READINESS_ERROR", {"error": str(exc)})
             return False
         self.state.operational["real_readiness"] = report
