@@ -31,6 +31,9 @@ class RealReadinessGate:
         outcome_samples: int, eligible_outcomes: int,
         walk_forward_ok: bool, regime_validation_ok: bool,
         watchdog_ok: bool, recovery_ok: bool, execution_test_ok: bool,
+        eligible_outcome_samples: int | None = None,
+        evidence_quality_ok: bool = True,
+        evidence_quality_detail: str = "not required",
         critical_errors: int = 0, credentials_ok: bool = True,
         credentials_detail: str = "not required", l2_oos_ok: bool = True,
         l2_oos_detail: str = "not required", reconciliation_ok: bool = True,
@@ -39,7 +42,7 @@ class RealReadinessGate:
         pending_orders_ok: bool = True,
         execution_intents_ok: bool = True,
         min_state_samples: int = 1000, min_outcome_samples: int = 1000,
-        min_eligible_outcomes: int = 1,
+        min_eligible_outcomes: int = 1, min_eligible_outcome_samples: int = 300,
     ) -> ReadinessReport:
         if account_reconciliation:
             reconciliation_ok = bool(account_reconciliation.get("ok", False))
@@ -69,8 +72,21 @@ class RealReadinessGate:
             GateCheck(
                 "ELIGIBLE_OUTCOMES",
                 eligible_outcomes >= min_eligible_outcomes,
-                f"eligible={eligible_outcomes}/{min_eligible_outcomes}",
+                f"eligible_records={eligible_outcomes}/{min_eligible_outcomes}",
             ),
+            GateCheck(
+                "ELIGIBLE_OUTCOME_SAMPLES",
+                (
+                    True if eligible_outcome_samples is None
+                    else eligible_outcome_samples >= min_eligible_outcome_samples
+                ),
+                (
+                    "legacy record-count gate only"
+                    if eligible_outcome_samples is None
+                    else f"samples={eligible_outcome_samples}/{min_eligible_outcome_samples}"
+                ),
+            ),
+            GateCheck("EVIDENCE_QUALITY", bool(evidence_quality_ok), evidence_quality_detail),
             GateCheck("WALK_FORWARD", bool(walk_forward_ok), "chronological validation"),
             GateCheck("REGIME_VALIDATION", bool(regime_validation_ok), "regime validation"),
             GateCheck("L2_OOS", bool(l2_oos_ok), l2_oos_detail),

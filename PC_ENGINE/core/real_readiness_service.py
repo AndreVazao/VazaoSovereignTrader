@@ -25,6 +25,14 @@ class RealReadinessService:
         self.min_state_samples = max(1, int(readiness.get("min_state_samples", 1000)))
         self.min_outcome_samples = max(1, int(readiness.get("min_outcome_samples", 1000)))
         self.min_eligible_outcomes = max(1, int(readiness.get("min_eligible_outcomes", 1)))
+        self.min_eligible_outcome_samples = max(1, int(readiness.get("min_eligible_outcome_samples", 300)))
+        self.min_eligible_evidence_records = max(1, int(readiness.get("min_eligible_evidence_records", 3)))
+        self.min_evidence_symbols = max(1, int(readiness.get("min_evidence_symbols", 2)))
+        self.min_evidence_regimes = max(1, int(readiness.get("min_evidence_regimes", 2)))
+        self.min_evidence_span_seconds = max(0, int(readiness.get("min_evidence_span_seconds", 21600)))
+        self.min_recent_evidence_records = max(1, int(readiness.get("min_recent_evidence_records", 3)))
+        self.min_recent_eligible_ratio = min(1.0, max(0.0, float(readiness.get("min_recent_eligible_ratio", 1.0))))
+        self.require_positive_economic_ci = bool(readiness.get("require_positive_economic_ci", True))
         self.require_l2_oos = bool(readiness.get("require_l2_oos_validation", True))
         self.require_reconciliation = bool(readiness.get("require_paper_reconciliation", True))
         self.max_evidence_age_seconds = max(60, int(readiness.get("max_evidence_age_seconds", 900)))
@@ -178,6 +186,66 @@ class RealReadinessService:
         rows = self._read_jsonl(self.history_path)
         return ReadinessDiagnosticTimeline(max_events=self.timeline_max_events).query(rows, component=component, direction=direction, from_status=from_status, to_status=to_status, limit=limit)
 
+    def _evidence_quality(self, records: list, now_ms: int) -> tuple[bool, str, dict]:
+        eligible = [record for record in records if bool(record.eligible)]
+        ordered = sorted(records, key=lambda record: record.created_at_ms)
+        eligible_ordered = sorted(eligible, key=lambda record: record.created_at_ms)
+        symbols = {str(record.symbol) for record in eligible if str(record.symbol)}
+        regimes = {str(record.regime) for record in eligible if str(record.regime)}
+        if eligible_ordered:
+            span_start = min(int(record.data_start_ms) for record in eligible_ordered)
+            span_end = max(int(record.data_end_ms) for record in eligible_ordered)
+            span_seconds = max(0.0, (span_end - span_start) / 1000.0)
+        else:
+            span_seconds = 0.0
+        recent = ordered[-self.min_recent_evidence_records:]
+        recent_ratio = (
+            sum(bool(record.eligible) for record in recent) / len(recent)
+            if recent else 0.0
+        )
+        economic_failures = []
+        if self.require_positive_economic_ci:
+            for record in eligible_ordered:
+                durable = record.durable_outcome
+                oos = record.chronological_oos
+                if float(durable.lower_ci_bps) <= 0.0 or float(durable.bootstrap_lower_ci_bps) <= 0.0:
+                    economic_failures.append(f"{record.candidate_id}@{record.version}:{record.symbol}:{record.regime}:durable_ci")
+                if float(oos.bootstrap_lower_ci_bps) <= 0.0:
+                    economic_failures.append(f"{record.candidate_id}@{record.version}:{record.symbol}:{record.regime}:oos_ci")
+        stats = {
+            "eligible_records": len(eligible_ordered),
+            "required_eligible_records": self.min_eligible_evidence_records,
+            "symbols": len(symbols),
+            "required_symbols": self.min_evidence_symbols,
+            "regimes": len(regimes),
+            "required_regimes": self.min_evidence_regimes,
+            "span_seconds": round(span_seconds, 3),
+            "required_span_seconds": self.min_evidence_span_seconds,
+            "recent_records": len(recent),
+            "recent_eligible_ratio": round(recent_ratio, 6),
+            "required_recent_eligible_ratio": self.min_recent_eligible_ratio,
+            "economic_failures": economic_failures[:10],
+        }
+        blockers = []
+        if len(eligible_ordered) < self.min_eligible_evidence_records:
+            blockers.append("insufficient eligible evidence records")
+        if len(symbols) < self.min_evidence_symbols:
+            blockers.append("insufficient evidence symbol diversity")
+        if len(regimes) < self.min_evidence_regimes:
+            blockers.append("insufficient evidence regime diversity")
+        if span_seconds < self.min_evidence_span_seconds:
+            blockers.append("insufficient evidence time span")
+        if len(recent) < self.min_recent_evidence_records:
+            blockers.append("insufficient recent evidence history")
+        if recent_ratio < self.min_recent_eligible_ratio:
+            blockers.append("recent evidence eligibility degraded")
+        if economic_failures:
+            blockers.append("economic confidence interval gate failed")
+        if not records:
+            blockers.append("evidence ledger empty")
+        detail = "; ".join(blockers) if blockers else "eligible PAPER evidence has breadth, duration, recent stability and positive net economics"
+        return not blockers, detail, stats
+
     def collect(self, engine, persist_history: bool = True, target_mode: str | None = None) -> dict:
         now_ms = int(__import__('time').time() * 1000)
         states = self._read_jsonl(self.data_dir / "market_states.jsonl")
@@ -186,6 +254,11 @@ class RealReadinessService:
         outcome_fresh, outcome_fresh_detail = self._evidence_fresh(outcomes, now_ms)
         outcome_samples = sum(int(row.get("samples", 0) or 0) for row in outcomes)
         eligible = sum(bool(row.get("eligible")) for row in outcomes)
+        eligible_outcome_samples = sum(
+            int(row.get("samples", 0) or 0)
+            for row in outcomes
+            if bool(row.get("eligible"))
+        )
         validation_dir = self.data_dir / "validation"
         preflight_ok = bool(engine.state.preflight.get("ok")) if engine.state.preflight else False
         watchdog_ok = bool(engine.state.watchdog.get("ok", False)) if engine.state.watchdog else False
@@ -226,12 +299,28 @@ class RealReadinessService:
             reconciliation_ok = True
 
         credentials_ok, credentials_detail = self._live_credentials_ok(engine, target_mode=target_mode)
+        evidence_quality_ok = False
+        evidence_quality_detail = "evidence ledger unavailable"
+        evidence_quality = {}
+        try:
+            ledger_path = engine.config.get("evidence", {}).get(
+                "ledger_path", "PC_ENGINE/data/radar/evidence_ledger.jsonl"
+            )
+            ledger_records_for_gate = EvidenceLedger.load(ledger_path)
+            evidence_quality_ok, evidence_quality_detail, evidence_quality = self._evidence_quality(
+                ledger_records_for_gate, now_ms
+            )
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            evidence_quality_detail = f"evidence ledger invalid: {exc}"
         report = self.gate.evaluate(
             mode=str(target_mode or engine.mode).upper(),
             preflight_ok=preflight_ok,
             state_samples=len(states),
             outcome_samples=outcome_samples,
             eligible_outcomes=eligible,
+            eligible_outcome_samples=eligible_outcome_samples,
+            evidence_quality_ok=evidence_quality_ok,
+            evidence_quality_detail=evidence_quality_detail,
             walk_forward_ok=self._validation_status(validation_dir / "walk_forward.json") and validation_fresh["walk_forward"][0] and state_fresh,
             regime_validation_ok=self._validation_status(validation_dir / "regime_validation.json") and validation_fresh["regime_validation"][0] and state_fresh,
             watchdog_ok=watchdog_ok,
@@ -250,6 +339,7 @@ class RealReadinessService:
             min_state_samples=self.min_state_samples,
             min_outcome_samples=self.min_outcome_samples,
             min_eligible_outcomes=self.min_eligible_outcomes,
+            min_eligible_outcome_samples=self.min_eligible_outcome_samples,
         )
         payload = report.to_dict()
         payload["readiness_trend"] = self.trend()
@@ -259,6 +349,8 @@ class RealReadinessService:
             "outcome_rows": len(outcomes),
             "outcome_samples": outcome_samples,
             "eligible_outcomes": eligible,
+            "eligible_outcome_samples": eligible_outcome_samples,
+            "evidence_quality": evidence_quality,
             "l2_stable_rows": l2_stable,
             "l2_oos_required": self.require_l2_oos,
             "paper_reconciliation_required": self.require_reconciliation,
