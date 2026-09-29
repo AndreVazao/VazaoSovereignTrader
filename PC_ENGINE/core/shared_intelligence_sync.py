@@ -75,7 +75,7 @@ class SharedIntelligenceSync:
             return {"accepted": result.accepted, "rejected": result.rejected, "skipped": result.skipped}
         except Exception:
             # Cloud/sync failure is isolated from the trader. Existing local knowledge remains usable.
-            return {"accepted": 0, "rejected": 0, "skipped": 0}
+            return {"accepted": 0, "rejected": 0, "skipped": 0, "error": 1}
 
     def sync_if_due(self, provider: SharedIntelligenceProvider, *, now_ms: int | None = None) -> dict[str, int]:
         """Pull only when the configured interval has elapsed; never blocks local trading."""
@@ -107,4 +107,4 @@ class SharedIntelligenceSync:
             ))
             return {"uploaded": int(response.get("accepted", len(rows))) if isinstance(response, dict) else len(rows)}
         except Exception:
-            return {"uploaded": 0}
+            return {"uploaded": 0, "error": 1}
