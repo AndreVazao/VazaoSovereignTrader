@@ -96,9 +96,12 @@ class SharedIntelligenceSyncWorker:
                         if not self.bootstrap_done
                         else self.sync.sync_once(self.provider)
                     )
+                    if isinstance(result, dict) and result.get("error"):
+                        raise RuntimeError("shared_pull_failed")
                     self.bootstrap_done = True
                     self._pull_failures = 0
                     self.last_result["pull"] = result
+                    self.last_result.pop("pull_error", None)
                     next_pull = time.monotonic() + self._jittered_interval(self.pull_interval)
                 except Exception as exc:
                     self._pull_failures += 1
@@ -112,8 +115,11 @@ class SharedIntelligenceSyncWorker:
             if now >= next_push:
                 try:
                     result = self.sync.push_new(self.provider)
+                    if isinstance(result, dict) and result.get("error"):
+                        raise RuntimeError("shared_push_failed")
                     self._push_failures = 0
                     self.last_result["push"] = result
+                    self.last_result.pop("push_error", None)
                     next_push = time.monotonic() + self._jittered_interval(self.push_interval)
                 except Exception as exc:
                     self._push_failures += 1
