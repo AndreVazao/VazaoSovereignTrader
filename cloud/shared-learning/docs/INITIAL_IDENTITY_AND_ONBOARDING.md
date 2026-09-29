@@ -6,7 +6,7 @@ These are reserved identity names, not live accounts:
 - `AndreVazao` — display name `André Vazão`; intended global administrator.
 - `DiogoRocha` — display name `Diogo Rocha`; intended standard member.
 
-No password, password hash, recovery code, token, or secret belongs in source control. The previously discussed temporary password must be supplied through a one-time trusted provisioning operation after the Supabase project exists; it must never be embedded in a migration, environment example, installer, or Git history. Both accounts must be forced to replace any temporary credential before normal use. Because `123456` is weak, the production provisioning flow should require rate limits, short-lived setup access, and immediate rotation; do not enable these accounts until this is implemented.
+No password, password hash, recovery code, token, or secret belongs in source control. The previously discussed temporary password must be supplied through a one-time trusted provisioning operation after the Supabase project exists; it must never be embedded in a migration, environment example, installer, or Git history. Both accounts must be forced to replace any temporary credential before normal use. The initial credential is weak and must only be used for a tightly rate-limited bootstrap step with immediate rotation; do not enable these accounts until this is implemented.
 
 ## Trust boundaries
 
