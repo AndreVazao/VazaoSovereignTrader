@@ -21,3 +21,12 @@ Every PC installation is an autonomous local node. The cloud is an optional exch
 
 ## Implementation status
 The local sync helper supports interval-gated pull/push calls with a 24-hour default and the example config sets daily intervals. This is a foundation, not proof that every runtime scheduler already calls these gated methods. Before enabling cloud sync, wire the scheduler to these methods, add jitter/backoff and telemetry, test airplane-mode behavior, and verify no sync work blocks trading cycles. Cloud deployment and onboarding remain separate, unprovisioned steps.
+
+
+## Background scheduling safeguards
+
+- Cloud synchronization starts on a daemon maintenance thread; engine startup does not wait for a network request.
+- Pull and push defaults are 24 hours, independently scheduled and jittered to avoid synchronized traffic across owner nodes.
+- Network failures are observable to the worker and use bounded exponential retry delays (60 seconds up to one hour by default), with jitter.
+- The worker records only error class names in its in-memory status, not authorization headers, tokens, or response bodies.
+- Cloud sync remains advisory and must not block local research, local history, PAPER operation, or local risk controls. Market data and remote exchange actions still require connectivity.
