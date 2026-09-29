@@ -52,14 +52,16 @@ export async function GET(req: NextRequest) {
       if (!validId(id)) return fail(400, "invalid_vault_id");
       const { data, error } = await db.from("encrypted_vault_objects")
         .select("id,object_kind,ciphertext,encryption_version,nonce,salt,ciphertext_sha256,created_at,expires_at")
-        .eq("id", id).eq("owner_id", user.id).is("deleted_at", null).maybeSingle();
+        .eq("id", id).eq("owner_id", user.id).is("deleted_at", null).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).maybeSingle();
       if (error) return fail(503, "vault_unavailable");
       if (!data) return fail(404, "vault_object_not_found");
+      const actualDigest = createHash("sha256").update(data.ciphertext).digest("hex");
+      if (actualDigest !== data.ciphertext_sha256) return fail(503, "vault_integrity_check_failed");
       return NextResponse.json({ ok: true, object: data }, { headers: { "Cache-Control": "no-store" } });
     }
     const { data, error } = await db.from("encrypted_vault_objects")
       .select("id,object_kind,encryption_version,ciphertext_sha256,created_at,expires_at")
-      .eq("owner_id", user.id).is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
+      .eq("owner_id", user.id).is("deleted_at", null).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order("created_at", { ascending: false }).limit(100);
     if (error) return fail(503, "vault_unavailable");
     return NextResponse.json({ ok: true, objects: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
   } catch {
