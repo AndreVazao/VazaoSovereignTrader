@@ -54,7 +54,7 @@ def test_provider_failure_does_not_break_local_store(tmp_path):
 
 def test_daily_sync_throttle_skips_network_until_interval_elapsed(tmp_path):
     store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
-    provider = Provider([row()])
+    provider = Provider([row(ts=2000)])
     sync = SharedIntelligenceSync(
         store, tmp_path / "sync.json", pull_interval_seconds=86400
     )
