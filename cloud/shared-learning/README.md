@@ -66,7 +66,4 @@ PBKDF2-SHA-256 with a random salt and nonce. The passphrase and derived key are 
 returned by the helper. Tests cover round-trip encryption, wrong-passphrase/tamper
 rejection, weak passphrases, and unsupported envelope versions.
 
-This is a cryptographic foundation, not a complete recovery feature: it is not yet wired
-to authenticated vault upload/download endpoints, a recovery UX, device-to-device restore,
-or key-loss recovery. Never upload plaintext or passphrases; do not store exchange API
-secrets in this vault without a separately reviewed threat model.
+This is a cryptographic foundation plus authenticated owner-scoped ciphertext storage routes, not a complete recovery feature: the desktop/mobile client is not yet wired end-to-end to these routes, and recovery UX, device-to-device restore, and key-loss recovery remain incomplete. Never upload plaintext or passphrases; do not store exchange API secrets in this vault without a separately reviewed threat model.
