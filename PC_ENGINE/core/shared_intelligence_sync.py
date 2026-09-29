@@ -26,11 +26,14 @@ class SharedSyncState:
 class SharedIntelligenceSync:
     """Continuous best-effort sync; local trading never depends on the provider."""
 
-    def __init__(self, store: SharedIntelligenceStore, state_path: str | Path, *, pull_limit: int = 500):
+    def __init__(self, store: SharedIntelligenceStore, state_path: str | Path, *, pull_limit: int = 500, pull_interval_seconds: int = 86400, push_interval_seconds: int = 86400):
         self.store = store
         self.state_path = Path(state_path)
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.pull_limit = max(1, int(pull_limit))
+        # Sync is maintenance work, never part of the trading hot path.
+        self.pull_interval_ms = max(60, int(pull_interval_seconds)) * 1000
+        self.push_interval_ms = max(60, int(push_interval_seconds)) * 1000
 
     def _read_state(self) -> SharedSyncState:
         if not self.state_path.exists():
@@ -73,6 +76,22 @@ class SharedIntelligenceSync:
         except Exception:
             # Cloud/sync failure is isolated from the trader. Existing local knowledge remains usable.
             return {"accepted": 0, "rejected": 0, "skipped": 0}
+
+    def sync_if_due(self, provider: SharedIntelligenceProvider, *, now_ms: int | None = None) -> dict[str, int]:
+        """Pull only when the configured interval has elapsed; never blocks local trading."""
+        now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
+        state = self._read_state()
+        if state.last_pull_ms and now_ms - state.last_pull_ms < self.pull_interval_ms:
+            return {"accepted": 0, "rejected": 0, "skipped": 1}
+        return self.sync_once(provider, now_ms=now_ms)
+
+    def push_if_due(self, provider: SharedIntelligenceProvider, *, now_ms: int | None = None) -> dict[str, int]:
+        """Push eligible local aggregate artifacts only when the interval has elapsed."""
+        now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
+        state = self._read_state()
+        if state.last_push_ms and now_ms - state.last_push_ms < self.push_interval_ms:
+            return {"uploaded": 0, "skipped": 1}
+        return self.push_new(provider, now_ms=now_ms)
 
     def push_new(self, provider: SharedIntelligenceProvider, *, now_ms: int | None = None) -> dict[str, int]:
         now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
