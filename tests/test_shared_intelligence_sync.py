@@ -49,3 +49,29 @@ def test_provider_failure_does_not_break_local_store(tmp_path):
         def pull(self, **kwargs): raise RuntimeError("offline")
         def push(self, **kwargs): raise RuntimeError("offline")
     assert sync.sync_once(Broken(), now_ms=2000) == {"accepted": 0, "rejected": 0, "skipped": 0}
+
+
+
+def test_daily_sync_throttle_skips_network_until_interval_elapsed(tmp_path):
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    provider = Provider([row()])
+    sync = SharedIntelligenceSync(
+        store, tmp_path / "sync.json", pull_interval_seconds=86400
+    )
+    assert sync.sync_if_due(provider, now_ms=2000)["accepted"] == 1
+    assert sync.sync_if_due(provider, now_ms=2000 + 86399000) == {
+        "accepted": 0, "rejected": 0, "skipped": 1
+    }
+    assert len(provider.calls) == 1
+    assert sync.sync_if_due(provider, now_ms=2000 + 86400000)["accepted"] == 1
+    assert len(provider.calls) == 2
+
+
+def test_daily_push_throttle_skips_network_until_interval_elapsed(tmp_path):
+    store = SharedIntelligenceStore(tmp_path / "shared.jsonl")
+    provider = Provider([row()])
+    sync = SharedIntelligenceSync(
+        store, tmp_path / "sync.json", push_interval_seconds=86400
+    )
+    assert sync.push_if_due(provider, now_ms=2000)["uploaded"] == 0
+    assert sync.push_if_due(provider, now_ms=3000) == {"uploaded": 0, "skipped": 1}
