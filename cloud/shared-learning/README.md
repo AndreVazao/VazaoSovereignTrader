@@ -42,3 +42,18 @@ Configuration synchronization is deliberately separate: it requires versioning, 
 
 ## Local sovereignty
 Each PC is a local-first node and must continue safe local work when cloud services are unreachable. Cloud sync is optional, best-effort maintenance and defaults to daily pull/push intervals. See [Local Sovereignty and Background Synchronization](../../docs/LOCAL_SOVEREIGNTY_AND_SYNC_POLICY.md). Daily interval helpers exist, but runtime scheduler integration, jitter/backoff, and airplane-mode validation remain required before enabling production sync.
+
+
+## Local PC sync adapter status
+
+The PC now has a stdlib-only `VercelSharedIntelligenceProvider` adapter. It requires
+`VST_SHARED_INTELLIGENCE_URL` and `VST_SHARED_INTELLIGENCE_TOKEN`, refuses non-HTTPS
+URLs, bounds request timeouts and response sizes, and maps the cloud's snapshot response
+to the local importer contract. Uploads use a strict field allow-list and omit local
+owner/device provenance references. Expired or ineligible artifacts are not uploaded.
+
+The API currently exposes a bounded snapshot rather than cursor pagination, so each
+scheduled pull is a fresh limited snapshot. The helper's daily throttling exists, but
+the production engine scheduler must still call it from a low-priority maintenance task;
+cloud sync remains disabled by default until account provisioning, device approval,
+rate limits, and runtime integration are complete.
