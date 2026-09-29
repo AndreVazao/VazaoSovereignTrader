@@ -37,7 +37,7 @@ function base64ToBytes(value: string): Uint8Array {
   return bytes;
 }
 
-function cryptoApi(): Crypto {
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {\n  const copy = new Uint8Array(bytes.byteLength);\n  copy.set(bytes);\n  return copy.buffer;\n}\n\nfunction cryptoApi(): Crypto {
   const api = globalThis.crypto;
   if (!api?.subtle || !api.getRandomValues) throw new Error("secure_crypto_unavailable");
   return api;
@@ -48,9 +48,9 @@ async function deriveKey(passphrase: string, salt: Uint8Array, iterations: numbe
     throw new Error("vault_passphrase_too_weak");
   }
   const api = cryptoApi();
-  const material = await api.subtle.importKey("raw", encoder.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  const material = await api.subtle.importKey("raw", asArrayBuffer(encoder.encode(passphrase)), "PBKDF2", false, ["deriveKey"]);
   return api.subtle.deriveKey(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    { name: "PBKDF2", hash: "SHA-256", salt: asArrayBuffer(salt), iterations },
     material,
     { name: "AES-GCM", length: 256 },
     false,
@@ -65,7 +65,7 @@ export async function encryptVaultJson(value: unknown, passphrase: string): Prom
   const key = await deriveKey(passphrase, salt, PBKDF2_ITERATIONS);
   const plaintext = encoder.encode(JSON.stringify(value));
   if (plaintext.byteLength > 1_000_000) throw new Error("vault_payload_too_large");
-  const ciphertext = await api.subtle.encrypt({ name: "AES-GCM", iv: nonce, tagLength: 128 }, key, plaintext);
+  const ciphertext = await api.subtle.encrypt({ name: "AES-GCM", iv: asArrayBuffer(nonce), tagLength: 128 }, key, asArrayBuffer(plaintext));
   return {
     encryption_version: VAULT_ENCRYPTION_VERSION,
     algorithm: "AES-GCM",
@@ -93,7 +93,7 @@ export async function decryptVaultJson<T = unknown>(envelope: EncryptedVaultEnve
   const key = await deriveKey(passphrase, salt, envelope.iterations);
   try {
     const plaintext = await cryptoApi().subtle.decrypt(
-      { name: "AES-GCM", iv: nonce, tagLength: 128 }, key, ciphertext,
+      { name: "AES-GCM", iv: asArrayBuffer(nonce), tagLength: 128 }, key, asArrayBuffer(ciphertext),
     );
     return JSON.parse(decoder.decode(plaintext)) as T;
   } catch {
