@@ -32,6 +32,6 @@ The second migration reserves the exact usernames `AndreVazao` (intended adminis
 7. Configure rate limiting and abuse monitoring before broad rollout.
 
 ## Production blockers
-Source code alone does not provision a database or deployment. Reserved usernames are not usable accounts. The initial temporary password must never be committed or stored in a migration; it may only be introduced by a trusted one-time provisioning workflow after infrastructure is approved, and must be rotated before normal use. The password `123456` is weak and must be treated only as a temporary bootstrap secret.
+Source code alone does not provision a database or deployment. Reserved usernames are not usable accounts. The initial temporary credential must never be committed or stored in a migration; it may only be introduced by a trusted one-time provisioning workflow after infrastructure is approved, and must be rotated before normal use.
 
 Configuration synchronization is deliberately separate: it requires versioning, approval, audit history, signature validation and rollback, and must never override local risk or REAL-mode gates. The current branch does not create cloud resources, deploy services, enable cloud sync, or authorize live trading.
