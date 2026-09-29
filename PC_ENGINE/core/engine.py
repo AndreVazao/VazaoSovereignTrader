@@ -198,13 +198,13 @@ class SovereignEngine:
         provider = VercelSharedIntelligenceProvider(base_url, token, timeout_seconds=float(cfg.get("timeout_seconds", 5.0)))
         self.shared_intelligence_worker = SharedIntelligenceSyncWorker(
             self.shared_intelligence_store, self.shared_intelligence_sync, provider,
-            pull_interval_seconds=float(cfg.get("pull_interval_seconds", 30.0)),
-            push_interval_seconds=float(cfg.get("push_interval_seconds", 60.0)),
+            pull_interval_seconds=float(cfg.get("pull_interval_seconds", 86400.0)),
+            push_interval_seconds=float(cfg.get("push_interval_seconds", 86400.0)),
         )
         self.state.shared_intelligence.update({
             "state": "READY",
-            "pull_interval_seconds": float(cfg.get("pull_interval_seconds", 30.0)),
-            "push_interval_seconds": float(cfg.get("push_interval_seconds", 60.0)),
+            "pull_interval_seconds": float(cfg.get("pull_interval_seconds", 86400.0)),
+            "push_interval_seconds": float(cfg.get("push_interval_seconds", 86400.0)),
         })
 
     def _sync_shared_intelligence_before_start(self) -> None:
