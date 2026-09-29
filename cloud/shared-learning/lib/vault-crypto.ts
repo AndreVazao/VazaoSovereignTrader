@@ -37,7 +37,13 @@ function base64ToBytes(value: string): Uint8Array {
   return bytes;
 }
 
-function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {\n  const copy = new Uint8Array(bytes.byteLength);\n  copy.set(bytes);\n  return copy.buffer;\n}\n\nfunction cryptoApi(): Crypto {
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+function cryptoApi(): Crypto {
   const api = globalThis.crypto;
   if (!api?.subtle || !api.getRandomValues) throw new Error("secure_crypto_unavailable");
   return api;
