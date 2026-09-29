@@ -208,15 +208,21 @@ class SovereignEngine:
         })
 
     def _sync_shared_intelligence_before_start(self) -> None:
+        """Start best-effort sync asynchronously; never wait on cloud during engine startup."""
         worker = self.shared_intelligence_worker
         if worker is None:
             return
         try:
-            result = worker.run_once(bootstrap=not worker.bootstrap_done)
-            self.state.shared_intelligence.update({"state": "RUNNING", "bootstrap": bool(worker.bootstrap_done), "last_result": result})
             worker.start()
+            self.state.shared_intelligence.update({
+                "state": "BACKGROUND_SYNC_SCHEDULED",
+                "bootstrap": bool(worker.bootstrap_done),
+                "pull_interval_seconds": worker.pull_interval,
+                "push_interval_seconds": worker.push_interval,
+            })
         except Exception as exc:
-            self.state.shared_intelligence.update({"state": "DEGRADED", "error": str(exc)})
+            # A sync worker failure is operational telemetry only; local trading remains independent.
+            self.state.shared_intelligence.update({"state": "DEGRADED", "error": type(exc).__name__})
 
     def _stop_shared_intelligence(self) -> None:
         worker = self.shared_intelligence_worker
