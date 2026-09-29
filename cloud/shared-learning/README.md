@@ -57,3 +57,16 @@ scheduled pull is a fresh limited snapshot. The helper's daily throttling exists
 the production engine scheduler must still call it from a low-priority maintenance task;
 cloud sync remains disabled by default until account provisioning, device approval,
 rate limits, and runtime integration are complete.
+
+
+## Client-side vault encryption foundation
+
+`lib/vault-crypto.ts` provides a versioned client-side envelope using AES-256-GCM and
+PBKDF2-SHA-256 with a random salt and nonce. The passphrase and derived key are not
+returned by the helper. Tests cover round-trip encryption, wrong-passphrase/tamper
+rejection, weak passphrases, and unsupported envelope versions.
+
+This is a cryptographic foundation, not a complete recovery feature: it is not yet wired
+to authenticated vault upload/download endpoints, a recovery UX, device-to-device restore,
+or key-loss recovery. Never upload plaintext or passphrases; do not store exchange API
+secrets in this vault without a separately reviewed threat model.
