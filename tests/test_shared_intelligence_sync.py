@@ -48,7 +48,7 @@ def test_provider_failure_does_not_break_local_store(tmp_path):
     class Broken:
         def pull(self, **kwargs): raise RuntimeError("offline")
         def push(self, **kwargs): raise RuntimeError("offline")
-    assert sync.sync_once(Broken(), now_ms=2000) == {"accepted": 0, "rejected": 0, "skipped": 0}
+    assert sync.sync_once(Broken(), now_ms=2000) == {"accepted": 0, "rejected": 0, "skipped": 0, "error": 1}
 
 
 
