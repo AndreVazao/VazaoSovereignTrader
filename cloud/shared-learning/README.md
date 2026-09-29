@@ -15,6 +15,9 @@ Deploy this directory as a separate Vercel project with Root Directory `cloud/sh
 - `GET /api/health`: non-sensitive health check.
 - `POST /api/v1/artifacts`: submit one artifact, with `Authorization: Bearer <Supabase access token>`.
 - `GET /api/v1/artifacts?limit=50`: retrieve eligible, unexpired artifacts with the same authentication.
+- `POST /api/v1/devices`: register a validated device public key; registration always starts as `pending`.
+- `GET /api/v1/devices`: list the authenticated user's devices after account activation and mandatory password rotation.
+- `DELETE /api/v1/devices?id=<uuid>`: revoke only a device belonging to the authenticated user.
 
 ## Database migrations
 1. `supabase/migrations/202609280001_shared_learning_artifacts.sql`
@@ -27,7 +30,7 @@ The second migration reserves the exact usernames `AndreVazao` (intended adminis
 2. Apply both migrations and verify RLS and grants.
 3. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in Vercel server-side environment variables only.
 4. Import this repository into Vercel and set Root Directory to `cloud/shared-learning`.
-5. Implement and test trusted account provisioning, mandatory password rotation, MFA/owner recovery, per-device approval/revocation, configuration signing/approval/rollback, and client-side vault encryption before onboarding.
+5. Implement and test trusted account provisioning, mandatory password rotation, MFA/owner recovery, a secure pending-device approval/proof-of-possession flow, configuration signing/approval/rollback, and client-side vault encryption before onboarding. Registration and owner-scoped revocation endpoints exist; approval and proof-of-possession remain blockers.
 6. Deploy a preview and test invalid/missing tokens, private fields, duplicates, expiry, cross-tenant access, role escalation, device revocation, vault confidentiality, and rollback.
 7. Configure rate limiting and abuse monitoring before broad rollout.
 
