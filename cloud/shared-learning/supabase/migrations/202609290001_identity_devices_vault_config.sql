@@ -11,7 +11,6 @@ create table if not exists public.user_profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.reserved_usernames (
   username text primary key check (username ~ '^[A-Za-z0-9]{3,32}$'),
   display_name text not null,
@@ -21,11 +20,8 @@ create table if not exists public.reserved_usernames (
   created_at timestamptz not null default now(),
   provisioned_at timestamptz
 );
-
 insert into public.reserved_usernames (username, display_name, intended_role)
-values
-  ('AndreVazao', 'André Vazão', 'admin'),
-  ('DiogoRocha', 'Diogo Rocha', 'member')
+values ('AndreVazao', 'André Vazão', 'admin'), ('DiogoRocha', 'Diogo Rocha', 'member')
 on conflict (username) do nothing;
 
 create table if not exists public.authorized_devices (
@@ -42,7 +38,6 @@ create table if not exists public.authorized_devices (
   revoked_at timestamptz,
   unique (user_id, device_fingerprint)
 );
-
 create table if not exists public.configuration_versions (
   id uuid primary key default gen_random_uuid(),
   scope text not null check (scope in ('global','user')),
@@ -56,9 +51,12 @@ create table if not exists public.configuration_versions (
   approved_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
   approved_at timestamptz,
-  unique (scope, owner_id, version),
   check ((scope = 'global' and owner_id is null) or (scope = 'user' and owner_id is not null))
 );
+create unique index if not exists configuration_versions_global_version
+  on public.configuration_versions (version) where scope = 'global';
+create unique index if not exists configuration_versions_user_version
+  on public.configuration_versions (owner_id, version) where scope = 'user';
 create unique index if not exists configuration_versions_one_active_global
   on public.configuration_versions (scope) where scope = 'global' and status = 'active';
 create unique index if not exists configuration_versions_one_active_user
@@ -79,7 +77,6 @@ create table if not exists public.encrypted_vault_objects (
 );
 create index if not exists encrypted_vault_objects_owner_created_idx
   on public.encrypted_vault_objects (owner_id, created_at desc) where deleted_at is null;
-
 create table if not exists public.security_audit_events (
   id bigint generated always as identity primary key,
   actor_user_id uuid references auth.users(id) on delete set null,
