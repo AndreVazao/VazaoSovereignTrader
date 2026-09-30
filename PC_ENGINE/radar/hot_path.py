@@ -29,6 +29,10 @@ class HotPathOpportunity:
     horizon_ms: int
     paper_only: bool = True
     execution_allowed: bool = False
+    leader_price: float = 0.0
+    follower_entry_price: float = 0.0
+    leader_local_ts_ms: int = 0
+    follower_entry_local_ts_ms: int = 0
 
 
 class HotPathLeadLagEngine:
@@ -159,6 +163,10 @@ class HotPathLeadLagEngine:
                     follower_quote_ts_ms=follower_event.exchange_ts_ms,
                     age_ms=age_ms,
                     horizon_ms=self.horizon_ms,
+                    leader_price=float(event.price),
+                    follower_entry_price=float(follower_event.price),
+                    leader_local_ts_ms=int(event.local_ts_ms),
+                    follower_entry_local_ts_ms=int(follower_event.local_ts_ms),
                 )
                 if best is None or candidate.expected_net_bps > best.expected_net_bps:
                     best = candidate
