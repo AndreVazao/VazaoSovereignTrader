@@ -178,32 +178,36 @@ def build_evidence_scorecard(
         "OOS robustness evidence must be explicitly PAPER-only with no submitted orders",
     ))
 
-    relationship_rows = relationship_oos.get("relationship_details", []) if relationship_oos else []
-    if not isinstance(relationship_rows, list):
-        relationship_rows = []
-    relationship_count = _safe_int(relationship_oos.get("relationships", 0)) if relationship_oos else 0
-    relationship_samples_present = any(
-        isinstance(row, dict) and row.get("sample_sufficiency") == "SUFFICIENT"
-        for row in relationship_rows
-    )
-    relationship_paper_only = bool(
-        relationship_oos
-        and relationship_oos.get("paper_only") is True
-        and relationship_oos.get("orders_submitted") is False
-        and relationship_oos.get("execution_authorized") is False
-    )
-    checks.append(_status(
-        "relationship_level_oos",
-        {
-            "relationships": relationship_count,
-            "sufficient_sample_relationships": sum(
-                1 for row in relationship_rows
-                if isinstance(row, dict) and row.get("sample_sufficiency") == "SUFFICIENT"
-            ),
-        },
-        relationship_paper_only and relationship_count > 0 and relationship_samples_present,
-        "requires per-relationship chronological holdout results with sufficient samples; positive performance is not required for this evidence-presence check",
-    ))
+    # Keep the standalone scorecard API backward-compatible for callers that
+    # have not opted into the relationship-level OOS artifact. The runtime
+    # scorecard always supplies the configured/default path.
+    if relationship_oos_report_path is not None:
+        relationship_rows = relationship_oos.get("relationship_details", []) if relationship_oos else []
+        if not isinstance(relationship_rows, list):
+            relationship_rows = []
+        relationship_count = _safe_int(relationship_oos.get("relationships", 0)) if relationship_oos else 0
+        relationship_samples_present = any(
+            isinstance(row, dict) and row.get("sample_sufficiency") == "SUFFICIENT"
+            for row in relationship_rows
+        )
+        relationship_paper_only = bool(
+            relationship_oos
+            and relationship_oos.get("paper_only") is True
+            and relationship_oos.get("orders_submitted") is False
+            and relationship_oos.get("execution_authorized") is False
+        )
+        checks.append(_status(
+            "relationship_level_oos",
+            {
+                "relationships": relationship_count,
+                "sufficient_sample_relationships": sum(
+                    1 for row in relationship_rows
+                    if isinstance(row, dict) and row.get("sample_sufficiency") == "SUFFICIENT"
+                ),
+            },
+            relationship_paper_only and relationship_count > 0 and relationship_samples_present,
+            "requires per-relationship chronological holdout results with sufficient samples; positive performance is not required for this evidence-presence check",
+        ))
 
     checks.append(_status(
         "execution_authorization",
