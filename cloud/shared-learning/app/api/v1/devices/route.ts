@@ -64,6 +64,11 @@ export async function POST(req: NextRequest) {
     catch (error) { return fail(400, error instanceof Error ? error.message : "invalid_device_payload"); }
     const { db } = clients();
     if (!(await activeProfile(db, user.id))) return fail(403, "account_not_ready");
+    const { data: withinLimit, error: rateLimitError } = await db.rpc("consume_device_security_rate_limit", {
+      p_user_id: user.id, p_scope: "device.register", p_limit: 10, p_window_seconds: 300
+    });
+    if (rateLimitError) return fail(503, "rate_limit_unavailable");
+    if (withinLimit !== true) return fail(429, "rate_limit_exceeded");
     const { data, error } = await db.from("authorized_devices").insert({
       user_id: user.id,
       device_public_key: registration.publicKey,
