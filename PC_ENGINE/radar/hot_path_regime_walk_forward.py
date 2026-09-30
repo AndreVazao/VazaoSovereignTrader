@@ -6,6 +6,7 @@ import statistics
 import time
 from pathlib import Path
 from typing import Any
+from PC_ENGINE.radar.report_io import atomic_write_json
 
 from PC_ENGINE.radar.hot_path_calibration import _moving_block_bootstrap_ci
 from PC_ENGINE.radar.hot_path_walk_forward import _read_completed_paper, _valid_rows
@@ -130,9 +131,5 @@ def write_regime_walk_forward_report(
     **kwargs: Any,
 ) -> dict[str, Any]:
     report = build_regime_walk_forward_report(outcomes_path, **kwargs)
-    destination = Path(report_path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
-    temporary.replace(destination)
+    atomic_write_json(report_path, report)
     return report

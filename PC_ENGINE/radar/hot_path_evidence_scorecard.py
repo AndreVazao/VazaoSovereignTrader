@@ -5,19 +5,36 @@ import math
 import time
 from pathlib import Path
 from typing import Any
+from PC_ENGINE.radar.report_io import atomic_write_json
 
 
 def _load_json(path: str | Path | None) -> dict[str, Any] | None:
     if path is None:
         return None
-    source = Path(path)
-    if not source.exists():
-        return None
     try:
-        value = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
         return None
     return value if isinstance(value, dict) else None
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _safe_finite_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return result if math.isfinite(result) else None
 
 
 def _status(requirement: str, observed: Any, passed: bool, detail: str) -> dict[str, Any]:
@@ -41,10 +58,11 @@ def build_evidence_scorecard(
     require_cost_scenario_bps: float = 2.0,
 ) -> dict[str, Any]:
     """Assemble an auditable evidence checklist; it never authorizes execution."""
-    min_calibration_samples = max(1, int(min_calibration_samples))
-    min_walk_forward_folds = max(1, int(min_walk_forward_folds))
-    min_regime_folds = max(1, int(min_regime_folds))
-    require_cost_scenario_bps = max(0.0, float(require_cost_scenario_bps))
+    min_calibration_samples = max(1, _safe_int(min_calibration_samples, 100))
+    min_walk_forward_folds = max(1, _safe_int(min_walk_forward_folds, 4))
+    min_regime_folds = max(1, _safe_int(min_regime_folds, 4))
+    parsed_cost = _safe_finite_float(require_cost_scenario_bps)
+    require_cost_scenario_bps = max(0.0, parsed_cost if parsed_cost is not None else 2.0)
 
     calibration = _load_json(calibration_report_path)
     walk_forward = _load_json(walk_forward_report_path)
@@ -53,7 +71,7 @@ def build_evidence_scorecard(
 
     checks: list[dict[str, Any]] = []
 
-    calibration_samples = int(calibration.get("outcome_samples", 0)) if calibration else 0
+    calibration_samples = _safe_int(calibration.get("outcome_samples", 0)) if calibration else 0
     checks.append(_status(
         "calibration_samples",
         calibration_samples,
@@ -61,16 +79,16 @@ def build_evidence_scorecard(
         f"requires >= {min_calibration_samples} valid unique PAPER outcome samples",
     ))
 
-    duplicate_count = int(calibration.get("duplicate_outcomes_ignored", 0)) if calibration else 0
-    invalid_count = int(calibration.get("invalid_outcomes_ignored", 0)) if calibration else 0
+    duplicate_count = _safe_int(calibration.get("duplicate_outcomes_ignored", 0), -1) if calibration else -1
+    invalid_count = _safe_int(calibration.get("invalid_outcomes_ignored", 0), -1) if calibration else -1
     checks.append(_status(
         "data_integrity_accounting",
         {"duplicates_ignored": duplicate_count, "invalid_ignored": invalid_count},
-        calibration is not None and "duplicate_outcomes_ignored" in calibration and "invalid_outcomes_ignored" in calibration,
+        calibration is not None and duplicate_count >= 0 and invalid_count >= 0,
         "duplicate and invalid PAPER outcomes are explicitly accounted for",
     ))
 
-    wf_folds = int(walk_forward.get("fold_count", 0)) if walk_forward else 0
+    wf_folds = _safe_int(walk_forward.get("fold_count", 0)) if walk_forward else 0
     checks.append(_status(
         "chronological_walk_forward",
         wf_folds,
@@ -78,7 +96,7 @@ def build_evidence_scorecard(
         f"requires >= {min_walk_forward_folds} chronological OOS folds",
     ))
 
-    regime_folds = int(regime.get("fold_count", 0)) if regime else 0
+    regime_folds = _safe_int(regime.get("fold_count", 0)) if regime else 0
     regime_coverage = regime.get("regime_fold_coverage", {}) if regime else {}
     checks.append(_status(
         "regime_stratification",
@@ -87,12 +105,10 @@ def build_evidence_scorecard(
         f"requires >= {min_regime_folds} regime-aware OOS folds and observed regime coverage",
     ))
 
-    temporal_available = False
-    if calibration:
-        temporal_available = any(
-            isinstance(row, dict) and row.get("temporal_dependence_assessment") == "AVAILABLE"
-            for row in calibration.get("stats", [])
-        )
+    stats = calibration.get("stats", []) if calibration else []
+    if not isinstance(stats, list):
+        stats = []
+    temporal_available = any(isinstance(row, dict) and row.get("temporal_dependence_assessment") == "AVAILABLE" for row in stats)
     checks.append(_status(
         "temporal_dependence_evidence",
         temporal_available,
@@ -100,12 +116,7 @@ def build_evidence_scorecard(
         "at least one calibration group has timestamped temporal-dependence evidence",
     ))
 
-    bootstrap_available = False
-    if calibration:
-        bootstrap_available = any(
-            isinstance(row, dict) and row.get("ci95_method") == "moving_block_bootstrap"
-            for row in calibration.get("stats", [])
-        )
+    bootstrap_available = any(isinstance(row, dict) and row.get("ci95_method") == "moving_block_bootstrap" for row in stats)
     checks.append(_status(
         "bootstrap_confidence_intervals",
         bootstrap_available,
@@ -114,35 +125,37 @@ def build_evidence_scorecard(
     ))
 
     cost_scenarios = robustness.get("scenarios", []) if robustness else []
-    matching_cost = next(
-        (
-            row for row in cost_scenarios
-            if isinstance(row, dict)
-            and math.isclose(float(row.get("extra_cost_bps", -1.0)), require_cost_scenario_bps, abs_tol=1e-9)
-        ),
-        None,
-    )
+    if not isinstance(cost_scenarios, list):
+        cost_scenarios = []
+    matching_cost = None
+    for row in cost_scenarios:
+        if not isinstance(row, dict):
+            continue
+        scenario_cost = _safe_finite_float(row.get("extra_cost_bps"))
+        if scenario_cost is not None and math.isclose(scenario_cost, require_cost_scenario_bps, abs_tol=1e-9):
+            matching_cost = row
+            break
     checks.append(_status(
         "cost_stress",
         {
             "required_extra_cost_bps": require_cost_scenario_bps,
             "scenario_present": matching_cost is not None,
-            "scenario_samples": int(matching_cost.get("samples", 0)) if matching_cost else 0,
+            "scenario_samples": _safe_int(matching_cost.get("samples", 0)) if matching_cost else 0,
         },
-        robustness is not None and matching_cost is not None and int(matching_cost.get("samples", 0)) > 0,
+        robustness is not None and matching_cost is not None and _safe_int(matching_cost.get("samples", 0)) > 0,
         f"requires an OOS extra-cost scenario at {require_cost_scenario_bps:g} bps with observations",
     ))
 
     monte_carlo_available = bool(
         matching_cost
         and matching_cost.get("monte_carlo_method") == "moving_block_bootstrap"
-        and int(matching_cost.get("monte_carlo_replicates", 0)) >= 500
+        and _safe_int(matching_cost.get("monte_carlo_replicates", 0)) >= 500
     )
     checks.append(_status(
         "bootstrap_monte_carlo",
         {
             "method": matching_cost.get("monte_carlo_method") if matching_cost else None,
-            "replicates": int(matching_cost.get("monte_carlo_replicates", 0)) if matching_cost else 0,
+            "replicates": _safe_int(matching_cost.get("monte_carlo_replicates", 0)) if matching_cost else 0,
         },
         robustness is not None and monte_carlo_available,
         "requires deterministic moving-block bootstrap resampling with >= 500 replicates",
@@ -190,9 +203,5 @@ def write_evidence_scorecard(
     **kwargs: Any,
 ) -> dict[str, Any]:
     report = build_evidence_scorecard(**kwargs)
-    destination = Path(report_path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
-    temporary.replace(destination)
+    atomic_write_json(report_path, report)
     return report

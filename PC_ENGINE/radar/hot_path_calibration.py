@@ -10,26 +10,20 @@ import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+from PC_ENGINE.radar.report_io import atomic_write_json
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     """Read only completed, explicitly PAPER-only outcomes from the JSONL ledger."""
-    if not path.exists():
-        return []
     rows: list[dict[str, Any]] = []
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
+        with path.open("rb") as handle:
+            for raw_line in handle:
                 try:
-                    value = json.loads(line)
-                except json.JSONDecodeError:
+                    value = json.loads(raw_line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
                     continue
-                if (
-                    isinstance(value, dict)
-                    and value.get("status") == "COMPLETED"
-                    and value.get("paper_only") is True
-                    and value.get("orders_submitted") is False
-                ):
+                if isinstance(value, dict) and value.get("status") == "COMPLETED" and value.get("paper_only") is True and value.get("orders_submitted") is False:
                     rows.append(value)
     except OSError:
         return []
@@ -54,10 +48,11 @@ def _outcome_identity(row: dict[str, Any]) -> str:
 
 def _timestamped_values(values: list[float], rows: list[dict[str, Any]]) -> list[float]:
     timestamped: list[tuple[int, float]] = []
+    now_ms = time.time_ns() // 1_000_000
     for row, value in zip(rows, values):
         try:
             timestamp = int(row["outcome_local_ts_ms"])
-            if timestamp > 0 and math.isfinite(value):
+            if 0 < timestamp <= now_ms and math.isfinite(value):
                 timestamped.append((timestamp, value))
         except (KeyError, TypeError, ValueError, OverflowError):
             continue
@@ -275,9 +270,5 @@ def write_hot_path_calibration(
     min_samples: int = 100,
 ) -> dict[str, Any]:
     report = build_hot_path_calibration(outcomes_path, min_samples=min_samples)
-    destination = Path(report_path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
-    temporary.replace(destination)
+    atomic_write_json(report_path, report)
     return report

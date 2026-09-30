@@ -66,3 +66,20 @@ def test_walk_forward_deduplicates_outcomes_and_keeps_timestamp_order(tmp_path):
     assert report["folds"][0]["test_start_ms"] < report["folds"][0]["test_end_ms"]
     assert report["folds"][0]["test_start_ms"] > report["folds"][0]["train_end_ms"]
     assert report["folds"][0]["test_mean_realized_net_bps"] == 3.5
+
+
+def test_walk_forward_skips_invalid_utf8_and_future_timestamp_rows(tmp_path):
+    source = tmp_path / "outcomes.jsonl"
+    now_ms = __import__("time").time_ns() // 1_000_000
+    rows = [_row(i, 1.0) for i in range(8)]
+    future = {**_row(50, 20.0), "outcome_local_ts_ms": now_ms + 60_000}
+    raw = (
+        ("\n".join(json.dumps(row) for row in rows[:4]) + "\n").encode("utf-8")
+        + b"\xff\xfe\n"
+        + ("\n".join(json.dumps(row) for row in rows[4:]) + "\n").encode("utf-8")
+        + (json.dumps(future) + "\n").encode("utf-8")
+    )
+    source.write_bytes(raw)
+    report = build_walk_forward_report(source, train_size=4, test_size=2, min_test_samples=2)
+    assert report["timestamped_valid_records"] == 8
+    assert report["execution_authorized"] is False

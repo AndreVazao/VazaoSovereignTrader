@@ -67,3 +67,22 @@ def test_collector_honours_configured_outcomes_path(tmp_path, monkeypatch):
 
     assert collector._outcomes_path(radar_cfg, data_dir) == tmp_path / "runtime/custom-outcomes.jsonl"
     assert collector._outcomes_path({}, data_dir) == data_dir / "hot_path_outcomes.jsonl"
+
+
+def test_refresh_survives_corrupt_utf8_and_json_lines_in_outcomes(tmp_path):
+    outcomes = tmp_path / "corrupt-outcomes.jsonl"
+    outcomes.write_bytes(b"\xff\xfe\n{bad json\n")
+    result = refresh_runtime_evidence_reports({
+        "radar": {
+            "data_dir": str(tmp_path),
+            "hot_path_outcomes_path": str(outcomes),
+            "evidence_train_size": 2,
+            "evidence_test_size": 2,
+            "evidence_min_test_samples": 2,
+        }
+    })
+    assert result["outcomes_file_exists"] is True
+    assert result["paper_only"] is True
+    assert result["execution_authorized"] is False
+    assert result["reports"]["calibration"]["outcome_samples"] == 0
+    assert result["reports"]["walk_forward"]["timestamped_valid_records"] == 0
