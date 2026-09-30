@@ -158,5 +158,5 @@ def build_venue_health(config: dict[str, Any], *, now_ms: int | None = None) -> 
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Sinalética operacional baseada em dados observados. Não é uma avaliação de rentabilidade nem autoriza execução. RED gera candidato a revisão; o descarte definitivo exige evidência adicional.",
+        "note": "Sinalética operacional baseada em dados observados. Não é uma avaliação de rentabilidade nem autoriza execução. RED gera candidato a revisão; não existe descarte automático e o descarte definitivo exige evidência adicional.",
     }
