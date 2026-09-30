@@ -1290,6 +1290,12 @@ class SovereignEngine:
         if guard is None:
             self.log("AUTONOMOUS_REAL_PROMOTION_BLOCKED", {"reason": "real_mode_guard_not_initialized"})
             return False
+        gate = getattr(self, "execution_gate", None)
+        if gate is None:
+            gate = ExecutionGate()
+            self.execution_gate = gate
+        if bool(getattr(getattr(guard, "state", None), "human_authorized", False)) and not gate.human_authorized:
+            gate.human_authorize()
         ok, reason = guard.authorize_from_readiness(report)
         if not ok:
             self.log("AUTONOMOUS_REAL_PROMOTION_BLOCKED", {"reason": reason})
