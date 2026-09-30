@@ -87,3 +87,8 @@ A periodicidade, custos, horizonte, número de folds, Monte Carlo e thresholds t
 A readiness de REAL agora exige, por defeito, um relatório `websocket_timing_validation.json` **fresco** e com `eligible_for_economic_interpretation=true`. Se o relatório estiver ausente, expirado ou bloqueado, a readiness permanece `LOCKED`.
 
 Isto não ativa REAL nem substitui preflight, reconciliação, Risk Engine ou RealModeGuard; acrescenta apenas uma proteção adicional contra interpretar lead/lag temporalmente inválido como evidência económica.
+
+
+## Estado da investigação no cockpit
+
+O endpoint autenticado `/research/status` expõe, em modo somente leitura, o estado dos relatórios PAPER contínuos (`paper_study_report.json` e `websocket_timing_validation.json`), idade dos artefactos, intervalo configurado e conteúdo estatístico disponível. O endpoint nunca envia ordens, altera risco ou promove REAL.
