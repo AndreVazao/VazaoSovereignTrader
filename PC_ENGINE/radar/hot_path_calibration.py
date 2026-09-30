@@ -11,6 +11,7 @@ from typing import Any
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Read only completed, explicitly PAPER-only outcomes from the JSONL ledger."""
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -21,11 +22,34 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
                     value = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if isinstance(value, dict) and value.get("paper_only") is True and value.get("orders_submitted") is False:
+                if (
+                    isinstance(value, dict)
+                    and value.get("status") == "COMPLETED"
+                    and value.get("paper_only") is True
+                    and value.get("orders_submitted") is False
+                ):
                     rows.append(value)
     except OSError:
         return []
     return rows
+
+
+def _outcome_identity(row: dict[str, Any]) -> str:
+    """Prefer a stable explicit ID; otherwise identify the same observed outcome."""
+    explicit_id = row.get("outcome_id")
+    if explicit_id is not None and str(explicit_id).strip():
+        return "id:" + str(explicit_id).strip()
+    fields = (
+        "symbol", "leader", "follower", "direction", "horizon_ms",
+        "leader_local_ts_ms", "entry_local_ts_ms", "outcome_local_ts_ms",
+    )
+    if all(row.get(field) is not None for field in fields):
+        identity = {field: row[field] for field in fields}
+    else:
+        # Legacy records without timestamps can only be deduplicated if their
+        # complete serialized contents are identical.
+        identity = row
+    return json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def build_hot_path_calibration(
@@ -36,7 +60,18 @@ def build_hot_path_calibration(
     """Build a PAPER-only calibration report; never enables or authorizes execution."""
     path = Path(outcomes_path)
     min_samples = max(2, int(min_samples))
-    rows = _read_jsonl(path)
+    raw_rows = _read_jsonl(path)
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    duplicate_outcomes_ignored = 0
+    for row in raw_rows:
+        identity = _outcome_identity(row)
+        if identity in seen:
+            duplicate_outcomes_ignored += 1
+            continue
+        seen.add(identity)
+        rows.append(row)
+
     buckets: dict[tuple[str, str, str, str, int, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         try:
@@ -94,12 +129,13 @@ def build_hot_path_calibration(
         "generated_at_ms": time.time_ns() // 1_000_000,
         "source": path.name,
         "outcome_samples": len(rows),
+        "duplicate_outcomes_ignored": duplicate_outcomes_ignored,
         "relationships": len(summaries),
         "min_samples": min_samples,
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Calibration evidence only; eligibility is not execution authorization.",
+        "note": "Calibration evidence only; duplicate outcomes are excluded; eligibility is not execution authorization.",
         "stats": summaries,
     }
 
