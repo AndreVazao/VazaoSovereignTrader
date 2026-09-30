@@ -4,7 +4,7 @@ import json
 import math
 import statistics
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any
 
@@ -47,14 +47,16 @@ def _configured_venues(config: dict[str, Any]) -> list[str]:
 
 
 def _load_outcomes(path: Path, *, now_ms: int, max_records: int) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    limit = max(1, int(max_records))
     counters = {"raw_lines_seen": 0, "malformed_lines_ignored": 0, "invalid_outcomes_ignored": 0,
-                "non_paper_records_ignored": 0, "duplicate_outcomes_ignored": 0}
-    rows: list[dict[str, Any]] = []
+                "non_paper_records_ignored": 0, "duplicate_outcomes_ignored": 0,
+                "records_omitted_by_limit": 0}
+    rows: deque[dict[str, Any]] = deque(maxlen=limit)
     seen: set[str] = set()
     try:
         handle = path.open("rb")
     except OSError:
-        return rows, counters
+        return [], counters
     with handle:
         for raw in handle:
             if not raw.strip():
@@ -92,17 +94,22 @@ def _load_outcomes(path: Path, *, now_ms: int, max_records: int) -> tuple[list[d
             if identity in seen:
                 counters["duplicate_outcomes_ignored"] += 1
                 continue
-            seen.add(identity)
             normalized = dict(row)
             normalized.update({"symbol": symbol, "leader": leader, "follower": follower,
                                "outcome_local_ts_ms": ts, "realized_net_bps": net})
             for key in ("fees_bps", "slippage_bps", "latency_penalty_bps"):
                 normalized[key] = _finite(row.get(key))
+            if len(rows) == rows.maxlen:
+                evicted = rows.popleft()
+                seen.discard(str(evicted["_economic_identity"]))
+                counters["records_omitted_by_limit"] += 1
+            normalized["_economic_identity"] = identity
             rows.append(normalized)
-    rows.sort(key=lambda row: row["outcome_local_ts_ms"])
-    if len(rows) > max(1, int(max_records)):
-        rows = rows[-max(1, int(max_records)):]
-    return rows, counters
+            seen.add(identity)
+    ordered = sorted(rows, key=lambda row: row["outcome_local_ts_ms"])
+    for row in ordered:
+        row.pop("_economic_identity", None)
+    return ordered, counters
 
 
 def build_venue_economic_evidence(
