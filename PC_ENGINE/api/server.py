@@ -202,6 +202,44 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             "snapshot": snapshot.to_dict(),
         })
 
+    @app.get("/research/status")
+    def research_status():
+        require_scope("read_private_state")
+        from pathlib import Path
+        import json
+        radar_cfg = engine.config.get("radar", {})
+        study_cfg = engine.config.get("paper_study", {})
+        data_dir = Path(radar_cfg.get("data_dir", "PC_ENGINE/data/radar"))
+        report_names = {
+            "paper_study": study_cfg.get("report_filename", "paper_study_report.json"),
+            "websocket_timing": study_cfg.get("timing_report_filename", "websocket_timing_validation.json"),
+        }
+        reports = {}
+        now_ms = __import__("time").time_ns() // 1_000_000
+        for name, filename in report_names.items():
+            path = data_dir / str(filename)
+            if not path.exists():
+                reports[name] = {"status": "NOT_STARTED", "path": str(path)}
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                modified_ms = int(path.stat().st_mtime_ns // 1_000_000)
+                reports[name] = {
+                    "status": "READY",
+                    "path": str(path),
+                    "age_ms": max(0, now_ms - modified_ms),
+                    "payload": payload,
+                }
+            except (OSError, ValueError) as exc:
+                reports[name] = {"status": "INVALID", "path": str(path), "error": str(exc)}
+        return jsonify({
+            "ok": True,
+            "paper_only": True,
+            "study_enabled": bool(study_cfg.get("enabled", True)),
+            "study_interval_minutes": float(study_cfg.get("interval_minutes", 15)),
+            "reports": reports,
+        })
+
     @app.get("/readiness/history")
     def readiness_history():
         require_scope("read_private_state")
