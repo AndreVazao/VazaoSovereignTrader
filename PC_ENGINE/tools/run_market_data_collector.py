@@ -11,6 +11,11 @@ from PC_ENGINE.radar.hot_path import HotPathLeadLagEngine, HotPathOpportunity
 from PC_ENGINE.radar.hot_path_outcomes import HotPathOutcomeTracker
 from PC_ENGINE.radar.lead_lag_learning import LeadLagLearningEngine
 from PC_ENGINE.radar.websocket_radar import WebSocketMarketRadar
+from PC_ENGINE.research.hot_path_outcome_study import (
+    load_hot_path_outcomes,
+    run_hot_path_outcome_study,
+    write_hot_path_outcome_study,
+)
 from PC_ENGINE.research.paper_study import load_states, run_study, write_report
 from PC_ENGINE.research.websocket_timing_validation import validate_paths, write_report as write_timing_report
 
@@ -224,6 +229,44 @@ def main() -> None:
                         hot_path=hot_path.snapshot(),
                         hot_path_outcomes=outcome_tracker.snapshot(),
                         study={"enabled": True, "error": f"{type(exc).__name__}: {exc}"},
+                    )
+                try:
+                    outcome_rows, invalid_outcome_rows = load_hot_path_outcomes(
+                        outcomes_path,
+                        limit=int(study_cfg.get("max_hot_path_outcomes", 100000)),
+                    )
+                    hot_path_oos = run_hot_path_outcome_study(
+                        outcome_rows,
+                        invalid_records=invalid_outcome_rows,
+                        min_samples=int(study_cfg.get("hot_path_min_samples", 100)),
+                        min_test_samples=int(study_cfg.get("hot_path_min_test_samples", 20)),
+                        train_fraction=float(study_cfg.get("hot_path_train_fraction", 0.7)),
+                        min_test_net_bps=float(study_cfg.get("hot_path_min_test_net_bps", 0.0)),
+                    )
+                    hot_path_oos_path = data_dir / str(
+                        study_cfg.get("hot_path_outcome_report_filename", "hot_path_outcome_study.json")
+                    )
+                    write_hot_path_outcome_study(hot_path_oos, hot_path_oos_path)
+                    write_health(
+                        "RUNNING",
+                        radar=radar.snapshot(),
+                        hot_path=hot_path.snapshot(),
+                        hot_path_outcomes=outcome_tracker.snapshot(),
+                        hot_path_oos={
+                            "status": hot_path_oos.get("status"),
+                            "valid_records": hot_path_oos.get("valid_records", 0),
+                            "eligible_relationships": hot_path_oos.get("eligible_relationships", 0),
+                            "report_path": str(hot_path_oos_path),
+                            "real_authorization_changed": False,
+                        },
+                    )
+                except Exception as exc:
+                    write_health(
+                        "RUNNING",
+                        radar=radar.snapshot(),
+                        hot_path=hot_path.snapshot(),
+                        hot_path_outcomes=outcome_tracker.snapshot(),
+                        hot_path_oos={"error": f"{type(exc).__name__}: {exc}", "real_authorization_changed": False},
                     )
                 next_study = now + max(60.0, study_minutes * 60.0)
             stop.wait(1.0)
