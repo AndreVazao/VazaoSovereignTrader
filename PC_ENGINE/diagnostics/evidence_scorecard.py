@@ -8,6 +8,7 @@ from PC_ENGINE.radar.hot_path_calibration import write_hot_path_calibration
 from PC_ENGINE.radar.hot_path_walk_forward import write_walk_forward_report
 from PC_ENGINE.radar.hot_path_regime_walk_forward import write_regime_walk_forward_report
 from PC_ENGINE.radar.hot_path_oos_robustness import write_oos_robustness_report
+from PC_ENGINE.radar.hot_path_relationship_oos import write_relationship_oos_report
 from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 
 
@@ -26,6 +27,7 @@ def build_runtime_evidence_scorecard(config: dict[str, Any]) -> dict[str, Any]:
         walk_forward_report_path=report_path("walk_forward", "hot_path_walk_forward.json"),
         regime_walk_forward_report_path=report_path("regime_walk_forward", "hot_path_regime_walk_forward.json"),
         oos_robustness_report_path=report_path("oos_robustness", "hot_path_oos_robustness.json"),
+        relationship_oos_report_path=report_path("relationship_oos", "hot_path_relationship_oos.json"),
         min_calibration_samples=int(radar.get("evidence_min_calibration_samples", 100)),
         min_walk_forward_folds=int(radar.get("evidence_min_walk_forward_folds", 4)),
         min_regime_folds=int(radar.get("evidence_min_regime_folds", 4)),
@@ -36,6 +38,7 @@ def build_runtime_evidence_scorecard(config: dict[str, Any]) -> dict[str, Any]:
         "walk_forward": str(report_path("walk_forward", "hot_path_walk_forward.json")),
         "regime_walk_forward": str(report_path("regime_walk_forward", "hot_path_regime_walk_forward.json")),
         "oos_robustness": str(report_path("oos_robustness", "hot_path_oos_robustness.json")),
+        "relationship_oos": str(report_path("relationship_oos", "hot_path_relationship_oos.json")),
     }
     return report
 
@@ -89,6 +92,14 @@ def refresh_runtime_evidence_reports(config: dict[str, Any]) -> dict[str, Any]:
         test_size=test_size,
         step_size=step_size,
         min_test_samples=min_test_samples,
+    )
+    generated["reports"]["relationship_oos"] = write_relationship_oos_report(
+        outcomes_path,
+        report_path("relationship_oos", "hot_path_relationship_oos.json"),
+        min_samples=int(radar.get("evidence_relationship_min_samples", 100)),
+        min_test_samples=int(radar.get("evidence_relationship_min_test_samples", 20)),
+        train_fraction=float(radar.get("evidence_relationship_train_fraction", 0.7)),
+        max_records=int(radar.get("evidence_relationship_max_records", 100000)),
     )
     generated["scorecard"] = build_runtime_evidence_scorecard(config)
     generated["paper_only"] = True

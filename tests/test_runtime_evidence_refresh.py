@@ -26,6 +26,7 @@ def test_refresh_generates_paper_reports_without_authorizing_execution(tmp_path)
         ("walk_forward", "hot_path_walk_forward.json"),
         ("regime_walk_forward", "hot_path_regime_walk_forward.json"),
         ("oos_robustness", "hot_path_oos_robustness.json"),
+        ("relationship_oos", "hot_path_relationship_oos.json"),
     ):
         path = tmp_path / filename
         assert path.exists(), name
@@ -86,3 +87,45 @@ def test_refresh_survives_corrupt_utf8_and_json_lines_in_outcomes(tmp_path):
     assert result["execution_authorized"] is False
     assert result["reports"]["calibration"]["outcome_samples"] == 0
     assert result["reports"]["walk_forward"]["timestamped_valid_records"] == 0
+
+
+def test_refresh_generates_relationship_oos_report_from_completed_paper_outcomes(tmp_path):
+    outcomes = tmp_path / "hot_path_outcomes.jsonl"
+    rows = []
+    for i in range(10):
+        rows.append({
+            "status": "COMPLETED",
+            "paper_only": True,
+            "orders_submitted": False,
+            "outcome_id": f"refresh-{i}",
+            "symbol": "BTC/USDT",
+            "leader": "binance",
+            "follower": "coinbase",
+            "direction": "UP",
+            "horizon_ms": 500,
+            "expected_net_bps": 1.0,
+            "realized_net_bps": -1.0 if i < 7 else 2.0,
+            "outcome_local_ts_ms": 1_000 + i * 1_000,
+        })
+    outcomes.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    result = refresh_runtime_evidence_reports({
+        "radar": {
+            "data_dir": str(tmp_path),
+            "hot_path_outcomes_path": str(outcomes),
+            "evidence_train_size": 4,
+            "evidence_test_size": 2,
+            "evidence_min_test_samples": 2,
+            "evidence_relationship_min_samples": 10,
+            "evidence_relationship_min_test_samples": 3,
+        }
+    })
+
+    report = result["reports"]["relationship_oos"]
+    saved = tmp_path / "hot_path_relationship_oos.json"
+    assert saved.is_file()
+    assert json.loads(saved.read_text(encoding="utf-8"))["relationships"] == 1
+    assert report["valid_unique_outcomes"] == 10
+    assert report["relationship_details"][0]["train_end_ms"] < report["relationship_details"][0]["test_start_ms"]
+    assert result["scorecard"]["execution_authorized"] is False
+    assert result["execution_authorized"] is False

@@ -102,3 +102,23 @@ def test_scorecard_fails_closed_on_invalid_utf8_and_malformed_numeric_fields(tmp
     assert "chronological_walk_forward" in report["requirements_missing"]
     assert "cost_stress" in report["requirements_missing"]
     assert "data_integrity_accounting" in report["requirements_missing"]
+
+
+def test_relationship_oos_requirement_checks_evidence_presence_not_positive_performance(tmp_path):
+    relationship_oos = tmp_path / "relationship-oos.json"
+    relationship_oos.write_text(json.dumps({
+        "relationships": 1,
+        "relationship_details": [{
+            "sample_sufficiency": "SUFFICIENT",
+            "eligible_for_paper_review": False,
+            "oos_mean_net_bps": -1.0,
+        }],
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+    }), encoding="utf-8")
+
+    report = build_evidence_scorecard(relationship_oos_report_path=relationship_oos)
+    check = next(row for row in report["checks"] if row["requirement"] == "relationship_level_oos")
+    assert check["status"] == "MET"
+    assert report["execution_authorized"] is False

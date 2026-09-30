@@ -25,6 +25,7 @@ def test_runtime_evidence_scorecard_uses_configured_report_paths(tmp_path):
         "walk_forward": reports / "wf.json",
         "regime_walk_forward": reports / "regime.json",
         "oos_robustness": reports / "oos.json",
+        "relationship_oos": reports / "relationship-oos.json",
     }
     for path in paths.values():
         path.write_text(json.dumps({}), encoding="utf-8")
@@ -39,3 +40,4 @@ def test_runtime_evidence_scorecard_uses_configured_report_paths(tmp_path):
     assert report["requirements_met"] == 0
     assert report["execution_authorized"] is False
     assert report["report_paths"]["calibration"] == str(paths["calibration"])
+    assert report["report_paths"]["relationship_oos"] == str(paths["relationship_oos"])
