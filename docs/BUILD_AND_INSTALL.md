@@ -66,3 +66,10 @@ O nó local pode executar `PC_ENGINE/tools/run_paper_study.py` sobre `PC_ENGINE/
 - comparação configurável entre todos os sinais e sinais de maior confiança/confluência.
 
 Nenhuma etapa do estudo envia ordens, altera risco ou promove REAL. O objetivo é transformar a acumulação contínua de dados em evidência estatística antes de qualquer decisão de execução.
+
+
+## Validação temporal do WebSocket
+
+Antes de interpretar lead/lag como evidência económica, o nó pode executar `PC_ENGINE/tools/validate_websocket_timing.py`. A validação verifica timestamps de exchange/local, latência de receção, duplicados, eventos fora de ordem e consistência entre `exchange_lag_ms` e `receive_lag_ms`.
+
+O relatório `PC_ENGINE/data/radar/websocket_timing_validation.json` só marca `eligible_for_economic_interpretation` quando os gates temporais configurados passam. Um resultado bloqueado não é transformado em sinal de trading.
