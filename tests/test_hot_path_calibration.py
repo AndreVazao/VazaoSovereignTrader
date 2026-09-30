@@ -73,7 +73,7 @@ def test_calibration_keeps_market_regimes_separate_and_marks_missing_regime(tmp_
     ] + [
         _outcome(1.0)
     ]
-    source.write_text("\\n".join(json.dumps(row) for row in rows) + "\\n", encoding="utf-8")
+    source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
     report = build_hot_path_calibration(source, min_samples=2)
 
