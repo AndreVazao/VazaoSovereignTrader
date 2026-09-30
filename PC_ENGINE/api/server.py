@@ -19,6 +19,7 @@ from PC_ENGINE.autonomy.paper_reconciliation import PaperAutonomyReconciler
 from PC_ENGINE.research.inbox import TraderResearchInbox
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
+from PC_ENGINE.diagnostics.operational import build_operational_diagnostics, latest_events_by_venue_symbol, storage_metrics
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -101,6 +102,57 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         payload["stale"] = age_ms > int(radar_cfg.get("health_stale_seconds", 30)) * 1000
         payload["ok"] = payload.get("status") == "RUNNING" and not payload["stale"]
         return jsonify(payload)
+
+    @app.get("/diagnostics")
+    def operational_diagnostics():
+        require_scope("read_private_state")
+        from pathlib import Path
+        import json
+        import time
+        engine_snapshot = engine.snapshot()
+        radar_cfg = engine.config.get("radar", {})
+        raw_dir = radar_cfg.get("data_dir", "PC_ENGINE/data/radar")
+        raw_path = Path(raw_dir)
+        health_path = raw_path / "market_data_health.json"
+        market_data = {"status": "NOT_STARTED", "ok": False, "stale": True}
+        if health_path.exists():
+            try:
+                market_data = json.loads(health_path.read_text(encoding="utf-8"))
+                now_ms = time.time_ns() // 1_000_000
+                market_data["health_age_ms"] = max(0, now_ms - int(market_data.get("timestamp_ms", now_ms)))
+                market_data["stale"] = market_data["health_age_ms"] > int(radar_cfg.get("health_stale_seconds", 30)) * 1000
+                market_data["ok"] = market_data.get("status") == "RUNNING" and not market_data["stale"]
+            except (OSError, ValueError, TypeError):
+                market_data = {"status": "INVALID", "ok": False, "stale": True}
+        event_path = raw_path / "websocket_events.jsonl"
+        data_root = raw_path.parent
+        state_path = data_root / "operational_diagnostics_state.json"
+        previous_bytes = None
+        try:
+            if state_path.exists():
+                previous_bytes = int(json.loads(state_path.read_text(encoding="utf-8")).get("bytes"))
+        except (OSError, ValueError, TypeError):
+            previous_bytes = None
+        storage = storage_metrics(data_root, previous_bytes)
+        try:
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps({"bytes": storage["bytes"]}, sort_keys=True) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+        return jsonify(build_operational_diagnostics(
+            engine=engine_snapshot,
+            market_data=market_data,
+            latest_events=latest_events_by_venue_symbol(event_path),
+            storage=storage,
+        ))
+
+    @app.get("/diagnostics/export")
+    def operational_diagnostics_export():
+        require_scope("read_private_state")
+        payload = operational_diagnostics().get_json()
+        response = Response(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", mimetype="application/json")
+        response.headers["Content-Disposition"] = 'attachment; filename="vazao-operational-diagnostics.json"'
+        return response
 
     @app.get("/identity")
     def identity_route():
