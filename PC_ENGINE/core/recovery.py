@@ -125,7 +125,8 @@ class RecoveryManager:
         recovery_source = "primary"
         recovery_error = None
         if selected is None:
-            backup, backup_error = self._read_valid(self.backup_path)
+            backup_path = getattr(self, "backup_path", None)
+            backup, backup_error = self._read_valid(backup_path) if backup_path is not None else (None, "missing")
             if backup is not None:
                 selected = backup
                 recovery_source = "backup"
