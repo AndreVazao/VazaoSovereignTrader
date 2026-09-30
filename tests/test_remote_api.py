@@ -308,3 +308,46 @@ def test_market_data_health_endpoint_requires_token(monkeypatch):
     monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
     client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
     assert client.get("/market-data-health").status_code == 401
+
+
+def test_operational_diagnostics_requires_token(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    assert client.get("/diagnostics").status_code == 401
+
+
+def test_operational_diagnostics_aggregates_market_events_and_storage(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    radar_dir = tmp_path / "radar"
+    radar_dir.mkdir()
+    (radar_dir / "websocket_events.jsonl").write_text(
+        json.dumps({"exchange": "binance", "symbol": "BTC/USDT", "price": 100, "exchange_ts_ms": 1000, "local_ts_ms": 1100, "local_receive_latency_ms": 100}) + "\n"
+        + json.dumps({"exchange": "binance", "symbol": "BTC/USDT", "price": 101, "exchange_ts_ms": 2000, "local_ts_ms": 2100, "local_receive_latency_ms": 100}) + "\n"
+        + json.dumps({"exchange": "coinbase", "symbol": "ETH/USDT", "price": 200, "exchange_ts_ms": 3000, "local_ts_ms": 3200, "local_receive_latency_ms": 200}) + "\n",
+        encoding="utf-8",
+    )
+    engine = FakeEngine()
+    engine.config = {
+        "real_mode_guard": {"enabled": True},
+        "radar": {"data_dir": str(radar_dir), "health_stale_seconds": 30},
+    }
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+    response = client.get("/diagnostics", headers={"X-Token": "secret-token"})
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["schema_version"] == 1
+    assert payload["paper_only"] is True
+    assert payload["market_data"]["latest_by_venue_symbol"]["binance"]["BTC/USDT"]["price"] == 101
+    assert payload["market_data"]["latest_by_venue_symbol"]["coinbase"]["ETH/USDT"]["latency_ms"] == 200
+    assert payload["storage"]["bytes"] > 0
+    assert payload["storage"]["jsonl_bytes"] > 0
+    assert payload["diagnostics"]["orders_submitted"] is False
+
+
+def test_operational_diagnostics_export_is_authenticated_and_downloadable(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    response = client.get("/diagnostics/export", headers={"X-Token": "secret-token"})
+    assert response.status_code == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert "vazao-operational-diagnostics.json" in response.headers["Content-Disposition"]
