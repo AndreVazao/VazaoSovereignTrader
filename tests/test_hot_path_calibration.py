@@ -6,6 +6,7 @@ from PC_ENGINE.radar.hot_path_calibration import build_hot_path_calibration, wri
 
 def _outcome(realized_net: float, expected_net: float = 3.0):
     return {
+        "status": "COMPLETED",
         "paper_only": True,
         "orders_submitted": False,
         "symbol": "BTC/USDT",
@@ -39,16 +40,18 @@ def test_calibration_requires_minimum_samples_and_positive_lower_bound(tmp_path)
 
     report = build_hot_path_calibration(source, min_samples=5)
 
-    assert report["stats"][0]["samples"] == 13
+    assert report["stats"][0]["samples"] == 2
+    assert report["duplicate_outcomes_ignored"] == 11
     assert report["stats"][0]["eligible_for_paper_review"] is False
     assert report["execution_authorized"] is False
 
 
-def test_calibration_ignores_non_paper_or_malformed_rows_and_writes_atomically(tmp_path):
+def test_calibration_ignores_non_paper_incomplete_or_malformed_rows_and_writes_atomically(tmp_path):
     source = tmp_path / "hot_path_outcomes.jsonl"
     source.write_text(
         json.dumps(_outcome(2.0)) + "\n"
         + json.dumps({**_outcome(99.0), "orders_submitted": True}) + "\n"
+        + json.dumps({**_outcome(88.0), "status": "PENDING"}) + "\n"
         + "{bad json\n",
         encoding="utf-8",
     )
@@ -85,3 +88,33 @@ def test_calibration_keeps_market_regimes_separate_and_marks_missing_regime(tmp_
     assert by_regime["TRENDING"]["mean_realized_net_bps"] > 0
     assert by_regime["RANGING"]["mean_realized_net_bps"] < 0
     assert report["execution_authorized"] is False
+
+
+def test_calibration_deduplicates_identical_legacy_rows(tmp_path):
+    source = tmp_path / "hot_path_outcomes.jsonl"
+    row = _outcome(2.0)
+    source.write_text("\n".join(json.dumps(value) for value in [row, row, row]) + "\n", encoding="utf-8")
+
+    report = build_hot_path_calibration(source, min_samples=2)
+
+    assert report["outcome_samples"] == 1
+    assert report["duplicate_outcomes_ignored"] == 2
+    assert report["stats"][0]["samples"] == 1
+    assert report["stats"][0]["eligible_for_paper_review"] is False
+    assert report["execution_authorized"] is False
+
+
+def test_calibration_uses_stable_outcome_id_to_deduplicate(tmp_path):
+    source = tmp_path / "hot_path_outcomes.jsonl"
+    first = {**_outcome(2.0), "outcome_id": "outcome-123"}
+    duplicate_with_conflicting_values = {**_outcome(99.0), "outcome_id": "outcome-123"}
+    source.write_text(
+        json.dumps(first) + "\n" + json.dumps(duplicate_with_conflicting_values) + "\n",
+        encoding="utf-8",
+    )
+
+    report = build_hot_path_calibration(source, min_samples=2)
+
+    assert report["outcome_samples"] == 1
+    assert report["duplicate_outcomes_ignored"] == 1
+    assert report["stats"][0]["mean_realized_net_bps"] == 2.0
