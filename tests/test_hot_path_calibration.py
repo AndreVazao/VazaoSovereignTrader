@@ -130,7 +130,24 @@ def test_calibration_penalizes_positive_serial_dependence(tmp_path):
     assert stat["effective_samples"] < stat["samples"]
     assert stat["ci95_sample_basis"] == "effective_samples"
     assert stat["lag1_autocorrelation"] > 0
+    assert stat["ci95_method"] == "moving_block_bootstrap"
+    assert stat["bootstrap_replicates"] == 1000
+    assert stat["bootstrap_block_length"] >= 2
+    assert stat["net_ci95_lower_bps"] <= stat["mean_realized_net_bps"] <= stat["net_ci95_upper_bps"]
     assert report["execution_authorized"] is False
+
+
+def test_calibration_bootstrap_is_deterministic_for_same_evidence(tmp_path):
+    source = tmp_path / "hot_path_outcomes.jsonl"
+    rows = [
+        {**_outcome(1.0 + (i % 5) * 0.25), "outcome_local_ts_ms": 10_000 + i * 500}
+        for i in range(20)
+    ]
+    source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    first = build_hot_path_calibration(source, min_samples=5)
+    second = build_hot_path_calibration(source, min_samples=5)
+    assert first["stats"][0]["net_ci95_lower_bps"] == second["stats"][0]["net_ci95_lower_bps"]
+    assert first["stats"][0]["net_ci95_upper_bps"] == second["stats"][0]["net_ci95_upper_bps"]
 
 
 def test_calibration_keeps_legacy_rows_usable_without_fake_temporal_data(tmp_path):
@@ -143,4 +160,6 @@ def test_calibration_keeps_legacy_rows_usable_without_fake_temporal_data(tmp_pat
     assert stat["timestamped_samples"] == 0
     assert stat["effective_samples"] == 6
     assert stat["ci95_sample_basis"] == "samples"
+    assert stat["ci95_method"] == "sample_normal"
+    assert stat["bootstrap_replicates"] == 0
     assert stat["eligible_for_paper_review"] is True
