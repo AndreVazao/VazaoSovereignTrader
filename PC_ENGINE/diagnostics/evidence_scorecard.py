@@ -43,13 +43,13 @@ def build_runtime_evidence_scorecard(config: dict[str, Any]) -> dict[str, Any]:
 def refresh_runtime_evidence_reports(config: dict[str, Any]) -> dict[str, Any]:
     """Refresh local evidence artifacts from completed PAPER outcomes only."""
     radar = config.get("radar", {})
-    data_dir = Path(radar.get("data_dir", "PC_ENGINE/data/radar"))
+    data_dir = resolve_config_path(radar.get("data_dir", "PC_ENGINE/data/radar"))
     report_cfg = radar.get("evidence_reports", {})
     outcomes_path = resolve_config_path(radar.get("hot_path_outcomes_path", data_dir / "hot_path_outcomes.jsonl"))
 
     def report_path(key: str, default_name: str) -> Path:
         configured = report_cfg.get(key)
-        return Path(configured) if configured else data_dir / default_name
+        return resolve_config_path(configured) if configured else data_dir / default_name
 
     train_size = max(1, int(radar.get("evidence_train_size", 100)))
     test_size = max(1, int(radar.get("evidence_test_size", 25)))
