@@ -161,3 +161,20 @@ def test_engine_startup_mode_always_demotes_configured_real_to_paper():
     assert SovereignEngine._startup_mode("real") == "PAPER"
     assert SovereignEngine._startup_mode("PAPER") == "PAPER"
     assert SovereignEngine._startup_mode(None) == "PAPER"
+
+
+
+def test_autonomous_readiness_cannot_bypass_initial_human_authorization():
+    guard = RealModeGuard({"enabled": True, "allow_real": True, "arm_seconds": 300})
+    ok, reason = guard.authorize_from_readiness({"ready": True, "blockers": []})
+    assert not ok
+    assert "initial human REAL authorization required" in reason
+
+
+def test_autonomous_readiness_is_available_after_human_authorization():
+    guard = RealModeGuard({"enabled": True, "allow_real": True, "arm_seconds": 300})
+    ok, _ = guard.arm("EU ACEITO O RISCO")
+    assert ok
+    guard.consume()
+    ok, _ = guard.authorize_from_readiness({"ready": True, "blockers": []})
+    assert ok
