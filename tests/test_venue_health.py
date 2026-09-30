@@ -79,16 +79,16 @@ def test_venue_health_does_not_call_red_an_automatic_discard(tmp_path):
 def test_venue_health_ignores_malformed_nested_rows_and_invalid_timestamps(tmp_path):
     now = 1_000_000
     (tmp_path / "observations.jsonl").write_bytes(
-        b'not json\\n'
-        + b'{"local_ts_ms":"not-a-time","snapshots":{"exchange":"binance"}}\\n'
-        + b'{"local_ts_ms":1000001,"snapshots":[{"exchange":"binance","local_ts_ms":1000001}]}\\n'
-        + b'{"local_ts_ms":999000,"snapshots":[null,42,{"exchange":"binance","local_ts_ms":"bad"}]}\\n'
-        + b'{"local_ts_ms":999500,"snapshots":[{"exchange":"binance","local_ts_ms":999500}]}\\n'
-        + b'\\xff\\xfe\\n'
+        b'not json\n'
+        + b'{"local_ts_ms":"not-a-time","snapshots":{"exchange":"binance"}}\n'
+        + b'{"local_ts_ms":1000001,"snapshots":[{"exchange":"binance","local_ts_ms":1000001}]}\n'
+        + b'{"local_ts_ms":999000,"snapshots":[null,42,{"exchange":"binance","local_ts_ms":"bad"}]}\n'
+        + b'{"local_ts_ms":999500,"snapshots":[{"exchange":"binance","local_ts_ms":999500}]}\n'
+        + b'\xff\xfe\n'
     )
     (tmp_path / "websocket_events.jsonl").write_text(
-        '{"exchange":"binance","local_ts_ms":NaN}\\n'
-        '{"exchange":"binance","local_ts_ms":999800}\\n',
+        '{"exchange":"binance","local_ts_ms":NaN}\n'
+        '{"exchange":"binance","local_ts_ms":999800}\n',
         encoding="utf-8",
     )
 
