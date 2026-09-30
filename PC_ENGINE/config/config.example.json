@@ -219,6 +219,23 @@
     "lead_lag_response_threshold_bps": 2,
     "collector_learning_minutes": 5
   },
+  "paper_study": {
+    "enabled": true,
+    "interval_minutes": 15,
+    "states_filename": "market_states.jsonl",
+    "report_filename": "paper_study_report.json",
+    "timing_report_filename": "websocket_timing_validation.json",
+    "max_states": 100000,
+    "horizon_ms": 5000,
+    "cost_bps": 28,
+    "walk_forward_folds": 5,
+    "walk_forward_min_train": 100,
+    "walk_forward_test_size": 50,
+    "monte_carlo_iterations": 2000,
+    "max_receive_latency_ms": 2000,
+    "timing_min_samples": 100,
+    "notes": "Continuous local PAPER research. Reports never authorize orders or REAL."
+  },
   "evidence": {
     "ledger_path": "PC_ENGINE/data/radar/evidence_ledger.jsonl",
     "ledger_writer_enabled": true,
