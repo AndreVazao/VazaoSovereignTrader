@@ -84,7 +84,7 @@ def test_economic_evidence_rejects_future_and_non_paper_rows_and_tolerates_corru
 
 def test_economic_evidence_marks_non_positive_holdout_for_review(tmp_path):
     path = tmp_path / "outcomes.jsonl"
-    path.write_text("\n".join(json.dumps(_outcome(i, net=-0.5)) for i in range(12)) + "\n", encoding="utf-8")
+    path.write_text("\n".join(json.dumps(_outcome(i, net=-0.5)) for i in range(40)) + "\n", encoding="utf-8")
     report = build_venue_economic_evidence(
         {"radar": {"websocket_exchanges": ["coinbase"]}},
         path,
