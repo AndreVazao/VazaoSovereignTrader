@@ -209,7 +209,7 @@ def _load_top_of_book(
         spread_bps = ((row["ask"] - row["bid"]) / mid) * 10000.0
         if math.isfinite(spread_bps) and spread_bps >= 0:
             by_venue[row["venue"]].append(spread_bps)
-            by_key[f"{row["venue"]}:{row["symbol"]}"].append({"age_ms": age_ms, "receive_ms": row["receive_ms"]})
+            by_key[f"{row['venue']}:{row['symbol']}"].append({"age_ms": age_ms, "receive_ms": row["receive_ms"]})
     return dict(by_venue), dict(by_key), counters
 
 
