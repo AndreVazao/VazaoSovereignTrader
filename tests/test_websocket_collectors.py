@@ -39,7 +39,6 @@ class WebSocketCollectorTests(unittest.TestCase):
         self.assertEqual(events[0].sequence, 88)
         self.assertEqual(events[0].price, 100.1)
 
-
     def test_okx_ticker_preserves_bid_ask_for_spread_research(self) -> None:
         collector = PublicWebSocketCollector(
             WebSocketMarketConfig("okx", "BTC/USDT", "wss://example"), lambda _: None)
@@ -68,6 +67,33 @@ class WebSocketCollectorTests(unittest.TestCase):
         self.assertEqual(events[0].ask, 100.2)
         self.assertIsNone(events[0].exchange_ts_ms)
         self.assertGreater(events[0].local_receive_wall_ns, 0)
+
+    def test_snapshot_exposes_paper_safe_operational_state(self) -> None:
+        received = []
+        collector = PublicWebSocketCollector(
+            WebSocketMarketConfig("coinbase", "BTC/USDT", "wss://example"),
+            received.append,
+        )
+        initial = collector.snapshot()
+        self.assertEqual(initial["state"], "IDLE")
+        self.assertEqual(initial["connect_attempts"], 0)
+        self.assertEqual(initial["events_emitted"], 0)
+        self.assertTrue(initial["paper_only"])
+        self.assertFalse(initial["orders_submitted"])
+        self.assertFalse(initial["execution_authorized"])
+
+        event = collector._parse(
+            json.dumps({"events": [{"tickers": [
+                {"best_bid": "100.0", "best_ask": "100.2", "price": "100.1"}
+            ]}]}),
+            9000,
+        )[0]
+        collector._emit(event)
+        snapshot = collector.snapshot()
+        self.assertEqual(snapshot["events_emitted"], 1)
+        self.assertEqual(len(received), 1)
+        self.assertIsNotNone(snapshot["last_event_age_ms"])
+        self.assertIsNone(snapshot["last_error"])
 
 
 if __name__ == "__main__":

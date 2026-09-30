@@ -5,12 +5,47 @@ import json
 import math
 import signal
 import threading
+import time
 from pathlib import Path
 
 from PC_ENGINE.market_events.websocket_collectors import (
     PublicWebSocketCollector,
     default_public_configs,
 )
+
+
+def _write_health(
+    path: Path,
+    *,
+    status: str,
+    collectors: list[PublicWebSocketCollector],
+    counters: dict[str, int],
+    symbols: list[str],
+    venues: list[str],
+    output: Path,
+    backup: Path,
+    max_bytes: int,
+) -> None:
+    payload = {
+        "schema_version": 1,
+        "service": "top_of_book_collector",
+        "status": status,
+        "timestamp_ms": time.time_ns() // 1_000_000,
+        "symbols": symbols,
+        "venues": venues,
+        "output": str(output),
+        "backup": str(backup),
+        "max_file_bytes": max_bytes,
+        "collectors": [collector.snapshot() for collector in collectors],
+        "counters": dict(counters),
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    tmp.replace(path)
 
 
 def main() -> None:
@@ -21,18 +56,28 @@ def main() -> None:
     parser.add_argument("--venues", nargs="+", default=["binance", "okx", "coinbase"])
     parser.add_argument("--data-dir", default="PC_ENGINE/data/radar")
     parser.add_argument("--max-file-mb", type=float, default=64.0)
+    parser.add_argument("--health-interval-seconds", type=float, default=5.0)
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     output = data_dir / "websocket_ticker_events.jsonl"
     backup = output.with_suffix(output.suffix + ".1")
+    health_path = data_dir / "top_of_book_health.json"
     max_bytes = max(1, int(args.max_file_mb * 1024 * 1024))
+    health_interval = max(1.0, float(args.health_interval_seconds))
     stop = threading.Event()
     write_lock = threading.Lock()
     collectors: list[PublicWebSocketCollector] = []
     threads: list[threading.Thread] = []
-    counters = {"events_written": 0, "invalid_tickers_ignored": 0, "write_errors": 0}
+    counters = {
+        "events_written": 0,
+        "invalid_tickers_ignored": 0,
+        "write_errors": 0,
+        "collector_errors": 0,
+        "reconnects": 0,
+    }
+    counters_lock = threading.Lock()
 
     def shutdown(_signum, _frame) -> None:
         stop.set()
@@ -53,7 +98,7 @@ def main() -> None:
             or float(bid) <= 0 or float(ask) <= float(bid)
             or int(event.local_receive_wall_ns) <= 0
         ):
-            with write_lock:
+            with counters_lock:
                 counters["invalid_tickers_ignored"] += 1
             return
         row = event.as_dict()
@@ -72,20 +117,31 @@ def main() -> None:
                     output.replace(backup)
                 with output.open("a", encoding="utf-8") as handle:
                     handle.write(encoded)
-                counters["events_written"] += 1
+                with counters_lock:
+                    counters["events_written"] += 1
             except OSError:
-                counters["write_errors"] += 1
+                with counters_lock:
+                    counters["write_errors"] += 1
 
     def run_with_reconnect(collector: PublicWebSocketCollector) -> None:
         delay_seconds = 1.0
         while not stop.is_set():
             try:
                 collector.run_forever()
-            except Exception:
-                # Public observation must survive a venue socket failure.
-                pass
+            except Exception as exc:
+                with counters_lock:
+                    counters["collector_errors"] += 1
+                print(json.dumps({
+                    "service": "top_of_book_collector",
+                    "venue": collector.config.venue,
+                    "symbol": collector.config.symbol,
+                    "collector_error": f"{type(exc).__name__}: {exc}",
+                    "paper_only": True,
+                }, ensure_ascii=False), flush=True)
             if stop.wait(delay_seconds):
                 return
+            with counters_lock:
+                counters["reconnects"] += 1
             delay_seconds = min(15.0, delay_seconds * 2.0)
 
     allowed = set(args.venues)
@@ -107,6 +163,42 @@ def main() -> None:
         threads.append(thread)
         thread.start()
 
+    _write_health(
+        health_path,
+        status="RUNNING",
+        collectors=collectors,
+        counters=counters,
+        symbols=args.symbols,
+        venues=args.venues,
+        output=output,
+        backup=backup,
+        max_bytes=max_bytes,
+    )
+
+    def health_loop() -> None:
+        while not stop.wait(health_interval):
+            try:
+                _write_health(
+                    health_path,
+                    status="RUNNING",
+                    collectors=collectors,
+                    counters=counters,
+                    symbols=args.symbols,
+                    venues=args.venues,
+                    output=output,
+                    backup=backup,
+                    max_bytes=max_bytes,
+                )
+            except OSError as exc:
+                print(json.dumps({
+                    "service": "top_of_book_collector",
+                    "health_write_error": f"{type(exc).__name__}: {exc}",
+                    "paper_only": True,
+                }), flush=True)
+
+    health_thread = threading.Thread(target=health_loop, name="top-book-health", daemon=True)
+    health_thread.start()
+
     print(json.dumps({
         "service": "top_of_book_collector",
         "status": "RUNNING",
@@ -114,6 +206,8 @@ def main() -> None:
         "venues": args.venues,
         "output": str(output),
         "backup": str(backup),
+        "health": str(health_path),
+        "health_interval_seconds": health_interval,
         "max_file_bytes": max_bytes,
         "paper_only": True,
         "orders_submitted": False,
@@ -127,10 +221,23 @@ def main() -> None:
             collector.stop()
         for thread in threads:
             thread.join(timeout=3)
+        health_thread.join(timeout=3)
+        _write_health(
+            health_path,
+            status="STOPPED",
+            collectors=collectors,
+            counters=counters,
+            symbols=args.symbols,
+            venues=args.venues,
+            output=output,
+            backup=backup,
+            max_bytes=max_bytes,
+        )
         print(json.dumps({
             "service": "top_of_book_collector",
             "status": "STOPPED",
             **counters,
+            "health": str(health_path),
             "paper_only": True,
             "orders_submitted": False,
             "execution_authorized": False,
