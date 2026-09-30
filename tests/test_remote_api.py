@@ -391,3 +391,57 @@ def test_market_data_health_resolves_relative_data_dir_from_repo_root(tmp_path, 
 
     assert response.status_code == 200
     assert response.get_json()["ok"] is True
+
+
+
+def test_venue_economic_evidence_requires_authentication(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    assert client.get("/venue-economic-evidence").status_code == 401
+
+
+def test_venue_economic_evidence_reads_configured_report_and_fails_closed(tmp_path, monkeypatch):
+    from PC_ENGINE.diagnostics import path_utils
+
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    monkeypatch.setattr(path_utils, "REPO_ROOT", tmp_path)
+    report_path = tmp_path / "runtime" / "custom-economic.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(json.dumps({
+        "status": "OK",
+        "venues": [{"venue": "coinbase", "status": "INSUFFICIENT_DATA"}],
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+    }), encoding="utf-8")
+
+    engine = FakeEngine()
+    engine.config = {
+        "real_mode_guard": {"enabled": True},
+        "radar": {
+            "data_dir": "runtime/radar",
+            "evidence_reports": {"venue_economic_evidence": "runtime/custom-economic.json"},
+        },
+        "human_bridge": {"data_dir": str(tmp_path / "bridge")},
+        "research": {"data_dir": str(tmp_path / "research")},
+    }
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+
+    response = client.get("/venue-economic-evidence", headers={"X-Token": "secret-token"})
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["venues"][0]["venue"] == "coinbase"
+    assert payload["paper_only"] is True
+    assert payload["orders_submitted"] is False
+    assert payload["execution_authorized"] is False
+    assert payload["report_path"] == str(report_path)
+
+    report_path.write_text(json.dumps({
+        "venues": [{"venue": "coinbase"}],
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": True,
+    }), encoding="utf-8")
+    invalid = client.get("/venue-economic-evidence", headers={"X-Token": "secret-token"})
+    assert invalid.status_code == 409
+    assert invalid.get_json()["execution_authorized"] is False

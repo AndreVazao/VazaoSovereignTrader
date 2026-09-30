@@ -175,6 +175,52 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("read_private_state")
         return jsonify(build_venue_health(engine.config))
 
+    @app.get("/venue-economic-evidence")
+    def venue_economic_evidence():
+        require_scope("read_private_state")
+        radar_cfg = engine.config.get("radar", {})
+        report_cfg = radar_cfg.get("evidence_reports", {})
+        configured = report_cfg.get("venue_economic_evidence")
+        if configured:
+            report_path = resolve_config_path(configured)
+        else:
+            report_path = resolve_config_path(radar_cfg.get("data_dir", "PC_ENGINE/data/radar")) / "venue_economic_evidence.json"
+        if not report_path.exists():
+            return jsonify({
+                "status": "NOT_STARTED",
+                "report_path": str(report_path),
+                "venues": [],
+                "paper_only": True,
+                "orders_submitted": False,
+                "execution_authorized": False,
+            })
+        try:
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            return jsonify({
+                "status": "INVALID",
+                "error": "venue_economic_evidence_invalid",
+                "paper_only": True,
+                "orders_submitted": False,
+                "execution_authorized": False,
+            }), 409
+        if (
+            not isinstance(payload, dict)
+            or payload.get("paper_only") is not True
+            or payload.get("orders_submitted") is not False
+            or payload.get("execution_authorized") is not False
+            or not isinstance(payload.get("venues"), list)
+        ):
+            return jsonify({
+                "status": "INVALID",
+                "error": "venue_economic_evidence_safety_invariant_failed",
+                "paper_only": True,
+                "orders_submitted": False,
+                "execution_authorized": False,
+            }), 409
+        payload["report_path"] = str(report_path)
+        return jsonify(payload)
+
     @app.get("/diagnostics/export")
     def operational_diagnostics_export():
         require_scope("read_private_state")
