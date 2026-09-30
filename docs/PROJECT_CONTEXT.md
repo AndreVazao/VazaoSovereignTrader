@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — PR #225, #226 and #227 merged; WebSocket timing validation is now the active research gate
+Last updated: 2026-09-30 (UTC) — PR #225, #226, #227 and #228 merged; continuous PAPER study is now the active operational research task
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -27,7 +27,7 @@ Immediate operational goal: data accumulation and research, not live trading.
 ## 2. Current main state
 
 PR #223 (device proof, admin approval and rate-limit hardening) was merged by André.
-Current main SHA after PR #227: c31ac22a5de65df579a9a3107f6f00688ecd2a60.
+Current main SHA after PR #228: 83e38a99848fa94c536a5a14ad0a7bb9133f2dc4.
 
 Latest main validation observed:
 - Windows EXE run 36672120924: SUCCESS.
