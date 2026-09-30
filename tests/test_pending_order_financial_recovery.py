@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PC_ENGINE.core.engine import Position, RuntimeState, SovereignEngine
+from PC_ENGINE.core.execution_gate import ExecutionGate
 from PC_ENGINE.core.recovery import RecoveryManager
 
 
@@ -296,7 +297,11 @@ def test_restart_after_partial_sell_applies_only_remaining_delta_once(tmp_path):
 def test_sell_pending_preserves_execution_intent_until_pending_is_durable():
     engine = object.__new__(SovereignEngine)
     engine.paper = False
-    engine.state = RuntimeState()
+    engine.mode = "REAL"
+    engine.execution_gate = ExecutionGate()
+    engine.execution_gate.human_authorize()
+    engine.execution_gate.activate_real()
+    engine.state = RuntimeState(mode="REAL")
     engine.state.open_positions["BTC/USDT"] = Position(
         "binance", "BTC/USDT", 100.0, 1.0, 98.0, 104.0, 1.0, 0.10
     )
@@ -320,6 +325,7 @@ def test_sell_pending_preserves_execution_intent_until_pending_is_durable():
     class Exchange:
         name = "binance"
 
+    engine.exchanges = {"binance": Exchange()}
     engine._close_position(
         Exchange(), engine.state.open_positions["BTC/USDT"],
         101.0, "test", 0.0,
