@@ -278,3 +278,33 @@ def test_autonomous_readiness_endpoint_is_read_only_preview(monkeypatch):
     assert payload["readiness"]["ready"] is False
     assert payload["readiness"]["blockers"] == ["EVIDENCE_QUALITY"]
     assert engine.mode == "PAPER"
+
+
+def test_market_data_health_endpoint_reads_fresh_heartbeat(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    import time
+    health = tmp_path / "market_data_health.json"
+    health.write_text(json.dumps({
+        "service": "market_data_collector",
+        "status": "RUNNING",
+        "timestamp_ms": time.time_ns() // 1_000_000,
+        "symbols": ["BTC/USDT"],
+        "exchanges": ["binance"],
+        "paper_only": True,
+        "radar": {"events_total": 12, "events_by_exchange": {"binance": 12}},
+    }), encoding="utf-8")
+    engine = FakeEngine()
+    engine.config = {"real_mode_guard": {"enabled": True}, "radar": {"data_dir": str(tmp_path)}}
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+    response = client.get("/market-data-health", headers={"X-Token": "secret-token"})
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["stale"] is False
+    assert payload["radar"]["events_total"] == 12
+
+
+def test_market_data_health_endpoint_requires_token(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    assert client.get("/market-data-health").status_code == 401
