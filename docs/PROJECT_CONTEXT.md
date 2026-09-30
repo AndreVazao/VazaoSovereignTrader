@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC)
+Last updated: 2026-09-30 (UTC) — updated with device proof-of-possession implementation in progress
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -144,14 +144,27 @@ Reference: `docs/SHARED_INTELLIGENCE_PRIVACY_AND_NETWORK.md`.
 - Imported artifacts are untrusted advice.
 - Source code does not prove a live deployment/database has correct tenant isolation.
 
-## 8. Immediate next action for the next chat
+## 8. Current device proof-of-possession feature branch (in progress)
 
-1. Fetch live PR #219 details and latest branch head.
-2. Confirm all three CI workflows for latest head; current known SHA above was green.
-3. Read current `cloud/shared-learning/app/api/v1/devices/route.ts`, auth helpers and migrations; map the existing schema and security contracts.
-4. Implement step 1 (device proof-of-possession + secure admin approval) on a clean feature branch from the latest correct PR head; do not allow self-approval; add migration if necessary, tests and docs.
-5. Update PR #219 or open a clean stacked PR with minimal diff. Run all three CI workflows and inspect failure logs. Do not merge.
-6. Update this context file on the working branch with new SHA, CI IDs/outcomes and next step.
+A stacked feature branch was created from `feat/secure-onboarding-foundation-clean`:
+- Branch: `feat/device-proof-and-admin-approval`
+- Latest known commit before final context update: `24f91f11263527bbc2819903a5458878219110e7` (onboarding docs); fetch live branch head before acting.
+- Changes implemented so far: `verifyDeviceProof` uses Node crypto to verify signatures against the registered public key; tests cover valid Ed25519 signature, altered challenge and malformed signature. Added migration `202609300001_device_proof_and_approval.sql` with a one-time challenge table, `possession_verified_at`, and a database function that rechecks active admin role/account/password-rotation state, only approves pending devices with verified possession, and writes the audit event atomically. Added `POST /api/v1/devices/challenge`, `POST /api/v1/devices/verify`, and `POST /api/v1/devices/approve`; docs describe the flow. Challenges are 5-minute, hash-only at rest and single-use; verification consumes the challenge before checking signature to prevent replay. Device stays pending after proof until an eligible admin approves it.
+- No CI results exist yet for this new branch head. Do not treat earlier green CI on parent SHA `96a1b9cd2f90e4af5b297ba2cce0c3e0002e7347` as validation of these changes.
+- Security gaps still requiring review: no rate limiting/abuse monitoring yet; no end-to-end integration tests against a disposable Supabase database; approval auth has server-side active-admin and password-rotation checks but MFA/step-up authentication is not wired; route-level failure/race behavior needs review. Do not deploy.
+
+## 9. Immediate next action for the next chat
+
+1. Fetch live branch head and inspect every file changed in `feat/device-proof-and-admin-approval`.
+2. Check the TypeScript/test workflow and all other relevant CI. Fix any test/type/build failures on this branch.
+3. Review SQL function and routes for signature canonicalization, challenge replay/expiry/races, admin authorization, atomic audit, and Supabase RPC permissions. Add route/integration tests and rate limiting before considering production.
+4. Open a stacked PR targeting `feat/secure-onboarding-foundation-clean` only after code review and tests are green, or otherwise prepare a clean minimal PR. Keep PR #219 open and unmerged.
+5. Update this context file with exact PR number, branch head SHA, CI run IDs/outcomes, blockers and next action.
+6. Continue with trusted account provisioning/login, MFA/owner recovery, signed configuration governance, vault restore UX, and sync runtime validation in that order.
+
+## 10. Original continuity prompt for a new ChatGPT conversation
+
+You are continuing work on GitHub repository `AndreVazao/VazaoSovereignTrader` in project “Pessoal programação”. First read `docs/PROJECT_CONTEXT.md` on the current feature/PR branch, then verify live GitHub state, latest SHA and CI before acting. The active stacked feature branch is `feat/device-proof-and-admin-approval`, based on open PR #219 branch `feat/secure-onboarding-foundation-clean`. Continue with the next action in section 9, beginning by reviewing and testing the new device proof-of-possession/admin approval implementation. Work autonomously on safe code changes, always use a dedicated branch/PR, test and report in Portuguese. Do not merge without my explicit authorization. Do not create cloud resources, deploy, incur costs or provision accounts until current costs/terms are checked, presented to me, and I explicitly authorize. Never expose or commit secrets. Keep trading fail-closed; shared learning must never bypass local risk gates or authorize REAL. At the end of each work session, update `docs/PROJECT_CONTEXT.md` with current branch/head SHA, exact CI outcomes, completed work, blockers and next action so another chat can continue without losing context.
 
 ## 9. Prompt for starting a new ChatGPT conversation
 
