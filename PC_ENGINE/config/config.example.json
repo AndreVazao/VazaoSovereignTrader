@@ -22,10 +22,10 @@
     "token_env": "VST_SHARED_INTELLIGENCE_TOKEN",
     "state_path": "PC_ENGINE/data/shared_intelligence/sync_state.json",
     "pull_limit": 500,
-    "pull_interval_seconds": 60,
-    "push_interval_seconds": 300,
+    "pull_interval_seconds": 86400,
+    "push_interval_seconds": 86400,
     "timeout_seconds": 5,
-    "notes": "Shared learning contains statistical/model artifacts only. Financial state, balances, orders, P&L, credentials and REAL authorization never sync. Cloud sync is opt-in and never part of the trading hot path."
+    "notes": "Sovereign local-first operation. Shared learning contains aggregate statistical/model artifacts only; private financial state and credentials never sync. Optional cloud sync is throttled to daily intervals, best-effort, and never part of the trading hot path."
   },
   "identity": {
     "mode": "local",

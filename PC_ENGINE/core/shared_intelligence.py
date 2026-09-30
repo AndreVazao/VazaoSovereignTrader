@@ -97,7 +97,7 @@ class SharedIntelligenceStore:
         unknown = set(payload) - SHARED_FIELDS
         if unknown:
             raise ValueError("private_or_unknown_fields:" + ",".join(sorted(unknown)))
-        required = SHARED_FIELDS - {"producer_version"}
+        required = SHARED_FIELDS - {"producer_version", "source_owner_ref", "source_node_ref"}
         missing = required - set(payload)
         if missing:
             raise ValueError("missing_fields:" + ",".join(sorted(missing)))
