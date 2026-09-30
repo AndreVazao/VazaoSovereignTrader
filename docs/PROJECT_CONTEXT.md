@@ -400,3 +400,23 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 3. Add/verify an end-to-end path test from collector append to explicit refresh output using the same configured relative and absolute `hot_path_outcomes_path`; keep all expensive report generation out of market-event callbacks.
 4. Continue chronological OOS, regime stratification and cost-stress accumulation. Do not declare profitability without adequate evidence.
 5. Keep PAPER as default. Never submit live orders, enable REAL or bypass any gate. No paid/cloud resources or costs without explicit approval.
+
+
+## 20. Handoff — 2026-09-30, after PR #272
+
+### Verified repository state
+- Current main SHA immediately after PR #272 merge: `64239b5fbd4b03c19ab98c592b7393d82d596c67`.
+- PR #272 (`test: verify PAPER outcome path end to end`) merged by squash from exact head `7486bb47a655068864a0b137a6c4bb3086ea79b0`; merge commit `64239b5fbd4b03c19ab98c592b7393d82d596c67`.
+- Exact-head Python test run `36746374511` passed.
+- Post-merge main CI is pending at handoff: Python run `36746526064` is queued and Windows EXE run `36746526009` is in progress. Verify both against main SHA `64239b5fbd4b03c19ab98c592b7393d82d596c67`.
+- No open PRs were present immediately after merge.
+
+### PR #272 — collector-to-refresh path integration
+- Added an end-to-end test using the same configured relative `hot_path_outcomes_path` for the collector's path resolver and the evidence refresh resolver.
+- The test writes completed PAPER outcomes through the real `append_paper_outcomes` persistence function, invokes the explicit report refresh, and verifies the relationship OOS report consumed the exact same file and was written under the configured data directory.
+- Both collector and refresh roots are isolated to a temporary directory; no production files or external services are touched. Execution authorization remains false.
+- This complements the prior unit tests for relative/absolute path resolution and report generation. It does not move report generation into market-event callbacks.
+
+### Next engineering action
+- After post-merge CI is green, implement the separate venue economic-evidence dimension without conflating it with operational health. Use only configured/observed venues and adequately sampled PAPER data; include spreads, explicit fee assumptions, slippage, latency and relationship-level OOS evidence. No fabricated venue lists, no economic GREEN from health-only signals, and RED means review rather than automatic removal.
+- Continue to preserve PAPER default, RealModeGuard, readiness/preflight, reconciliation, Risk Engine and all execution gates. No live orders, paid/cloud resources, secrets or costs without explicit approval.
