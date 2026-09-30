@@ -10,6 +10,7 @@ from pathlib import Path
 from PC_ENGINE.radar.hot_path import HotPathLeadLagEngine, HotPathOpportunity
 from PC_ENGINE.radar.hot_path_outcomes import HotPathOutcomeTracker
 from PC_ENGINE.radar.hot_path_calibration import write_hot_path_calibration
+from PC_ENGINE.radar.hot_path_persistence import append_paper_outcomes
 from PC_ENGINE.radar.lead_lag_learning import LeadLagLearningEngine
 from PC_ENGINE.radar.websocket_radar import WebSocketMarketRadar
 from PC_ENGINE.research.paper_study import load_states, run_study, write_report
@@ -91,6 +92,15 @@ def main() -> None:
         max_pending=int(radar_cfg.get("hot_path_max_pending_outcomes", 4096))
     )
     outcomes_path = data_dir / "hot_path_outcomes.jsonl"
+
+    def persist_completed_outcomes() -> int:
+        # Keep buffered rows until the append and fsync have both succeeded.
+        rows = outcome_tracker.peek_completed()
+        if not rows:
+            return 0
+        written = append_paper_outcomes(outcomes_path, rows)
+        outcome_tracker.acknowledge_completed(written)
+        return written
 
     def on_market_event(event) -> None:
         # Callback stays memory-only: no disk I/O, blocking research, or orders.
@@ -191,11 +201,15 @@ def main() -> None:
                 opportunity_queue.clear()
             for opportunity in queued:
                 hot_path.persist(opportunity)
-            completed_outcomes = outcome_tracker.drain_completed()
-            if completed_outcomes:
-                with outcomes_path.open("a", encoding="utf-8") as handle:
-                    for outcome in completed_outcomes:
-                        handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\n")
+            try:
+                persist_completed_outcomes()
+            except OSError as exc:
+                # Do not acknowledge the in-memory batch; retry after the next loop.
+                print(json.dumps({
+                    "service": "market_data_collector",
+                    "paper_outcome_persistence_error": f"{type(exc).__name__}: {exc}",
+                    "buffered": outcome_tracker.snapshot()["completed_buffered"],
+                }), flush=True)
 
             if study_enabled and now >= next_study:
                 states_path = data_dir / str(study_cfg.get("states_filename", "market_states.jsonl"))
@@ -247,11 +261,10 @@ def main() -> None:
     finally:
         radar.stop()
         learner.learn()
-        completed_outcomes = outcome_tracker.drain_completed()
-        if completed_outcomes:
-            with outcomes_path.open("a", encoding="utf-8") as handle:
-                for outcome in completed_outcomes:
-                    handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\n")
+        try:
+            persist_completed_outcomes()
+        except OSError as exc:
+            print(f"Final PAPER outcome persistence failed: {type(exc).__name__}: {exc}", flush=True)
         write_health(
             "STOPPED",
             radar=radar.snapshot(),

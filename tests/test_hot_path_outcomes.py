@@ -78,3 +78,21 @@ def test_outcome_tracker_is_bounded_and_observation_only():
     assert tracker.register(opportunity)
     assert tracker.snapshot()["paper_only"] is True
     assert tracker.snapshot()["orders_submitted"] is False
+
+
+def test_completed_outcomes_remain_buffered_until_persistence_is_acknowledged():
+    opportunity = _opportunity()
+    assert opportunity is not None
+    tracker = HotPathOutcomeTracker()
+    assert tracker.register(opportunity)
+    tracker.on_market_event(_event("coinbase", 100.2, 1700))
+
+    first_peek = tracker.peek_completed()
+    second_peek = tracker.peek_completed()
+    assert len(first_peek) == 1
+    assert first_peek == second_peek
+    assert tracker.snapshot()["completed_buffered"] == 1
+
+    assert tracker.acknowledge_completed(1) == 1
+    assert tracker.peek_completed() == []
+    assert tracker.snapshot()["completed_buffered"] == 0
