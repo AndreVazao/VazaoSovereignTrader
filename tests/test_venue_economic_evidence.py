@@ -162,3 +162,48 @@ def test_spread_uses_only_fresh_valid_public_top_of_book_observations(tmp_path):
     assert report["integrity"]["ticker_non_paper_ignored"] == 1
     assert report["integrity"]["ticker_malformed_ignored"] == 1
     assert report["execution_authorized"] is False
+
+
+def test_top_of_book_reports_freshness_and_coverage_per_venue_symbol(tmp_path):
+    outcomes = tmp_path / "outcomes.jsonl"
+    outcomes.write_text(
+        "\n".join(json.dumps(_outcome(i, net=1.0)) for i in range(20)) + "\n",
+        encoding="utf-8",
+    )
+    ticker_path = tmp_path / "ticker.jsonl"
+    base = {
+        "venue": "coinbase",
+        "event_type": "ticker",
+        "observation_type": "PUBLIC_TOP_OF_BOOK",
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+    }
+    rows = [
+        {**base, "event_id": "btc-1", "symbol": "BTC/USDT", "bid": 100.0, "ask": 100.2, "local_receive_wall_ns": 9_500_000_000},
+        {**base, "event_id": "btc-2", "symbol": "BTC/USDT", "bid": 100.1, "ask": 100.3, "local_receive_wall_ns": 9_000_000_000},
+        {**base, "event_id": "eth-1", "symbol": "ETH/USDT", "bid": 200.0, "ask": 200.4, "local_receive_wall_ns": 9_900_000_000},
+        {**base, "event_id": "stale", "symbol": "ETH/USDT", "bid": 200.0, "ask": 200.4, "local_receive_wall_ns": 1_000_000_000},
+    ]
+    ticker_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    report = build_venue_economic_evidence(
+        {"radar": {"websocket_exchanges": ["coinbase"]}},
+        outcomes,
+        now_ms=10_000,
+        min_samples=10,
+        min_oos_samples=8,
+        top_of_book_path=ticker_path,
+        top_of_book_max_age_ms=2_000,
+        top_of_book_min_samples=1,
+    )
+
+    venue = report["venues"][0]
+    coverage = {row["symbol"]: row for row in report["top_of_book_coverage"]}
+    assert venue["top_of_book_valid_observations"] == 3
+    assert venue["top_of_book_last_observation_age_ms"] == 100
+    assert venue["top_of_book_symbol_coverage"][0]["symbol"] == "BTC/USDT"
+    assert coverage["BTC/USDT"]["valid_observations"] == 2
+    assert coverage["BTC/USDT"]["age_p95_ms"] == 1000
+    assert coverage["ETH/USDT"]["valid_observations"] == 1
+    assert report["integrity"]["ticker_stale_ignored"] == 1
