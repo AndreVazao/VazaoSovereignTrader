@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
     if (profileError) return fail(503, "profile_unavailable");
     if (!profile || profile.account_state !== "active" || profile.must_change_password !== false) return fail(403, "account_not_ready");
 
+    const { data: withinLimit, error: rateLimitError } = await db.rpc("consume_device_security_rate_limit", {
+      p_user_id: user.id, p_scope: "device.challenge", p_limit: 10, p_window_seconds: 300
+    });
+    if (rateLimitError) return fail(503, "rate_limit_unavailable");
+    if (withinLimit !== true) return fail(429, "rate_limit_exceeded");
+
     const { data: device, error: deviceError } = await db.from("authorized_devices")
       .select("id,status").eq("id", deviceId).eq("user_id", user.id).maybeSingle();
     if (deviceError) return fail(503, "device_unavailable");
