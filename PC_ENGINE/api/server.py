@@ -22,6 +22,7 @@ from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 from PC_ENGINE.diagnostics.operational import build_operational_diagnostics, latest_events_by_venue_symbol, storage_metrics
 from PC_ENGINE.diagnostics.venue_health import build_venue_health
+from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scorecard, refresh_runtime_evidence_reports
 
 
@@ -87,7 +88,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("read_private_state")
         radar_cfg = engine.config.get("radar", {})
         raw_dir = radar_cfg.get("data_dir", "PC_ENGINE/data/radar")
-        health_path = __import__("pathlib").Path(raw_dir) / "market_data_health.json"
+        health_path = resolve_config_path(raw_dir) / "market_data_health.json"
         if not health_path.exists():
             return jsonify({
                 "ok": False,
@@ -114,7 +115,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         engine_snapshot = engine.snapshot()
         radar_cfg = engine.config.get("radar", {})
         raw_dir = radar_cfg.get("data_dir", "PC_ENGINE/data/radar")
-        raw_path = Path(raw_dir)
+        raw_path = resolve_config_path(raw_dir)
         health_path = raw_path / "market_data_health.json"
         market_data = {"status": "NOT_STARTED", "ok": False, "stale": True}
         if health_path.exists():

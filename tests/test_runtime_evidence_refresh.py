@@ -33,3 +33,37 @@ def test_refresh_generates_paper_reports_without_authorizing_execution(tmp_path)
         assert payload["paper_only"] is True
         assert payload["orders_submitted"] is False
         assert payload["execution_authorized"] is False
+
+
+
+def test_relative_configured_paths_resolve_from_repository_root(tmp_path, monkeypatch):
+    from PC_ENGINE.diagnostics import path_utils
+
+    monkeypatch.setattr(path_utils, "REPO_ROOT", tmp_path)
+    report = refresh_runtime_evidence_reports({
+        "radar": {
+            "data_dir": "runtime/radar",
+            "hot_path_outcomes_path": "runtime/custom-outcomes.jsonl",
+            "evidence_reports": {"calibration": "reports/custom-calibration.json"},
+            "evidence_train_size": 4,
+            "evidence_test_size": 2,
+            "evidence_min_test_samples": 2,
+        }
+    })
+
+    assert report["outcomes_path"] == str(tmp_path / "runtime/custom-outcomes.jsonl")
+    assert report["outcomes_file_exists"] is False
+    assert (tmp_path / "reports/custom-calibration.json").is_file()
+    assert (tmp_path / "runtime/radar/hot_path_walk_forward.json").is_file()
+    assert report["scorecard"]["report_paths"]["calibration"] == str(tmp_path / "reports/custom-calibration.json")
+
+
+def test_collector_honours_configured_outcomes_path(tmp_path, monkeypatch):
+    from PC_ENGINE.tools import run_market_data_collector as collector
+
+    monkeypatch.setattr(collector, "REPO_ROOT", tmp_path)
+    radar_cfg = {"hot_path_outcomes_path": "runtime/custom-outcomes.jsonl"}
+    data_dir = tmp_path / "runtime" / "radar"
+
+    assert collector._outcomes_path(radar_cfg, data_dir) == tmp_path / "runtime/custom-outcomes.jsonl"
+    assert collector._outcomes_path({}, data_dir) == data_dir / "hot_path_outcomes.jsonl"
