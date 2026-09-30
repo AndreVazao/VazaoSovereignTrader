@@ -2,7 +2,7 @@
 -- This is a server-side guard, not a substitute for edge/WAF controls or abuse monitoring.
 create table if not exists public.device_security_rate_limits (
   user_id uuid not null references auth.users(id) on delete cascade,
-  scope text not null check (scope in ('device.challenge', 'device.verify', 'device.approve')),
+  scope text not null check (scope in ('device.register', 'device.challenge', 'device.verify', 'device.approve')),
   window_started_at timestamptz not null,
   request_count integer not null check (request_count > 0),
   updated_at timestamptz not null default now(),
