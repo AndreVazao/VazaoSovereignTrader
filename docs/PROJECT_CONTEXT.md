@@ -606,3 +606,26 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. If checks pass, next evaluate freshness/coverage diagnostics by venue and symbol, and ensure spread data is joined to the correct venue-symbol configuration without mixing symbols or stale data.
 3. Keep the collector opt-in, bounded, public-data-only and separate from trading execution. No orders, credentials, REAL-mode changes, cloud provisioning, deployments, paid services or spend without explicit authorization.
 4. Maintain separation between operational health, economic evidence, OOS uncertainty and execution authorization. Positive spread/OOS evidence is never permission to trade.
+
+
+## 29. Handoff — 2026-09-30, top-of-book freshness/coverage diagnostics in progress
+
+### Baseline
+- PR #282 documentation handoff merged via squash at main SHA `35c0259fb56e499c7f5f5f376fa4cf6fe2d9abe0` after exact-head Python run `36754843073` completed successfully; PR was clean/mergeable.
+- The public top-of-book collector from PR #281 remains optional, public-data-only and PAPER-only. It is not auto-started by the trading runtime.
+
+### Current feature branch
+- Branch: `feat/top-of-book-coverage-diagnostics`.
+- Adds per-venue/per-symbol top-of-book coverage to the economic evidence report: valid observation count, last observation age, p50/p95 age and venue aggregate freshness.
+- Stale observations remain excluded from spread evidence and coverage. Venue/symbol identities are kept separate; no aliases or symbols are mixed.
+- Dashboard economics panel now surfaces symbol-level coverage and freshness alongside the existing spread metric, while keeping operational health and economic evidence separate.
+- Added tests for venue-symbol coverage and freshness filtering. Exact-head CI still needs to validate the branch.
+
+### Safety
+- PAPER only; no order submission, REAL promotion, gate bypass, cloud provisioning, deployment, paid service or credential changes.
+
+### Next actions
+1. Validate exact PR-head Python tests and Windows EXE build/smoke.
+2. Review the final diff and merge only if checks are green and PR is clean/mergeable.
+3. Verify post-merge Python and Windows CI on the resulting main SHA.
+4. Continue toward a genuinely installable PAPER-first Windows workflow; keep cloud activation and REAL execution explicitly gated.
