@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — current verified handoff: main at 3f9a284933e8bed28ee3efa2ff754b009bc3172c; PR #258–#261 merged
+Last updated: 2026-09-30 (UTC) — current verified handoff: main at 648502928c0426bd86334c7f3d4957d42f4162a7; implementation PRs #258–#263 merged
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -27,9 +27,9 @@ Immediate operational goal: data accumulation and research, not live trading.
 ## 2. Current main state
 
 PR #223 (device proof, admin approval and rate-limit hardening) was merged by André.
-Current main SHA after PR #261: 3f9a284933e8bed28ee3efa2ff754b009bc3172c.
+Current main SHA after PR #263: 648502928c0426bd86334c7f3d4957d42f4162a7.
 
-Latest main validation observed:
+Previous main validation before PR #263:
 - Windows EXE run 36672120924: SUCCESS.
 - Shared Learning Service run 36672120901: SUCCESS.
 - No open PRs and no open issues at the time of this context update.
@@ -224,7 +224,7 @@ Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live
 ## 15. Current handoff — 2026-09-30 (verified against GitHub)
 
 ### Current main
-- Main SHA: `3f9a284933e8bed28ee3efa2ff754b009bc3172c`.
+- Main SHA: `648502928c0426bd86334c7f3d4957d42f4162a7`.
 - PR #260 merged at 2026-09-30 15:10 UTC; merge SHA above.
 - Exact PR #260 head: `577bde3a751b7ca67b972cbe2179ec581836831b`.
 - Exact-head CI for PR #260: both Python test jobs SUCCESS and Windows EXE build SUCCESS before merge.
@@ -264,10 +264,10 @@ Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live
 - If outcomes are missing, reports are generated as empty evidence artifacts; requirements remain unmet. This does not imply strategy failure; it means there is no accumulated evidence yet.
 - All generated reports retain `paper_only=true`, `orders_submitted=false`, `execution_authorized=false`. No REAL gate changes and no orders are submitted.
 
-### Active branch / PR status
-- PR #260 is merged; no feature branch should be assumed active without checking GitHub.
+### Historical branch / PR status at the PR #260–#261 handoff
+- PR #260 was merged; no feature branch should be assumed active without checking GitHub.
 - Latest completed implementation sequence: PR #258 venue health signage -> PR #259 runtime scorecard -> PR #260 explicit PAPER evidence refresh.
-- PR #261 merged: updated this project context/continuation handoff. Documentation CI passed on exact head `9a6440a50f71e31d9934daa460ca7c5b4a57c1b7`; merge SHA `3f9a284933e8bed28ee3efa2ff754b009bc3172c`.
+- PR #261 merged: updated this project context/continuation handoff. Documentation CI passed on exact head `9a6440a50f71e31d9934daa460ca7c5b4a57c1b7`; merge SHA `648502928c0426bd86334c7f3d4957d42f4162a7`.
 - Before further coding, inspect live main, open PRs, and current CI. Keep one active implementation PR wherever practical.
 
 ### Immediate next engineering actions
@@ -287,4 +287,31 @@ Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live
 - The future mobile view should include engine/PAPER state, P&L only when backed by real PAPER records, feed quality/latency, lead-lag evidence, OOS/walk-forward/regime coverage, learning status, alerts and explicit REAL LOCKED status until all gates are satisfied.
 
 ### Continuity prompt for the next chat
-Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal). First read `docs/PROJECT_CONTEXT.md` and verify live GitHub state; do not assume branches, PRs, or CI state from this note alone. Current verified main SHA at handoff: `3f9a284933e8bed28ee3efa2ff754b009bc3172c`. PR #258 added exchange venue GREEN/YELLOW/RED operational health signage; PR #259 added a read-only PAPER evidence scorecard; PR #260 added authenticated `POST /evidence-scorecard/refresh` and a cockpit refresh button to regenerate calibration, walk-forward, regime walk-forward and OOS cost/bootstrap reports from completed PAPER outcomes. PR #260 exact-head Python test jobs and Windows EXE build all passed before merge. Continue autonomously with a dedicated branch and PR, inspect the evidence refresh path/config/collector integration, verify that outcomes are written to the same path the scorecard reads, then improve venue classification using separate operational-health and economic-performance evidence. Keep everything PAPER-only; never submit orders, activate REAL, bypass readiness/risk/RealModeGuard, create cloud resources or incur costs without explicit authorization. Merge only after exact-head required CI is green and the diff has no blockers. The user also wants a polished phone-friendly dashboard mockup later, with venue signage and trader status, but it must not interrupt core engine work.
+Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal). First read `docs/PROJECT_CONTEXT.md` and verify live GitHub state; do not assume branches, PRs, or CI state from this note alone. Current verified main SHA at handoff: `648502928c0426bd86334c7f3d4957d42f4162a7`. PR #258 added exchange venue GREEN/YELLOW/RED operational health signage; PR #259 added a read-only PAPER evidence scorecard; PR #260 added authenticated `POST /evidence-scorecard/refresh` and a cockpit refresh button to regenerate calibration, walk-forward, regime walk-forward and OOS cost/bootstrap reports from completed PAPER outcomes. PR #260 exact-head Python test jobs and Windows EXE build all passed before merge. Continue autonomously with a dedicated branch and PR, inspect the evidence refresh path/config/collector integration, verify that outcomes are written to the same path the scorecard reads, then improve venue classification using separate operational-health and economic-performance evidence. Keep everything PAPER-only; never submit orders, activate REAL, bypass readiness/risk/RealModeGuard, create cloud resources or incur costs without explicit authorization. Merge only after exact-head required CI is green and the diff has no blockers. The user also wants a polished phone-friendly dashboard mockup later, with venue signage and trader status, but it must not interrupt core engine work.
+
+
+## 16. Evidence path consistency audit — 2026-09-30
+
+### Verified finding and fix — PR #263
+- Current main after merge: `648502928c0426bd86334c7f3d4957d42f4162a7`.
+- PR #263: https://github.com/AndreVazao/VazaoSovereignTrader/pull/263
+- Merge commit: `648502928c0426bd86334c7f3d4957d42f4162a7`.
+- Fixed a real configuration integration defect: the collector always wrote outcomes to `data_dir/hot_path_outcomes.jsonl`, even when `radar.hot_path_outcomes_path` was configured, while the refresh service read the configured override.
+- Added a shared `PC_ENGINE/diagnostics/path_utils.py` resolver so relative configured paths are anchored to the repository root instead of depending on the process working directory.
+- Applied consistent root-based path resolution to evidence report paths, the evidence refresh service, venue-health telemetry, and the cockpit `/market-data-health` and `/diagnostics` endpoints.
+- Added tests for configured outcome path selection, relative data/report paths, and the market-data heartbeat endpoint with a relative configured data directory.
+- Exact PR-head CI for `ea7d00ae5b25761f31433cc5d118887e11f2f303`: Python tests SUCCESS (run 36740419300); Windows EXE build and smoke test SUCCESS (run 36740419273). PR was mergeable/clean at merge.
+- Main post-merge CI for `648502928c0426bd86334c7f3d4957d42f4162a7` was still running at the time this section was written; verify both Python tests and Windows EXE runs before treating post-merge validation as complete.
+- No changes to execution mode, Risk Engine, RealModeGuard, readiness/preflight/reconciliation, or REAL authorization. Reports remain PAPER-only; no orders were submitted and no cloud resources/costs were introduced.
+
+### Repository housekeeping verified
+- Closed stale PR #226 because its operational diagnostics endpoint/module were already present in main.
+- Closed stale PR #253 because the chronological walk-forward module/tests were already present in main through later merged work.
+- PR #243 remains open: `feat/lead-lag-oos-study`, head `71761c1fdc6ebfe4dd120bd32eb9d068138b8a01`. Its base SHA is old; do not merge without reviewing the diff against current main and rebasing/rebuilding its tests. Treat it as the only pre-existing feature PR, separate from the path-consistency fix.
+
+### Next technical actions
+1. Verify post-merge Python and Windows EXE CI on exact main SHA `648502928c0426bd86334c7f3d4957d42f4162a7`.
+2. Audit report loaders and writers for malformed UTF-8/JSON, invalid or non-monotonic timestamps, duplicate outcomes, insufficient samples, and atomic-write/failure recovery; add targeted tests.
+3. Audit `build_venue_health` against malformed timestamps and nested JSON structures so a bad telemetry line cannot break the endpoint. Continue to list only configured/observed venues.
+4. Add the separate economic venue evidence dimension (spread, fees, slippage, latency and lead/lag PAPER outcomes) only with sufficient sample counts; operational GREEN must not imply profitability.
+5. Continue to keep PAPER as the default and preserve every REAL gate. No cloud activation or spend without explicit authorization.
