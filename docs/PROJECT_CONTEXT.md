@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — current verified handoff: main at 648502928c0426bd86334c7f3d4957d42f4162a7; PR #258–#261 merged
+Last updated: 2026-09-30 (UTC) — current verified handoff: main at 648502928c0426bd86334c7f3d4957d42f4162a7; implementation PRs #258–#263 merged
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -27,9 +27,9 @@ Immediate operational goal: data accumulation and research, not live trading.
 ## 2. Current main state
 
 PR #223 (device proof, admin approval and rate-limit hardening) was merged by André.
-Current main SHA after PR #261: 648502928c0426bd86334c7f3d4957d42f4162a7.
+Current main SHA after PR #263: 648502928c0426bd86334c7f3d4957d42f4162a7.
 
-Latest main validation observed:
+Previous main validation before PR #263:
 - Windows EXE run 36672120924: SUCCESS.
 - Shared Learning Service run 36672120901: SUCCESS.
 - No open PRs and no open issues at the time of this context update.
