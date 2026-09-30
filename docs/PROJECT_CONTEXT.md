@@ -661,3 +661,15 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 - The new adapter never clicks order controls, submits forms, calls private APIs or reports a simulated PAPER intent as an exchange fill.
 - Added `tests/test_playwright_paper_surface.py` and `docs/EXECUTION_BROWSER_ADAPTER.md`.
 - Next action: exact-head Python/Windows CI, inspect diff, then merge only if clean/green. After integration, add venue-specific browser observation/feedback safely; keep real submission behind existing execution/risk/readiness/RealModeGuard gates. Then implement Desktop and Android bridges separately.
+
+
+## Current handoff — 2026-09-30, execution surface dashboard signalling
+
+- PR #287 merged to main at `020e6ca15c8025ea405a98da5520876cb91e46ab` after exact-head Python SUCCESS (`36770762998`) and Windows SUCCESS (`36770762627`).
+- Post-merge main CI is running for the merged SHA; do not infer completion until exact SHA results are checked.
+- Current branch: `feat/execution-surface-dashboard`.
+- Added read-only `/execution-surfaces` catalogue backed by `PC_ENGINE/diagnostics/execution_surface_catalog.py`.
+- Dashboard now has a dedicated `Superfícies de execução` panel showing WEB_BROWSER, DESKTOP_APP, ANDROID_APK and HUMAN surface metadata when configured.
+- The catalogue is deliberately configuration-only: `live_probe=false`; it cannot submit orders, probe private accounts or authorize REAL.
+- Added tests and `docs/EXECUTION_SURFACE_DASHBOARD.md`.
+- Next action: wait for post-merge main CI on `020e6ca...`, then validate exact-head CI for this branch. If green, merge. The following branch should connect persistent `ExecutionSurfaceStatus`/adapter feedback to the dashboard, exposing connection state, last feedback age, reconnects and data-write health while keeping operational health separate from economic evidence, OOS uncertainty and execution authorization.
