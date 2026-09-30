@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PC_ENGINE.radar.hot_path import HotPathLeadLagEngine, HotPathOpportunity
 from PC_ENGINE.radar.hot_path_outcomes import HotPathOutcomeTracker
+from PC_ENGINE.radar.hot_path_calibration import write_hot_path_calibration
 from PC_ENGINE.radar.lead_lag_learning import LeadLagLearningEngine
 from PC_ENGINE.radar.websocket_radar import WebSocketMarketRadar
 from PC_ENGINE.research.paper_study import load_states, run_study, write_report
@@ -144,6 +145,11 @@ def main() -> None:
             now = time.monotonic()
             if now >= next_learning:
                 stats = learner.learn()
+                calibration = write_hot_path_calibration(
+                    outcomes_path,
+                    data_dir / "hot_path_calibration.json",
+                    min_samples=int(radar_cfg.get("hot_path_calibration_min_samples", 100)),
+                )
                 for row in stats:
                     if row.eligible:
                         hot_path.set_expectancy(
@@ -161,11 +167,19 @@ def main() -> None:
                         "stats": len(stats),
                         "eligible_paper_relationships": sum(1 for row in stats if row.eligible),
                     },
+                    hot_path_calibration={
+                        "outcome_samples": calibration["outcome_samples"],
+                        "relationships": calibration["relationships"],
+                        "paper_only": True,
+                        "execution_authorized": False,
+                    },
                 )
                 print(json.dumps({
                     "service": "market_data_collector",
                     "stats": len(stats),
                     "eligible_paper_relationships": sum(1 for row in stats if row.eligible),
+                    "hot_path_outcome_samples": calibration["outcome_samples"],
+                    "hot_path_calibration_relationships": calibration["relationships"],
                     "timestamp_ms": time.time_ns() // 1_000_000,
                 }, ensure_ascii=False), flush=True)
                 next_learning = now + max(30.0, args.learn_minutes * 60.0)
