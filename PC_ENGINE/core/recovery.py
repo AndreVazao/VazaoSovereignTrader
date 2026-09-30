@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from dataclasses import asdict
@@ -7,6 +8,19 @@ from pathlib import Path
 from typing import Dict
 
 from PC_ENGINE.core.config import DATA_DIR
+
+
+SCHEMA_VERSION = 2
+
+
+def _canonical_payload(payload: dict) -> bytes:
+    body = dict(payload)
+    body.pop("integrity_sha256", None)
+    return json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _digest(payload: dict) -> str:
+    return hashlib.sha256(_canonical_payload(payload)).hexdigest()
 
 
 class RecoveryManager:
@@ -18,6 +32,66 @@ class RecoveryManager:
         else:
             state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state_path = state_path
+        self.backup_path = state_path.with_suffix(state_path.suffix + ".bak")
+
+    @staticmethod
+    def _empty_state() -> Dict:
+        return {
+            "positions": {},
+            "pending_orders": {},
+            "order_guards": {},
+            "execution_intents": {},
+            "financial_account": {},
+            "risk_state": {},
+        }
+
+    def _build_payload(
+        self,
+        positions: Dict,
+        pending_orders: Dict | None,
+        order_guards: Dict[str, float] | None,
+        execution_intents: Dict[str, dict] | None,
+        financial_account: Dict | None,
+        risk_state: Dict | None,
+        generation: int,
+    ) -> dict:
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "generation": int(generation),
+            "ts": int(time.time()),
+            "positions": {str(symbol): asdict(position) for symbol, position in sorted(positions.items())},
+            "pending_orders": dict(sorted((pending_orders or {}).items())),
+            "order_guards": {str(key): float(value) for key, value in sorted((order_guards or {}).items())},
+            "execution_intents": dict(sorted((execution_intents or {}).items())),
+            "financial_account": dict(financial_account or {}),
+            "risk_state": dict(risk_state or {}),
+        }
+        payload["integrity_sha256"] = _digest(payload)
+        return payload
+
+    def _read_valid(self, path: Path) -> tuple[dict | None, str | None]:
+        if not path.exists():
+            return None, "missing"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("recovery root must be a JSON object")
+            fields = self._empty_state()
+            for name in fields:
+                value = payload.get(name, {})
+                if not isinstance(value, dict):
+                    raise ValueError(f"recovery field '{name}' must be an object")
+            stored_digest = str(payload.get("integrity_sha256", "")).strip()
+            if stored_digest and stored_digest != _digest(payload):
+                raise ValueError("recovery integrity digest mismatch")
+            # Files from schema 1 did not carry a digest; accept them for compatibility.
+            if stored_digest:
+                schema = int(payload.get("schema_version", 1))
+                if schema > SCHEMA_VERSION:
+                    raise ValueError(f"unsupported recovery schema: {schema}")
+            return payload, None
+        except Exception as exc:
+            return None, f"{type(exc).__name__}: {exc}"
 
     def save_positions(
         self,
@@ -28,48 +102,66 @@ class RecoveryManager:
         financial_account: Dict | None = None,
         risk_state: Dict | None = None,
     ) -> None:
-        payload = {
-            "ts": int(time.time()),
-            "positions": {symbol: asdict(position) for symbol, position in positions.items()},
-            "pending_orders": dict(pending_orders or {}),
-            "order_guards": {str(key): float(value) for key, value in (order_guards or {}).items()},
-            "execution_intents": dict(execution_intents or {}),
-            "financial_account": dict(financial_account or {}),
-            "risk_state": dict(risk_state or {}),
-        }
+        current, _ = self._read_valid(self.state_path)
+        previous_generation = int((current or {}).get("generation", 0) or 0)
+        payload = self._build_payload(
+            positions,
+            pending_orders,
+            order_guards,
+            execution_intents,
+            financial_account,
+            risk_state,
+            previous_generation + 1,
+        )
         tmp_path = self.state_path.with_suffix(self.state_path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         tmp_path.replace(self.state_path)
+        # Keep the last known-good snapshot independently so a damaged primary can recover.
+        self.backup_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     def load_state(self) -> Dict:
-        if not self.state_path.exists():
-            return {"positions": {}, "pending_orders": {}, "order_guards": {}, "execution_intents": {}, "financial_account": {}, "risk_state": {}}
-        try:
-            payload = json.loads(self.state_path.read_text(encoding="utf-8"))
-            if not isinstance(payload, dict):
-                raise ValueError("recovery root must be a JSON object")
-            fields = {
-                "positions": payload.get("positions", {}),
-                "pending_orders": payload.get("pending_orders", {}),
-                "order_guards": payload.get("order_guards", {}),
-                "execution_intents": payload.get("execution_intents", {}),
-                "financial_account": payload.get("financial_account", {}),
-                "risk_state": payload.get("risk_state", {}),
-            }
-            for name, value in fields.items():
-                if not isinstance(value, dict):
-                    raise ValueError(f"recovery field '{name}' must be an object")
-            return fields
-        except Exception as exc:
-            return {
-                "positions": {},
-                "pending_orders": {},
-                "order_guards": {},
-                "execution_intents": {},
-                "financial_account": {},
-                "risk_state": {},
-                "recovery_error": f"{type(exc).__name__}: {exc}",
-            }
+        primary, primary_error = self._read_valid(self.state_path)
+        selected = primary
+        recovery_source = "primary"
+        recovery_error = None
+        if selected is None:
+            backup_path = getattr(self, "backup_path", None)
+            backup, backup_error = self._read_valid(backup_path) if backup_path is not None else (None, "missing")
+            if backup is not None:
+                selected = backup
+                recovery_source = "backup"
+                recovery_error = primary_error
+            else:
+                recovery_error = f"primary={primary_error}; backup={backup_error}"
+        if selected is None:
+            state = self._empty_state()
+            state["recovery_error"] = recovery_error
+            state["recovery_source"] = "none"
+            return state
+
+        state = {name: selected.get(name, {}) for name in self._empty_state()}
+        state["recovery_source"] = recovery_source
+        state["recovery_generation"] = int(selected.get("generation", 0) or 0)
+        if recovery_error:
+            state["recovery_error"] = recovery_error
+        return state
+
+    def diagnostics(self) -> dict:
+        primary, primary_error = self._read_valid(self.state_path)
+        backup, backup_error = self._read_valid(self.backup_path)
+        selected = primary or backup
+        return {
+            "schema_version": int((selected or {}).get("schema_version", 1)),
+            "generation": int((selected or {}).get("generation", 0) or 0),
+            "primary_exists": self.state_path.exists(),
+            "primary_valid": primary is not None,
+            "backup_exists": self.backup_path.exists(),
+            "backup_valid": backup is not None,
+            "recovery_source": "primary" if primary is not None else "backup" if backup is not None else "none",
+            "primary_error": primary_error,
+            "backup_error": backup_error,
+            "integrity_ok": primary is not None or backup is not None,
+        }
 
     def load_positions(self) -> Dict:
         return self.load_state().get("positions", {})
@@ -92,3 +184,5 @@ class RecoveryManager:
     def clear(self) -> None:
         if self.state_path.exists():
             self.state_path.unlink()
+        if self.backup_path.exists():
+            self.backup_path.unlink()
