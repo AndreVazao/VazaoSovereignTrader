@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — verified main at dc653064a5f91a34f54d12f959d2f361eb1db89e after PR #273; venue economic evidence implementation underway on feat/venue-economic-evidence
+Last updated: 2026-09-30 (UTC) — main at f288905b229e9c24b1c9d64ddb936ce841c9c49c after PR #274; post-merge CI pending
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -444,3 +444,26 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 4. Later, consider actual bid/ask spread evidence only if the collectors can record reliable bid/ask snapshots. Do not infer spread from trade prints.
 5. Keep operational venue health separate from economic evidence. GREEN means operationally active, not profitable; a positive holdout mean is only a research candidate, never a promotion or execution authorization.
 6. Preserve PAPER defaults, RealModeGuard, readiness/preflight, reconciliation, Risk Engine and all REAL gates. No cloud provisioning or costs without explicit authorization.
+
+## 22. Handoff — 2026-09-30, after PR #274 venue economic evidence
+
+### Verified repository state
+- PR #274 (`feat: add separate PAPER venue economic evidence`) merged by squash. Exact PR head `8d3396250b26c9de2e43f7160079a21c33c50050`; merge commit/main SHA `f288905b229e9c24b1c9d64ddb936ce841c9c49c`.
+- Exact-head PR checks passed on SHA `8d3396250b26c9de2e43f7160079a21c33c50050`: Python tests run `36750471740` and Windows EXE build/smoke run `36750471811`. Both required checks concluded success and PR was clean/mergeable before squash merge.
+- Post-merge CI for main SHA `f288905b229e9c24b1c9d64ddb936ce841c9c49c` was started as Python run `36750719099` and Windows EXE run `36750719613`; verify both before declaring this main SHA fully validated.
+- No open PRs immediately after PR #274 merge; documentation handoff branch `docs/handoff-after-venue-economics` is now being used to update this context.
+
+### PR #274 — PAPER venue economic evidence
+- Added `PC_ENGINE/diagnostics/venue_economic_evidence.py`, a cold-path report from completed PAPER outcomes, grouped by configured follower venue. Validates PAPER flags, finite realized net outcomes and timestamps, rejects future timestamps, tolerates corrupt UTF-8/JSON lines, deduplicates, and reports integrity counters.
+- Reports sample sufficiency, chronological holdout mean/positive rate, and recorded fees/slippage/latency assumptions. A positive holdout mean is only `POSITIVE_OOS_CANDIDATE`, not proof of profitability or permission to trade; non-positive holdout and insufficient data remain explicit.
+- Spread is deliberately `UNAVAILABLE_NO_BID_ASK_EVIDENCE`: the current trade-print feed does not provide trustworthy bid/ask snapshots, so no spread estimate is fabricated.
+- Integrated with explicit `refresh_runtime_evidence_reports`; configurable report path `evidence_reports.venue_economic_evidence`, `venue_economics_min_samples`, `venue_economics_min_oos_samples`, and `venue_economics_max_records`. The loader retains a bounded set of valid outcomes and records evictions.
+- Unit/integration tests cover configured venues only, cost summaries, positive/non-positive holdout, insufficient data, corrupted/future/non-PAPER records, and report generation. Exact-head CI passed.
+- Economic evidence is separate from operational health and does not feed REAL readiness or authorize execution. PAPER only, `orders_submitted=false`, `execution_authorized=false`.
+
+### Next engineering actions
+1. Verify post-merge Python and Windows EXE checks for main SHA `f288905b229e9c24b1c9d64ddb936ce841c9c49c`.
+2. Add the new venue economics report to the dashboard as a separate panel next to operational venue health, preserving the existing green/yellow/red operational signal and showing economic sample sufficiency independently.
+3. Only add measured spread metrics after collectors reliably capture timestamped bid/ask data; never infer spread from trade prints.
+4. Keep GREEN operational health distinct from profitability; positive OOS means candidate for further PAPER review only, never automatic venue promotion/removal or execution authorization.
+5. Preserve PAPER defaults and every REAL gate. No Supabase/Vercel resources, deployments, paid services, credentials, live orders or costs without explicit authorization.
