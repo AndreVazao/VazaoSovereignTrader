@@ -308,3 +308,19 @@ def test_market_data_health_endpoint_requires_token(monkeypatch):
     monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
     client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
     assert client.get("/market-data-health").status_code == 401
+
+
+def test_research_status_requires_auth(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    assert client.get("/research/status").status_code == 401
+
+
+def test_research_status_is_paper_only(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    response = client.get("/research/status", headers={"X-Token": "secret-token"})
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["paper_only"] is True
