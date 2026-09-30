@@ -7,6 +7,7 @@ from dataclasses import dataclass
 @dataclass
 class RealModeState:
     armed: bool = False
+    human_authorized: bool = False
     armed_until: float = 0.0
     last_reason: str = "not armed"
 
@@ -48,6 +49,7 @@ class RealModeGuard:
             self.disarm("confirmation phrase mismatch")
             return False, self.state.last_reason
         self.state.armed = True
+        self.state.human_authorized = True
         self.state.armed_until = time.time() + self.arm_seconds
         self.state.last_reason = "armed"
         return True, "REAL mode armed temporarily"
@@ -55,15 +57,19 @@ class RealModeGuard:
     def authorize_from_readiness(self, report: dict) -> tuple[bool, str]:
         """Authorize a one-time REAL transition from an objective readiness report.
 
-        This is the autonomous path: no human phrase is required. It remains
-        gated by explicit allow_real configuration and a complete readiness
-        report, and the authorization is consumed by the mode transition.
+        This is the autonomous recovery path after the operator has already
+        performed the first explicit REAL authorization. It remains gated by
+        the remembered in-process human authorization, explicit allow_real
+        configuration, and a complete readiness report.
         """
         if not self.enabled:
             self.state.last_reason = "REAL mode guard disabled by configuration"
             return False, self.state.last_reason
         if not self.allow_real:
             self.disarm("REAL mode disabled by configuration")
+            return False, self.state.last_reason
+        if not self.state.human_authorized:
+            self.disarm("initial human REAL authorization required")
             return False, self.state.last_reason
         if not isinstance(report, dict) or not bool(report.get("ready")):
             self.disarm("readiness report is not ready")
