@@ -150,8 +150,11 @@ def main() -> None:
                     data_dir / "hot_path_calibration.json",
                     min_samples=int(radar_cfg.get("hot_path_calibration_min_samples", 100)),
                 )
+                target_horizon_ms = max(1, int(radar_cfg.get("hot_path_horizon_ms", 500)))
                 for row in stats:
-                    if row.eligible:
+                    # The hot-path detector has one configured outcome horizon.
+                    # Never let stats from another horizon overwrite its model.
+                    if row.eligible and int(row.horizon_ms) == target_horizon_ms:
                         hot_path.set_expectancy(
                             symbol=row.symbol,
                             leader=row.leader,
