@@ -9,6 +9,7 @@ from PC_ENGINE.radar.hot_path_walk_forward import write_walk_forward_report
 from PC_ENGINE.radar.hot_path_regime_walk_forward import write_regime_walk_forward_report
 from PC_ENGINE.radar.hot_path_oos_robustness import write_oos_robustness_report
 from PC_ENGINE.radar.hot_path_relationship_oos import write_relationship_oos_report
+from PC_ENGINE.diagnostics.venue_economic_evidence import write_venue_economic_evidence
 from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 
 
@@ -100,6 +101,14 @@ def refresh_runtime_evidence_reports(config: dict[str, Any]) -> dict[str, Any]:
         min_test_samples=int(radar.get("evidence_relationship_min_test_samples", 20)),
         train_fraction=float(radar.get("evidence_relationship_train_fraction", 0.7)),
         max_records=int(radar.get("evidence_relationship_max_records", 100000)),
+    )
+    generated["reports"]["venue_economic_evidence"] = write_venue_economic_evidence(
+        config,
+        outcomes_path,
+        report_path("venue_economic_evidence", "venue_economic_evidence.json"),
+        min_samples=int(radar.get("venue_economics_min_samples", 30)),
+        min_oos_samples=int(radar.get("venue_economics_min_oos_samples", 8)),
+        max_records=int(radar.get("venue_economics_max_records", 100000)),
     )
     generated["scorecard"] = build_runtime_evidence_scorecard(config)
     generated["paper_only"] = True
