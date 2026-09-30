@@ -122,7 +122,7 @@ def _load_top_of_book(
     now_ms: int,
     max_records: int,
     max_age_ms: int,
-) -> tuple[dict[str, list[float]], dict[str, int]]:
+) -> tuple[dict[str, list[float]], dict[str, list[dict[str, Any]]], dict[str, int]]:
     counters = {
         "ticker_lines_seen": 0,
         "ticker_malformed_ignored": 0,
@@ -133,7 +133,7 @@ def _load_top_of_book(
         "ticker_records_omitted_by_limit": 0,
     }
     if path is None:
-        return {}, counters
+        return {}, {}, counters
     limit = max(1, int(max_records))
     rows: deque[dict[str, Any]] = deque(maxlen=limit)
     seen: set[str] = set()
@@ -199,6 +199,7 @@ def _load_top_of_book(
             seen.add(identity)
 
     by_venue: dict[str, list[float]] = defaultdict(list)
+    by_key: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         age_ms = now_ms - row["receive_ms"]
         if age_ms > max(0, int(max_age_ms)):
@@ -208,7 +209,8 @@ def _load_top_of_book(
         spread_bps = ((row["ask"] - row["bid"]) / mid) * 10000.0
         if math.isfinite(spread_bps) and spread_bps >= 0:
             by_venue[row["venue"]].append(spread_bps)
-    return dict(by_venue), counters
+            by_key[f"{row["venue"]}:{row["symbol"]}"].append({"age_ms": age_ms, "receive_ms": row["receive_ms"]})
+    return dict(by_venue), dict(by_key), counters
 
 
 def _moving_block_bootstrap_ci(values: list[float], *, seed_key: str, replicates: int = 1000) -> dict[str, Any]:
@@ -266,7 +268,7 @@ def build_venue_economic_evidence(
     min_samples = max(1, int(min_samples))
     min_oos_samples = max(1, int(min_oos_samples))
     rows, counters = _load_outcomes(Path(outcomes_path), now_ms=now, max_records=max_records)
-    spread_by_venue, ticker_counters = _load_top_of_book(
+    spread_by_venue, top_of_book_by_key, ticker_counters = _load_top_of_book(
         Path(top_of_book_path) if top_of_book_path is not None else None,
         now_ms=now,
         max_records=top_of_book_max_records,
@@ -278,6 +280,7 @@ def build_venue_economic_evidence(
         by_follower[row["follower"]].append(row)
 
     venues: list[dict[str, Any]] = []
+    coverage: list[dict[str, Any]] = []
     for venue in configured:
         sample = by_follower.get(venue, [])
         count = len(sample)
@@ -304,6 +307,29 @@ def build_venue_economic_evidence(
         def mean_cost(key: str) -> float | None:
             values = [row[key] for row in sample if row.get(key) is not None]
             return round(statistics.fmean(values), 6) if values else None
+        venue_keys = {key: rows_for_key for key, rows_for_key in top_of_book_by_key.items() if key.startswith(f"{venue}:")}
+        venue_ages = [item["age_ms"] for rows_for_key in venue_keys.values() for item in rows_for_key]
+        if venue_ages:
+            sorted_ages = sorted(venue_ages)
+            p50_age = sorted_ages[(len(sorted_ages) - 1) // 2]
+            p95_age = sorted_ages[min(len(sorted_ages) - 1, int(math.ceil(0.95 * len(sorted_ages))) - 1)]
+        else:
+            p50_age = None
+            p95_age = None
+        venue_symbols = []
+        for key, rows_for_key in sorted(venue_keys.items()):
+            _, symbol = key.split(":", 1)
+            ages = [item["age_ms"] for item in rows_for_key]
+            ordered = sorted(ages)
+            entry = {
+                "symbol": symbol,
+                "valid_observations": len(rows_for_key),
+                "last_observation_age_ms": min(ages),
+                "age_p50_ms": ordered[(len(ordered) - 1) // 2],
+                "age_p95_ms": ordered[min(len(ordered) - 1, int(math.ceil(0.95 * len(ordered))) - 1)],
+            }
+            venue_symbols.append(entry)
+            coverage.append({"venue": venue, **entry})
         spreads = spread_by_venue.get(venue, [])
         spread_status = "UNAVAILABLE_NO_BID_ASK_EVIDENCE"
         spread_mean = None
@@ -336,6 +362,11 @@ def build_venue_economic_evidence(
             "spread_samples": len(spreads),
             "spread_min_samples_required": max(1, int(top_of_book_min_samples)),
             "spread_status": spread_status,
+            "top_of_book_valid_observations": len(venue_ages),
+            "top_of_book_symbol_coverage": venue_symbols,
+            "top_of_book_last_observation_age_ms": min(venue_ages) if venue_ages else None,
+            "top_of_book_age_p50_ms": p50_age,
+            "top_of_book_age_p95_ms": p95_age,
             "notes": "Net outcomes are PAPER observations under recorded cost assumptions, not fills or a profitability guarantee. A positive OOS mean is insufficient on its own; a candidate requires the deterministic moving-block bootstrap 95% interval lower bound above zero. This remains a PAPER review candidate only.",
         })
 
@@ -345,6 +376,7 @@ def build_venue_economic_evidence(
         "source": Path(outcomes_path).name,
         "configured_venues_only": True,
         "venues": venues,
+        "top_of_book_coverage": coverage,
         "integrity": {**counters, **ticker_counters},
         "paper_only": True,
         "orders_submitted": False,
