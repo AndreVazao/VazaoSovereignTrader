@@ -163,3 +163,30 @@ def test_calibration_keeps_legacy_rows_usable_without_fake_temporal_data(tmp_pat
     assert stat["ci95_method"] == "sample_normal"
     assert stat["bootstrap_replicates"] == 0
     assert stat["eligible_for_paper_review"] is True
+
+
+def test_calibration_skips_invalid_utf8_and_continues_reading(tmp_path):
+    source = tmp_path / "outcomes.jsonl"
+    valid_first = json.dumps(_outcome(2.0)).encode("utf-8") + b"\n"
+    corrupt = b"\xff\xfe\n"
+    malformed = b"{bad json\n"
+    valid_last = valid_first
+    source.write_bytes(valid_first + corrupt + malformed + valid_last)
+    report = build_hot_path_calibration(source, min_samples=2)
+    assert report["outcome_records_loaded"] == 2
+    assert report["outcome_samples"] == 1
+    assert report["duplicate_outcomes_ignored"] == 1
+
+
+def test_calibration_excludes_future_timestamps_from_temporal_evidence(tmp_path):
+    source = tmp_path / "outcomes.jsonl"
+    now_ms = __import__("time").time_ns() // 1_000_000
+    rows = [
+        {**_outcome(1.0 + i / 10), "outcome_id": f"future-check-{i}",
+         "outcome_local_ts_ms": now_ms + 10_000 if i == 11 else now_ms - (12 - i) * 1000}
+        for i in range(12)
+    ]
+    source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    report = build_hot_path_calibration(source, min_samples=5)
+    assert report["outcome_samples"] == 12
+    assert report["stats"][0]["timestamped_samples"] == 11

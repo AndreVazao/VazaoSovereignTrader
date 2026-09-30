@@ -3,27 +3,23 @@ from __future__ import annotations
 import json
 import math
 import statistics
+import time
 from pathlib import Path
 from typing import Any
+from PC_ENGINE.radar.report_io import atomic_write_json
 
 
 def _read_completed_paper(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
     rows: list[dict[str, Any]] = []
     try:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if (
-                isinstance(row, dict)
-                and row.get("status") == "COMPLETED"
-                and row.get("paper_only") is True
-                and row.get("orders_submitted") is False
-            ):
-                rows.append(row)
+        with path.open("rb") as handle:
+            for raw_line in handle:
+                try:
+                    row = json.loads(raw_line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(row, dict) and row.get("status") == "COMPLETED" and row.get("paper_only") is True and row.get("orders_submitted") is False:
+                    rows.append(row)
     except OSError:
         return []
     return rows
@@ -32,6 +28,7 @@ def _read_completed_paper(path: Path) -> list[dict[str, Any]]:
 def _valid_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     valid: list[dict[str, Any]] = []
+    now_ms = time.time_ns() // 1_000_000
     for row in rows:
         try:
             identity = str(row.get("outcome_id") or json.dumps(
@@ -49,7 +46,7 @@ def _valid_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             realized = float(row["realized_net_bps"])
             expected = float(row["expected_net_bps"])
             regime = str(row.get("market_regime", row.get("regime", "UNCLASSIFIED"))).strip().upper() or "UNCLASSIFIED"
-            if timestamp <= 0 or not all(math.isfinite(value) for value in (realized, expected)):
+            if timestamp <= 0 or timestamp > now_ms or not all(math.isfinite(value) for value in (realized, expected)):
                 continue
             if identity in seen:
                 continue
@@ -150,9 +147,5 @@ def write_walk_forward_report(
     **kwargs: Any,
 ) -> dict[str, Any]:
     report = build_walk_forward_report(outcomes_path, **kwargs)
-    destination = Path(report_path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
-    temporary.replace(destination)
+    atomic_write_json(report_path, report)
     return report

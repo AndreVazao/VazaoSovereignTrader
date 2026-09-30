@@ -61,3 +61,44 @@ def test_scorecard_does_not_treat_missing_reports_as_ready(tmp_path):
     assert "calibration_samples" in report["requirements_missing"]
     assert "cost_stress" in report["requirements_missing"]
     assert report["execution_authorized"] is False
+
+
+def test_scorecard_fails_closed_on_invalid_utf8_and_malformed_numeric_fields(tmp_path):
+    bad_utf8 = tmp_path / "bad-utf8.json"
+    bad_utf8.write_bytes(b'{"outcome_samples":100}\xff')
+    calibration = tmp_path / "calibration.json"
+    walk = tmp_path / "walk.json"
+    regime = tmp_path / "regime.json"
+    robustness = tmp_path / "robustness.json"
+    calibration.write_text(json.dumps({
+        "outcome_samples": "not-a-number",
+        "duplicate_outcomes_ignored": None,
+        "invalid_outcomes_ignored": [],
+        "stats": {"unexpected": "shape"},
+    }), encoding="utf-8")
+    walk.write_text(json.dumps({"fold_count": "NaN"}), encoding="utf-8")
+    regime.write_text(json.dumps({"fold_count": [], "regime_fold_coverage": []}), encoding="utf-8")
+    robustness.write_text(json.dumps({
+        "paper_only": True,
+        "orders_submitted": False,
+        "scenarios": [
+            {"extra_cost_bps": "not-a-number", "samples": "NaN", "monte_carlo_replicates": []}
+        ],
+    }), encoding="utf-8")
+    bad_json = tmp_path / "bad-json.json"
+    bad_json.write_text("{bad json", encoding="utf-8")
+    missing = build_evidence_scorecard(calibration_report_path=bad_utf8)
+    missing_json = build_evidence_scorecard(calibration_report_path=bad_json)
+    report = build_evidence_scorecard(
+        calibration_report_path=calibration,
+        walk_forward_report_path=walk,
+        regime_walk_forward_report_path=regime,
+        oos_robustness_report_path=robustness,
+    )
+    assert missing["requirements_met"] == 0
+    assert missing_json["requirements_met"] == 0
+    assert report["execution_authorized"] is False
+    assert "calibration_samples" in report["requirements_missing"]
+    assert "chronological_walk_forward" in report["requirements_missing"]
+    assert "cost_stress" in report["requirements_missing"]
+    assert "data_integrity_accounting" in report["requirements_missing"]
