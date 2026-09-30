@@ -119,7 +119,7 @@ Reference: `docs/SHARED_INTELLIGENCE_PRIVACY_AND_NETWORK.md`.
 PR: https://github.com/AndreVazao/VazaoSovereignTrader/pull/223
 Branch: `feat/device-proof-and-approval-clean`
 Base: `main`
-Latest context commit at this update: `4edf5ac87edebf91dd38f7e421b15a41b33c0555`; this documentation edit will create a new head SHA, so always fetch the live PR head and CI before merging.
+Latest code commit before this context refresh: `3b656edd7148cc74e181a3e72137a848b8c45823`. This context refresh creates a new head SHA, so CI must be rechecked on that new exact head before merging.
 
 PR #223 is a clean consolidation of useful work from old stacked PRs #221 and #222 onto the merged #219 foundation. It currently changes 9 files relative to main. PR #221 and PR #222 have been closed as superseded; do not reopen them unless the replacement PR is found incomplete.
 
@@ -136,11 +136,11 @@ PR history:
 - PR #222 closed as superseded by #223, not merged.
 - PR #223 is the only active implementation PR and must be kept current.
 
-CI on the initial PR #223 head `4edf5ac87edebf91dd38f7e421b15a41b33c0555`:
-- Shared Learning Service run `36671533845`: queued/in progress at last check.
-- Python tests run `36671533842`: queued/in progress at last check.
-- Python tests run `36671525062`: queued/in progress at last check.
-These runs are not yet a green CI result. The next documentation commit will also require CI on its new exact head.
+CI verified on code head `3b656edd7148cc74e181a3e72137a848b8c45823`:
+- Shared Learning Service run `36671619790`: SUCCESS (`npm test` and `npm run build` passed).
+- Python tests run `36671619770`: SUCCESS.
+- Python tests run `36671615586`: SUCCESS.
+The earlier head `4edf5ac87edebf91dd38f7e421b15a41b33c0555` failed Shared Learning tests because the proof-verification helper was missing from the clean transplant; the helper was restored from the validated feature branch and the tests above passed on the corrected code head. This context-only update creates a new head and therefore requires fresh CI before merge.
 
 Remaining security blockers before production:
 1. Validate migration SQL and RPC behavior with integration tests, including RLS, service-role grants, tenant isolation, expiry, replay, concurrent consumption/approval, and audit outcomes. Do not create Supabase resources until current costs/terms are reviewed and André explicitly authorizes it.
