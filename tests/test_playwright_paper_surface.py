@@ -45,3 +45,31 @@ def test_observe_can_use_an_existing_page_without_network_access() -> None:
     assert feedback.state == "OBSERVED"
     assert "Demo" in feedback.detail
     adapter.close()
+
+
+def test_browser_feedback_can_be_persisted_bounded(tmp_path) -> None:
+    path = tmp_path / "surface-feedback.jsonl"
+    adapter = PlaywrightPaperSurfaceAdapter(
+        PlaywrightPaperConfig(
+            venue_id="demo",
+            url="https://example.invalid",
+            feedback_path=str(path),
+            feedback_max_records=2,
+        )
+    )
+
+    class Page:
+        url = "https://demo.invalid/trade"
+
+        def title(self) -> str:
+            return "Demo"
+
+    adapter._page = Page()
+    feedback = adapter.observe()
+
+    assert feedback.state == "OBSERVED"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert '"paper_only": true' in lines[0]
+    assert '"execution_authorized": false' in lines[0]
+    adapter.close()

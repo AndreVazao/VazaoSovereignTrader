@@ -30,6 +30,8 @@ class PlaywrightPaperConfig:
     profile_dir: str | None = None
     headless: bool = True
     timeout_ms: int = 10_000
+    feedback_path: str | None = None
+    feedback_max_records: int = 2_000
 
 
 class PlaywrightPaperSurfaceAdapter(ExecutionSurfaceAdapter):
@@ -52,6 +54,10 @@ class PlaywrightPaperSurfaceAdapter(ExecutionSurfaceAdapter):
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Any = None
+        self._feedback_store = None
+        if config.feedback_path:
+            from .surface_feedback_store import ExecutionSurfaceFeedbackStore
+            self._feedback_store = ExecutionSurfaceFeedbackStore(config.feedback_path, max_records=config.feedback_max_records)
 
     @staticmethod
     def _now_ms() -> int:
@@ -69,6 +75,8 @@ class PlaywrightPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             order_reference=None,
         )
         validate_feedback(feedback)
+        if self._feedback_store is not None:
+            self._feedback_store.append(feedback)
         return feedback
 
     def _ensure_page(self) -> Any:

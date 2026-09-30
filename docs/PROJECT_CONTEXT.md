@@ -673,3 +673,18 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 - The catalogue is deliberately configuration-only: `live_probe=false`; it cannot submit orders, probe private accounts or authorize REAL.
 - Added tests and `docs/EXECUTION_SURFACE_DASHBOARD.md`.
 - Next action: wait for post-merge main CI on `020e6ca...`, then validate exact-head CI for this branch. If green, merge. The following branch should connect persistent `ExecutionSurfaceStatus`/adapter feedback to the dashboard, exposing connection state, last feedback age, reconnects and data-write health while keeping operational health separate from economic evidence, OOS uncertainty and execution authorization.
+
+
+## Current handoff — 2026-09-30, persistent execution surface feedback
+
+- PR branch: feat/persistent-execution-surface-status.
+- Base main was 6c78910956b90f73b5a8fc16d427bdf1b47010cf; post-merge Python and Windows checks on that main SHA both completed SUCCESS.
+- Added PC_ENGINE/execution/surface_feedback_store.py: bounded local JSONL feedback persistence with atomic writes, retention cap, latest per venue/surface, feedback age, operational state, reconnect transitions and write-health telemetry.
+- Extended PlaywrightPaperConfig with optional feedback persistence and connected browser adapter feedback to the store.
+- Extended execution_surface_catalog to merge persistent transport telemetry into the existing read-only dashboard catalogue without inventing configured venues.
+- Dashboard now shows connection state, last feedback age, reconnects, persistence/write health and source.
+- Added unit tests for bounded persistence, stale classification, reconnect counting and browser feedback persistence.
+- Added docs/PERSISTENT_EXECUTION_SURFACE_STATUS.md.
+- Safety remains unchanged: all feedback is PAPER-only; no orders are submitted; execution authorization remains false; operational health is not economic/OOS/Risk/REAL evidence.
+- Exact-head CI must validate this branch before merge. After merge, verify main CI on the resulting SHA.
+- Next engineering sequence after merge: Desktop local bridge, then Android ADB/emulator/device bridge, both reusing the same transport feedback contract/store; continue Windows PAPER restart/recovery and bounded multi-day evidence.
