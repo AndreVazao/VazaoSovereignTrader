@@ -11,7 +11,16 @@ export function parseDeviceRegistration(input: unknown): DeviceRegistration {
   let canonical: string;
   try {
     const key = createPublicKey(value.public_key);
-    if (key.asymmetricKeyType !== "ed25519" && key.asymmetricKeyType !== "rsa" && key.asymmetricKeyType !== "ec") throw new Error("unsupported");
+    const details = key.asymmetricKeyDetails;
+    if (key.asymmetricKeyType === "ed25519") {
+      // Ed25519 has a fixed, modern security profile.
+    } else if (key.asymmetricKeyType === "rsa") {
+      if (!details?.modulusLength || details.modulusLength < 2048) throw new Error("weak_rsa_key");
+    } else if (key.asymmetricKeyType === "ec") {
+      if (!details?.namedCurve || !["prime256v1", "secp384r1"].includes(details.namedCurve)) throw new Error("weak_or_unsupported_ec_curve");
+    } else {
+      throw new Error("unsupported_key_type");
+    }
     canonical = key.export({ type: "spki", format: "pem" }).toString().trim();
   } catch {
     throw new Error("invalid_device_public_key");
