@@ -12,8 +12,9 @@ from PC_ENGINE.radar.websocket_radar import MarketEvent
 class HotPathOutcomeTracker:
     """Bounded, in-memory PAPER outcome tracker; never submits orders or performs I/O."""
 
-    def __init__(self, *, max_pending: int = 4096) -> None:
+    def __init__(self, *, max_pending: int = 4096, max_completed: int = 8192) -> None:
         self.max_pending = max(1, int(max_pending))
+        self.max_completed = max(1, int(max_completed))
         self._pending: list[dict[str, Any]] = []
         self._completed: list[dict[str, Any]] = []
         self._lock = threading.RLock()
@@ -96,6 +97,9 @@ class HotPathOutcomeTracker:
                     "profitable_after_costs": realized_net_bps > 0.0,
                     "expected_edge_met": realized_net_bps >= expected_net_bps,
                 })
+                if len(self._completed) > self.max_completed:
+                    del self._completed[: len(self._completed) - self.max_completed]
+                    self._dropped += 1
             self._pending = remaining
 
     def drain_completed(self, limit: int = 2048) -> list[dict[str, Any]]:
@@ -110,6 +114,8 @@ class HotPathOutcomeTracker:
             return {
                 "pending": len(self._pending),
                 "completed_buffered": len(self._completed),
+                "max_pending": self.max_pending,
+                "max_completed": self.max_completed,
                 "registered": self._registered,
                 "timed_out": self._timed_out,
                 "dropped_overflow": self._dropped,
