@@ -28,5 +28,35 @@ class WebSocketCollectorTests(unittest.TestCase):
         self.assertEqual(events[0].price, 100.1)
 
 
+    def test_okx_ticker_preserves_bid_ask_for_spread_research(self) -> None:
+        collector = PublicWebSocketCollector(
+            WebSocketMarketConfig("okx", "BTC/USDT", "wss://example"), lambda _: None)
+        events = collector._parse(
+            json.dumps({"arg": {"channel": "tickers"},
+                        "data": [{"ts": "1234", "bidPx": "100.0", "askPx": "100.2", "last": "100.1"}]}),
+            9000)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "ticker")
+        self.assertEqual(events[0].bid, 100.0)
+        self.assertEqual(events[0].ask, 100.2)
+        self.assertEqual(events[0].exchange_ts_ms, 1234)
+        self.assertGreater(events[0].local_receive_wall_ns, 0)
+
+    def test_coinbase_ticker_preserves_bid_ask_for_spread_research(self) -> None:
+        collector = PublicWebSocketCollector(
+            WebSocketMarketConfig("coinbase", "BTC/USDT", "wss://example"), lambda _: None)
+        events = collector._parse(
+            json.dumps({"events": [{"tickers": [
+                {"best_bid": "100.0", "best_ask": "100.2", "price": "100.1"}
+            ]}]}),
+            9000)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "ticker")
+        self.assertEqual(events[0].bid, 100.0)
+        self.assertEqual(events[0].ask, 100.2)
+        self.assertIsNone(events[0].exchange_ts_ms)
+        self.assertGreater(events[0].local_receive_wall_ns, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
