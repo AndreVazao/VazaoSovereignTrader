@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at 0e64d31fb805f92f8bd866720c1e10ee096342be after PR #279; post-merge CI pending
+Last updated: 2026-09-30 (UTC) — main at 6f3e809b81fd3eb459213ab377e266884e4100d6; public top-of-book spread evidence in progress
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -566,3 +566,23 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. Research reliable top-of-book evidence before implementing spread reporting. `PC_ENGINE/market_events/websocket_collectors.py` parses bid/ask ticker observations for Binance, OKX and Coinbase, but the default `run_market_data_collector.py` currently uses the trade-only `WebSocketMarketRadar`. The separate L2 collector persists snapshots/deltas; deltas must not be mistaken for full book snapshots without stateful book reconstruction.
 3. If implementing spread collection, use public ticker/top-of-book observations with venue/symbol, valid positive bid/ask, bid < ask, exchange/provider timestamp and local receive timestamp; cap/rotate persistence, tolerate corrupt lines, and report freshness/sample sufficiency. Do not change trade callback latency or introduce orders.
 4. Keep operational health, economic evidence and REAL authorization separate. Preserve PAPER defaults and all existing gates. No Supabase/Vercel provisioning, deployments, paid services, credentials, live orders or spend without explicit authorization.
+
+## 27. Handoff — 2026-09-30, public top-of-book spread evidence in progress
+
+### Baseline
+- PR #279 added deterministic moving-block bootstrap intervals for venue PAPER OOS evidence and was merged at `0e64d31fb805f92f8bd866720c1e10ee096342be`; exact-head Python and Windows EXE checks passed, and post-merge Python/Windows checks both passed on that SHA.
+- PR #280 documentation handoff merged at `6f3e809b81fd3eb459213ab377e266884e4100d6`. Post-merge Python and Windows checks for that SHA were started; verify their final conclusions.
+- Current branch `feat/top-of-book-spread-evidence` starts from main SHA `6f3e809b81fd3eb459213ab377e266884e4100d6`.
+
+### Top-of-book spread collection — implementation in progress
+- Added `PC_ENGINE/tools/run_top_of_book_collector.py`, a separate optional public-market observation process using existing ticker adapters for Binance bookTicker, OKX tickers and Coinbase ticker. It filters invalid/crossed markets, writes normalized ticker observations to `websocket_ticker_events.jsonl`, rotates one bounded backup, reconnects with backoff, and marks observations PAPER-only with orders/execution authorization false.
+- Venue economic report now optionally reads the configured `evidence_reports.top_of_book` path (default `websocket_ticker_events.jsonl`) and computes mean quoted spread in bps from valid bid/ask pairs, only when the local receive timestamp is fresh and the minimum sample count is met. It rejects malformed, future, stale, crossed, non-PAPER-flagged or duplicate records and reports integrity counters.
+- Defaults: 30-second freshness window, 20 valid observations required, and a bounded read of at most 100,000 records. Until the optional collector is run and enough valid data accumulates, spread remains unavailable/insufficient; do not infer it from trade prints.
+- Dashboard now displays the measured spread and sample count only when the report marks spread evidence `AVAILABLE`; otherwise it displays the explicit unavailable/insufficient status.
+- Added tests for Binance/OKX/Coinbase bid-ask parsing and spread report validity. Exact-head CI still needs to validate the branch.
+
+### Safety and next actions
+1. Inspect final diff and wait for exact-head Python tests plus Windows EXE build/smoke checks. Fix failures before merge.
+2. Verify post-merge Python and Windows checks on the resulting main SHA.
+3. The top-of-book collector is a separate opt-in process and is not automatically started by the trading runtime. No orders, credentials, private APIs, or REAL execution are involved.
+4. Keep operational venue health, economic evidence and execution authorization independent. No cloud provisioning, deployments, paid services or spend without explicit authorization.
