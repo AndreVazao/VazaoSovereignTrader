@@ -648,3 +648,16 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. Merge only after clean/mergeable PR and green required checks, then verify resulting main CI.
 3. Use the new heartbeat as the source for a later dashboard feed-status layer: per exchange/platform, per symbol, connection state, last observation age, reconnects and data-write health.
 4. Continue Windows PAPER resilience: clean installation, restart/recovery verification, bounded persistence and multi-day evidence accumulation. Keep operational health, economic evidence, OOS uncertainty and execution authorization separate.
+
+
+## Current handoff — 2026-09-30, concrete browser PAPER surface
+
+- PR #286 merged successfully at squash SHA `4fb21947f930021142c0b513f30097e3a6993080`.
+- Exact-head CI for #286: Python tests run `36765400881` SUCCESS; Windows EXE run `36765400816` SUCCESS.
+- Current implementation branch: `feat/browser-paper-adapter`.
+- Existing repository browser execution work was preserved: `BrowserExecutionAdapter`, observed-target freshness safety and durable browser ledger remain separate and gated.
+- Added `PC_ENGINE/execution/playwright_paper_surface.py` as the first concrete implementation of the transport-neutral surface contract.
+- The new adapter supports headed/headless Chromium, optional persistent local profile, probe/observe feedback and deterministic PAPER BUY/SELL/CANCEL intent recording.
+- The new adapter never clicks order controls, submits forms, calls private APIs or reports a simulated PAPER intent as an exchange fill.
+- Added `tests/test_playwright_paper_surface.py` and `docs/EXECUTION_BROWSER_ADAPTER.md`.
+- Next action: exact-head Python/Windows CI, inspect diff, then merge only if clean/green. After integration, add venue-specific browser observation/feedback safely; keep real submission behind existing execution/risk/readiness/RealModeGuard gates. Then implement Desktop and Android bridges separately.
