@@ -144,6 +144,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             market_data=market_data,
             latest_events=latest_events_by_venue_symbol(event_path),
             storage=storage,
+            recovery=getattr(getattr(engine, "recovery", None), "diagnostics", lambda: {})(),
         ))
 
     @app.get("/diagnostics/export")
