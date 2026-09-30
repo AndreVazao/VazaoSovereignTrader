@@ -102,7 +102,6 @@ class HotPathLeadLagEngine:
             }
 
     def on_market_event(self, event: MarketEvent) -> HotPathOpportunity | None:
-        now_ms = time.time_ns() // 1_000_000
         key = (event.exchange, event.symbol)
         with self._lock:
             previous = self._previous.get(key)
@@ -127,7 +126,7 @@ class HotPathLeadLagEngine:
                 if follower_event is None:
                     continue
 
-                age_ms = max(0, now_ms - follower_event.local_ts_ms)
+                age_ms = max(0, event.local_ts_ms - follower_event.local_ts_ms)
                 exchange_lag = event.exchange_ts_ms - follower_event.exchange_ts_ms
                 if age_ms > self.stale_after_ms:
                     continue
