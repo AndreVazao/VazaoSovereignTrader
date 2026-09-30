@@ -140,7 +140,7 @@ def _load_top_of_book(
     try:
         handle = path.open("rb")
     except OSError:
-        return {}, counters
+        return {}, {}, counters
     with handle:
         for raw in handle:
             if not raw.strip():
