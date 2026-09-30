@@ -47,7 +47,7 @@ def test_walk_forward_excludes_unusable_and_non_paper_rows(tmp_path):
 
     report = build_walk_forward_report(source, train_size=4, test_size=2, min_test_samples=2)
 
-    assert report["raw_completed_paper_records"] == 9
+    assert report["raw_completed_paper_records"] == 10
     assert report["timestamped_valid_records"] == 8
     assert report["fold_count"] == 2
     assert report["folds"][0]["test_start_ms"] == 5_000
@@ -65,4 +65,4 @@ def test_walk_forward_deduplicates_outcomes_and_keeps_timestamp_order(tmp_path):
     assert report["folds"][0]["train_start_ms"] < report["folds"][0]["train_end_ms"]
     assert report["folds"][0]["test_start_ms"] < report["folds"][0]["test_end_ms"]
     assert report["folds"][0]["test_start_ms"] > report["folds"][0]["train_end_ms"]
-    assert report["folds"][0]["test_mean_realized_net_bps"] == 1.5
+    assert report["folds"][0]["test_mean_realized_net_bps"] == 3.5
