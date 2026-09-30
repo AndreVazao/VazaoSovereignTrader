@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — updated with device proof-of-possession implementation in progress
+Last updated: 2026-09-30 (UTC) — PR #222 adds device endpoint rate limits and prevents administrator self-approval
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -151,15 +151,30 @@ A stacked feature branch was created from `feat/secure-onboarding-foundation-cle
 - Latest known commit before final context update: `24f91f11263527bbc2819903a5458878219110e7` (onboarding docs); fetch live branch head before acting.
 - Changes implemented so far: `verifyDeviceProof` uses Node crypto to verify signatures against the registered public key; tests cover valid Ed25519 signature, altered challenge and malformed signature. Added migration `202609300001_device_proof_and_approval.sql` with a one-time challenge table, `possession_verified_at`, and a database function that rechecks active admin role/account/password-rotation state, only approves pending devices with verified possession, and writes the audit event atomically. Added `POST /api/v1/devices/challenge`, `POST /api/v1/devices/verify`, and `POST /api/v1/devices/approve`; docs describe the flow. Challenges are 5-minute, hash-only at rest and single-use; verification consumes the challenge before checking signature to prevent replay. Device stays pending after proof until an eligible admin approves it.
 - Stacked PR #221: https://github.com/AndreVazao/VazaoSovereignTrader/pull/221 (open, non-draft, base `feat/secure-onboarding-foundation-clean`, not merged). Shared Learning Service workflow run `36669360478` completed SUCCESS on code/context head `d9ceeeca22aab1b03580e78ce271d0a6cf57eea8`; `npm test` and `npm run build` both passed. Python/Windows workflows were not returned for this stacked PR and these changes are cloud-service-only. Any subsequent commit requires rechecking CI for the new head.
-- Security gaps still requiring review: no rate limiting/abuse monitoring yet; no end-to-end integration tests against a disposable Supabase database; approval auth has server-side active-admin and password-rotation checks but MFA/step-up authentication is not wired; route-level failure/race behavior needs review. Do not deploy.
+- Security gaps still requiring review: baseline per-account rate limiting and self-approval prevention are implemented on stacked PR #222; edge/WAF abuse controls and alerting are not implemented; no end-to-end integration tests against a disposable Supabase database; approval auth has server-side active-admin and password-rotation checks but MFA/step-up authentication is not wired. Do not deploy.
 
-## 9. Immediate next action for the next chat
+## 9. Current follow-up PR #222 — device security hardening
 
-1. Fetch live PR #221 head SHA and verify the Shared Learning Service workflow again after this context-only update.
-2. Review SQL function and routes for signature canonicalization, challenge replay/expiry/races, admin authorization, atomic audit, and Supabase RPC permissions. Add route/integration tests and rate limiting before considering production.
-3. Keep PR #221 stacked on PR #219 and keep both open/unmerged unless André explicitly authorizes merge.
-4. Continue with trusted account provisioning/login, MFA/owner recovery, signed configuration governance, vault restore UX, and sync runtime validation in that order.
-5. Update this context file with exact PR number, branch head SHA, CI run IDs/outcomes, blockers and next action.
+PR: https://github.com/AndreVazao/VazaoSovereignTrader/pull/222
+Branch: `fix/device-approval-rate-limits`
+Base: `feat/device-proof-and-admin-approval` (PR #221), which remains based on PR #219's branch `feat/secure-onboarding-foundation-clean`.
+Latest known branch head at context update: `c338d815a46c4f62f0aed0320280c42b40d08c52`. Fetch the live PR head before acting.
+Changes:
+- Added migration `202609300002_device_security_rate_limits.sql` with a per-account atomic fixed-window rate-limit table and service-role-only RPC. Limits: registration 10/5 min, challenge issuance 10/5 min, proof verification 8/5 min, admin approval 20/5 min. Routes fail closed if the RPC errors and return HTTP 429 when the limit is exceeded.
+- Rate limits cover registration, challenge, verification and approval. The limiter is per authenticated account; edge/WAF protections and abuse alerting are still required.
+- Replaced the admin approval function to prevent an admin approving a device belonging to their own account. The database function continues to re-check admin role, active state, password-rotation state and verified possession, and writes audit metadata in the same transaction.
+- Signature verification now occurs before challenge consumption, preventing an invalid signature from burning a legitimate challenge; challenge consumption still uses an atomic conditional update to enforce single use.
+- Added signature tests for RSA-2048, P-256 and P-384, and documented the controls.
+CI:
+- PR #221 current known head `a915e433486d40d5179b07c6f40869f16dbe014b`: Shared Learning Service run `36669525737` completed SUCCESS; `npm test` and `npm run build` both completed successfully.
+- PR #222 run `36670655083` was in progress when last checked, associated with the latest PR head at that time. Re-check the live run and latest head; do not claim CI green for a newer commit until verified.
+- No local test run was performed in this session. The CI workflow tests TypeScript/unit tests and builds Next.js; it does not execute the SQL migration against a live database.
+Remaining blockers:
+1. Verify latest CI and inspect any failures.
+2. Add database integration tests for SQL syntax/semantics, RPC grants, RLS, tenant isolation, concurrency and audit behavior using a disposable Supabase environment only after the required organization/cost authorization; do not create one without approval.
+3. Add MFA/step-up verification for admin approval, edge/WAF rate limits and abuse alerting.
+4. Continue trusted account provisioning/login, signed configuration approval/rollback, end-to-end vault restore, and sync runtime validation in roadmap order.
+5. Keep PRs #219, #221 and #222 open/unmerged unless André explicitly authorizes merge. No cloud resources, deployments, or accounts have been created; cloud sync remains disabled by default and REAL remains gated.
 
 ## 10. Original continuity prompt for a new ChatGPT conversation
 
