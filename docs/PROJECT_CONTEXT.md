@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — current verified handoff: main at 0087fdb934e76ae7f1f40d5df7596f367ff7c875; PR #258–#260 merged
+Last updated: 2026-09-30 (UTC) — current verified handoff: main at 3f9a284933e8bed28ee3efa2ff754b009bc3172c; PR #258–#261 merged
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -27,7 +27,7 @@ Immediate operational goal: data accumulation and research, not live trading.
 ## 2. Current main state
 
 PR #223 (device proof, admin approval and rate-limit hardening) was merged by André.
-Current main SHA after PR #260: 0087fdb934e76ae7f1f40d5df7596f367ff7c875.
+Current main SHA after PR #261: 3f9a284933e8bed28ee3efa2ff754b009bc3172c.
 
 Latest main validation observed:
 - Windows EXE run 36672120924: SUCCESS.
@@ -224,7 +224,7 @@ Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live
 ## 15. Current handoff — 2026-09-30 (verified against GitHub)
 
 ### Current main
-- Main SHA: `0087fdb934e76ae7f1f40d5df7596f367ff7c875`.
+- Main SHA: `3f9a284933e8bed28ee3efa2ff754b009bc3172c`.
 - PR #260 merged at 2026-09-30 15:10 UTC; merge SHA above.
 - Exact PR #260 head: `577bde3a751b7ca67b972cbe2179ec581836831b`.
 - Exact-head CI for PR #260: both Python test jobs SUCCESS and Windows EXE build SUCCESS before merge.
@@ -267,7 +267,7 @@ Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live
 ### Active branch / PR status
 - PR #260 is merged; no feature branch should be assumed active without checking GitHub.
 - Latest completed implementation sequence: PR #258 venue health signage -> PR #259 runtime scorecard -> PR #260 explicit PAPER evidence refresh.
-- A documentation-only handoff PR is now being prepared from the current main SHA; it must pass exact-head CI before merge.
+- PR #261 merged: updated this project context/continuation handoff. Documentation CI passed on exact head `9a6440a50f71e31d9934daa460ca7c5b4a57c1b7`; merge SHA `3f9a284933e8bed28ee3efa2ff754b009bc3172c`.
 - Before further coding, inspect live main, open PRs, and current CI. Keep one active implementation PR wherever practical.
 
 ### Immediate next engineering actions
@@ -287,4 +287,4 @@ Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live
 - The future mobile view should include engine/PAPER state, P&L only when backed by real PAPER records, feed quality/latency, lead-lag evidence, OOS/walk-forward/regime coverage, learning status, alerts and explicit REAL LOCKED status until all gates are satisfied.
 
 ### Continuity prompt for the next chat
-Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal). First read `docs/PROJECT_CONTEXT.md` and verify live GitHub state; do not assume branches, PRs, or CI state from this note alone. Current verified main SHA at handoff: `0087fdb934e76ae7f1f40d5df7596f367ff7c875`. PR #258 added exchange venue GREEN/YELLOW/RED operational health signage; PR #259 added a read-only PAPER evidence scorecard; PR #260 added authenticated `POST /evidence-scorecard/refresh` and a cockpit refresh button to regenerate calibration, walk-forward, regime walk-forward and OOS cost/bootstrap reports from completed PAPER outcomes. PR #260 exact-head Python test jobs and Windows EXE build all passed before merge. Continue autonomously with a dedicated branch and PR, inspect the evidence refresh path/config/collector integration, verify that outcomes are written to the same path the scorecard reads, then improve venue classification using separate operational-health and economic-performance evidence. Keep everything PAPER-only; never submit orders, activate REAL, bypass readiness/risk/RealModeGuard, create cloud resources or incur costs without explicit authorization. Merge only after exact-head required CI is green and the diff has no blockers. The user also wants a polished phone-friendly dashboard mockup later, with venue signage and trader status, but it must not interrupt core engine work.
+Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal). First read `docs/PROJECT_CONTEXT.md` and verify live GitHub state; do not assume branches, PRs, or CI state from this note alone. Current verified main SHA at handoff: `3f9a284933e8bed28ee3efa2ff754b009bc3172c`. PR #258 added exchange venue GREEN/YELLOW/RED operational health signage; PR #259 added a read-only PAPER evidence scorecard; PR #260 added authenticated `POST /evidence-scorecard/refresh` and a cockpit refresh button to regenerate calibration, walk-forward, regime walk-forward and OOS cost/bootstrap reports from completed PAPER outcomes. PR #260 exact-head Python test jobs and Windows EXE build all passed before merge. Continue autonomously with a dedicated branch and PR, inspect the evidence refresh path/config/collector integration, verify that outcomes are written to the same path the scorecard reads, then improve venue classification using separate operational-health and economic-performance evidence. Keep everything PAPER-only; never submit orders, activate REAL, bypass readiness/risk/RealModeGuard, create cloud resources or incur costs without explicit authorization. Merge only after exact-head required CI is green and the diff has no blockers. The user also wants a polished phone-friendly dashboard mockup later, with venue signage and trader status, but it must not interrupt core engine work.
