@@ -29,8 +29,8 @@ begin
   if p_user_id is null
      or p_scope is null
      or p_scope not in ('device.register', 'device.challenge', 'device.verify', 'device.approve')
-     or p_limit < 1 or p_limit > 120
-     or p_window_seconds < 1 or p_window_seconds > 3600 then
+     or p_limit is null or p_limit < 1 or p_limit > 120
+     or p_window_seconds is null or p_window_seconds < 1 or p_window_seconds > 3600 then
     raise exception 'invalid_rate_limit_parameters';
   end if;
 
