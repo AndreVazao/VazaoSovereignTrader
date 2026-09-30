@@ -699,3 +699,18 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 - Reuses `ExecutionSurfaceFeedbackStore` for bounded local persistence and dashboard telemetry; all records remain PAPER-only and execution authorization remains false.
 - Added `tests/test_desktop_paper_surface.py` and `docs/EXECUTION_DESKTOP_ADAPTER.md`.
 - Next: validate exact-head Python and Windows EXE checks for PR #290; merge only when clean/mergeable and all required checks pass. Then verify post-merge main CI. Android ADB/emulator/device bridge follows, reusing the same surface contract and feedback store.
+
+
+## Review update — 2026-09-30, desktop PAPER bridge hardening
+
+Live GitHub verification at review time:
+- Main remains at `145dd17f498a09853ba1dbacd5cbe41ffcf9a787` (PR #289 squash merge).
+- PR #290 is open on `feat/desktop-paper-local-bridge`; the initially reviewed head was `0027640692ec50b990e79a2d3cd907f8eb1686be`, clean/mergeable, with Python test and Windows EXE checks successful on that exact SHA.
+- Code review found cases not covered by the first green CI: process creation could be reported as connected even if the process exited immediately; an existing directory could be accepted as an executable path; OBSERVE feedback persistence used a generic probe request ID rather than the caller's request ID; process-name matching could be ambiguous.
+- Hardened `PC_ENGINE/execution/desktop_paper_surface.py`: executable path must be a file; fast process exits are reported DOWN with the exit code; OBSERVE preserves the request ID in persisted feedback; Windows process-name observation uses CSV image-name exact matching and POSIX uses `pgrep -x`.
+- Added regression tests for fast process exit, request-ID correlation in persisted feedback, and directory-as-executable rejection.
+- Updated `docs/EXECUTION_DESKTOP_ADAPTER.md` to clarify process-liveness semantics and limits. These observations remain operational-only and do not prove exchange authentication, economic performance or permission to trade.
+- The hardening commits were pushed to this same PR branch. The final exact-head CI must complete again after the documentation/context commit; do not merge based on the earlier SHA's green checks.
+- Android bridge remains the next feature only after #290 has passed exact-head CI, been reviewed, merged, and the resulting main SHA has successful post-merge Python and Windows checks.
+- PAPER-only safety unchanged: no order controls clicked, no forms submitted, no private exchange APIs called, no REAL authorization, no cloud resources or paid services.
+
