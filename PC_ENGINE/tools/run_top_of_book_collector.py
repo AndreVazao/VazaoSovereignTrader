@@ -32,7 +32,7 @@ def main() -> None:
     write_lock = threading.Lock()
     collectors: list[PublicWebSocketCollector] = []
     threads: list[threading.Thread] = []
-    counters = {"events_written": 0, "invalid_tickers_ignored": 0}
+    counters = {"events_written": 0, "invalid_tickers_ignored": 0, "write_errors": 0}
 
     def shutdown(_signum, _frame) -> None:
         stop.set()
@@ -74,7 +74,19 @@ def main() -> None:
                     handle.write(encoded)
                 counters["events_written"] += 1
             except OSError:
-                counters["invalid_tickers_ignored"] += 1
+                counters["write_errors"] += 1
+
+    def run_with_reconnect(collector: PublicWebSocketCollector) -> None:
+        delay_seconds = 1.0
+        while not stop.is_set():
+            try:
+                collector.run_forever()
+            except Exception:
+                # Public observation must survive a venue socket failure.
+                pass
+            if stop.wait(delay_seconds):
+                return
+            delay_seconds = min(15.0, delay_seconds * 2.0)
 
     allowed = set(args.venues)
     configs = [
@@ -87,8 +99,9 @@ def main() -> None:
         collector = PublicWebSocketCollector(cfg, persist)
         collectors.append(collector)
         thread = threading.Thread(
-            target=collector.run_forever,
+            target=run_with_reconnect,
             name=f"top-book-{cfg.venue}-{cfg.symbol.replace('/', '')}",
+            args=(collector,),
             daemon=True,
         )
         threads.append(thread)
