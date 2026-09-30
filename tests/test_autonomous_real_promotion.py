@@ -37,8 +37,13 @@ def test_readiness_target_real_blocks_missing_live_credentials(monkeypatch, tmp_
     assert "missing API credentials" in detail
 
 
-def test_autonomous_guard_accepts_only_ready_report():
+def test_autonomous_guard_requires_human_authorization_and_ready_report():
     guard = RealModeGuard({"enabled": True, "allow_real": True, "arm_seconds": 300})
+    ok, _ = guard.authorize_from_readiness({"ready": True, "blockers": []})
+    assert not ok
+    assert "initial human REAL authorization required" in guard.state.last_reason
+    ok, _ = guard.arm("EU ACEITO O RISCO")
+    assert ok
     ok, _ = guard.authorize_from_readiness({"ready": False, "blockers": ["STATE_OUTCOMES"]})
     assert not ok
     ok, _ = guard.authorize_from_readiness({"ready": True, "blockers": []})
@@ -70,6 +75,7 @@ def test_engine_autonomous_promotion_runs_only_after_stable_review():
     engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
     engine.state = SimpleNamespace(operational={}, status="RUNNING")
     engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
+    engine.real_mode_guard.arm("EU ACEITO O RISCO")
     engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: {
         "ready": True,
         "status": "READY_FOR_PROTECTED_REAL_REVIEW",
@@ -122,6 +128,7 @@ def test_engine_autonomous_promotion_fails_safe_when_preflight_fails():
     engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
     engine.state = SimpleNamespace(operational={}, status="RUNNING", mode="PAPER")
     engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
+    engine.real_mode_guard.arm("EU ACEITO O RISCO")
     engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: {
         "ready": True,
         "status": "READY_FOR_PROTECTED_REAL_REVIEW",
@@ -158,6 +165,7 @@ def test_engine_autonomous_promotion_fails_safe_when_reconciliation_fails():
     engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
     engine.state = SimpleNamespace(operational={}, status="RUNNING", mode="PAPER")
     engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
+    engine.real_mode_guard.arm("EU ACEITO O RISCO")
     engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: {
         "ready": True,
         "status": "READY_FOR_PROTECTED_REAL_REVIEW",
