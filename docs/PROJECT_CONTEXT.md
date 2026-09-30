@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at d44c67f875df4c7d88d39389c10825da52f64551 after PR #275; dashboard venue economics implementation underway
+Last updated: 2026-09-30 (UTC) — main at 6b5794c5ac4b770d9da5de44b159715766a0d28e after PR #276; post-merge CI pending
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -487,3 +487,24 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. Verify post-merge Python and Windows EXE checks on the new main SHA.
 3. Keep economic signals separate from operational health and execution authorization. Do not estimate spread from trade prints.
 4. Continue only with safe PAPER evidence improvements; do not provision cloud resources or incur costs without explicit authorization.
+
+## 24. Handoff — 2026-09-30, after dashboard venue economics integration
+
+### Verified repository state
+- PR #276 (`feat: show venue economic evidence in dashboard`) merged by squash. Exact PR head `9ac706a26c446f68f008f2cb2145abdd31ae54e1`; merge commit/main SHA `6b5794c5ac4b770d9da5de44b159715766a0d28e`.
+- Exact-head PR checks passed on `9ac706a26c446f68f008f2cb2145abdd31ae54e1`: Python tests run `36751325469` and Windows EXE build/smoke run `36751325456`.
+- Post-merge CI for main SHA `6b5794c5ac4b770d9da5de44b159715766a0d28e` is running as Python run `36751581750` and Windows EXE run `36751581645`. Verify both before declaring this SHA fully validated.
+- No open PRs were present immediately after PR #276 merge. The handoff update is being made on branch `docs/handoff-after-dashboard-economics`.
+
+### PR #276 — dashboard economic panel
+- Added authenticated, read-only `GET /venue-economic-evidence`; it reads the configured report path, returns `NOT_STARTED` when absent and returns 409 with fail-closed flags for malformed reports or invalid safety invariants.
+- Added a separate cockpit panel for PAPER economics beside operational venue health. It shows sample counts, chronological holdout net mean and recorded fee/slippage/latency assumptions. Positive holdout mean is amber/review-candidate only; non-positive holdout is distinct from insufficient samples. No economic status is treated as operational GREEN or REAL authorization.
+- The existing explicit PAPER evidence refresh refreshes the economic panel. Page load only reads the existing report and does not trigger expensive report generation.
+- Endpoint tests cover authentication, configured relative report paths and rejection of invalid execution safety flags. Exact-head Python and Windows EXE checks passed.
+- No trading behavior or REAL gates changed; no cloud resources, deployment, paid services, secrets or live orders were created.
+
+### Next engineering actions
+1. Verify post-merge Python and Windows EXE runs `36751581750` and `36751581645` on the exact main SHA above.
+2. Next research improvement: only implement spread evidence if public collectors can capture valid timestamped bid/ask snapshots; trade prints alone are not enough.
+3. Continue accumulating PAPER outcomes and require sufficient chronological OOS evidence before interpreting venue economics. Positive mean remains a candidate for review, not proof of profitability.
+4. Keep operational status, economic evidence and REAL authorization as three separate concepts. Preserve all gates and do not provision Supabase/Vercel resources or incur costs without explicit authorization.
