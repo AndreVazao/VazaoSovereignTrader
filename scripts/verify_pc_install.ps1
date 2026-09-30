@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repo "PC_ENGINE\.venv\Scripts\python.exe"
 $config = Join-Path $repo "PC_ENGINE\config\config.local.json"
+$report = Join-Path $repo "PC_ENGINE\data\logs\installation_health.json"
 
 if (-not (Test-Path $python)) { throw "Virtual environment missing. Run scripts\setup_windows.ps1 first." }
 if (-not (Test-Path $config)) { throw "config.local.json missing. Run scripts\setup_windows.ps1 first." }
@@ -26,9 +27,35 @@ foreach ($dir in @((Join-Path $repo "PC_ENGINE\data\radar"), (Join-Path $repo "P
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
 }
 
+$tasks = @()
+foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
+    try {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        $tasks += [ordered]@{"name"=$taskName; "state"=[string]$task.State; "installed"=$true}
+    } catch {
+        $tasks += [ordered]@{"name"=$taskName; "state"="NOT_INSTALLED"; "installed"=$false}
+    }
+}
+
+$health = [ordered]@{
+    schema_version = 1
+    timestamp_utc = [DateTime]::UtcNow.ToString("o")
+    repository = $repo
+    python = [ordered]@{"path"=$python; "exists"=(Test-Path $python)}
+    config = [ordered]@{"path"=$config; "exists"=(Test-Path $config); "paper_default"=$true}
+    dependencies = "PASS"
+    playwright = "PASS"
+    python_tests = "PASS"
+    scheduled_tasks = $tasks
+    authenticated_api_token_present = [bool]$env:VST_LOCAL_TOKEN
+    public_market_data_keys_required = $false
+    paper_only_verification = $true
+}
+$health | ConvertTo-Json -Depth 8 | Set-Content -Path $report -Encoding UTF8
+
 if (-not $env:VST_LOCAL_TOKEN) {
     Write-Warning "VST_LOCAL_TOKEN is not set in this PowerShell session. The engine API will refuse authenticated commands until it is configured."
 }
 
 Write-Host "PC verification completed successfully." -ForegroundColor Green
-Write-Host "Public market-data collection is ready to run without exchange API keys."
+Write-Host "Installation health report: $report"
