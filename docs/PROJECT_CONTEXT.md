@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — current verified handoff: main at ec8eafb9d306a9146cdaeb329062fed1cc68363b; implementation PRs #258–#263 and #265–#266 merged; PR #264 documentation-only and merged
+Last updated: 2026-09-30 (UTC) — verified main at dc653064a5f91a34f54d12f959d2f361eb1db89e after PR #273; venue economic evidence implementation underway on feat/venue-economic-evidence
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -420,3 +420,27 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 ### Next engineering action
 - After post-merge CI is green, implement the separate venue economic-evidence dimension without conflating it with operational health. Use only configured/observed venues and adequately sampled PAPER data; include spreads, explicit fee assumptions, slippage, latency and relationship-level OOS evidence. No fabricated venue lists, no economic GREEN from health-only signals, and RED means review rather than automatic removal.
 - Continue to preserve PAPER default, RealModeGuard, readiness/preflight, reconciliation, Risk Engine and all execution gates. No live orders, paid/cloud resources, secrets or costs without explicit approval.
+
+## 21. Handoff — 2026-09-30, after PR #273 and venue economics implementation start
+
+### Verified repository state
+- PR #273 (documentation handoff after collector-to-refresh integration) merged by squash. Exact head `1681d3e821f7ed2d33edaecda29cfdcf569bc5cd`; merge commit `dc653064a5f91a34f54d12f959d2f361eb1db89e`.
+- Exact-head Python tests passed for PR #273 (run `36746595551`).
+- Before PR #273 merge, post-merge CI for parent main SHA `64239b5fbd4b03c19ab98c592b7393d82d596c67` completed successfully: Python run `36746526064`, Windows EXE build/smoke run `36746526009`.
+- New post-merge CI for main SHA `dc653064a5f91a34f54d12f959d2f361eb1db89e` started as runs `36749711224` (Python) and `36749711208` (Windows EXE); verify final conclusions before treating the new main SHA as validated.
+- Implementation branch `feat/venue-economic-evidence` started from this main SHA. The feature is not yet merged; continue with one PR and exact-head checks.
+
+### Venue economic evidence — implementation in progress
+- Added `PC_ENGINE/diagnostics/venue_economic_evidence.py`, a cold-path report built from completed PAPER outcomes only. It groups observed outcomes by configured follower venue, validates status/PAPER flags/finite net outcome/timestamps, rejects future records, tolerates malformed UTF-8/JSON lines, deduplicates, and emits integrity counters.
+- The report distinguishes insufficient samples, non-positive chronological holdout mean, and a positive holdout mean that is only a review candidate. It records observed PAPER cost assumptions (fees, slippage, latency penalty) and explicitly marks spread as unavailable until valid bid/ask evidence exists.
+- Integrated the report into explicit `refresh_runtime_evidence_reports` output with configurable `evidence_reports.venue_economic_evidence` path, `venue_economics_min_samples`, `venue_economics_min_oos_samples`, and `venue_economics_max_records`. This is intentionally not a REAL readiness gate or authorization signal.
+- Tests added for configured venues only, positive/non-positive holdout behavior, insufficient samples, corrupt/future/non-PAPER inputs, cost summaries and refresh integration. Await CI to validate.
+- No Supabase/Vercel resource, cloud deployment, paid service, credential, real order, or new spend was created.
+
+### Next actions
+1. Inspect the feature diff and verify Python tests and Windows EXE build/smoke test on the exact PR head SHA.
+2. Fix any failing checks/review issues; merge only when required exact-head checks are green and the PR is clean/mergeable.
+3. Verify post-merge Python and Windows EXE checks on the new main SHA.
+4. Later, consider actual bid/ask spread evidence only if the collectors can record reliable bid/ask snapshots. Do not infer spread from trade prints.
+5. Keep operational venue health separate from economic evidence. GREEN means operationally active, not profitable; a positive holdout mean is only a research candidate, never a promotion or execution authorization.
+6. Preserve PAPER defaults, RealModeGuard, readiness/preflight, reconciliation, Risk Engine and all REAL gates. No cloud provisioning or costs without explicit authorization.
