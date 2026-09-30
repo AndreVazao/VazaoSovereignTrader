@@ -73,6 +73,7 @@ def build_hot_path_calibration(
         rows.append(row)
 
     buckets: dict[tuple[str, str, str, str, int, str], list[dict[str, Any]]] = defaultdict(list)
+    valid_outcome_samples = 0
     for row in rows:
         try:
             symbol = str(row["symbol"]).upper()
@@ -89,6 +90,7 @@ def build_hot_path_calibration(
             if horizon <= 0 or not all(math.isfinite(v) for v in (expected, realized, gross)):
                 continue
             buckets[(symbol, leader, follower, direction, horizon, regime)].append(row)
+            valid_outcome_samples += 1
         except (KeyError, TypeError, ValueError, OverflowError):
             continue
 
@@ -128,14 +130,17 @@ def build_hot_path_calibration(
         "schema_version": 1,
         "generated_at_ms": time.time_ns() // 1_000_000,
         "source": path.name,
-        "outcome_samples": len(rows),
+        "outcome_records_loaded": len(raw_rows),
+        "unique_completed_paper_records": len(rows),
+        "outcome_samples": valid_outcome_samples,
         "duplicate_outcomes_ignored": duplicate_outcomes_ignored,
+        "invalid_outcomes_ignored": len(rows) - valid_outcome_samples,
         "relationships": len(summaries),
         "min_samples": min_samples,
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Calibration evidence only; duplicate outcomes are excluded; eligibility is not execution authorization.",
+        "note": "Calibration evidence only; duplicate and invalid outcomes are excluded from samples; eligibility is not execution authorization.",
         "stats": summaries,
     }
 

@@ -30,6 +30,7 @@ def test_calibration_is_diagnostic_and_never_authorizes_execution(tmp_path):
     assert report["orders_submitted"] is False
     assert report["execution_authorized"] is False
     assert report["outcome_samples"] == 10
+    assert report["invalid_outcomes_ignored"] == 0
     assert report["stats"][0]["eligible_for_paper_review"] is True
 
 
@@ -118,3 +119,24 @@ def test_calibration_uses_stable_outcome_id_to_deduplicate(tmp_path):
     assert report["outcome_samples"] == 1
     assert report["duplicate_outcomes_ignored"] == 1
     assert report["stats"][0]["mean_realized_net_bps"] == 2.0
+
+
+def test_calibration_does_not_count_completed_but_invalid_rows_as_samples(tmp_path):
+    source = tmp_path / "hot_path_outcomes.jsonl"
+    valid = _outcome(2.0)
+    missing_metric = {**_outcome(100.0)}
+    del missing_metric["expected_net_bps"]
+    invalid_number = {**_outcome(200.0), "realized_net_bps": float("nan")}
+    source.write_text(
+        "\n".join(json.dumps(row) for row in [valid, missing_metric, invalid_number]) + "\n",
+        encoding="utf-8",
+    )
+
+    report = build_hot_path_calibration(source, min_samples=2)
+
+    assert report["outcome_records_loaded"] == 3
+    assert report["unique_completed_paper_records"] == 3
+    assert report["outcome_samples"] == 1
+    assert report["invalid_outcomes_ignored"] == 2
+    assert report["stats"][0]["samples"] == 1
+    assert report["execution_authorized"] is False
