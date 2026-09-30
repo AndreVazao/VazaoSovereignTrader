@@ -83,7 +83,7 @@ def storage_metrics(root: str | Path, previous_bytes: int | None = None) -> dict
 
 def build_operational_diagnostics(*, engine: dict[str, Any], market_data: dict[str, Any],
                                   latest_events: dict[str, dict[str, dict[str, Any]]],
-                                  storage: dict[str, Any]) -> dict[str, Any]:
+                                  storage: dict[str, Any], recovery: dict[str, Any] | None = None) -> dict[str, Any]:
     radar = dict(market_data.get("radar") or {})
     return {
         "schema_version": 1,
@@ -112,6 +112,7 @@ def build_operational_diagnostics(*, engine: dict[str, Any], market_data: dict[s
             "latest_by_venue_symbol": latest_events,
         },
         "storage": storage,
+        "recovery": dict(recovery or {}),
         "diagnostics": {
             "real_promotion_attempted": False,
             "orders_submitted": False,
