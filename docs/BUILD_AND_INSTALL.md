@@ -99,3 +99,8 @@ O endpoint autenticado `/research/status` expõe, em modo somente leitura, o est
 `verify_pc_install.ps1` passa a gerar `PC_ENGINE/data/logs/installation_health.json` depois de concluir as verificações. O relatório regista versão do schema, timestamp UTC, runtime Python, configuração PAPER, dependências, Playwright, resultado da suite Python, presença das duas Scheduled Tasks e se o token local está disponível na sessão.
 
 A ausência das Scheduled Tasks é reportada como estado, não como erro, porque o script de verificação pode ser executado antes da instalação do autostart. O relatório é local e não contém tokens ou credenciais.
+
+
+## Cockpit — investigação PAPER
+
+O painel local inclui agora um bloco de investigação contínua com amostras, média líquida em bps, volume do conjunto OOS e estado da validação temporal WebSocket. O resumo detalhado mostra walk-forward, regimes e Monte Carlo. Tudo é somente leitura e não controla execução.

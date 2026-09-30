@@ -19,6 +19,7 @@ COCKPIT_HTML = r'''<!doctype html>
 <section class="card wide"><div class="label">Assistência pendente</div><div class="muted">Pedidos de informação ou confirmação necessários ao funcionamento do trader.</div><div id="bridge" class="notice">A verificar pedidos pendentes…</div></section>
 <section class="card wide"><div class="label">💬 Dizer ao Trader</div><div class="muted">Escreve uma ideia, pergunta ou cola um website. O trader investiga; não transforma a mensagem diretamente numa ordem.</div><textarea id="researchMessage" rows="3" style="width:100%;margin-top:8px;resize:vertical;background:#09111f;color:#eef4ff;border:1px solid #334968;border-radius:11px;padding:12px;font:inherit" placeholder="Ex.: Analisa este website e procura padrões ou ideias que possam melhorar o trader: https://..."></textarea><div class="row"><button class="go" onclick="submitResearch()">ENVIAR AO TRADER</button></div><div id="researchStatus" class="notice">A verificar…</div><details><summary>Investigações recentes</summary><div id="researchList"></div></details></section>
 
+<section class="card wide"><div class="label">📊 Investigação PAPER contínua</div><div class="grid"><div class="card"><div class="label">Amostras</div><div id="studySamples" class="big">---</div></div><div class="card"><div class="label">Mean net bps</div><div id="studyMean" class="big">---</div></div><div class="card"><div class="label">OOS</div><div id="studyOos" class="big">---</div></div><div class="card"><div class="label">Timing WebSocket</div><div id="studyTiming" class="big">---</div></div></div><div id="studyMeta" class="notice">A verificar investigação…</div><details><summary>Resumo estatístico</summary><pre id="studyReport">---</pre></details></section>
 <section class="card wide"><div class="label">Ativos</div><table><thead><tr><th>Ativo</th><th>Score</th><th>Regime</th></tr></thead><tbody id="assets"></tbody></table></section>
 <section class="grid"><div class="card"><div class="label">Posições</div><pre id="positions">---</pre></div><div class="card"><div class="label">Modelos</div><pre id="models">---</pre></div><div class="card"><div class="label">Eventos</div><pre id="logs">---</pre></div><div class="card"><div class="label">Preflight</div><pre id="preflight">---</pre></div></section>
 <section class="card wide"><details><summary>Acesso local</summary><input id="token" type="password" placeholder="Token local, se configurado"><div class="muted">Deixa vazio se não tiveres configurado um token.</div></details></section>
@@ -51,8 +52,23 @@ async function cancel(id){
 async function submitResearch(){
  try{const message=$('researchMessage').value.trim();if(!message)return;$('researchStatus').textContent='A enviar ao cérebro…';await api('/research',{method:'POST',body:JSON.stringify({message})});$('researchMessage').value='';$('researchStatus').innerHTML='<span class="ok">✓ Pedido entregue ao trader.</span>';refreshResearch()}catch(e){$('researchStatus').textContent='Não foi possível enviar: '+e.message}
 }
+async function refreshStudy(){
+ try{
+  const d=await api('/research/status');
+  const study=d.reports?.paper_study||{}, timing=d.reports?.websocket_timing||{};
+  const p=study.payload||{}, o=p.overall||{}, oos=p.chronological_oos?.test||{};
+  $('studySamples').textContent=String(p.outcome_samples??'0');
+  $('studyMean').textContent=Number(o.mean_net_bps||0).toFixed(2);
+  $('studyOos').textContent=(oos.samples||0)+' amostras';
+  const eligible=timing.payload?.eligible_for_economic_interpretation===true;
+  $('studyTiming').textContent=eligible?'OK':'BLOQUEADO';
+  $('studyTiming').className='big '+(eligible?'ok':'bad');
+  $('studyMeta').textContent='Estudo: '+(study.status||'—')+' · idade '+(study.age_ms!=null?Math.round(study.age_ms/1000)+'s':'—')+' · timing: '+(timing.status||'—')+' · intervalo '+d.study_interval_minutes+' min';
+  $('studyReport').textContent=JSON.stringify({overall:o,chronological_oos:p.chronological_oos,walk_forward:p.walk_forward,regimes:p.regimes,monte_carlo:p.monte_carlo},null,2);
+ }catch(e){$('studyMeta').textContent='Investigação indisponível: '+e.message}
+}
 async function refreshResearch(){
  try{const d=await api('/research');$('researchStatus').innerHTML='<span class="ok">'+d.pending+' pendente(s)</span> · '+d.active+' em análise · '+d.completed+' concluída(s) · '+d.discarded+' descartada(s)';$('researchList').innerHTML=(d.requests||[]).slice(0,8).map(x=>'<div class="notice"><b>'+esc(x.status)+'</b> · '+new Date(x.created_at*1000).toLocaleString()+'<div>'+esc(x.message)+'</div></div>').join('')}catch(e){$('researchStatus').textContent='Pesquisa indisponível'}
 }
-setInterval(refresh,4000);setInterval(refreshBridge,3000);refresh();refreshBridge();refreshResearch();
+setInterval(refresh,4000);setInterval(refreshBridge,3000);refresh();refreshBridge();refreshResearch();refreshStudy();
 </script></body></html>'''
