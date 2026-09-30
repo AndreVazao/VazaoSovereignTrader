@@ -115,6 +115,102 @@ def _load_outcomes(path: Path, *, now_ms: int, max_records: int) -> tuple[list[d
 
 
 
+
+def _load_top_of_book(
+    path: Path | None,
+    *,
+    now_ms: int,
+    max_records: int,
+    max_age_ms: int,
+) -> tuple[dict[str, list[float]], dict[str, int]]:
+    counters = {
+        "ticker_lines_seen": 0,
+        "ticker_malformed_ignored": 0,
+        "ticker_invalid_ignored": 0,
+        "ticker_non_paper_ignored": 0,
+        "ticker_duplicate_ignored": 0,
+        "ticker_stale_ignored": 0,
+        "ticker_records_omitted_by_limit": 0,
+    }
+    if path is None:
+        return {}, counters
+    limit = max(1, int(max_records))
+    rows: deque[dict[str, Any]] = deque(maxlen=limit)
+    seen: set[str] = set()
+    try:
+        handle = path.open("rb")
+    except OSError:
+        return {}, counters
+    with handle:
+        for raw in handle:
+            if not raw.strip():
+                continue
+            counters["ticker_lines_seen"] += 1
+            try:
+                row = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                counters["ticker_malformed_ignored"] += 1
+                continue
+            if not isinstance(row, dict):
+                counters["ticker_invalid_ignored"] += 1
+                continue
+            if (
+                row.get("observation_type") != "PUBLIC_TOP_OF_BOOK"
+                or row.get("paper_only") is not True
+                or row.get("orders_submitted") is not False
+                or row.get("execution_authorized") is not False
+            ):
+                counters["ticker_non_paper_ignored"] += 1
+                continue
+            try:
+                venue = str(row["venue"]).strip().lower()
+                symbol = str(row["symbol"]).strip().upper()
+                bid = _finite(row["bid"])
+                ask = _finite(row["ask"])
+                receive_ns_raw = row["local_receive_wall_ns"]
+                if isinstance(receive_ns_raw, bool):
+                    raise ValueError("boolean receive timestamp")
+                receive_ms = int(receive_ns_raw) // 1_000_000
+                if (
+                    not venue or not symbol or bid is None or ask is None
+                    or bid <= 0 or ask <= bid or receive_ms <= 0 or receive_ms > now_ms
+                ):
+                    raise ValueError("invalid ticker observation")
+            except (KeyError, TypeError, ValueError, OverflowError):
+                counters["ticker_invalid_ignored"] += 1
+                continue
+            identity = str(row.get("event_id") or f"{venue}:{symbol}:{receive_ms}:{bid}:{ask}")
+            if identity in seen:
+                counters["ticker_duplicate_ignored"] += 1
+                continue
+            normalized = {
+                "venue": venue,
+                "symbol": symbol,
+                "bid": bid,
+                "ask": ask,
+                "receive_ms": receive_ms,
+                "identity": identity,
+            }
+            if len(rows) == rows.maxlen:
+                evicted = rows.popleft()
+                seen.discard(evicted["identity"])
+                counters["ticker_records_omitted_by_limit"] += 1
+            rows.append(normalized)
+            seen.add(identity)
+
+    by_venue: dict[str, list[float]] = defaultdict(list)
+    for row in rows:
+        age_ms = now_ms - row["receive_ms"]
+        if age_ms > max(0, int(max_age_ms)):
+            counters["ticker_stale_ignored"] += 1
+            continue
+        mid = (row["bid"] + row["ask"]) / 2.0
+        spread_bps = ((row["ask"] - row["bid"]) / mid) * 10000.0
+        if math.isfinite(spread_bps) and spread_bps >= 0:
+            by_venue[row["venue"]].append(spread_bps)
+    return dict(by_venue), counters
+
+
 def _moving_block_bootstrap_ci(values: list[float], *, seed_key: str, replicates: int = 1000) -> dict[str, Any]:
     """Deterministic mean interval preserving short-range chronological dependence."""
     n = len(values)
@@ -160,12 +256,22 @@ def build_venue_economic_evidence(
     min_samples: int = 30,
     min_oos_samples: int = 8,
     max_records: int = 100000,
+    top_of_book_path: str | Path | None = None,
+    top_of_book_max_records: int = 100000,
+    top_of_book_max_age_ms: int = 30000,
+    top_of_book_min_samples: int = 20,
 ) -> dict[str, Any]:
     """Descriptive PAPER economics per configured follower venue; never authorizes execution."""
     now = int(now_ms if now_ms is not None else time.time_ns() // 1_000_000)
     min_samples = max(1, int(min_samples))
     min_oos_samples = max(1, int(min_oos_samples))
     rows, counters = _load_outcomes(Path(outcomes_path), now_ms=now, max_records=max_records)
+    spread_by_venue, ticker_counters = _load_top_of_book(
+        Path(top_of_book_path) if top_of_book_path is not None else None,
+        now_ms=now,
+        max_records=top_of_book_max_records,
+        max_age_ms=top_of_book_max_age_ms,
+    )
     configured = _configured_venues(config)
     by_follower: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -198,6 +304,14 @@ def build_venue_economic_evidence(
         def mean_cost(key: str) -> float | None:
             values = [row[key] for row in sample if row.get(key) is not None]
             return round(statistics.fmean(values), 6) if values else None
+        spreads = spread_by_venue.get(venue, [])
+        spread_status = "UNAVAILABLE_NO_BID_ASK_EVIDENCE"
+        spread_mean = None
+        if len(spreads) >= max(1, int(top_of_book_min_samples)):
+            spread_status = "AVAILABLE"
+            spread_mean = round(statistics.fmean(spreads), 6)
+        elif spreads:
+            spread_status = "INSUFFICIENT_SPREAD_SAMPLES"
         venues.append({
             "venue": venue,
             "role": "PAPER_FOLLOWER_EXECUTION_PROXY",
@@ -218,8 +332,10 @@ def build_venue_economic_evidence(
             "mean_recorded_fees_bps": mean_cost("fees_bps"),
             "mean_recorded_slippage_bps": mean_cost("slippage_bps"),
             "mean_recorded_latency_penalty_bps": mean_cost("latency_penalty_bps"),
-            "spread_bps": None,
-            "spread_status": "UNAVAILABLE_NO_BID_ASK_EVIDENCE",
+            "spread_bps": spread_mean,
+            "spread_samples": len(spreads),
+            "spread_min_samples_required": max(1, int(top_of_book_min_samples)),
+            "spread_status": spread_status,
             "notes": "Net outcomes are PAPER observations under recorded cost assumptions, not fills or a profitability guarantee. A positive OOS mean is insufficient on its own; a candidate requires the deterministic moving-block bootstrap 95% interval lower bound above zero. This remains a PAPER review candidate only.",
         })
 
@@ -229,11 +345,11 @@ def build_venue_economic_evidence(
         "source": Path(outcomes_path).name,
         "configured_venues_only": True,
         "venues": venues,
-        "integrity": counters,
+        "integrity": {**counters, **ticker_counters},
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Economic evidence is separate from operational health. No venue is automatically removed or promoted; spread remains unavailable until valid bid/ask observations are collected; OOS uncertainty is reported with a deterministic moving-block bootstrap interval.",
+        "note": "Economic evidence is separate from operational health. No venue is automatically removed or promoted; spread is computed only from valid, fresh public top-of-book observations when sample requirements are met; OOS uncertainty is reported with a deterministic moving-block bootstrap interval.",
     }
 
 
@@ -246,10 +362,18 @@ def write_venue_economic_evidence(
     min_samples: int = 30,
     min_oos_samples: int = 8,
     max_records: int = 100000,
+    top_of_book_path: str | Path | None = None,
+    top_of_book_max_records: int = 100000,
+    top_of_book_max_age_ms: int = 30000,
+    top_of_book_min_samples: int = 20,
 ) -> dict[str, Any]:
     report = build_venue_economic_evidence(
         config, outcomes_path, now_ms=now_ms, min_samples=min_samples,
         min_oos_samples=min_oos_samples, max_records=max_records,
+        top_of_book_path=top_of_book_path,
+        top_of_book_max_records=top_of_book_max_records,
+        top_of_book_max_age_ms=top_of_book_max_age_ms,
+        top_of_book_min_samples=top_of_book_min_samples,
     )
     atomic_write_json(Path(report_path), report)
     report["report_path"] = str(report_path)

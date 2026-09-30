@@ -153,6 +153,9 @@ def test_collector_append_path_is_consumed_by_explicit_evidence_refresh(tmp_path
         "evidence_min_test_samples": 2,
         "evidence_relationship_min_samples": 10,
         "evidence_relationship_min_test_samples": 3,
+        "websocket_exchanges": ["coinbase"],
+        "top_of_book_min_samples": 2,
+        "top_of_book_max_age_ms": 30_000,
     }
     collector_data_dir = collector._resolve_path(radar_config["data_dir"])
     collector_path = collector._outcomes_path(radar_config, collector_data_dir)
@@ -181,6 +184,26 @@ def test_collector_append_path_is_consumed_by_explicit_evidence_refresh(tmp_path
     assert append_paper_outcomes(collector_path, outcomes) == len(outcomes)
     assert collector_path.is_file()
 
+    ticker_path = collector_data_dir / "websocket_ticker_events.jsonl"
+    ticker_path.parent.mkdir(parents=True, exist_ok=True)
+    ticker_rows = [
+        {
+            "event_id": f"ticker-{i}",
+            "venue": "coinbase",
+            "symbol": "BTC/USDT",
+            "event_type": "ticker",
+            "bid": 100.0 + i * 0.1,
+            "ask": 100.2 + i * 0.1,
+            "local_receive_wall_ns": now_ms * 1_000_000,
+            "observation_type": "PUBLIC_TOP_OF_BOOK",
+            "paper_only": True,
+            "orders_submitted": False,
+            "execution_authorized": False,
+        }
+        for i in range(2)
+    ]
+    ticker_path.write_text("\n".join(json.dumps(row) for row in ticker_rows) + "\n", encoding="utf-8")
+
     result = refresh_runtime_evidence_reports({"radar": radar_config})
     relationship_report = result["reports"]["relationship_oos"]
     report_path = tmp_path / "runtime" / "radar" / "hot_path_relationship_oos.json"
@@ -200,4 +223,8 @@ def test_collector_append_path_is_consumed_by_explicit_evidence_refresh(tmp_path
     assert economics_path.is_file()
     economics = json.loads(economics_path.read_text(encoding="utf-8"))
     assert economics["execution_authorized"] is False
+    coinbase = next(row for row in economics["venues"] if row["venue"] == "coinbase")
+    assert coinbase["spread_status"] == "AVAILABLE"
+    assert coinbase["spread_samples"] == 2
+    assert coinbase["spread_bps"] > 0
     assert result["execution_authorized"] is False

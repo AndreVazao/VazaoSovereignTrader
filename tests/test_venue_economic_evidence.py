@@ -113,3 +113,52 @@ def test_economic_evidence_marks_mixed_holdout_as_uncertain(tmp_path):
     assert venue["oos_confidence_interval_available"] is True
     assert venue["oos_ci95_lower_bps"] <= 0 <= venue["oos_ci95_upper_bps"]
     assert venue["oos_edge_supported"] is False
+
+
+
+def test_spread_uses_only_fresh_valid_public_top_of_book_observations(tmp_path):
+    outcomes = tmp_path / "outcomes.jsonl"
+    outcomes.write_text(
+        "\n".join(json.dumps(_outcome(i, net=1.0)) for i in range(40)) + "\n",
+        encoding="utf-8",
+    )
+    ticker_path = tmp_path / "ticker.jsonl"
+    base = {
+        "venue": "coinbase",
+        "symbol": "BTC/USDT",
+        "event_type": "ticker",
+        "local_receive_wall_ns": 10_000_000_000,
+        "observation_type": "PUBLIC_TOP_OF_BOOK",
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+    }
+    rows = [
+        {**base, "event_id": "t1", "bid": 100.0, "ask": 100.2},
+        {**base, "event_id": "t2", "bid": 100.1, "ask": 100.3},
+        {**base, "event_id": "crossed", "bid": 101.0, "ask": 100.0},
+        {**base, "event_id": "nonpaper", "bid": 100.0, "ask": 100.1, "orders_submitted": True},
+    ]
+    ticker_path.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n{bad json\n",
+        encoding="utf-8",
+    )
+
+    report = build_venue_economic_evidence(
+        {"radar": {"websocket_exchanges": ["coinbase"]}},
+        outcomes,
+        now_ms=10_000,
+        min_samples=20,
+        min_oos_samples=8,
+        top_of_book_path=ticker_path,
+        top_of_book_min_samples=2,
+        top_of_book_max_age_ms=5_000,
+    )
+    venue = report["venues"][0]
+    assert venue["spread_status"] == "AVAILABLE"
+    assert venue["spread_samples"] == 2
+    assert 19.0 < venue["spread_bps"] < 21.0
+    assert report["integrity"]["ticker_invalid_ignored"] == 1
+    assert report["integrity"]["ticker_non_paper_ignored"] == 1
+    assert report["integrity"]["ticker_malformed_ignored"] == 1
+    assert report["execution_authorized"] is False

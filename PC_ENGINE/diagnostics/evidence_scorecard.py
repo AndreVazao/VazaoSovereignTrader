@@ -109,6 +109,10 @@ def refresh_runtime_evidence_reports(config: dict[str, Any]) -> dict[str, Any]:
         min_samples=int(radar.get("venue_economics_min_samples", 30)),
         min_oos_samples=int(radar.get("venue_economics_min_oos_samples", 8)),
         max_records=int(radar.get("venue_economics_max_records", 100000)),
+        top_of_book_path=report_path("top_of_book", "websocket_ticker_events.jsonl"),
+        top_of_book_max_records=int(radar.get("top_of_book_max_records", 100000)),
+        top_of_book_max_age_ms=int(radar.get("top_of_book_max_age_ms", 30000)),
+        top_of_book_min_samples=int(radar.get("top_of_book_min_samples", 20)),
     )
     generated["scorecard"] = build_runtime_evidence_scorecard(config)
     generated["paper_only"] = True
