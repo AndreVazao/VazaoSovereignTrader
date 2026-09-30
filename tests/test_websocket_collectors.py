@@ -17,6 +17,18 @@ class WebSocketCollectorTests(unittest.TestCase):
         self.assertEqual(events[0].sequence, 77)
         self.assertEqual(events[0].local_receive_ns, 9000)
 
+    def test_binance_book_ticker_without_event_type_normalizes(self) -> None:
+        collector = PublicWebSocketCollector(
+            WebSocketMarketConfig("binance", "BTC/USDT", "wss://example"), lambda _: None)
+        events = collector._parse(
+            json.dumps({"u": 77, "s": "BTCUSDT", "b": "100.0", "B": "1.0", "a": "100.2", "A": "2.0"}),
+            9000)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "ticker")
+        self.assertEqual(events[0].bid, 100.0)
+        self.assertEqual(events[0].ask, 100.2)
+        self.assertEqual(events[0].sequence, 77)
+
     def test_okx_trade_normalizes(self) -> None:
         collector = PublicWebSocketCollector(
             WebSocketMarketConfig("okx", "BTC/USDT", "wss://example"), lambda _: None)
