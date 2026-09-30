@@ -24,10 +24,10 @@ No password, password hash, recovery code, token, or secret belongs in source co
 3. Run the database migrations and verify RLS/service-role boundaries.
 4. Provision the two reserved usernames through a trusted one-time workflow, not SQL containing passwords.
 5. Require credential rotation before granting ordinary access; require MFA/owner approval for privileged administration where supported.
-6. Register each device as pending and approve it independently.
+6. Register each device as pending, require a short-lived one-time signed proof-of-possession challenge, then approve only through an active admin account; the approval transaction rechecks eligibility and records an audit event.
 7. Deliver only authorized, signed configuration and public aggregate learning artifacts. Keep local risk gates authoritative.
 8. Test invalid sessions, username collision, role escalation, device revocation, cross-user access, audit redaction, vault ciphertext-only storage, and rollback before rollout.
 
 ## Current implementation boundary
 
-This branch adds the data model and reservation of the two usernames only. It does not create Supabase users, store passwords, deploy infrastructure, enable cloud sync, or authorize live trading. The API workflows for provisioning, device approval, signed configuration and encrypted vault operations must be implemented and tested before production onboarding.
+The repository contains identity/device/config/vault schema foundations, reserved usernames, authenticated owner-scoped vault ciphertext routes, and (on the device-proof feature branch) one-time challenge, signature verification and audited admin-approval foundations. Device registration alone never approves a device. The new flow still needs CI/security review, integration tests, rate limiting/abuse monitoring and validation against a real disposable Supabase preview before production use. Trusted account provisioning/login, mandatory rotation enforcement end-to-end, MFA/owner recovery, signed configuration approval/rollback, and complete desktop/mobile vault restore are not complete. No Supabase users are provisioned, no infrastructure is deployed, cloud sync remains disabled by default, and no live trading is authorized.
