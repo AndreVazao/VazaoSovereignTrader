@@ -51,6 +51,8 @@ class RealReadinessService:
         self.scorecard_recent_window = max(1, int(readiness.get("scorecard_recent_window", 5)))
         self.scorecard_min_pass_ratio = min(1.0, max(0.0, float(readiness.get("scorecard_min_pass_ratio", 1.0))))
         self.timeline_max_events = max(1, int(readiness.get("timeline_max_events", 200)))
+        self.require_websocket_timing_validation = bool(readiness.get("require_websocket_timing_validation", True))
+        self.websocket_timing_report_path = Path(readiness.get("websocket_timing_report_path", "PC_ENGINE/data/radar/websocket_timing_validation.json"))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -364,6 +366,23 @@ class RealReadinessService:
             min_eligible_outcome_samples=self.min_eligible_outcome_samples,
         )
         payload = report.to_dict()
+        timing_payload = self._read_json(self.websocket_timing_report_path)
+        timing_fresh, timing_fresh_detail = self._validation_fresh(self.websocket_timing_report_path, now_ms)
+        timing_eligible = bool(timing_payload.get("eligible_for_economic_interpretation", False))
+        payload["websocket_timing"] = {
+            "required": self.require_websocket_timing_validation,
+            "eligible_for_economic_interpretation": timing_eligible,
+            "fresh": timing_fresh,
+            "fresh_detail": timing_fresh_detail,
+            "path": str(self.websocket_timing_report_path),
+        }
+        target_is_real = str(target_mode or engine.mode).upper() == "REAL"
+        if target_is_real and self.require_websocket_timing_validation and (not timing_eligible or not timing_fresh):
+            payload["ready"] = False
+            payload["status"] = "LOCKED"
+            blockers = list(payload.get("blockers", []))
+            blockers.append("websocket_timing_validation_required")
+            payload["blockers"] = list(dict.fromkeys(blockers))
         payload["readiness_trend"] = self.trend()
         payload["readiness_scorecard"] = self.scorecard()
         payload["evidence"] = {
