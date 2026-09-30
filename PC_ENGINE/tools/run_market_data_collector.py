@@ -178,7 +178,7 @@ def main() -> None:
             if completed_outcomes:
                 with outcomes_path.open("a", encoding="utf-8") as handle:
                     for outcome in completed_outcomes:
-                        handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\\n")
+                        handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\n")
 
             if study_enabled and now >= next_study:
                 states_path = data_dir / str(study_cfg.get("states_filename", "market_states.jsonl"))
@@ -234,7 +234,7 @@ def main() -> None:
         if completed_outcomes:
             with outcomes_path.open("a", encoding="utf-8") as handle:
                 for outcome in completed_outcomes:
-                    handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\\n")
+                    handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\n")
         write_health(
             "STOPPED",
             radar=radar.snapshot(),
