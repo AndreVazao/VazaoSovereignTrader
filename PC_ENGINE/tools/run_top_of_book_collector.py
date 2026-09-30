@@ -70,7 +70,13 @@ def main() -> None:
     write_lock = threading.Lock()
     collectors: list[PublicWebSocketCollector] = []
     threads: list[threading.Thread] = []
-    counters = {"events_written": 0, "invalid_tickers_ignored": 0, "write_errors": 0}
+    counters = {
+        "events_written": 0,
+        "invalid_tickers_ignored": 0,
+        "write_errors": 0,
+        "collector_errors": 0,
+        "reconnects": 0,
+    }
     counters_lock = threading.Lock()
 
     def shutdown(_signum, _frame) -> None:
@@ -124,7 +130,7 @@ def main() -> None:
                 collector.run_forever()
             except Exception as exc:
                 with counters_lock:
-                    counters["write_errors"] += 0
+                    counters["collector_errors"] += 1
                 print(json.dumps({
                     "service": "top_of_book_collector",
                     "venue": collector.config.venue,
@@ -134,6 +140,8 @@ def main() -> None:
                 }, ensure_ascii=False), flush=True)
             if stop.wait(delay_seconds):
                 return
+            with counters_lock:
+                counters["reconnects"] += 1
             delay_seconds = min(15.0, delay_seconds * 2.0)
 
     allowed = set(args.venues)
