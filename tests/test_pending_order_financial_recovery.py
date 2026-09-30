@@ -330,6 +330,12 @@ def test_sell_pending_preserves_execution_intent_until_pending_is_durable():
     engine._close_position(
         Exchange(), engine.state.open_positions["BTC/USDT"],
         101.0, "test", 0.0,
+        execution_checks={
+            "opportunity_ok": True,
+            "risk_ok": True,
+            "exchange_ok": True,
+            "stale_ok": True,
+        },
     )
 
     assert "sell-1" in engine.state.pending_orders
