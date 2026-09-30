@@ -52,6 +52,7 @@ def build_evidence_scorecard(
     walk_forward_report_path: str | Path | None = None,
     regime_walk_forward_report_path: str | Path | None = None,
     oos_robustness_report_path: str | Path | None = None,
+    relationship_oos_report_path: str | Path | None = None,
     min_calibration_samples: int = 100,
     min_walk_forward_folds: int = 4,
     min_regime_folds: int = 4,
@@ -68,6 +69,7 @@ def build_evidence_scorecard(
     walk_forward = _load_json(walk_forward_report_path)
     regime = _load_json(regime_walk_forward_report_path)
     robustness = _load_json(oos_robustness_report_path)
+    relationship_oos = _load_json(relationship_oos_report_path)
 
     checks: list[dict[str, Any]] = []
 
@@ -174,6 +176,33 @@ def build_evidence_scorecard(
         },
         oos_only,
         "OOS robustness evidence must be explicitly PAPER-only with no submitted orders",
+    ))
+
+    relationship_rows = relationship_oos.get("relationship_details", []) if relationship_oos else []
+    if not isinstance(relationship_rows, list):
+        relationship_rows = []
+    relationship_count = _safe_int(relationship_oos.get("relationships", 0)) if relationship_oos else 0
+    relationship_samples_present = any(
+        isinstance(row, dict) and row.get("sample_sufficiency") == "SUFFICIENT"
+        for row in relationship_rows
+    )
+    relationship_paper_only = bool(
+        relationship_oos
+        and relationship_oos.get("paper_only") is True
+        and relationship_oos.get("orders_submitted") is False
+        and relationship_oos.get("execution_authorized") is False
+    )
+    checks.append(_status(
+        "relationship_level_oos",
+        {
+            "relationships": relationship_count,
+            "sufficient_sample_relationships": sum(
+                1 for row in relationship_rows
+                if isinstance(row, dict) and row.get("sample_sufficiency") == "SUFFICIENT"
+            ),
+        },
+        relationship_paper_only and relationship_count > 0 and relationship_samples_present,
+        "requires per-relationship chronological holdout results with sufficient samples; positive performance is not required for this evidence-presence check",
     ))
 
     checks.append(_status(

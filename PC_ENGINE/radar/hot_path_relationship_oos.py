@@ -63,6 +63,7 @@ def _read_valid_outcomes(
         "records_omitted_by_limit": 0,
     }
     rows: deque[dict[str, Any]] = deque(maxlen=max(1, int(max_records)))
+    seen: set[str] = set()
     try:
         handle = path.open("rb")
     except OSError:
@@ -118,7 +119,7 @@ def _read_valid_outcomes(
             # participate in deduplication, preventing an invalid first row from
             # suppressing a later valid row with the same outcome_id.
             identity = _identity(row)
-            if any(existing["_identity"] == identity for existing in rows):
+            if identity in seen:
                 counters["duplicate_outcomes_ignored"] += 1
                 continue
 
@@ -138,8 +139,11 @@ def _read_valid_outcomes(
                 ).strip().upper() or "UNCLASSIFIED",
             }
             if len(rows) == rows.maxlen:
+                evicted = rows.popleft()
+                seen.discard(str(evicted["_identity"]))
                 counters["records_omitted_by_limit"] += 1
             rows.append(normalized)
+            seen.add(identity)
 
     counters["valid_unique_outcomes"] = len(rows)
     # The bounded reader retains the most recent records; return them chronologically.
