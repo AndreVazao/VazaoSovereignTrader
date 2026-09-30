@@ -312,8 +312,6 @@ def build_venue_economic_evidence(
             spread_mean = round(statistics.fmean(spreads), 6)
         elif spreads:
             spread_status = "INSUFFICIENT_SPREAD_SAMPLES"
-        elif ticker_counters["ticker_stale_ignored"]:
-            spread_status = "STALE_BID_ASK_EVIDENCE"
         venues.append({
             "venue": venue,
             "role": "PAPER_FOLLOWER_EXECUTION_PROXY",
