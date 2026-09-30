@@ -5,7 +5,6 @@ import json
 import math
 import signal
 import threading
-import time
 from pathlib import Path
 
 from PC_ENGINE.market_events.websocket_collectors import (
@@ -64,7 +63,7 @@ def main() -> None:
             "execution_authorized": False,
             "observation_type": "PUBLIC_TOP_OF_BOOK",
         })
-        encoded = json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\\n"
+        encoded = json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
         with write_lock:
             try:
                 if output.exists() and output.stat().st_size + len(encoded.encode("utf-8")) > max_bytes:
