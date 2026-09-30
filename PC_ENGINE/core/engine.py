@@ -19,6 +19,7 @@ from PC_ENGINE.core.recovery import RecoveryManager
 from PC_ENGINE.core.risk import RiskEngine
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
 from PC_ENGINE.core.real_mode_guard import RealModeGuard
+from PC_ENGINE.core.execution_gate import ExecutionGate, ExecutionState
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
@@ -93,6 +94,7 @@ class SovereignEngine:
         self.real_operational = False
         self.real_fail_safe_reason = ""
         self.real_mode_guard = RealModeGuard(config.get("real_mode_guard", {}))
+        self.execution_gate = ExecutionGate()
         self.real_readiness_service = RealReadinessService(config)
         self._autonomous_real_promotion_attempted = False
         self.state = RuntimeState(mode=self.mode)
@@ -514,6 +516,9 @@ class SovereignEngine:
 
     def _enter_real_fail_safe(self, reason: str, data: dict | None = None) -> None:
         """Leave REAL immediately on a critical runtime condition."""
+        gate = getattr(self, "execution_gate", None)
+        if gate is not None:
+            gate.fail_safe(str(reason))
         if getattr(self, "mode", "PAPER") != "REAL":
             self.state.status = "SAFE_MODE"
             self.real_operational = False
@@ -632,6 +637,21 @@ class SovereignEngine:
             raise RuntimeError("REAL mode disabled by configuration")
         if mode == "REAL" and self.state.status == "RUNNING" and not autonomous:
             raise RuntimeError("Stop the engine before switching to REAL")
+        if mode == "REAL":
+            guard = getattr(self, "real_mode_guard", None)
+            if guard is None or not bool(getattr(getattr(guard, "state", None), "human_authorized", False)):
+                raise RuntimeError("REAL mode requires the RealModeGuard's initial human authorization")
+            gate = getattr(self, "execution_gate", None)
+            if gate is None:
+                raise RuntimeError("REAL mode execution gate is not initialized")
+            if not gate.human_authorized:
+                gate.human_authorize()
+            if gate.state == ExecutionState.PAPER:
+                gate.activate_real()
+            elif gate.state not in {ExecutionState.REAL_ACTIVE, ExecutionState.SAFEGUARD_PAPER, ExecutionState.REAL_RECOVERY_ELIGIBLE}:
+                raise RuntimeError(f"REAL execution gate blocked: {gate.state.value}")
+        elif getattr(self, "execution_gate", None) is not None:
+            self.execution_gate.reset_to_paper()
         if mode == "REAL" and self.paper_collector is not None:
             self.paper_collector.stop()
         self.mode = mode
@@ -658,6 +678,11 @@ class SovereignEngine:
             data["paper_collector"] = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
             data["real_operational"] = self.real_operational
             data["real_fail_safe_reason"] = self.real_fail_safe_reason
+            gate = getattr(self, "execution_gate", None)
+            data["execution_gate"] = {
+                "state": gate.state.value,
+                "human_authorized": gate.human_authorized,
+            } if gate is not None else {"state": "MISSING", "human_authorized": False}
             if self.shared_intelligence_worker is not None:
                 data["shared_intelligence"] = {**self.state.shared_intelligence, "bootstrap": bool(self.shared_intelligence_worker.bootstrap_done), "last_result": dict(self.shared_intelligence_worker.last_result)}
             return data
@@ -1282,6 +1307,28 @@ class SovereignEngine:
             if not reconciliation.get("ok", False):
                 self._enter_real_fail_safe("autonomous_real_reconciliation_failed", reconciliation)
                 return False
+            gate = getattr(self, "execution_gate", None)
+            if gate is None:
+                self._enter_real_fail_safe("execution_gate_missing")
+                return False
+            if gate.state == ExecutionState.SAFEGUARD_PAPER:
+                recovery = gate.evaluate_recovery(
+                    readiness_ok=bool(report.get("ready")) and bool((report.get("paper_review") or {}).get("ready")),
+                    reconciliation_ok=bool(reconciliation.get("ok", False)),
+                    timing_ok=bool(report.get("timing_validation", {}).get("eligible_for_economic_interpretation", False)),
+                )
+                if not recovery.allowed:
+                    self._enter_real_fail_safe("execution_gate_recovery_blocked", {"reason": recovery.reason})
+                    return False
+                activation = gate.activate_real()
+                if not activation.allowed:
+                    self._enter_real_fail_safe("execution_gate_activation_blocked", {"reason": activation.reason})
+                    return False
+            elif gate.state != ExecutionState.REAL_ACTIVE:
+                activation = gate.activate_real()
+                if not activation.allowed:
+                    self._enter_real_fail_safe("execution_gate_activation_blocked", {"reason": activation.reason})
+                    return False
             self.real_operational = True
             self.state.status = "RUNNING"
             self.log("AUTONOMOUS_REAL_PROMOTION", {
@@ -1450,6 +1497,22 @@ class SovereignEngine:
         self._persist_recovery()
 
     def _open_position(self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float, stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0) -> None:
+        if not getattr(self, "paper", True):
+            gate = getattr(self, "execution_gate", None)
+            if gate is None:
+                self._enter_real_fail_safe("execution_gate_missing")
+                return
+            decision = gate.can_submit(
+                opportunity_ok=True,
+                risk_ok=True,
+                exchange_ok=bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
+                stale_ok=True,
+            )
+            if not decision.allowed:
+                self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": symbol, "side": "buy", "state": decision.state.value, "reason": decision.reason})
+                if decision.state != ExecutionState.REAL_ACTIVE:
+                    self._enter_real_fail_safe("execution_gate_order_blocked", {"symbol": symbol, "reason": decision.reason})
+                return
         intent_id = f"intent-{time.time_ns()}"
         client_order_id = f"vzt-{time.time_ns()}-buy"
         self.state.execution_intents[intent_id] = {
@@ -1526,6 +1589,22 @@ class SovereignEngine:
         self.log("POSITION_OPENED", {"symbol": symbol, "price": result.price, "qty": result.qty, "fee": result.fee, "reason": reason})
 
     def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
+        if not getattr(self, "paper", True):
+            gate = getattr(self, "execution_gate", None)
+            if gate is None:
+                self._enter_real_fail_safe("execution_gate_missing")
+                return
+            decision = gate.can_submit(
+                opportunity_ok=True,
+                risk_ok=True,
+                exchange_ok=bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
+                stale_ok=True,
+            )
+            if not decision.allowed:
+                self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": position.symbol, "side": "sell", "state": decision.state.value, "reason": decision.reason})
+                if decision.state != ExecutionState.REAL_ACTIVE:
+                    self._enter_real_fail_safe("execution_gate_order_blocked", {"symbol": position.symbol, "reason": decision.reason})
+                return
         intent_id = f"intent-{time.time_ns()}"
         client_order_id = f"vzt-{time.time_ns()}-sell"
         self.state.execution_intents[intent_id] = {
