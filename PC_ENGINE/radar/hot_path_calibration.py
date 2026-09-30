@@ -46,10 +46,48 @@ def _outcome_identity(row: dict[str, Any]) -> str:
     if all(row.get(field) is not None for field in fields):
         identity = {field: row[field] for field in fields}
     else:
-        # Legacy records without timestamps can only be deduplicated if their
-        # complete serialized contents are identical.
         identity = row
     return json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _temporal_dependence(values: list[float], rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Estimate first-order serial dependence and a conservative effective sample size."""
+    timestamped: list[tuple[int, float]] = []
+    for row, value in zip(rows, values):
+        try:
+            timestamp = int(row["outcome_local_ts_ms"])
+            if timestamp > 0 and math.isfinite(value):
+                timestamped.append((timestamp, value))
+        except (KeyError, TypeError, ValueError, OverflowError):
+            continue
+
+    if len(timestamped) < 3:
+        return {
+            "assessment": "UNAVAILABLE",
+            "timestamped_samples": len(timestamped),
+            "lag1_autocorrelation": None,
+            "effective_samples": len(values),
+        }
+
+    timestamped.sort(key=lambda item: item[0])
+    ordered = [value for _, value in timestamped]
+    mean = statistics.fmean(ordered)
+    centered = [value - mean for value in ordered]
+    denominator = sum(value * value for value in centered)
+    if denominator <= 0.0:
+        rho = 0.0
+    else:
+        rho = sum(centered[i] * centered[i - 1] for i in range(1, len(centered))) / denominator
+        rho = max(-0.999, min(0.999, rho))
+
+    effective = len(ordered) * (1.0 - rho) / (1.0 + rho)
+    effective = max(1.0, min(float(len(values)), effective))
+    return {
+        "assessment": "AVAILABLE",
+        "timestamped_samples": len(timestamped),
+        "lag1_autocorrelation": round(rho, 6),
+        "effective_samples": round(effective, 6),
+    }
 
 
 def build_hot_path_calibration(
@@ -102,7 +140,9 @@ def build_hot_path_calibration(
         n = len(net)
         mean_net = statistics.fmean(net)
         std_net = statistics.stdev(net) if n > 1 else 0.0
-        margin = 1.96 * std_net / math.sqrt(n) if n > 1 else float("inf")
+        temporal = _temporal_dependence(net, group)
+        ci_samples = float(temporal["effective_samples"])
+        margin = 1.96 * std_net / math.sqrt(ci_samples) if ci_samples > 1.0 else float("inf")
         lower = mean_net - margin if math.isfinite(margin) else None
         upper = mean_net + margin if math.isfinite(margin) else None
         mean_expected = statistics.fmean(expected)
@@ -121,13 +161,23 @@ def build_hot_path_calibration(
             "mean_realized_response_bps": round(mean_gross, 6),
             "mean_edge_error_bps": round(mean_net - mean_expected, 6),
             "net_stddev_bps": round(std_net, 6),
+            "temporal_dependence_assessment": temporal["assessment"],
+            "timestamped_samples": temporal["timestamped_samples"],
+            "lag1_autocorrelation": temporal["lag1_autocorrelation"],
+            "effective_samples": temporal["effective_samples"],
+            "ci95_sample_basis": "effective_samples" if temporal["assessment"] == "AVAILABLE" else "samples",
             "net_ci95_lower_bps": round(lower, 6) if lower is not None else None,
             "net_ci95_upper_bps": round(upper, 6) if upper is not None else None,
-            "eligible_for_paper_review": bool(n >= min_samples and lower is not None and lower > 0.0),
+            "eligible_for_paper_review": bool(
+                n >= min_samples
+                and ci_samples >= min_samples
+                and lower is not None
+                and lower > 0.0
+            ),
         })
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_ms": time.time_ns() // 1_000_000,
         "source": path.name,
         "outcome_records_loaded": len(raw_rows),
@@ -140,7 +190,7 @@ def build_hot_path_calibration(
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Calibration evidence only; duplicate and invalid outcomes are excluded from samples; eligibility is not execution authorization.",
+        "note": "Calibration evidence only; duplicate and invalid outcomes are excluded from samples. Confidence intervals use a first-order serial-dependence adjustment when timestamps are available; eligibility is not execution authorization.",
         "stats": summaries,
     }
 
