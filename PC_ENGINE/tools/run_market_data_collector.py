@@ -41,6 +41,22 @@ def main() -> None:
     exchanges = list(radar_cfg.get("websocket_exchanges") or ["binance", "coinbase", "okx"])
     data_dir = _resolve_path(args.data_dir or radar_cfg.get("data_dir") or "PC_ENGINE/data/radar")
     data_dir.mkdir(parents=True, exist_ok=True)
+    health_path = data_dir / "market_data_health.json"
+
+    def write_health(status: str, **extra) -> None:
+        payload = {
+            "service": "market_data_collector",
+            "status": status,
+            "timestamp_ms": time.time_ns() // 1_000_000,
+            "symbols": symbols,
+            "exchanges": exchanges,
+            "data_dir": str(data_dir),
+            "paper_only": True,
+            **extra,
+        }
+        tmp = health_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+        tmp.replace(health_path)
 
     stop = threading.Event()
 
@@ -67,6 +83,7 @@ def main() -> None:
     )
 
     radar.start()
+    write_health("RUNNING", radar=radar.snapshot())
     print(json.dumps({
         "service": "market_data_collector",
         "status": "RUNNING",
@@ -82,6 +99,15 @@ def main() -> None:
             now = time.monotonic()
             if now >= next_learning:
                 stats = learner.learn()
+                radar_state = radar.snapshot()
+                write_health(
+                    "RUNNING",
+                    radar=radar_state,
+                    learning={
+                        "stats": len(stats),
+                        "eligible_paper_relationships": sum(1 for row in stats if row.eligible),
+                    },
+                )
                 print(json.dumps({
                     "service": "market_data_collector",
                     "stats": len(stats),
@@ -93,6 +119,7 @@ def main() -> None:
     finally:
         radar.stop()
         learner.learn()
+        write_health("STOPPED", radar=radar.snapshot())
         print("Market-data collector stopped cleanly.", flush=True)
 
 
