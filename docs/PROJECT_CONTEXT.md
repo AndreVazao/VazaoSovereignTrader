@@ -629,3 +629,22 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. Review the final diff and merge only if checks are green and PR is clean/mergeable.
 3. Verify post-merge Python and Windows CI on the resulting main SHA.
 4. Continue toward a genuinely installable PAPER-first Windows workflow; keep cloud activation and REAL execution explicitly gated.
+
+## 30. Handoff — 2026-09-30, top-of-book operational heartbeat in progress
+
+### Feature branch
+- Branch: `feat/top-of-book-operational-heartbeat`, based on main SHA `23a06a492c2556835dfb9df8f0b4b94aeb30e0f0` after PR #283 was merged.
+- Added operational state snapshots to `PublicWebSocketCollector`: connection attempts, message/event counts, last-event age, last error/close information and per venue-symbol state.
+- The standalone top-of-book collector now writes an atomic `top_of_book_health.json` heartbeat alongside the bounded ticker evidence file. The heartbeat is refreshed every 5 seconds by default and records reconnect/collector/write counters.
+- Health payloads remain explicitly PAPER-only with `orders_submitted=false` and `execution_authorized=false`.
+- Added tests for collector operational snapshots and atomic heartbeat output.
+
+### Safety / scope
+- This is operational telemetry only. It does not auto-start the collector, submit orders, alter REAL gates, bypass readiness, create cloud resources, deploy or add paid services.
+- The top-of-book collector remains a separate opt-in process; the trading runtime does not silently start it.
+
+### Next actions
+1. Validate exact-head Python and Windows EXE CI for this branch/PR.
+2. Merge only after clean/mergeable PR and green required checks, then verify resulting main CI.
+3. Use the new heartbeat as the source for a later dashboard feed-status layer: per exchange/platform, per symbol, connection state, last observation age, reconnects and data-write health.
+4. Continue Windows PAPER resilience: clean installation, restart/recovery verification, bounded persistence and multi-day evidence accumulation. Keep operational health, economic evidence, OOS uncertainty and execution authorization separate.
