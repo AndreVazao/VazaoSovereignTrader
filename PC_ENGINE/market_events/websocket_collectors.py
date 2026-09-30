@@ -48,7 +48,11 @@ class PublicWebSocketCollector:
                     sequence=data.get("a"), price=float(data["p"]),
                     volume=float(data["q"]), raw_source="websocket",
                     receive_ns=receive_ns))
-            elif event_type == "bookTicker":
+            elif event_type == "bookTicker" or (
+                "b" in data and "a" in data and "u" in data and "p" not in data
+            ):
+                # Binance individual-symbol bookTicker streams may omit the
+                # event type and exchange timestamp fields.
                 bid, ask = float(data["b"]), float(data["a"])
                 events.append(MarketEventFactory.create(
                     venue=venue, symbol=symbol, event_type="ticker",
