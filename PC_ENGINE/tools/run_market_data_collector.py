@@ -7,6 +7,7 @@ import threading
 import time
 from pathlib import Path
 
+from PC_ENGINE.radar.hot_path import HotPathLeadLagEngine, HotPathOpportunity
 from PC_ENGINE.radar.lead_lag_learning import LeadLagLearningEngine
 from PC_ENGINE.radar.websocket_radar import WebSocketMarketRadar
 from PC_ENGINE.research.paper_study import load_states, run_study, write_report
@@ -70,12 +71,36 @@ def main() -> None:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, shutdown)
 
+    hot_path = HotPathLeadLagEngine(
+        exchanges=exchanges,
+        lead_window_ms=int(radar_cfg.get("lead_window_ms", 750)),
+        stale_after_ms=int(radar_cfg.get("hot_path_stale_after_ms", 750)),
+        min_move_bps=float(radar_cfg.get("min_move_bps", 5)),
+        min_expected_net_bps=float(radar_cfg.get("hot_path_min_expected_net_bps", 2)),
+        fee_bps_round_trip=float(radar_cfg.get("lead_lag_fee_bps_per_side", 10)) * 2,
+        slippage_bps_round_trip=float(radar_cfg.get("lead_lag_slippage_bps_per_side", 4)) * 2,
+        latency_bps_per_100ms=float(radar_cfg.get("hot_path_latency_bps_per_100ms", 0.5)),
+        horizon_ms=int(radar_cfg.get("hot_path_horizon_ms", 500)),
+        data_dir=data_dir,
+    )
+    opportunity_queue: list[HotPathOpportunity] = []
+    opportunity_lock = threading.Lock()
+
+    def on_market_event(event) -> None:
+        opportunity = hot_path.on_market_event(event)
+        if opportunity is not None:
+            with opportunity_lock:
+                opportunity_queue.append(opportunity)
+                if len(opportunity_queue) > 256:
+                    del opportunity_queue[:-256]
+
     radar = WebSocketMarketRadar(
         symbols=symbols,
         exchanges=exchanges,
         data_dir=data_dir,
         min_move_bps=float(radar_cfg.get("min_move_bps", 5)),
         lead_window_ms=int(radar_cfg.get("lead_window_ms", 750)),
+        callback=on_market_event,
     )
     learner = LeadLagLearningEngine(
         data_dir=data_dir,
@@ -106,6 +131,15 @@ def main() -> None:
             now = time.monotonic()
             if now >= next_learning:
                 stats = learner.learn()
+                for row in stats:
+                    if row.eligible:
+                        hot_path.set_expectancy(
+                            symbol=row.symbol,
+                            leader=row.leader,
+                            follower=row.follower,
+                            direction=row.direction,
+                            expected_response_bps=row.expectancy_bps,
+                        )
                 radar_state = radar.snapshot()
                 write_health(
                     "RUNNING",
@@ -122,6 +156,12 @@ def main() -> None:
                     "timestamp_ms": time.time_ns() // 1_000_000,
                 }, ensure_ascii=False), flush=True)
                 next_learning = now + max(30.0, args.learn_minutes * 60.0)
+            with opportunity_lock:
+                queued = list(opportunity_queue)
+                opportunity_queue.clear()
+            for opportunity in queued:
+                hot_path.persist(opportunity)
+
             if study_enabled and now >= next_study:
                 states_path = data_dir / str(study_cfg.get("states_filename", "market_states.jsonl"))
                 report_path = data_dir / str(study_cfg.get("report_filename", "paper_study_report.json"))
@@ -148,6 +188,7 @@ def main() -> None:
                     write_health(
                         "RUNNING",
                         radar=radar.snapshot(),
+                        hot_path=hot_path.snapshot(),
                         study={
                             "enabled": True,
                             "state_samples": len(states),
@@ -158,13 +199,13 @@ def main() -> None:
                         },
                     )
                 except Exception as exc:
-                    write_health("RUNNING", radar=radar.snapshot(), study={"enabled": True, "error": f"{type(exc).__name__}: {exc}"})
+                    write_health("RUNNING", radar=radar.snapshot(), hot_path=hot_path.snapshot(), study={"enabled": True, "error": f"{type(exc).__name__}: {exc}"})
                 next_study = now + max(60.0, study_minutes * 60.0)
             stop.wait(1.0)
     finally:
         radar.stop()
         learner.learn()
-        write_health("STOPPED", radar=radar.snapshot())
+        write_health("STOPPED", radar=radar.snapshot(), hot_path=hot_path.snapshot())
         print("Market-data collector stopped cleanly.", flush=True)
 
 
