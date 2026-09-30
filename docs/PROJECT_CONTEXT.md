@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — current verified handoff: main at 648502928c0426bd86334c7f3d4957d42f4162a7; implementation PRs #258–#263 merged
+Last updated: 2026-09-30 (UTC) — current verified handoff: main at ec8eafb9d306a9146cdaeb329062fed1cc68363b; implementation PRs #258–#263 and #265–#266 merged; PR #264 documentation-only and merged
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -301,7 +301,7 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 - Applied consistent root-based path resolution to evidence report paths, the evidence refresh service, venue-health telemetry, and the cockpit `/market-data-health` and `/diagnostics` endpoints.
 - Added tests for configured outcome path selection, relative data/report paths, and the market-data heartbeat endpoint with a relative configured data directory.
 - Exact PR-head CI for `ea7d00ae5b25761f31433cc5d118887e11f2f303`: Python tests SUCCESS (run 36740419300); Windows EXE build and smoke test SUCCESS (run 36740419273). PR was mergeable/clean at merge.
-- Main post-merge CI for `648502928c0426bd86334c7f3d4957d42f4162a7` was still running at the time this section was written; verify both Python tests and Windows EXE runs before treating post-merge validation as complete.
+- At this historical handoff, post-merge CI for `648502928c0426bd86334c7f3d4957d42f4162a7` was still running. It subsequently completed successfully on both Python tests and Windows EXE (runs 36740684028 and 36740683635).
 - No changes to execution mode, Risk Engine, RealModeGuard, readiness/preflight/reconciliation, or REAL authorization. Reports remain PAPER-only; no orders were submitted and no cloud resources/costs were introduced.
 
 ### Repository housekeeping verified
@@ -309,9 +309,41 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 - Closed stale PR #253 because the chronological walk-forward module/tests were already present in main through later merged work.
 - PR #243 remains open: `feat/lead-lag-oos-study`, head `71761c1fdc6ebfe4dd120bd32eb9d068138b8a01`. Its base SHA is old; do not merge without reviewing the diff against current main and rebasing/rebuilding its tests. Treat it as the only pre-existing feature PR, separate from the path-consistency fix.
 
-### Next technical actions
-1. Verify post-merge Python and Windows EXE CI on exact main SHA `648502928c0426bd86334c7f3d4957d42f4162a7`.
-2. Audit report loaders and writers for malformed UTF-8/JSON, invalid or non-monotonic timestamps, duplicate outcomes, insufficient samples, and atomic-write/failure recovery; add targeted tests.
-3. Audit `build_venue_health` against malformed timestamps and nested JSON structures so a bad telemetry line cannot break the endpoint. Continue to list only configured/observed venues.
-4. Add the separate economic venue evidence dimension (spread, fees, slippage, latency and lead/lag PAPER outcomes) only with sufficient sample counts; operational GREEN must not imply profitability.
-5. Continue to keep PAPER as the default and preserve every REAL gate. No cloud activation or spend without explicit authorization.
+### Next technical actions from this handoff (historical; see Section 17 for the current state)
+1. Verify post-merge Python and Windows EXE CI on the exact main SHA.
+2. Audit report readers/writers for corrupt UTF-8/JSON, timestamps, duplicate outcomes, insufficient samples and atomic-write recovery.
+3. Harden venue-health parsing against malformed timestamps and nested telemetry structures.
+4. Keep operational venue health separate from economic evidence (spread, fees, slippage, latency and PAPER lead/lag), and require sufficient sample counts.
+5. Keep PAPER as the default and preserve every REAL gate. No cloud activation or spend without explicit authorization.
+
+
+## 17. Current handoff — 2026-09-30, after PR #266
+
+### Verified repository state
+- Current main SHA: `ec8eafb9d306a9146cdaeb329062fed1cc68363b`.
+- PR #264 merged: context and continuity documentation.
+- PR #265 merged: defensive venue-health telemetry parsing. Merge commit `3786be983c0dcce1eabc2044b26b2102e915d710`; exact PR head `ca2d4febce1a4bba12a0919a5acdb29862223ab5`. Exact-head Python tests passed (run 36741856987) and Windows EXE build/smoke test passed (run 36741857149).
+- PR #266 merged: resilient PAPER evidence ingestion and atomic report writes. Merge commit `ec8eafb9d306a9146cdaeb329062fed1cc68363b`; exact PR head `4a992b33729840ac23ee8fbd63ccd280e354c1d1`. Exact-head Python tests passed (run 36742870332) and Windows EXE build/smoke test passed (run 36742870298).
+- Post-merge CI for current main SHA `ec8eafb9d306a9146cdaeb329062fed1cc68363b` was in progress at the time of this handoff: Python run 36743092034 and Windows EXE run 36743092059. Verify both before declaring post-merge validation complete.
+- PR #243 remains the only open implementation PR, but its base is stale (`765dee0a95a75e1c808753f6e787c4979f9394f7`). Do not merge it without reviewing its diff against current main and running fresh exact-head CI. Its per-relationship OOS holdout analysis may add useful detail, but its collector integration and report handling must be reconciled with the now-current evidence pipeline first.
+
+### PR #265 — venue health hardening
+- JSONL files are read line-by-line as bytes; malformed JSON and invalid UTF-8 rows are skipped without hiding later valid rows.
+- Nested snapshots/configuration and timestamps are validated defensively. Invalid/future timestamps do not count as valid recent activity or inflate the sample threshold.
+- Only configured venue names are displayed. RED remains a review candidate, never an automatic deletion. Status is operational-only and does not imply profitability.
+
+### PR #266 — PAPER evidence ingestion/report writes
+- Calibration and chronological walk-forward readers now tolerate individual invalid UTF-8/JSON lines and continue processing valid records later in the ledger.
+- Future timestamps are excluded from temporal calibration evidence and from chronological walk-forward records.
+- Evidence scorecard loading now fails closed for malformed UTF-8/JSON, unexpected shapes and invalid/non-finite numeric fields.
+- Added `PC_ENGINE/radar/report_io.py`: unique same-directory temporary file, JSON serialization, flush/fsync, then atomic replace. Failed writes clean up the temporary file and preserve the previous report. Calibration, chronological walk-forward, regime walk-forward, OOS robustness and scorecard writers use it.
+- Added regression tests for corrupt input, future timestamps, malformed scorecard fields, full refresh with corrupt outcomes and preservation of prior reports after simulated replace failure.
+- Safety remains unchanged: PAPER only, no order submission, no REAL promotion or gate bypass, no cloud provisioning/spend.
+
+### Next engineering actions
+1. Verify post-merge Python and Windows EXE checks for main SHA `ec8eafb9d306a9146cdaeb329062fed1cc68363b`.
+2. Audit outcome identity/deduplication semantics so invalid first occurrences cannot suppress a later valid outcome with the same ID; preserve auditable duplicate/invalid counts.
+3. Review PR #243 against current main. Either rebuild its per-relationship OOS study safely on a fresh branch or close it as superseded after confirming no unique useful behavior is lost.
+4. Add a separate economic evidence dimension for venues (spread, fee assumptions, slippage, latency and PAPER lead/lag outcomes) only when samples are sufficient. Operational GREEN must never imply economic viability.
+5. Continue PAPER accumulation and chronological OOS/regime/cost validation. Do not state profitability without adequate evidence.
+6. Keep every REAL gate intact; no real orders, cloud resources, paid services or new costs without explicit authorization.
