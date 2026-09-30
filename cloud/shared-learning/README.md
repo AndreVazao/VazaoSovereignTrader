@@ -1,5 +1,7 @@
 # Vazao Sovereign Trader — Shared Learning API
 
+**Project continuity:** See [docs/PROJECT_CONTEXT.md](../../docs/PROJECT_CONTEXT.md) for current architecture, verified CI, PR state, security constraints, blockers, and the ordered continuation plan. Update that file at the end of each meaningful work session.
+
 Deploy this directory as a separate Vercel project with Root Directory `cloud/shared-learning`.
 
 ## Scope
@@ -41,7 +43,7 @@ Configuration synchronization is deliberately separate: it requires versioning, 
 
 
 ## Local sovereignty
-Each PC is a local-first node and must continue safe local work when cloud services are unreachable. Cloud sync is optional, best-effort maintenance and defaults to daily pull/push intervals. See [Local Sovereignty and Background Synchronization](../../docs/LOCAL_SOVEREIGNTY_AND_SYNC_POLICY.md). Daily interval helpers exist, but runtime scheduler integration, jitter/backoff, and airplane-mode validation remain required before enabling production sync.
+Each PC is a local-first node and must continue safe local work when cloud services are unreachable. Cloud sync is optional, best-effort maintenance and defaults to daily pull/push intervals. See [Local Sovereignty and Background Synchronization](../../docs/LOCAL_SOVEREIGNTY_AND_SYNC_POLICY.md). Daily throttling, a background maintenance worker, jitter, and exponential retry/backoff foundations exist in the PR branch. Before enabling production sync, verify actual engine lifecycle integration, offline/airplane-mode behavior, idempotency, and that the cloud remains disabled by default.
 
 
 ## Local PC sync adapter status
