@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import random
 import statistics
 import time
 from collections import defaultdict, deque
@@ -112,6 +114,44 @@ def _load_outcomes(path: Path, *, now_ms: int, max_records: int) -> tuple[list[d
     return ordered, counters
 
 
+
+def _moving_block_bootstrap_ci(values: list[float], *, seed_key: str, replicates: int = 1000) -> dict[str, Any]:
+    """Deterministic mean interval preserving short-range chronological dependence."""
+    n = len(values)
+    if n < 8:
+        return {
+            "assessment": "UNAVAILABLE",
+            "method": "moving_block_bootstrap",
+            "bootstrap_replicates": 0,
+            "block_length": None,
+            "lower": None,
+            "upper": None,
+        }
+    block_length = max(2, int(round(math.sqrt(n))))
+    block_length = min(block_length, max(2, n // 2))
+    seed = int.from_bytes(hashlib.sha256(seed_key.encode("utf-8")).digest()[:8], "big")
+    rng = random.Random(seed)
+    block_starts = list(range(n - block_length + 1))
+    means: list[float] = []
+    for _ in range(max(500, int(replicates))):
+        sample: list[float] = []
+        while len(sample) < n:
+            start = rng.choice(block_starts)
+            sample.extend(values[start:start + block_length])
+        means.append(statistics.fmean(sample[:n]))
+    means.sort()
+    low_index = int(0.025 * (len(means) - 1))
+    high_index = int(0.975 * (len(means) - 1))
+    return {
+        "assessment": "AVAILABLE",
+        "method": "moving_block_bootstrap",
+        "bootstrap_replicates": len(means),
+        "block_length": block_length,
+        "lower": means[low_index],
+        "upper": means[high_index],
+    }
+
+
 def build_venue_economic_evidence(
     config: dict[str, Any],
     outcomes_path: str | Path,
@@ -140,9 +180,21 @@ def build_venue_economic_evidence(
         net_values = [row["realized_net_bps"] for row in test]
         enough = count >= min_samples and len(test) >= min_oos_samples
         mean_oos = statistics.fmean(net_values) if net_values else None
+        ci = _moving_block_bootstrap_ci(
+            net_values,
+            seed_key=f"{venue}:{count}:{sample[0]['outcome_local_ts_ms'] if sample else 0}:{sample[-1]['outcome_local_ts_ms'] if sample else 0}",
+        )
+        ci_available = ci["assessment"] == "AVAILABLE"
         status = "INSUFFICIENT_DATA"
-        if enough:
-            status = "POSITIVE_OOS_CANDIDATE" if mean_oos is not None and mean_oos > 0 else "NON_POSITIVE_OOS"
+        if enough and not ci_available:
+            status = "INSUFFICIENT_OOS_FOR_CI"
+        elif enough and ci_available:
+            if ci["lower"] is not None and ci["lower"] > 0:
+                status = "POSITIVE_OOS_CANDIDATE"
+            elif ci["upper"] is not None and ci["upper"] < 0:
+                status = "NON_POSITIVE_OOS"
+            else:
+                status = "UNCERTAIN_OOS"
         def mean_cost(key: str) -> float | None:
             values = [row[key] for row in sample if row.get(key) is not None]
             return round(statistics.fmean(values), 6) if values else None
@@ -155,13 +207,20 @@ def build_venue_economic_evidence(
             "min_samples_required": min_samples,
             "min_oos_samples_required": min_oos_samples,
             "oos_mean_realized_net_bps": round(mean_oos, 6) if mean_oos is not None else None,
+            "oos_ci95_lower_bps": round(ci["lower"], 6) if ci["lower"] is not None else None,
+            "oos_ci95_upper_bps": round(ci["upper"], 6) if ci["upper"] is not None else None,
+            "oos_ci95_method": ci["method"],
+            "oos_bootstrap_replicates": ci["bootstrap_replicates"],
+            "oos_bootstrap_block_length": ci["block_length"],
+            "oos_confidence_interval_available": ci_available,
+            "oos_edge_supported": bool(ci_available and ci["lower"] is not None and ci["lower"] > 0),
             "oos_positive_rate": round(sum(value > 0 for value in net_values) / len(net_values), 6) if net_values else None,
             "mean_recorded_fees_bps": mean_cost("fees_bps"),
             "mean_recorded_slippage_bps": mean_cost("slippage_bps"),
             "mean_recorded_latency_penalty_bps": mean_cost("latency_penalty_bps"),
             "spread_bps": None,
             "spread_status": "UNAVAILABLE_NO_BID_ASK_EVIDENCE",
-            "notes": "Net outcomes are PAPER observations under recorded cost assumptions, not fills or a profitability guarantee. Positive OOS mean is a review candidate only.",
+            "notes": "Net outcomes are PAPER observations under recorded cost assumptions, not fills or a profitability guarantee. A positive OOS mean is insufficient on its own; a candidate requires the deterministic moving-block bootstrap 95% interval lower bound above zero. This remains a PAPER review candidate only.",
         })
 
     return {
@@ -174,7 +233,7 @@ def build_venue_economic_evidence(
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Economic evidence is separate from operational health. No venue is automatically removed or promoted; spread remains unavailable until valid bid/ask observations are collected.",
+        "note": "Economic evidence is separate from operational health. No venue is automatically removed or promoted; spread remains unavailable until valid bid/ask observations are collected; OOS uncertainty is reported with a deterministic moving-block bootstrap interval.",
     }
 
 

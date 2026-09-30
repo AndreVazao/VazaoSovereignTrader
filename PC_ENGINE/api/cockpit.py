@@ -108,14 +108,17 @@ async function refreshVenueEconomicEvidence(){
   $('venueEconomics').innerHTML=rows.map(v=>{
    const candidate=v.status==='POSITIVE_OOS_CANDIDATE';
    const nonPositive=v.status==='NON_POSITIVE_OOS';
+   const uncertain=v.status==='UNCERTAIN_OOS';
+   const noCi=v.status==='INSUFFICIENT_OOS_FOR_CI';
    const cls=nonPositive?'red':'';
    const tone=nonPositive?'bad':'warn';
    const mean=v.oos_mean_realized_net_bps==null?'n/d':Number(v.oos_mean_realized_net_bps).toFixed(2)+' bps';
    const fees=v.mean_recorded_fees_bps==null?'n/d':Number(v.mean_recorded_fees_bps).toFixed(2)+' bps';
    const slip=v.mean_recorded_slippage_bps==null?'n/d':Number(v.mean_recorded_slippage_bps).toFixed(2)+' bps';
    const latency=v.mean_recorded_latency_penalty_bps==null?'n/d':Number(v.mean_recorded_latency_penalty_bps).toFixed(2)+' bps';
-   const label=candidate?'CANDIDATO PAPER · REVER':nonPositive?'OOS NÃO POSITIVO':'AMOSTRA INSUFICIENTE';
-   return '<div class="venue"><span class="dot '+cls+'"></span><div><div class="venue-name">'+esc(v.venue)+' <span class="'+tone+'">'+label+'</span></div><div class="venue-meta">Amostras '+Number(v.paper_outcome_samples||0)+' · OOS '+Number(v.oos_samples||0)+' · média líquida OOS '+mean+' · comissões '+fees+' · slippage '+slip+' · latência '+latency+' · spread indisponível</div></div><b class="'+tone+'">'+esc(v.status)+'</b></div>';
+   const label=candidate?'CANDIDATO PAPER · IC95% acima de zero; rever':nonPositive?'IC95% abaixo de zero':uncertain?'OOS INCERTO · IC95% inclui zero':noCi?'OOS insuficiente para IC95%':'AMOSTRA INSUFICIENTE';
+   const ci=(v.oos_ci95_lower_bps==null||v.oos_ci95_upper_bps==null)?'IC95% n/d':'IC95% ['+Number(v.oos_ci95_lower_bps).toFixed(2)+', '+Number(v.oos_ci95_upper_bps).toFixed(2)+'] bps';
+   return '<div class="venue"><span class="dot '+cls+'"></span><div><div class="venue-name">'+esc(v.venue)+' <span class="'+tone+'">'+label+'</span></div><div class="venue-meta">Amostras '+Number(v.paper_outcome_samples||0)+' · OOS '+Number(v.oos_samples||0)+' · média líquida OOS '+mean+' · '+ci+' · comissões '+fees+' · slippage '+slip+' · latência '+latency+' · spread indisponível</div></div><b class="'+tone+'">'+esc(v.status)+'</b></div>';
   }).join('')+'<div class="venue-meta">PAPER only · ordens enviadas: não · autorização REAL: não · '+esc(d.note||'')+'</div>';
  }catch(e){$('venueEconomics').innerHTML='<span class="bad">Evidência económica indisponível: '+esc(e.message)+'</span>'}
 }
