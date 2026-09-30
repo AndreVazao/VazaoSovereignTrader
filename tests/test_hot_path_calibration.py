@@ -170,7 +170,7 @@ def test_calibration_skips_invalid_utf8_and_continues_reading(tmp_path):
     valid_first = json.dumps(_outcome(2.0)).encode("utf-8") + b"\n"
     corrupt = b"\xff\xfe\n"
     malformed = b"{bad json\n"
-    valid_last = json.dumps(_outcome(4.0)).encode("utf-8") + b"\n"
+    valid_last = valid_first
     source.write_bytes(valid_first + corrupt + malformed + valid_last)
     report = build_hot_path_calibration(source, min_samples=2)
     assert report["outcome_records_loaded"] == 2

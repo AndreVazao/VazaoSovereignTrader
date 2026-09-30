@@ -85,7 +85,10 @@ def test_scorecard_fails_closed_on_invalid_utf8_and_malformed_numeric_fields(tmp
             {"extra_cost_bps": "not-a-number", "samples": "NaN", "monte_carlo_replicates": []}
         ],
     }), encoding="utf-8")
+    bad_json = tmp_path / "bad-json.json"
+    bad_json.write_text("{bad json", encoding="utf-8")
     missing = build_evidence_scorecard(calibration_report_path=bad_utf8)
+    missing_json = build_evidence_scorecard(calibration_report_path=bad_json)
     report = build_evidence_scorecard(
         calibration_report_path=calibration,
         walk_forward_report_path=walk,
@@ -93,6 +96,7 @@ def test_scorecard_fails_closed_on_invalid_utf8_and_malformed_numeric_fields(tmp
         oos_robustness_report_path=robustness,
     )
     assert missing["requirements_met"] == 0
+    assert missing_json["requirements_met"] == 0
     assert report["execution_authorized"] is False
     assert "calibration_samples" in report["requirements_missing"]
     assert "chronological_walk_forward" in report["requirements_missing"]

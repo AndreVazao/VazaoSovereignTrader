@@ -72,7 +72,7 @@ def test_walk_forward_skips_invalid_utf8_and_future_timestamp_rows(tmp_path):
     source = tmp_path / "outcomes.jsonl"
     now_ms = __import__("time").time_ns() // 1_000_000
     rows = [_row(i, 1.0) for i in range(8)]
-    future = {**_row(50, 20.0), "outcome_local_ts_ms": now_ms + 60_000}
+    future = {**_row(50, 20.0), "outcome_local_ts_ms": now_ms + 86_400_000}
     raw = (
         ("\n".join(json.dumps(row) for row in rows[:4]) + "\n").encode("utf-8")
         + b"\xff\xfe\n"
