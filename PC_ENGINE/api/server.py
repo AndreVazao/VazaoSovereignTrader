@@ -21,6 +21,7 @@ from PC_ENGINE.research.inbox import TraderResearchInbox
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 from PC_ENGINE.diagnostics.operational import build_operational_diagnostics, latest_events_by_venue_symbol, storage_metrics
+from PC_ENGINE.diagnostics.venue_health import build_venue_health
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -146,6 +147,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             storage=storage,
             recovery=getattr(getattr(engine, "recovery", None), "diagnostics", lambda: {})(),
         ))
+
+    @app.get("/venue-health")
+    def venue_health():
+        require_scope("read_private_state")
+        return jsonify(build_venue_health(engine.config))
 
     @app.get("/diagnostics/export")
     def operational_diagnostics_export():
