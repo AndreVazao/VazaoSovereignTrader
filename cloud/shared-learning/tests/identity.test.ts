@@ -14,7 +14,7 @@ test("normalizes a valid device public key and fingerprints the canonical key", 
 
 test("rejects weak RSA and unsupported elliptic curves", () => {
   const weakRsa = generateKeyPairSync("rsa", { modulusLength: 1024 }).publicKey.export({ type: "spki", format: "pem" }).toString();
-  const weakEc = generateKeyPairSync("ec", { namedCurve: "secp192r1" }).publicKey.export({ type: "spki", format: "pem" }).toString();
+  const weakEc = generateKeyPairSync("ec", { namedCurve: "secp224r1" }).publicKey.export({ type: "spki", format: "pem" }).toString();
   assert.throws(() => parseDeviceRegistration({ label: "laptop", public_key: weakRsa }), /invalid_device_public_key/);
   assert.throws(() => parseDeviceRegistration({ label: "laptop", public_key: weakEc }), /invalid_device_public_key/);
 });
