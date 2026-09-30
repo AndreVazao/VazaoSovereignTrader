@@ -264,8 +264,8 @@ Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live
 - If outcomes are missing, reports are generated as empty evidence artifacts; requirements remain unmet. This does not imply strategy failure; it means there is no accumulated evidence yet.
 - All generated reports retain `paper_only=true`, `orders_submitted=false`, `execution_authorized=false`. No REAL gate changes and no orders are submitted.
 
-### Active branch / PR status
-- PR #260 is merged; no feature branch should be assumed active without checking GitHub.
+### Historical branch / PR status at the PR #260–#261 handoff
+- PR #260 was merged; no feature branch should be assumed active without checking GitHub.
 - Latest completed implementation sequence: PR #258 venue health signage -> PR #259 runtime scorecard -> PR #260 explicit PAPER evidence refresh.
 - PR #261 merged: updated this project context/continuation handoff. Documentation CI passed on exact head `9a6440a50f71e31d9934daa460ca7c5b4a57c1b7`; merge SHA `648502928c0426bd86334c7f3d4957d42f4162a7`.
 - Before further coding, inspect live main, open PRs, and current CI. Keep one active implementation PR wherever practical.
