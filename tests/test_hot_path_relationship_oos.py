@@ -27,7 +27,7 @@ def _row(i, net, **extra):
 
 def test_relationship_oos_splits_each_relationship_chronologically(tmp_path):
     path = tmp_path / "outcomes.jsonl"
-    rows = [_row(i, -2.0) for i in range(7)] + [_row(i, 3.0) for i in range(7, 10)]
+    rows = [_row(i, -2.0) for i in range(70)] + [_row(i, 3.0) for i in range(70, 100)]
     rows += [
         {**_row(i, 2.0), "symbol": "ETH/USDT", "outcome_id": f"eth-{i}"}
         for i in range(10, 20)
@@ -35,16 +35,19 @@ def test_relationship_oos_splits_each_relationship_chronologically(tmp_path):
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
     report = build_relationship_oos_report(
-        path, min_samples=10, min_test_samples=3, train_fraction=0.7, now_ms=100_000,
+        path, min_samples=100, min_test_samples=20, train_fraction=0.7, now_ms=200_000,
     )
 
     assert report["relationships"] == 2
     btc = next(row for row in report["relationship_details"] if row["symbol"] == "BTC/USDT")
-    assert btc["train_samples"] == 7
-    assert btc["test_samples"] == 3
+    assert btc["train_samples"] == 70
+    assert btc["test_samples"] == 30
     assert btc["train_end_ms"] < btc["test_start_ms"]
     assert btc["train_mean_net_bps"] == -2.0
     assert btc["oos_mean_net_bps"] == 3.0
+    assert btc["oos_ci95_method"] == "moving_block_bootstrap"
+    assert btc["oos_bootstrap_replicates"] >= 500
+    assert btc["oos_confidence_interval_available"] is True
     assert btc["oos_edge_supported"] is True
     assert report["execution_authorized"] is False
 
