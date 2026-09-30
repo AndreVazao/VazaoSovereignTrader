@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 import base64
+import json
 
 from flask import Flask, Response, jsonify, request, send_file
 
@@ -93,7 +94,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
                 "health_path": str(health_path),
             })
         try:
-            payload = __import__("json").loads(health_path.read_text(encoding="utf-8"))
+            payload = json.loads(health_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             return jsonify({"ok": False, "status": "INVALID", "error": str(exc)}), 409
         now_ms = __import__("time").time_ns() // 1_000_000
@@ -107,7 +108,6 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def operational_diagnostics():
         require_scope("read_private_state")
         from pathlib import Path
-        import json
         import time
         engine_snapshot = engine.snapshot()
         radar_cfg = engine.config.get("radar", {})
@@ -258,7 +258,6 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def research_status():
         require_scope("read_private_state")
         from pathlib import Path
-        import json
         radar_cfg = engine.config.get("radar", {})
         study_cfg = engine.config.get("paper_study", {})
         data_dir = Path(radar_cfg.get("data_dir", "PC_ENGINE/data/radar"))
