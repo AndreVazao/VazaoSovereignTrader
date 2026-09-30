@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — PR #223 merged by owner; Windows runtime/data bootstrap is now the active implementation branch
+Last updated: 2026-09-30 (UTC) — PR #225 and PR #226 merged; PAPER operational diagnostics and study harness are now the active roadmap
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -27,7 +27,7 @@ Immediate operational goal: data accumulation and research, not live trading.
 ## 2. Current main state
 
 PR #223 (device proof, admin approval and rate-limit hardening) was merged by André.
-Current main SHA: 0683d91faacb94075cf90b397b9a941aeae73bdc.
+Current main SHA after PR #226: 4994e45b2a8d1da93630a0cdb034a17eb99eba89.
 
 Latest main validation observed:
 - Windows EXE run 36672120924: SUCCESS.
@@ -37,10 +37,10 @@ Latest main validation observed:
 
 PR #223 and predecessor consolidation work are complete. Do not reopen them.
 
-## 3. Active implementation — Windows runtime + continuous market-data bootstrap
+## 3. Active implementation — Windows runtime + operational diagnostics
 
-Branch: feat/windows-runtime-bootstrap
-No PR was open yet when this context was written; create exactly one PR for this branch after final review.
+Branch: feat/paper-study-harness
+Active PR will cover the reusable PAPER study harness.
 
 Implemented:
 - setup_windows.ps1 installs Python runtime, PC requirements, Playwright Chromium and persistent data directories.
@@ -122,7 +122,30 @@ Before cloud activation:
 
 Cloud learning remains advisory and must never authorize REAL.
 
-## 7. Next actions
+## 7. Completed since previous handover
+
+- PR #225 merged: market-data heartbeat, exchange metrics, reconnect/error counters and authenticated `/market-data-health`.
+- PR #226 merged: authenticated `/diagnostics`, latest event by venue/symbol, local storage growth metrics, deterministic JSON export and cockpit diagnostics panel.
+- Exact-head CI for PR #226: Python tests SUCCESS (run 36673761535); Windows EXE SUCCESS (run 36673761420).
+
+## 8. Active implementation — PAPER study harness
+
+Branch: feat/paper-study-harness
+
+Implemented:
+- reusable PAPER study engine over local `market_states.jsonl`;
+- net outcomes after configured costs;
+- chronological OOS train/test;
+- walk-forward folds;
+- regime breakdown;
+- deterministic Monte Carlo bootstrap;
+- configurable signal vs high-confidence/high-confluence policy comparison;
+- local study runner producing `paper_study_report.json`;
+- unit tests and installation documentation.
+
+Safety: research/PAPER only. No order submission, risk mutation, cloud activation or REAL promotion.
+
+## 9. Next actions
 
 1. Finish/review branch feat/windows-runtime-bootstrap.
 2. Open one PR for it.
@@ -139,7 +162,7 @@ Cloud learning remains advisory and must never authorize REAL.
 7. Then expand the study pipeline: common PAPER harness, strategy comparison, OOS/walk-forward, Monte Carlo and regime analysis.
 8. Then validate WebSocket timestamps/latency rigorously before treating lead/lag as economically meaningful.
 
-## 8. Installation target
+## 10. Installation target
 
 1. Install/prepare runtime.
 2. Configure local API token.
@@ -152,6 +175,6 @@ Cloud learning remains advisory and must never authorize REAL.
 
 No live trading account is required for this first stage.
 
-## 9. Continuity prompt
+## 11. Continuity prompt
 
 Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live GitHub state, then continue the active branch/PR. Work autonomously on safe code. Keep exactly one active implementation PR where practical. Merge automatically when exact-head CI is green and review finds no blocker. Do not create cloud resources or incur costs without explicit authorization. The immediate objective is a reliable installable PAPER/data-collection node that can accumulate evidence for the trader's studies while all REAL gates remain fail-closed.

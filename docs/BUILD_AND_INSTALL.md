@@ -53,3 +53,16 @@ PAPER primeiro. REAL só depois de validação estatística, replay/PAPER e revi
 O PC e o telefone são independentes. Se o PC encontrar um login, 2FA/OTP, CAPTCHA ou outra barreira humana, cria um pedido persistente no Human Interaction Bridge. Quando o telefone estiver disponível através da Tailscale, mostra o pedido e envia a intervenção de volta ao PC.
 
 A fila de pedidos é persistente, mas dados sensíveis não são: passwords, OTPs e outros segredos enviados pelo telefone ficam apenas em RAM no processo do PC até serem consumidos. O browser mantém a sessão local no PC. CAPTCHA/2FA são sempre intervenção humana normal, sem bypass.
+
+
+## Estudo estatístico PAPER
+
+O nó local pode executar `PC_ENGINE/tools/run_paper_study.py` sobre `PC_ENGINE/data/radar/market_states.jsonl`. O harness é observacional e produz `PC_ENGINE/data/radar/paper_study_report.json` com:
+- outcomes líquidos de custos;
+- separação cronológica train/test;
+- walk-forward por folds;
+- análise por regime;
+- Monte Carlo bootstrap com seed determinística;
+- comparação configurável entre todos os sinais e sinais de maior confiança/confluência.
+
+Nenhuma etapa do estudo envia ordens, altera risco ou promove REAL. O objetivo é transformar a acumulação contínua de dados em evidência estatística antes de qualquer decisão de execução.
