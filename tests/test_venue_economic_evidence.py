@@ -42,6 +42,9 @@ def test_venue_economic_evidence_is_paper_only_and_separate_from_health(tmp_path
     assert set(by_venue) == {"coinbase", "binance"}
     assert by_venue["coinbase"]["paper_outcome_samples"] == 40
     assert by_venue["coinbase"]["status"] == "POSITIVE_OOS_CANDIDATE"
+    assert by_venue["coinbase"]["oos_confidence_interval_available"] is True
+    assert by_venue["coinbase"]["oos_ci95_lower_bps"] > 0
+    assert by_venue["coinbase"]["oos_bootstrap_replicates"] >= 500
     assert by_venue["coinbase"]["mean_recorded_fees_bps"] == 2.0
     assert by_venue["coinbase"]["spread_bps"] is None
     assert by_venue["coinbase"]["spread_status"] == "UNAVAILABLE_NO_BID_ASK_EVIDENCE"
@@ -72,7 +75,8 @@ def test_economic_evidence_rejects_future_and_non_paper_rows_and_tolerates_corru
     )
     venue = report["venues"][0]
     assert venue["paper_outcome_samples"] == 1
-    assert venue["status"] == "POSITIVE_OOS_CANDIDATE"
+    assert venue["status"] == "INSUFFICIENT_OOS_FOR_CI"
+    assert venue["oos_confidence_interval_available"] is False
     assert report["integrity"]["malformed_lines_ignored"] == 2
     assert report["integrity"]["non_paper_records_ignored"] == 1
     assert report["execution_authorized"] is False
@@ -85,8 +89,27 @@ def test_economic_evidence_marks_non_positive_holdout_for_review(tmp_path):
         {"radar": {"websocket_exchanges": ["coinbase"]}},
         path,
         now_ms=10_000,
-        min_samples=10,
-        min_oos_samples=3,
+        min_samples=20,
+        min_oos_samples=8,
     )
     assert report["venues"][0]["status"] == "NON_POSITIVE_OOS"
     assert report["venues"][0]["oos_mean_realized_net_bps"] == -0.5
+
+
+
+def test_economic_evidence_marks_mixed_holdout_as_uncertain(tmp_path):
+    path = tmp_path / "outcomes.jsonl"
+    rows = [_outcome(i, net=(2.0 if i % 2 else -2.0)) for i in range(50)]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    report = build_venue_economic_evidence(
+        {"radar": {"websocket_exchanges": ["coinbase"]}},
+        path,
+        now_ms=10_000,
+        min_samples=30,
+        min_oos_samples=8,
+    )
+    venue = report["venues"][0]
+    assert venue["status"] == "UNCERTAIN_OOS"
+    assert venue["oos_confidence_interval_available"] is True
+    assert venue["oos_ci95_lower_bps"] <= 0 <= venue["oos_ci95_upper_bps"]
+    assert venue["oos_edge_supported"] is False
