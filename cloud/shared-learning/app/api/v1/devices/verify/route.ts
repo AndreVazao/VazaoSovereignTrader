@@ -58,6 +58,12 @@ export async function POST(req: NextRequest) {
     if (profileError) return fail(503, "profile_unavailable");
     if (!profile || profile.account_state !== "active" || profile.must_change_password !== false) return fail(403, "account_not_ready");
 
+    const { data: withinLimit, error: rateLimitError } = await db.rpc("consume_device_security_rate_limit", {
+      p_user_id: user.id, p_scope: "device.verify", p_limit: 8, p_window_seconds: 300
+    });
+    if (rateLimitError) return fail(503, "rate_limit_unavailable");
+    if (withinLimit !== true) return fail(429, "rate_limit_exceeded");
+
     const { data: device, error: deviceError } = await db.from("authorized_devices")
       .select("id,status,device_public_key").eq("id", deviceId).eq("user_id", user.id).maybeSingle();
     if (deviceError) return fail(503, "device_unavailable");
@@ -77,16 +83,17 @@ export async function POST(req: NextRequest) {
       return fail(400, "challenge_mismatch");
     }
 
-    // Atomically consume before checking the signature: even an invalid attempt cannot replay this challenge.
+    // Verify before consuming so an invalid signature cannot burn a legitimate challenge.
+    // The conditional update below is atomic; only one concurrent valid request can consume it.
+    if (!verifyDeviceProof(device.device_public_key, value.challenge, value.signature)) {
+      return fail(401, "device_proof_invalid");
+    }
     const { data: consumed, error: consumeError } = await db.from("device_proof_challenges")
       .update({ consumed_at: now }).eq("id", challengeId).eq("user_id", user.id)
       .is("consumed_at", null).gt("expires_at", now).select("id").maybeSingle();
     if (consumeError) return fail(503, "challenge_consume_unavailable");
     if (!consumed) return fail(400, "challenge_already_used");
 
-    if (!verifyDeviceProof(device.device_public_key, value.challenge, value.signature)) {
-      return fail(401, "device_proof_invalid");
-    }
     const verifiedAt = new Date().toISOString();
     const { data: updated, error: updateError } = await db.from("authorized_devices")
       .update({ possession_verified_at: verifiedAt }).eq("id", deviceId).eq("user_id", user.id)
