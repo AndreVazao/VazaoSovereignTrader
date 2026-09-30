@@ -30,7 +30,7 @@ No password, password hash, recovery code, token, or secret belongs in source co
 
 ## Device security endpoint protections
 
-The device challenge, proof verification and administrator approval routes use database-backed per-account fixed-window limits. Current limits are 10 challenges / 5 minutes, 8 proof attempts / 5 minutes, and 20 approval attempts / 5 minutes. Rate-limit storage and incrementing are atomic in PostgreSQL; if the limiter RPC fails, the routes fail closed with a service error. A limit breach returns HTTP 429.
+Device registration, challenge issuance, proof verification and administrator approval use database-backed per-account fixed-window limits. Current limits are 10 registrations / 5 minutes, 10 challenges / 5 minutes, 8 proof attempts / 5 minutes, and 20 approval attempts / 5 minutes. Rate-limit storage and incrementing are atomic in PostgreSQL; if the limiter RPC fails, the routes fail closed with a service error. A limit breach returns HTTP 429.
 
 An administrator cannot approve a device registered to their own account. Approval remains restricted to an active admin account whose mandatory password-rotation flag is cleared, and the database function independently checks role/account state and possession proof before writing the approval and audit event in one transaction.
 
