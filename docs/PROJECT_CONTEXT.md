@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC)
+Last updated: 2026-09-30 (UTC) — PR #219 merged; clean replacement PR #223 consolidates device proof, approval and rate-limit work
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -11,12 +11,13 @@ Purpose: durable handover for new ChatGPT conversations. Update this file whenev
 1. Read this file first from the repository, including the PR branch if it is not yet on main. Check the live GitHub PRs, branch head SHA, CI status, and repository state before acting on stale details here.
 2. Continue the roadmap in order, doing safe repository/code work autonomously without repeatedly asking broad permission. Report material progress clearly in Portuguese.
 3. Always work on a dedicated branch and open/update a PR. Never push directly to main for normal feature work.
-4. Never merge a PR unless André explicitly authorizes the merge or clearly instructs to do it. A green CI alone is not merge authorization.
+4. Merge autonomously when the PR is reviewed, the required CI checks are green on the exact latest head, there are no unresolved blocking failures, and the diff is within the approved project scope. Do not ask for generic merge authorization. If a PR is obsolete, duplicated, unsafe, or no longer useful, close it with a clear reason rather than leaving it open.
 5. Never create Supabase/Vercel/cloud resources, deploy, incur costs, or provision real user accounts without first presenting verified current costs and obtaining explicit authorization.
 6. Never expose or commit passwords, tokens, keys, API credentials, recovery codes, user balances, private trade histories, or personal account identifiers. Temporary onboarding password discussed by owner must never be put in source/docs/logs.
 7. Fail closed. No automatic or manual shortcut may bypass local risk controls, readiness checks, preflight/reconciliation, RealModeGuard, or PAPER/REAL gates. No forced REAL mode. Shared learning is advisory only.
 8. Each owner should have their own Tailscale tailnet by default. Network membership is not permission to share private trading data. Cloud learning may contain only allow-listed aggregated technical artifacts.
 9. Do not claim a deployment, account, migration, test, merge, or resource exists unless verified.
+10. Keep only one active implementation task/feature branch and its current PR wherever practical. Finish the current PR, validate it, merge it when green, then create the next dedicated branch and PR. Avoid accumulating stale open PRs; consolidate useful work, retarget stacked PRs safely, and close obsolete PRs. Delete old remote branches only when supported; André may clean them up manually afterward.
 10. Before finishing a work session, update this context file (or explicitly state why it could not be updated) with completed work, exact branch/PR/SHA, test outcomes, blockers and next action.
 
 ## 1. Core objectives and architecture
@@ -81,52 +82,21 @@ Location: `cloud/shared-learning`; designed as a separate Next.js 15 / React 19 
 - Snapshot API currently bounded (no cursor pagination).
 - Current production runtime sync must not be enabled until all security blockers are closed.
 
-## 5. Current open PR #219 — onboarding, sync and vault foundations
+## 5. Merged PR #219 — onboarding, sync and vault foundations
 
-PR: https://github.com/AndreVazao/VazaoSovereignTrader/pull/219
-Title: `feat: secure owner onboarding and device vault foundations`
-Branch: `feat/secure-onboarding-foundation-clean`
-Base: `main`
-PR is OPEN and must NOT be merged without explicit owner authorization.
-Base SHA at creation was `451c5b6c26163f6f4261ede8d9962532459ee093`.
-Most recent known branch commits:
-- `5310a83d5ace7080792e74ba012219ee9192cd29` — device key validation/fingerprinting hardening.
-- `96a1b9cd2f90e4af5b297ba2cce0c3e0002e7347` — key validation tests.
-Always fetch current live head before next change.
+PR #219: https://github.com/AndreVazao/VazaoSovereignTrader/pull/219
+Status: MERGED on 2026-09-30.
+Merge commit on `main`: `ba7f916d99be92df1a67e2237f51bdd782b3d59a`.
+The exact PR head `147039106c7b4fa8a850ac8a128b4e76b96f6aa9` had successful Shared Learning Service, Python tests, and Windows EXE workflows before merge.
 
-### Latest verified CI on SHA 96a1b9cd2f90e4af5b297ba2cce0c3e0002e7347
-Checked 2026-09-30:
-- Shared Learning Service run #36664921837: completed SUCCESS.
-- Python tests run #36664921847: completed SUCCESS.
-- Windows EXE run #36664921850: completed SUCCESS.
-Re-check live CI before merge or additional changes; any new commit invalidates these results for the new head.
+Merged foundations include identity/device/vault/config schema; reserved usernames only (not active accounts); per-device registration/revocation; privacy-allow-listed shared-learning adapter; daily local-first sync helpers and background worker; client-side encrypted vault helpers/routes; key-strength validation; local sovereignty policy; and durable project context.
 
-### PR #219 contents
-- Identity/device/vault/config DB migration: `cloud/shared-learning/supabase/migrations/202609290001_identity_devices_vault_config.sql`.
-- `user_profiles`: unique username, role admin/member, account state pending/active/suspended, mandatory password-change flag.
-- Reserved usernames `AndreVazao` and `DiogoRocha`; reservations only.
-- `authorized_devices`: public key/fingerprint, pending/approved/revoked status and timestamps.
-- `configuration_versions`: global/user scope, payload/hash/signature, draft/approved/active/rolled_back/revoked statuses and audit metadata; requires real signature/approval implementation before production.
-- `encrypted_vault_objects`: ciphertext-only, version, nonce, salt and digest.
-- `security_audit_events`: minimal security audit metadata.
-- RLS enabled and anon/authenticated access revoked; server-mediated access only.
-- Device route `POST /api/v1/devices` registers a public key and always begins pending; GET lists the user's devices after activation/password rotation; DELETE revokes only a device owned by the authenticated user.
-- `lib/identity.ts`: public-key validation supports Ed25519, RSA >=2048 bits, and EC prime256v1/secp384r1 only; canonical SPKI PEM SHA-256 fingerprints; UUID validation. Public key validation is NOT proof-of-possession and does not approve a device.
-- Local shared-learning adapter `PC_ENGINE/core/vercel_shared_intelligence.py`: standard-library HTTPS, required URL/token, bounded timeouts/responses, allow-listed upload fields, no owner/node refs, skip expired/ineligible.
-- Daily sync helpers and background maintenance worker: default daily pull/push, no blocking engine startup, jitter and exponential retry. Cloud sync stays disabled by default; verify the actual runtime integration and failure behavior before enabling.
-- Vault crypto foundation `cloud/shared-learning/lib/vault-crypto.ts`: AES-256-GCM, PBKDF2-SHA-256, 310,000 iterations, random 16-byte salt, 12-byte nonce, passphrase 12–1024 chars, plaintext cap 1MB. Wrong passphrase/tampering fail closed. Client app is not yet wired end-to-end.
-- Vault routes authenticate owner, require active account/password rotation complete, store ciphertext only, verify digest, owner-scope GET/DELETE, use no-store and generic errors.
-- Docs include `docs/LOCAL_SOVEREIGNTY_AND_SYNC_POLICY.md` and `cloud/shared-learning/docs/INITIAL_IDENTITY_AND_ONBOARDING.md`.
-
-### PR #219 blockers — work through in order
-1. **Device proof-of-possession + approval**: design a one-time cryptographic challenge with expiry/consumption, verify signature against registered public key, prevent replay, rate-limit; separate approval route restricted to active admin server-side. Device registration must stay pending until a legitimate approval flow succeeds. Audit approval/revocation. Add tests for replay, expiry, wrong signer, non-admin, cross-user and races.
-2. **Trusted account provisioning/login**: secure username→Auth mapping without account enumeration; one-time provisioning after infra approval; mandatory rotation, MFA and owner recovery; server-side role checks only. Do not hardcode any password or secret.
-3. **Signed/versioned configuration**: implement canonical payload hashing, signature verification, approval workflow, audit trail, rollback/last-known-good and tests. Config cannot override local risk gates or REAL mode.
-4. **Vault end-to-end client/recovery**: wire encryption to desktop/phone only after threat review; safe restore UX, device-to-device restore and key-loss recovery. Do not store exchange API secrets without a separate threat model.
-5. **Sync runtime integration**: inspect actual engine/maintenance scheduling; verify daily interval, jitter/backoff, offline/airplane mode, duplicate/digest behavior, response pagination and no hot-path blocking. Cloud sync disabled by default until security and infra gates are complete.
-6. **Rate limiting/abuse monitoring** for all cloud endpoints; tenant-isolation, auth expiry, RLS/grants, payload size, cross-tenant access, role escalation, audit and rollback tests.
-7. Update this file and docs; run Shared Learning Service, Python and Windows EXE CI; review diff and PR metadata. Leave PR open until André authorizes merge.
-8. Only after code is reviewed and merged by explicit authorization, consider infra setup: new organization first, current cost/limits and region verified, show costs, wait for explicit authorization, then provision in approved order. Do not deploy or provision accounts beforehand.
+Security boundaries remain:
+- Cloud sync disabled by default; cloud advice never replaces local risk controls.
+- No cloud resources, deployments, accounts or costs created.
+- End-to-end vault recovery, trusted account provisioning, MFA, signed configuration lifecycle, live sync scheduling validation, and database integration tests remain incomplete.
+- No PAPER→REAL promotion or RealModeGuard bypass.
+- Infra provisioning/deployment still requires current cost/terms review and André's explicit authorization.
 
 ## 6. Closed accidental PR #220
 
@@ -144,15 +114,49 @@ Reference: `docs/SHARED_INTELLIGENCE_PRIVACY_AND_NETWORK.md`.
 - Imported artifacts are untrusted advice.
 - Source code does not prove a live deployment/database has correct tenant isolation.
 
-## 8. Immediate next action for the next chat
+## 8. Current active PR #223 — device proof, approval and rate-limit hardening
 
-1. Fetch live PR #219 details and latest branch head.
-2. Confirm all three CI workflows for latest head; current known SHA above was green.
-3. Read current `cloud/shared-learning/app/api/v1/devices/route.ts`, auth helpers and migrations; map the existing schema and security contracts.
-4. Implement step 1 (device proof-of-possession + secure admin approval) on a clean feature branch from the latest correct PR head; do not allow self-approval; add migration if necessary, tests and docs.
-5. Update PR #219 or open a clean stacked PR with minimal diff. Run all three CI workflows and inspect failure logs. Do not merge.
-6. Update this context file on the working branch with new SHA, CI IDs/outcomes and next step.
+PR: https://github.com/AndreVazao/VazaoSovereignTrader/pull/223
+Branch: `feat/device-proof-and-approval-clean`
+Base: `main`
+Latest code commit before this context refresh: `3b656edd7148cc74e181a3e72137a848b8c45823`. This context refresh creates a new head SHA, so CI must be rechecked on that new exact head before merging.
 
-## 9. Prompt for starting a new ChatGPT conversation
+PR #223 is a clean consolidation of useful work from old stacked PRs #221 and #222 onto the merged #219 foundation. It currently changes 9 files relative to main. PR #221 and PR #222 have been closed as superseded; do not reopen them unless the replacement PR is found incomplete.
 
-You are continuing work on GitHub repository `AndreVazao/VazaoSovereignTrader` in project “Pessoal programação”. First read `docs/PROJECT_CONTEXT.md` on the current PR branch `feat/secure-onboarding-foundation-clean` (PR #219) if it is not yet on main, then verify live GitHub state, latest SHA and CI before acting. Treat the context file as the source of continuity but verify current statuses. Continue the roadmap in section 5 in order, beginning with secure device proof-of-possession and admin approval. Work autonomously on safe code changes, always use a dedicated branch/PR, test and report in Portuguese. Do not merge without my explicit authorization. Do not create cloud resources, deploy, incur costs or provision accounts until you have checked current costs/terms, presented them to me, and received explicit authorization. Never expose or commit secrets. Keep trading fail-closed; shared learning must never bypass local risk gates or authorize REAL. At the end of each work session, update `docs/PROJECT_CONTEXT.md` with current branch/head SHA, exact CI outcomes, completed work, blockers and next action so another chat can continue without losing context.
+Implemented in the active PR:
+- Short-lived, single-use device proof challenges; public-key signature verification and atomic challenge consumption.
+- Admin-only approval with database-side active-account/admin/password-rotation checks, verified-possession requirement, audit event, and explicit prevention of approving one's own device.
+- Database-backed atomic per-account fixed-window rate limits: device registration 10/5 minutes, challenge issuance 10/5 minutes, proof verification 8/5 minutes, administrator approval 20/5 minutes. Routes fail closed if the limiter RPC fails and return HTTP 429 when over limit.
+- Signature tests for Ed25519, RSA-2048, P-256 and P-384; onboarding/rate-limit documentation.
+- Local-first sync and vault foundations remain those already merged in #219; full phone/PC restore is not complete.
+
+PR history:
+- PR #219 merged to main at `ba7f916d99be92df1a67e2237f51bdd782b3d59a`.
+- PR #221 closed as superseded by #223, not merged.
+- PR #222 closed as superseded by #223, not merged.
+- PR #223 is the only active implementation PR and must be kept current.
+
+CI verified on code head `3b656edd7148cc74e181a3e72137a848b8c45823`:
+- Shared Learning Service run `36671619790`: SUCCESS (`npm test` and `npm run build` passed).
+- Python tests run `36671619770`: SUCCESS.
+- Python tests run `36671615586`: SUCCESS.
+The earlier head `4edf5ac87edebf91dd38f7e421b15a41b33c0555` failed Shared Learning tests because the proof-verification helper was missing from the clean transplant; the helper was restored from the validated feature branch and the tests above passed on the corrected code head. This context-only update creates a new head and therefore requires fresh CI before merge.
+
+Remaining security blockers before production:
+1. Validate migration SQL and RPC behavior with integration tests, including RLS, service-role grants, tenant isolation, expiry, replay, concurrent consumption/approval, and audit outcomes. Do not create Supabase resources until current costs/terms are reviewed and André explicitly authorizes it.
+2. Add MFA/step-up authentication for administrative approval.
+3. Add edge/WAF rate limits and abuse monitoring/alerting; database limits are only per authenticated account.
+4. Complete secure account provisioning/login, mandatory credential rotation, owner recovery, signed/versioned configuration with approval and rollback, end-to-end vault recovery, and actual offline/daily sync runtime validation.
+5. Keep cloud sync disabled by default and preserve local risk gates. No cloud project, deployment, account provisioning or paid resource has been created.
+
+## 9. Immediate next action
+
+Fetch the current PR #223 head and exact-head CI. Fix any failures, run/review the applicable Shared Learning Service, Python and Windows EXE workflows, and inspect the final diff. Merge automatically only when the exact latest head's required CI is green, the PR is mergeable, and review reveals no blocking defect. Then close any superseded PRs, update this context on main through the normal branch/PR flow, and open one fresh dedicated branch/PR for the next roadmap task. Keep only one active implementation PR wherever practical.
+
+## 10. Original continuity prompt for a new ChatGPT conversation
+
+You are continuing work on GitHub repository `AndreVazao/VazaoSovereignTrader` in project “Pessoal programação”. First read `docs/PROJECT_CONTEXT.md` from the newest relevant branch, then verify live GitHub state, PR #223, latest SHA and CI before acting. PR #219 is merged; old PRs #221/#222 are closed as superseded. Continue with the next action in section 9. Work autonomously on safe code changes, always use a dedicated branch/PR, test and report in Portuguese. Merge when the exact latest head has green required CI and review reveals no blocking issue; close obsolete PRs instead of leaving them open. Do not create cloud resources, deploy, incur costs or provision accounts until current costs/terms are checked, presented to me, and I explicitly authorize. Never expose or commit secrets. Keep trading fail-closed; shared learning must never bypass local risk gates or authorize REAL. At the end of each work session, update `docs/PROJECT_CONTEXT.md` with current branch/head SHA, exact CI outcomes, completed work, blockers and next action so another chat can continue without losing context.
+
+## 11. Prompt for starting a new ChatGPT conversation
+
+You are continuing work on GitHub repository `AndreVazao/VazaoSovereignTrader` in project “Pessoal programação”. First read `docs/PROJECT_CONTEXT.md` from the newest relevant branch, then verify live GitHub PR #223, latest SHA and CI before acting. Treat this context as durable continuity but verify all live statuses. Continue the roadmap in order, beginning by completing CI validation and the security review/integration-test plan for device proof-of-possession, admin approval and rate limiting. Work autonomously on safe code changes, always use a dedicated branch/PR, test and report in Portuguese. Merge when the exact latest head has green required CI and review reveals no blocking issue; close obsolete PRs instead of leaving them open. Do not create cloud resources, deploy, incur costs or provision accounts until you have checked current costs/terms, presented them to me, and received explicit authorization. Never expose or commit secrets. Keep trading fail-closed; shared learning must never bypass local risk gates or authorize REAL. At the end of each work session, update `docs/PROJECT_CONTEXT.md` with current branch/head SHA, exact CI outcomes, completed work, blockers and next action so another chat can continue without losing context.

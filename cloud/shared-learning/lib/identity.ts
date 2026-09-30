@@ -1,4 +1,4 @@
-import { createHash, createPublicKey } from "node:crypto";
+import { createHash, createPublicKey, verify as cryptoVerify, type KeyObject } from "node:crypto";
 
 export type DeviceRegistration = { label: string; publicKey: string; fingerprint: string };
 
@@ -27,6 +27,28 @@ export function parseDeviceRegistration(input: unknown): DeviceRegistration {
   }
   const fingerprint = createHash("sha256").update(canonical).digest("hex");
   return { label: value.label.trim(), publicKey: canonical, fingerprint };
+}
+
+export function verifyDeviceProof(publicKeyPem: string, challenge: string, signatureBase64Url: string): boolean {
+  if (challenge.length < 32 || challenge.length > 256) return false;
+  if (!/^[A-Za-z0-9_-]{80,2048}$/.test(signatureBase64Url)) return false;
+  let key: KeyObject;
+  let signature: Buffer;
+  try {
+    key = createPublicKey(publicKeyPem);
+    signature = Buffer.from(signatureBase64Url, "base64url");
+    if (signature.length < 32 || signature.length > 1024) return false;
+    // Reject non-canonical encodings so malformed inputs cannot be interpreted ambiguously.
+    if (signature.toString("base64url") !== signatureBase64Url) return false;
+  } catch {
+    return false;
+  }
+  const algorithm = key.asymmetricKeyType === "ed25519" ? null : "sha256";
+  try {
+    return cryptoVerify(algorithm, Buffer.from(challenge, "utf8"), key, signature);
+  } catch {
+    return false;
+  }
 }
 
 export function parseDeviceId(value: string | null): string {
