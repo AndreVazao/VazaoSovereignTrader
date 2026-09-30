@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — PR #225, #226, #227 and #228 merged; continuous PAPER study is now the active operational research task
+Last updated: 2026-09-30 (UTC) — PR #225–#230 merged; cockpit research-status integration is now active
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -27,7 +27,7 @@ Immediate operational goal: data accumulation and research, not live trading.
 ## 2. Current main state
 
 PR #223 (device proof, admin approval and rate-limit hardening) was merged by André.
-Current main SHA after PR #228: 83e38a99848fa94c536a5a14ad0a7bb9133f2dc4.
+Current main SHA after PR #230: deb822acbc1d9de75ea72b88153f95c3e6cf4932.
 
 Latest main validation observed:
 - Windows EXE run 36672120924: SUCCESS.
@@ -145,7 +145,24 @@ Implemented:
 
 Safety: research/PAPER only. No order submission, risk mutation, cloud activation or REAL promotion.
 
-## 9. Next actions
+## 9. Completed research/runtime hardening
+
+- PR #227 merged: reusable PAPER study harness with chronological OOS, walk-forward, regime analysis and Monte Carlo.
+- PR #228 merged: WebSocket timestamp/latency validation gate.
+- PR #229 merged: continuous PAPER studies from the market-data collector.
+- PR #230 merged: fresh WebSocket timing validation required for REAL readiness; fail-closed.
+
+## 10. Active implementation — cockpit research status
+
+Branch: feat/cockpit-research-status
+
+Implemented:
+- authenticated `/research/status` endpoint;
+- exposes PAPER study and WebSocket timing report state, age and payload;
+- explicit PAPER-only/read-only semantics;
+- tests and installation documentation.
+
+## 11. Next actions
 
 1. Finish/review branch feat/windows-runtime-bootstrap.
 2. Open one PR for it.
@@ -162,7 +179,7 @@ Safety: research/PAPER only. No order submission, risk mutation, cloud activatio
 7. Then expand the study pipeline: common PAPER harness, strategy comparison, OOS/walk-forward, Monte Carlo and regime analysis.
 8. Then validate WebSocket timestamps/latency rigorously before treating lead/lag as economically meaningful.
 
-## 10. Active implementation — REAL readiness timing gate
+## 12. Active implementation — REAL readiness timing gate
 
 Branch: feat/readiness-timing-gate
 
@@ -174,7 +191,7 @@ Implemented:
 
 This is an additional fail-closed gate. It does not activate REAL or bypass any existing control.
 
-## 10. Installation target
+## 13. Installation target
 
 1. Install/prepare runtime.
 2. Configure local API token.
@@ -187,6 +204,6 @@ This is an additional fail-closed gate. It does not activate REAL or bypass any 
 
 No live trading account is required for this first stage.
 
-## 11. Continuity prompt
+## 14. Continuity prompt
 
 Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live GitHub state, then continue the active branch/PR. Work autonomously on safe code. Keep exactly one active implementation PR where practical. Merge automatically when exact-head CI is green and review finds no blocker. Do not create cloud resources or incur costs without explicit authorization. The immediate objective is a reliable installable PAPER/data-collection node that can accumulate evidence for the trader's studies while all REAL gates remain fail-closed.
