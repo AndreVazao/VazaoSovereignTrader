@@ -12,6 +12,7 @@ from PC_ENGINE.api.server import create_app
 from PC_ENGINE.core.config import load_config
 from PC_ENGINE.core.engine import SovereignEngine
 from PC_ENGINE.core.paper_confluence_engine import PaperConfluenceEngine
+from PC_ENGINE.core.startup_health import StartupHealth
 
 
 def _should_auto_start_paper(config: dict, mode: str) -> bool:
@@ -31,6 +32,8 @@ def main() -> None:
     else:
         engine = SovereignEngine(config)
         print("PAPER Confluence gate: DISABLED")
+    startup_health = StartupHealth(engine.owner_context.private_path("startup"), config).run(engine.recovery)
+    engine.state.operational["startup_health"] = startup_health
     app = create_app(engine, config.get("server", {}).get("local_control_token_env", "VST_LOCAL_TOKEN"))
     host = config.get("server", {}).get("host", "0.0.0.0")
     port = int(config.get("server", {}).get("port", 8765))
