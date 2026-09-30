@@ -1,8 +1,10 @@
 # Path: PC_ENGINE/radar/hot_path_relationship_oos.py
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import random
 import statistics
 import time
 from collections import defaultdict, deque
@@ -152,13 +154,27 @@ def _read_valid_outcomes(
     return sorted(rows, key=lambda row: int(row["outcome_local_ts_ms"])), counters
 
 
-def _mean_ci(values: list[float]) -> tuple[float | None, float | None]:
-    if len(values) < 2:
-        return None, None
-    mean = statistics.fmean(values)
-    margin = 1.96 * statistics.stdev(values) / math.sqrt(len(values))
-    return mean - margin, mean + margin
-
+def _moving_block_bootstrap_ci(values: list[float], *, seed_key: str, replicates: int = 1000) -> dict[str, Any]:
+    """Estimate a mean interval while preserving short-range temporal dependence."""
+    n = len(values)
+    if n < 8:
+        return {"assessment": "UNAVAILABLE", "method": "moving_block_bootstrap", "bootstrap_replicates": 0, "block_length": None, "lower": None, "upper": None}
+    block_length = max(2, int(round(math.sqrt(n))))
+    block_length = min(block_length, max(2, n // 2))
+    seed = int.from_bytes(hashlib.sha256(seed_key.encode("utf-8")).digest()[:8], "big")
+    rng = random.Random(seed)
+    block_starts = list(range(n - block_length + 1))
+    means: list[float] = []
+    for _ in range(max(500, int(replicates))):
+        sample: list[float] = []
+        while len(sample) < n:
+            start = rng.choice(block_starts)
+            sample.extend(values[start:start + block_length])
+        means.append(statistics.fmean(sample[:n]))
+    means.sort()
+    low_index = int(0.025 * (len(means) - 1))
+    high_index = int(0.975 * (len(means) - 1))
+    return {"assessment": "AVAILABLE", "method": "moving_block_bootstrap", "bootstrap_replicates": len(means), "block_length": block_length, "lower": means[low_index], "upper": means[high_index]}
 
 def build_relationship_oos_report(
     outcomes_path: str | Path,
@@ -204,9 +220,11 @@ def build_relationship_oos_report(
         test_values = [float(row["realized_net_bps"]) for row in test]
         train_mean = statistics.fmean(train_values) if train_values else None
         test_mean = statistics.fmean(test_values) if test_values else None
-        lower, upper = _mean_ci(test_values)
+        ci = _moving_block_bootstrap_ci(test_values, seed_key=json.dumps(key, ensure_ascii=False, separators=(",", ":")))
+        lower = ci["lower"]
+        upper = ci["upper"]
         enough = count >= min_samples and len(test) >= min_test_samples
-        supported = bool(enough and lower is not None and lower > 0.0)
+        supported = bool(enough and ci["assessment"] == "AVAILABLE" and lower is not None and lower > 0.0)
         relationships.append({
             "symbol": key[0],
             "leader": key[1],
@@ -226,6 +244,10 @@ def build_relationship_oos_report(
             "oos_positive_rate": round(sum(value > 0 for value in test_values) / len(test_values), 6) if test_values else None,
             "oos_ci95_lower_bps": round(lower, 6) if lower is not None else None,
             "oos_ci95_upper_bps": round(upper, 6) if upper is not None else None,
+            "oos_ci95_method": ci["method"],
+            "oos_bootstrap_replicates": ci["bootstrap_replicates"],
+            "oos_bootstrap_block_length": ci["block_length"],
+            "oos_confidence_interval_available": ci["assessment"] == "AVAILABLE",
             "sample_sufficiency": "SUFFICIENT" if enough else "INSUFFICIENT",
             "oos_edge_supported": supported,
             "eligible_for_paper_review": supported,
@@ -253,7 +275,7 @@ def build_relationship_oos_report(
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Per-relationship chronological holdout diagnostics only. The test window follows the training window; insufficient evidence is ineligible. A positive lower confidence bound is only a candidate for PAPER review and never authorizes REAL execution or establishes future profitability.",
+        "note": "Per-relationship chronological holdout diagnostics only. The test window follows the training window; insufficient evidence is ineligible. A positive lower bound from a deterministic moving-block bootstrap is only a candidate for PAPER review; intervals are unavailable for fewer than eight OOS samples, and no report authorizes REAL execution or establishes future profitability.",
         "relationship_details": relationships,
     }
 
