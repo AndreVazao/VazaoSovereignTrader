@@ -95,6 +95,8 @@ def _read_valid_outcomes(
                 leader = str(row["leader"]).strip().lower()
                 follower = str(row["follower"]).strip().lower()
                 direction = str(row["direction"]).strip().upper()
+                if isinstance(row["horizon_ms"], bool) or isinstance(row["outcome_local_ts_ms"], bool):
+                    raise ValueError("boolean horizon/timestamp")
                 horizon_ms = int(row["horizon_ms"])
                 timestamp_ms = int(row["outcome_local_ts_ms"])
                 expected = _finite(row["expected_net_bps"])
@@ -192,6 +194,10 @@ def build_relationship_oos_report(
         group.sort(key=lambda row: int(row["outcome_local_ts_ms"]))
         count = len(group)
         split = max(1, min(count - 1, int(math.floor(count * fraction)))) if count >= 2 else count
+        # Keep equal timestamps on the same side of the holdout boundary. A row
+        # with the same event time must never leak across train and test windows.
+        while 0 < split < count and int(group[split - 1]["outcome_local_ts_ms"]) == int(group[split]["outcome_local_ts_ms"]):
+            split += 1
         train = group[:split]
         test = group[split:]
         train_values = [float(row["realized_net_bps"]) for row in train]

@@ -104,3 +104,18 @@ def test_relationship_oos_requires_sample_threshold_and_writes_atomically(tmp_pa
     assert saved["paper_only"] is True
     assert saved["orders_submitted"] is False
     assert saved["execution_authorized"] is False
+
+
+def test_relationship_oos_never_splits_equal_timestamps_across_train_and_test(tmp_path):
+    path = tmp_path / "outcomes.jsonl"
+    rows = [_row(i, 1.0) for i in range(10)]
+    rows[7]["outcome_local_ts_ms"] = rows[6]["outcome_local_ts_ms"]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    report = build_relationship_oos_report(
+        path, min_samples=10, min_test_samples=2, train_fraction=0.7, now_ms=100_000,
+    )
+    relationship = report["relationship_details"][0]
+    assert relationship["train_samples"] == 8
+    assert relationship["test_samples"] == 2
+    assert relationship["train_end_ms"] < relationship["test_start_ms"]
