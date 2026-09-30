@@ -80,3 +80,10 @@ O relatório `PC_ENGINE/data/radar/websocket_timing_validation.json` só marca `
 O Market Data Collector passou a executar automaticamente, por defeito a cada 15 minutos, o estudo estatístico local e a validação temporal do WebSocket. Os relatórios ficam em `PC_ENGINE/data/radar/paper_study_report.json` e `PC_ENGINE/data/radar/websocket_timing_validation.json`.
 
 A periodicidade, custos, horizonte, número de folds, Monte Carlo e thresholds temporais são configuráveis em `paper_study` no `config.local.json`. O ciclo continua estritamente PAPER/observacional e falha fechado: relatórios nunca alteram risco nem autorizam REAL.
+
+
+## Gate temporal para REAL
+
+A readiness de REAL agora exige, por defeito, um relatório `websocket_timing_validation.json` **fresco** e com `eligible_for_economic_interpretation=true`. Se o relatório estiver ausente, expirado ou bloqueado, a readiness permanece `LOCKED`.
+
+Isto não ativa REAL nem substitui preflight, reconciliação, Risk Engine ou RealModeGuard; acrescenta apenas uma proteção adicional contra interpretar lead/lag temporalmente inválido como evidência económica.
