@@ -1,8 +1,10 @@
 # Path: PC_ENGINE/radar/hot_path_calibration.py
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import random
 import statistics
 import time
 from collections import defaultdict
@@ -50,8 +52,7 @@ def _outcome_identity(row: dict[str, Any]) -> str:
     return json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
-def _temporal_dependence(values: list[float], rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Estimate first-order serial dependence and a conservative effective sample size."""
+def _timestamped_values(values: list[float], rows: list[dict[str, Any]]) -> list[float]:
     timestamped: list[tuple[int, float]] = []
     for row, value in zip(rows, values):
         try:
@@ -60,17 +61,21 @@ def _temporal_dependence(values: list[float], rows: list[dict[str, Any]]) -> dic
                 timestamped.append((timestamp, value))
         except (KeyError, TypeError, ValueError, OverflowError):
             continue
+    timestamped.sort(key=lambda item: item[0])
+    return [value for _, value in timestamped]
 
-    if len(timestamped) < 3:
+
+def _temporal_dependence(values: list[float], rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Estimate first-order serial dependence and a conservative effective sample size."""
+    ordered = _timestamped_values(values, rows)
+    if len(ordered) < 3:
         return {
             "assessment": "UNAVAILABLE",
-            "timestamped_samples": len(timestamped),
+            "timestamped_samples": len(ordered),
             "lag1_autocorrelation": None,
             "effective_samples": len(values),
         }
 
-    timestamped.sort(key=lambda item: item[0])
-    ordered = [value for _, value in timestamped]
     mean = statistics.fmean(ordered)
     centered = [value - mean for value in ordered]
     denominator = sum(value * value for value in centered)
@@ -84,9 +89,55 @@ def _temporal_dependence(values: list[float], rows: list[dict[str, Any]]) -> dic
     effective = max(1.0, min(float(len(values)), effective))
     return {
         "assessment": "AVAILABLE",
-        "timestamped_samples": len(timestamped),
+        "timestamped_samples": len(ordered),
         "lag1_autocorrelation": round(rho, 6),
         "effective_samples": round(effective, 6),
+    }
+
+
+def _moving_block_bootstrap_ci(
+    values: list[float],
+    rows: list[dict[str, Any]],
+    *,
+    seed_key: str,
+    replicates: int = 1000,
+) -> dict[str, Any]:
+    """Estimate a 95% mean CI with a deterministic moving-block bootstrap."""
+    ordered = _timestamped_values(values, rows)
+    n = len(ordered)
+    if n < 8:
+        return {
+            "assessment": "UNAVAILABLE",
+            "method": "effective_sample_normal",
+            "bootstrap_replicates": 0,
+            "block_length": None,
+            "lower": None,
+            "upper": None,
+        }
+
+    block_length = max(2, int(round(math.sqrt(n))))
+    block_length = min(block_length, max(2, n // 2))
+    seed = int.from_bytes(hashlib.sha256(seed_key.encode("utf-8")).digest()[:8], "big")
+    rng = random.Random(seed)
+    block_starts = list(range(n - block_length + 1))
+    means: list[float] = []
+    for _ in range(max(200, int(replicates))):
+        sample: list[float] = []
+        while len(sample) < n:
+            start = rng.choice(block_starts)
+            sample.extend(ordered[start:start + block_length])
+        means.append(statistics.fmean(sample[:n]))
+
+    means.sort()
+    low_index = max(0, min(len(means) - 1, int(0.025 * (len(means) - 1))))
+    high_index = max(0, min(len(means) - 1, int(0.975 * (len(means) - 1))))
+    return {
+        "assessment": "AVAILABLE",
+        "method": "moving_block_bootstrap",
+        "bootstrap_replicates": len(means),
+        "block_length": block_length,
+        "lower": means[low_index],
+        "upper": means[high_index],
     }
 
 
@@ -143,8 +194,27 @@ def build_hot_path_calibration(
         temporal = _temporal_dependence(net, group)
         ci_samples = float(temporal["effective_samples"])
         margin = 1.96 * std_net / math.sqrt(ci_samples) if ci_samples > 1.0 else float("inf")
-        lower = mean_net - margin if math.isfinite(margin) else None
-        upper = mean_net + margin if math.isfinite(margin) else None
+        normal_lower = mean_net - margin if math.isfinite(margin) else None
+        normal_upper = mean_net + margin if math.isfinite(margin) else None
+
+        bootstrap = _moving_block_bootstrap_ci(
+            net,
+            group,
+            seed_key=json.dumps(
+                [symbol, leader, follower, direction, horizon, regime],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+        if bootstrap["assessment"] == "AVAILABLE":
+            lower = bootstrap["lower"]
+            upper = bootstrap["upper"]
+            ci_method = bootstrap["method"]
+        else:
+            lower = normal_lower
+            upper = normal_upper
+            ci_method = "effective_sample_normal" if temporal["assessment"] == "AVAILABLE" else "sample_normal"
+
         mean_expected = statistics.fmean(expected)
         mean_gross = statistics.fmean(gross)
         summaries.append({
@@ -166,6 +236,9 @@ def build_hot_path_calibration(
             "lag1_autocorrelation": temporal["lag1_autocorrelation"],
             "effective_samples": temporal["effective_samples"],
             "ci95_sample_basis": "effective_samples" if temporal["assessment"] == "AVAILABLE" else "samples",
+            "ci95_method": ci_method,
+            "bootstrap_replicates": bootstrap["bootstrap_replicates"],
+            "bootstrap_block_length": bootstrap["block_length"],
             "net_ci95_lower_bps": round(lower, 6) if lower is not None else None,
             "net_ci95_upper_bps": round(upper, 6) if upper is not None else None,
             "eligible_for_paper_review": bool(
@@ -177,7 +250,7 @@ def build_hot_path_calibration(
         })
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at_ms": time.time_ns() // 1_000_000,
         "source": path.name,
         "outcome_records_loaded": len(raw_rows),
@@ -190,7 +263,7 @@ def build_hot_path_calibration(
         "paper_only": True,
         "orders_submitted": False,
         "execution_authorized": False,
-        "note": "Calibration evidence only; duplicate and invalid outcomes are excluded from samples. Confidence intervals use a first-order serial-dependence adjustment when timestamps are available; eligibility is not execution authorization.",
+        "note": "Calibration evidence only; duplicate and invalid outcomes are excluded from samples. Timestamped outcomes use first-order serial-dependence adjustment plus deterministic moving-block bootstrap confidence intervals when enough temporal data exists; eligibility is not execution authorization.",
         "stats": summaries,
     }
 
