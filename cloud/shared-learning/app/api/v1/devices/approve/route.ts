@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
     if (!profile || profile.role !== "admin" || profile.account_state !== "active" || profile.must_change_password !== false) {
       return fail(403, "admin_required");
     }
+    const { data: withinLimit, error: rateLimitError } = await db.rpc("consume_device_security_rate_limit", {
+      p_user_id: user.id, p_scope: "device.approve", p_limit: 20, p_window_seconds: 300
+    });
+    if (rateLimitError) return fail(503, "rate_limit_unavailable");
+    if (withinLimit !== true) return fail(429, "rate_limit_exceeded");
+
     const { data, error } = await db.rpc("approve_authorized_device", {
       p_actor_user_id: user.id, p_device_id: deviceId
     });
