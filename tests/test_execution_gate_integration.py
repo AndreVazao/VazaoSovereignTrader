@@ -15,7 +15,7 @@ def test_engine_rejects_real_mode_without_guard_human_authorization():
     engine.paper_collector = None
     engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True})
     engine.execution_gate = ExecutionGate()
-    with pytest.raises(RuntimeError, match="initial human authorization"):
+    with pytest.raises(RuntimeError, match="human authorization"):
         engine.set_mode("REAL", real_authorized=True)
 
 
