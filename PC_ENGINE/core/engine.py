@@ -1562,7 +1562,11 @@ class SovereignEngine:
             )
             if not decision.allowed:
                 self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": symbol, "side": "buy", "state": decision.state.value, "reason": decision.reason})
-                if decision.state != ExecutionState.REAL_ACTIVE:
+                if (
+                    decision.state != ExecutionState.REAL_ACTIVE
+                    or not bool(checks.get("exchange_ok", False))
+                    or not bool(checks.get("stale_ok", False))
+                ):
                     self._enter_real_fail_safe("execution_gate_order_blocked", {"symbol": symbol, "reason": decision.reason})
                 return
         intent_id = f"intent-{time.time_ns()}"
@@ -1658,7 +1662,11 @@ class SovereignEngine:
             )
             if not decision.allowed:
                 self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": position.symbol, "side": "sell", "state": decision.state.value, "reason": decision.reason})
-                if decision.state != ExecutionState.REAL_ACTIVE:
+                if (
+                    decision.state != ExecutionState.REAL_ACTIVE
+                    or not bool(checks.get("exchange_ok", False))
+                    or not bool(checks.get("stale_ok", False))
+                ):
                     self._enter_real_fail_safe("execution_gate_order_blocked", {"symbol": position.symbol, "reason": decision.reason})
                 return
         intent_id = f"intent-{time.time_ns()}"
