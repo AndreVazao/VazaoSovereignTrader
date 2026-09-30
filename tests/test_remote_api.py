@@ -324,3 +324,40 @@ def test_research_status_is_paper_only(monkeypatch):
     payload = response.get_json()
     assert payload["ok"] is True
     assert payload["paper_only"] is True
+
+
+def test_operational_diagnostics_requires_token(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    assert client.get("/diagnostics").status_code == 401
+
+
+def test_operational_diagnostics_aggregates_events_and_storage(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    radar_dir = tmp_path / "radar"
+    radar_dir.mkdir()
+    (radar_dir / "websocket_events.jsonl").write_text(
+        json.dumps({"exchange": "binance", "symbol": "BTC/USDT", "price": 100, "exchange_ts_ms": 1000, "local_ts_ms": 1100, "local_receive_latency_ms": 100}) + "\n"
+        + json.dumps({"exchange": "binance", "symbol": "BTC/USDT", "price": 101, "exchange_ts_ms": 2000, "local_ts_ms": 2100, "local_receive_latency_ms": 100}) + "\n",
+        encoding="utf-8",
+    )
+    engine = FakeEngine()
+    engine.config = {"real_mode_guard": {"enabled": True}, "radar": {"data_dir": str(radar_dir)}}
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+    response = client.get("/diagnostics", headers={"X-Token": "secret-token"})
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["schema_version"] == 1
+    assert payload["paper_only"] is True
+    assert payload["market_data"]["latest_by_venue_symbol"]["binance"]["BTC/USDT"]["price"] == 101
+    assert payload["storage"]["bytes"] > 0
+    assert payload["diagnostics"]["orders_submitted"] is False
+
+
+def test_operational_diagnostics_export_is_authenticated(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+    response = client.get("/diagnostics/export", headers={"X-Token": "secret-token"})
+    assert response.status_code == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert "vazao-operational-diagnostics.json" in response.headers["Content-Disposition"]
