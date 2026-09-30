@@ -12,5 +12,5 @@ if ([string]::IsNullOrWhiteSpace($current)) {
     Write-Host "Existing VST_LOCAL_TOKEN preserved." -ForegroundColor Green
 }
 
-$env:$name = $current
+Set-Item -Path "Env:$name" -Value $current
 Write-Host "Local API authentication token is configured."
