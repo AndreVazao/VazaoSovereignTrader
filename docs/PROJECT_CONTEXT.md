@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at fd02f7954628649571cd32cdee0918fed00f5988; venue OOS uncertainty improvement in progress
+Last updated: 2026-09-30 (UTC) — main at 0e64d31fb805f92f8bd866720c1e10ee096342be after PR #279; post-merge CI pending
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -546,3 +546,23 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. Finish reviewing the feature diff and run exact-head Python tests plus Windows EXE build/smoke checks.
 3. Merge only after all required checks succeed on the exact PR head and the PR is clean/mergeable; then verify post-merge CI.
 4. Continue to keep PAPER evidence, operational health, and REAL authorization independent. Spread stays unavailable until valid timestamped bid/ask observations are actually collected and validated.
+
+## 26. Handoff — 2026-09-30, venue OOS bootstrap uncertainty merged
+
+### Verified repository state
+- PR #279 (`feat: add bootstrap uncertainty to venue economics`) merged by squash. Exact PR head `d83438d1bb04d1e1951bf45ed7cd3d88e0e40329`; merge commit/main SHA `0e64d31fb805f92f8bd866720c1e10ee096342be`.
+- Exact-head checks passed on PR #279 SHA: Python tests run `36752698057` and Windows EXE build/smoke run `36752697940`; PR was clean/mergeable before merge.
+- Post-merge Python run `36752997010` and Windows EXE run `36752997208` were still in progress at handoff creation. Verify final conclusions before declaring this main SHA fully validated.
+- No open PRs immediately after PR #279 merge. Documentation branch `docs/handoff-after-venue-oos-bootstrap` is being used to capture this handoff.
+
+### PR #279 — more conservative venue economic evidence
+- Venue economic evidence now computes a deterministic moving-block bootstrap 95% interval over chronological OOS PAPER outcomes, preserving short-range temporal dependence. Fewer than 8 OOS samples means the interval is unavailable.
+- `POSITIVE_OOS_CANDIDATE` now requires the 95% interval lower bound to be above zero; `NON_POSITIVE_OOS` requires the upper bound below zero; an interval crossing zero is `UNCERTAIN_OOS`; too few OOS samples is `INSUFFICIENT_OOS_FOR_CI`.
+- The dashboard shows the interval and distinguishes uncertain from non-positive or insufficient evidence. Even a positive supported interval is a candidate for further PAPER review only, never an execution or venue-promotion signal.
+- Tests cover positive supported evidence, negative holdout, mixed/uncertain holdout, and insufficient OOS samples. Exact-head Python and Windows EXE checks passed.
+
+### Next engineering actions
+1. Verify post-merge Python and Windows EXE checks for main SHA `0e64d31fb805f92f8bd866720c1e10ee096342be`.
+2. Research reliable top-of-book evidence before implementing spread reporting. `PC_ENGINE/market_events/websocket_collectors.py` parses bid/ask ticker observations for Binance, OKX and Coinbase, but the default `run_market_data_collector.py` currently uses the trade-only `WebSocketMarketRadar`. The separate L2 collector persists snapshots/deltas; deltas must not be mistaken for full book snapshots without stateful book reconstruction.
+3. If implementing spread collection, use public ticker/top-of-book observations with venue/symbol, valid positive bid/ask, bid < ask, exchange/provider timestamp and local receive timestamp; cap/rotate persistence, tolerate corrupt lines, and report freshness/sample sufficiency. Do not change trade callback latency or introduce orders.
+4. Keep operational health, economic evidence and REAL authorization separate. Preserve PAPER defaults and all existing gates. No Supabase/Vercel provisioning, deployments, paid services, credentials, live orders or spend without explicit authorization.
