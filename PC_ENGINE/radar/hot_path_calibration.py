@@ -37,7 +37,7 @@ def build_hot_path_calibration(
     path = Path(outcomes_path)
     min_samples = max(2, int(min_samples))
     rows = _read_jsonl(path)
-    buckets: dict[tuple[str, str, str, str, int], list[dict[str, Any]]] = defaultdict(list)
+    buckets: dict[tuple[str, str, str, str, int, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         try:
             symbol = str(row["symbol"]).upper()
@@ -45,6 +45,7 @@ def build_hot_path_calibration(
             follower = str(row["follower"]).lower()
             direction = str(row["direction"]).upper()
             horizon = int(row["horizon_ms"])
+            regime = str(row.get("market_regime", row.get("regime", "UNCLASSIFIED"))).strip().upper() or "UNCLASSIFIED"
             expected = float(row["expected_net_bps"])
             realized = float(row["realized_net_bps"])
             gross = float(row["realized_response_bps"])
@@ -52,12 +53,12 @@ def build_hot_path_calibration(
                 continue
             if horizon <= 0 or not all(math.isfinite(v) for v in (expected, realized, gross)):
                 continue
-            buckets[(symbol, leader, follower, direction, horizon)].append(row)
+            buckets[(symbol, leader, follower, direction, horizon, regime)].append(row)
         except (KeyError, TypeError, ValueError, OverflowError):
             continue
 
     summaries: list[dict[str, Any]] = []
-    for (symbol, leader, follower, direction, horizon), group in sorted(buckets.items()):
+    for (symbol, leader, follower, direction, horizon, regime), group in sorted(buckets.items()):
         net = [float(row["realized_net_bps"]) for row in group]
         expected = [float(row["expected_net_bps"]) for row in group]
         gross = [float(row["realized_response_bps"]) for row in group]
@@ -75,6 +76,7 @@ def build_hot_path_calibration(
             "follower": follower,
             "direction": direction,
             "horizon_ms": horizon,
+            "market_regime": regime,
             "samples": n,
             "profitable_after_costs_rate": round(sum(v > 0 for v in net) / n, 6),
             "mean_expected_net_bps": round(mean_expected, 6),
