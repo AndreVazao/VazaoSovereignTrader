@@ -26,9 +26,47 @@ class PublicWebSocketCollector:
         self.on_event = on_event
         self._stop = threading.Event()
         self._socket: websocket.WebSocketApp | None = None
+        self._stats_lock = threading.Lock()
+        self._state = "IDLE"
+        self._connect_attempts = 0
+        self._messages_received = 0
+        self._events_emitted = 0
+        self._last_event_monotonic_ns: int | None = None
+        self._last_error: str | None = None
+        self._last_close_code: int | None = None
+        self._last_close_message: str | None = None
+
+    def _set_state(self, state: str) -> None:
+        with self._stats_lock:
+            self._state = state
+
+    def snapshot(self) -> dict[str, object]:
+        now = time.monotonic_ns()
+        with self._stats_lock:
+            last_event = self._last_event_monotonic_ns
+            return {
+                "venue": self.config.venue,
+                "symbol": self.config.symbol,
+                "state": self._state,
+                "connect_attempts": self._connect_attempts,
+                "messages_received": self._messages_received,
+                "events_emitted": self._events_emitted,
+                "last_event_age_ms": (
+                    max(0, (now - last_event) // 1_000_000) if last_event is not None else None
+                ),
+                "last_error": self._last_error,
+                "last_close_code": self._last_close_code,
+                "last_close_message": self._last_close_message,
+                "paper_only": True,
+                "orders_submitted": False,
+                "execution_authorized": False,
+            }
 
     def _emit(self, event: MarketEvent) -> None:
         if not self._stop.is_set():
+            with self._stats_lock:
+                self._events_emitted += 1
+                self._last_event_monotonic_ns = time.monotonic_ns()
             self.on_event(event)
 
     def _parse(self, message: str, receive_ns: int) -> list[MarketEvent]:
@@ -51,8 +89,6 @@ class PublicWebSocketCollector:
             elif event_type == "bookTicker" or (
                 "b" in data and "a" in data and "u" in data and "p" not in data
             ):
-                # Binance individual-symbol bookTicker streams may omit the
-                # event type and exchange timestamp fields.
                 bid, ask = float(data["b"]), float(data["a"])
                 events.append(MarketEventFactory.create(
                     venue=venue, symbol=symbol, event_type="ticker",
@@ -94,7 +130,13 @@ class PublicWebSocketCollector:
         return events
 
     def run_forever(self) -> None:
+        with self._stats_lock:
+            self._connect_attempts += 1
+            self._state = "CONNECTING"
+
         def on_message(ws: websocket.WebSocketApp, message: str) -> None:
+            with self._stats_lock:
+                self._messages_received += 1
             receive_ns = time.monotonic_ns()
             try:
                 for event in self._parse(message, receive_ns):
@@ -103,6 +145,7 @@ class PublicWebSocketCollector:
                 return
 
         def on_open(ws: websocket.WebSocketApp) -> None:
+            self._set_state("RUNNING")
             if self.config.venue == "binance":
                 return
             if self.config.venue == "okx":
@@ -114,13 +157,35 @@ class PublicWebSocketCollector:
                 product = self.config.symbol.replace("/", "-")
                 ws.send(json.dumps({"type": "subscribe", "product_ids": [product], "channel": "ticker"}))
 
-        self._socket = websocket.WebSocketApp(self.config.url, on_open=on_open, on_message=on_message)
+        def on_error(ws: websocket.WebSocketApp, error: object) -> None:
+            with self._stats_lock:
+                self._state = "ERROR"
+                self._last_error = f"{type(error).__name__}: {error}"
+
+        def on_close(
+            ws: websocket.WebSocketApp,
+            close_status_code: int | None,
+            close_msg: str | None,
+        ) -> None:
+            with self._stats_lock:
+                self._state = "STOPPED" if self._stop.is_set() else "DISCONNECTED"
+                self._last_close_code = close_status_code
+                self._last_close_message = str(close_msg) if close_msg is not None else None
+
+        self._socket = websocket.WebSocketApp(
+            self.config.url,
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close,
+        )
         self._socket.run_forever()
 
     def stop(self) -> None:
         self._stop.set()
         if self._socket is not None:
             self._socket.close()
+        self._set_state("STOPPED")
 
 
 def default_public_configs(symbol: str) -> list[WebSocketMarketConfig]:
