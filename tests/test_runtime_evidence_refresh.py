@@ -129,3 +129,68 @@ def test_refresh_generates_relationship_oos_report_from_completed_paper_outcomes
     assert report["relationship_details"][0]["train_end_ms"] < report["relationship_details"][0]["test_start_ms"]
     assert result["scorecard"]["execution_authorized"] is False
     assert result["execution_authorized"] is False
+
+
+
+def test_collector_append_path_is_consumed_by_explicit_evidence_refresh(tmp_path, monkeypatch):
+    import time
+    from pathlib import Path
+
+    from PC_ENGINE.diagnostics import path_utils
+    from PC_ENGINE.radar.hot_path_persistence import append_paper_outcomes
+    from PC_ENGINE.tools import run_market_data_collector as collector
+
+    monkeypatch.setattr(collector, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(path_utils, "REPO_ROOT", tmp_path)
+
+    radar_config = {
+        "data_dir": "runtime/radar",
+        "hot_path_outcomes_path": "runtime/custom-outcomes.jsonl",
+        "evidence_train_size": 4,
+        "evidence_test_size": 2,
+        "evidence_min_test_samples": 2,
+        "evidence_relationship_min_samples": 10,
+        "evidence_relationship_min_test_samples": 3,
+    }
+    collector_data_dir = collector._resolve_path(radar_config["data_dir"])
+    collector_path = collector._outcomes_path(radar_config, collector_data_dir)
+    refresh_path = path_utils.resolve_config_path(radar_config["hot_path_outcomes_path"])
+    assert collector_path == refresh_path
+
+    now_ms = time.time_ns() // 1_000_000
+    outcomes = [
+        {
+            "status": "COMPLETED",
+            "paper_only": True,
+            "orders_submitted": False,
+            "outcome_id": f"integration-{i}",
+            "symbol": "BTC/USDT",
+            "leader": "binance",
+            "follower": "coinbase",
+            "direction": "UP",
+            "horizon_ms": 500,
+            "expected_net_bps": 1.0,
+            "realized_net_bps": -1.0 if i < 8 else 2.0,
+            "outcome_local_ts_ms": now_ms - (20 - i) * 1_000,
+        }
+        for i in range(12)
+    ]
+
+    assert append_paper_outcomes(collector_path, outcomes) == len(outcomes)
+    assert collector_path.is_file()
+
+    result = refresh_runtime_evidence_reports({"radar": radar_config})
+    relationship_report = result["reports"]["relationship_oos"]
+    report_path = tmp_path / "runtime" / "radar" / "hot_path_relationship_oos.json"
+
+    assert Path(result["outcomes_path"]) == collector_path
+    assert result["outcomes_file_exists"] is True
+    assert relationship_report["source"] == collector_path.name
+    assert relationship_report["raw_lines_seen"] == len(outcomes)
+    assert relationship_report["valid_unique_outcomes"] == len(outcomes)
+    assert relationship_report["relationships"] == 1
+    assert report_path.is_file()
+    saved = json.loads(report_path.read_text(encoding="utf-8"))
+    assert saved["valid_unique_outcomes"] == len(outcomes)
+    assert saved["execution_authorized"] is False
+    assert result["execution_authorized"] is False
