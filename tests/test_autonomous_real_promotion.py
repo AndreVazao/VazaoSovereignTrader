@@ -99,7 +99,7 @@ def test_engine_autonomous_promotion_stays_paper_when_autonomy_disabled():
     assert not engine._maybe_autonomous_real_promotion()
     assert engine.mode == "PAPER"
 
-    
+
 def test_engine_readiness_error_replaces_stale_ready_snapshot():
     engine = SovereignEngine.__new__(SovereignEngine)
     engine.mode = "PAPER"
