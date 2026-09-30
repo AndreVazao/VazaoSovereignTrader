@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — PR #225–#232 merged; cockpit installation/research observability is now active
+Last updated: 2026-09-30 (UTC) — current verified handoff: main at 0087fdb934e76ae7f1f40d5df7596f367ff7c875; PR #258–#260 merged
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -27,7 +27,7 @@ Immediate operational goal: data accumulation and research, not live trading.
 ## 2. Current main state
 
 PR #223 (device proof, admin approval and rate-limit hardening) was merged by André.
-Current main SHA after PR #230: deb822acbc1d9de75ea72b88153f95c3e6cf4932.
+Current main SHA after PR #260: 0087fdb934e76ae7f1f40d5df7596f367ff7c875.
 
 Latest main validation observed:
 - Windows EXE run 36672120924: SUCCESS.
@@ -219,3 +219,72 @@ No live trading account is required for this first stage.
 ## 14. Continuity prompt
 
 Continue working on AndreVazao/VazaoSovereignTrader. Read this file, verify live GitHub state, then continue the active branch/PR. Work autonomously on safe code. Keep exactly one active implementation PR where practical. Merge automatically when exact-head CI is green and review finds no blocker. Do not create cloud resources or incur costs without explicit authorization. The immediate objective is a reliable installable PAPER/data-collection node that can accumulate evidence for the trader's studies while all REAL gates remain fail-closed.
+
+
+## 15. Current handoff — 2026-09-30 (verified against GitHub)
+
+### Current main
+- Main SHA: `0087fdb934e76ae7f1f40d5df7596f367ff7c875`.
+- PR #260 merged at 2026-09-30 15:10 UTC; merge SHA above.
+- Exact PR #260 head: `577bde3a751b7ca67b972cbe2179ec581836831b`.
+- Exact-head CI for PR #260: both Python test jobs SUCCESS and Windows EXE build SUCCESS before merge.
+- Repository: `AndreVazao/VazaoSovereignTrader`.
+
+### Newly completed — venue health signage (PR #258)
+- Added `PC_ENGINE/diagnostics/venue_health.py`.
+- Added authenticated `GET /venue-health` endpoint.
+- Cockpit displays configured venues/exchanges with GREEN / YELLOW / RED status:
+  - GREEN: recent activity and minimum observation sample count met.
+  - YELLOW: some data exists, but recency/sample evidence is insufficient for strong operational classification.
+  - RED: no valid activity or feed is outside the operational freshness window; mark for review.
+- Includes polling/WebSocket/research roles, sample counts, last activity and age.
+- Added `tests/test_venue_health.py`.
+- Safety: status is operational/data-quality evidence, not profitability assessment. RED never deletes/discards a venue automatically; any removal needs further review. No order submission changes.
+
+### Newly completed — runtime evidence scorecard (PR #259)
+- Added `PC_ENGINE/diagnostics/evidence_scorecard.py` runtime service.
+- Added authenticated `GET /evidence-scorecard`.
+- Cockpit shows presence/missing status for calibration, chronological walk-forward, regime walk-forward, cost stress and bootstrap evidence.
+- Missing reports fail closed as MISSING.
+- The scorecard cannot authorize REAL; `execution_authorized=false` by design.
+
+### Newly completed — refresh PAPER evidence from cockpit (PR #260)
+- Added `refresh_runtime_evidence_reports(config)` in `PC_ENGINE/diagnostics/evidence_scorecard.py`.
+- Regenerates calibration, chronological walk-forward, regime walk-forward and OOS cost/bootstrap robustness reports from the completed PAPER outcomes ledger.
+- Default report paths under configured radar data directory:
+  - `hot_path_calibration.json`
+  - `hot_path_walk_forward.json`
+  - `hot_path_regime_walk_forward.json`
+  - `hot_path_oos_robustness.json`
+- Outcomes default path: `hot_path_outcomes.jsonl`, overridable with `radar.hot_path_outcomes_path`.
+- Optional custom report paths: `radar.evidence_reports.calibration`, `walk_forward`, `regime_walk_forward`, `oos_robustness`.
+- Added authenticated `POST /evidence-scorecard/refresh`.
+- Cockpit has “ATUALIZAR EVIDÊNCIA PAPER” button.
+- Added `tests/test_runtime_evidence_scorecard.py` and `tests/test_runtime_evidence_refresh.py`.
+- If outcomes are missing, reports are generated as empty evidence artifacts; requirements remain unmet. This does not imply strategy failure; it means there is no accumulated evidence yet.
+- All generated reports retain `paper_only=true`, `orders_submitted=false`, `execution_authorized=false`. No REAL gate changes and no orders are submitted.
+
+### Active branch / PR status
+- PR #260 is merged; no feature branch should be assumed active without checking GitHub.
+- Latest completed implementation sequence: PR #258 venue health signage -> PR #259 runtime scorecard -> PR #260 explicit PAPER evidence refresh.
+- A documentation-only handoff PR is now being prepared from the current main SHA; it must pass exact-head CI before merge.
+- Before further coding, inspect live main, open PRs, and current CI. Keep one active implementation PR wherever practical.
+
+### Immediate next engineering actions
+1. Verify the documentation handoff PR and merge only if exact-head required CI is green.
+2. Inspect runtime behavior/config path consistency for the evidence refresh endpoint and the venue-health source files; add/fix tests if necessary.
+3. Connect venue status to richer economic evidence in later phases: latency, spread, data gaps, fee assumptions, slippage, lead/lag sample size and net PAPER outcomes. Keep operational feed health separate from profitability.
+4. Ensure the runtime collector actually writes `hot_path_outcomes.jsonl` at the configured path, and that the scorecard's report paths align with the files produced in the current installation. Do not infer data exists merely because report files exist.
+5. Continue accumulating PAPER-only evidence, then evaluate sample quality, OOS/walk-forward/regime stability and stressed costs. Do not claim a strategy is profitable without sufficient evidence.
+6. Later create the mobile dashboard mockup as a presentation layer. User wants a polished, phone-friendly view with a clear green/yellow/red venue list and evidence/status panels. Do not let mockup work interrupt core engine hardening.
+7. Never activate REAL or relax its gates. Explicit human authorization remains mandatory; no cloud deployment/spend without explicit authorization.
+
+### User preferences and dashboard direction
+- Communicate in Portuguese (Portugal), warm and direct; user calls assistant “irmão”.
+- User wants autonomous progress on safe repository work and a copy/paste continuation prompt when a chat gets long.
+- Dashboard should list the actual exchanges/platforms the trader is configured to use, not an invented fixed list. Green/yellow/red must be based on observed telemetry and clear rules.
+- Red means “review/candidate to remove”, not automatic deletion. A healthy feed is not the same as a profitable venue; future economic classification must be separate.
+- The future mobile view should include engine/PAPER state, P&L only when backed by real PAPER records, feed quality/latency, lead-lag evidence, OOS/walk-forward/regime coverage, learning status, alerts and explicit REAL LOCKED status until all gates are satisfied.
+
+### Continuity prompt for the next chat
+Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal). First read `docs/PROJECT_CONTEXT.md` and verify live GitHub state; do not assume branches, PRs, or CI state from this note alone. Current verified main SHA at handoff: `0087fdb934e76ae7f1f40d5df7596f367ff7c875`. PR #258 added exchange venue GREEN/YELLOW/RED operational health signage; PR #259 added a read-only PAPER evidence scorecard; PR #260 added authenticated `POST /evidence-scorecard/refresh` and a cockpit refresh button to regenerate calibration, walk-forward, regime walk-forward and OOS cost/bootstrap reports from completed PAPER outcomes. PR #260 exact-head Python test jobs and Windows EXE build all passed before merge. Continue autonomously with a dedicated branch and PR, inspect the evidence refresh path/config/collector integration, verify that outcomes are written to the same path the scorecard reads, then improve venue classification using separate operational-health and economic-performance evidence. Keep everything PAPER-only; never submit orders, activate REAL, bypass readiness/risk/RealModeGuard, create cloud resources or incur costs without explicit authorization. Merge only after exact-head required CI is green and the diff has no blockers. The user also wants a polished phone-friendly dashboard mockup later, with venue signage and trader status, but it must not interrupt core engine work.
