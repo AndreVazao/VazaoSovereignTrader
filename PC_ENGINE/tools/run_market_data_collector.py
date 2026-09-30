@@ -9,6 +9,8 @@ from pathlib import Path
 
 from PC_ENGINE.radar.lead_lag_learning import LeadLagLearningEngine
 from PC_ENGINE.radar.websocket_radar import WebSocketMarketRadar
+from PC_ENGINE.research.paper_study import load_states, run_study, write_report
+from PC_ENGINE.research.websocket_timing_validation import validate_paths, write_report as write_timing_report
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +35,7 @@ def main() -> None:
     )
     parser.add_argument("--data-dir", default=None)
     parser.add_argument("--learn-minutes", type=float, default=5.0)
+    parser.add_argument("--study-minutes", type=float, default=None)
     args = parser.parse_args()
 
     config = _load_config(_resolve_path(args.config))
@@ -93,7 +96,11 @@ def main() -> None:
         "paper_only": True,
     }, ensure_ascii=False), flush=True)
 
+    study_cfg = dict(config.get("paper_study", {}))
+    study_enabled = bool(study_cfg.get("enabled", True))
+    study_minutes = float(args.study_minutes if args.study_minutes is not None else study_cfg.get("interval_minutes", 15))
     next_learning = 0.0
+    next_study = 0.0
     try:
         while not stop.is_set():
             now = time.monotonic()
@@ -115,6 +122,44 @@ def main() -> None:
                     "timestamp_ms": time.time_ns() // 1_000_000,
                 }, ensure_ascii=False), flush=True)
                 next_learning = now + max(30.0, args.learn_minutes * 60.0)
+            if study_enabled and now >= next_study:
+                states_path = data_dir / str(study_cfg.get("states_filename", "market_states.jsonl"))
+                report_path = data_dir / str(study_cfg.get("report_filename", "paper_study_report.json"))
+                timing_path = data_dir / str(study_cfg.get("timing_report_filename", "websocket_timing_validation.json"))
+                try:
+                    states = load_states(states_path, limit=int(study_cfg.get("max_states", 100000)))
+                    report = run_study(
+                        states,
+                        horizon_ms=int(study_cfg.get("horizon_ms", 5000)),
+                        cost_bps=float(study_cfg.get("cost_bps", 28.0)),
+                        folds=int(study_cfg.get("walk_forward_folds", 5)),
+                        min_train=int(study_cfg.get("walk_forward_min_train", 100)),
+                        test_size=int(study_cfg.get("walk_forward_test_size", 50)),
+                        monte_carlo_iterations=int(study_cfg.get("monte_carlo_iterations", 2000)),
+                    )
+                    write_report(report, report_path)
+                    timing = validate_paths(
+                        data_dir,
+                        max_receive_latency_ms=int(study_cfg.get("max_receive_latency_ms", 2000)),
+                        max_lead_ms=int(radar_cfg.get("lead_window_ms", 750)),
+                        min_samples=int(study_cfg.get("timing_min_samples", 100)),
+                    )
+                    write_timing_report(timing, timing_path)
+                    write_health(
+                        "RUNNING",
+                        radar=radar.snapshot(),
+                        study={
+                            "enabled": True,
+                            "state_samples": len(states),
+                            "outcome_samples": report.get("outcome_samples", 0),
+                            "timing_eligible": timing.get("eligible_for_economic_interpretation", False),
+                            "report_path": str(report_path),
+                            "timing_report_path": str(timing_path),
+                        },
+                    )
+                except Exception as exc:
+                    write_health("RUNNING", radar=radar.snapshot(), study={"enabled": True, "error": f"{type(exc).__name__}: {exc}"})
+                next_study = now + max(60.0, study_minutes * 60.0)
             stop.wait(1.0)
     finally:
         radar.stop()
