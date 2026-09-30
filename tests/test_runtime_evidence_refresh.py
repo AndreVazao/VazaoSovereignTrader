@@ -21,6 +21,8 @@ def test_refresh_generates_paper_reports_without_authorizing_execution(tmp_path)
     assert report["orders_submitted"] is False
     assert report["execution_authorized"] is False
     assert report["scorecard"]["execution_authorized"] is False
+    assert "venue_economic_evidence" in report["reports"]
+    assert report["reports"]["venue_economic_evidence"]["execution_authorized"] is False
     for name, filename in (
         ("calibration", "hot_path_calibration.json"),
         ("walk_forward", "hot_path_walk_forward.json"),
@@ -193,4 +195,9 @@ def test_collector_append_path_is_consumed_by_explicit_evidence_refresh(tmp_path
     saved = json.loads(report_path.read_text(encoding="utf-8"))
     assert saved["valid_unique_outcomes"] == len(outcomes)
     assert saved["execution_authorized"] is False
+    assert result["reports"]["venue_economic_evidence"]["paper_only"] is True
+    economics_path = tmp_path / "runtime" / "radar" / "venue_economic_evidence.json"
+    assert economics_path.is_file()
+    economics = json.loads(economics_path.read_text(encoding="utf-8"))
+    assert economics["execution_authorized"] is False
     assert result["execution_authorized"] is False
