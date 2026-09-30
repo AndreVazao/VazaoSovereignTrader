@@ -80,3 +80,75 @@ def test_connect_launches_only_configured_local_process(tmp_path: Path) -> None:
     assert feedback.state == "CONNECTED"
     assert feedback.acknowledged is True
     adapter._process.terminate()  # type: ignore[union-attr]
+
+
+
+def test_connect_reports_fast_exit_as_down(tmp_path: Path) -> None:
+    executable = Path(sys.executable)
+    adapter = DesktopPaperSurfaceAdapter(
+        DesktopPaperConfig(
+            venue_id="demo",
+            executable_path=str(executable),
+            launch_args=("-c", "raise SystemExit(7)"),
+        )
+    )
+
+    feedback = adapter.execute(
+        SurfaceAction(
+            request_id="connect-fast-exit",
+            venue_id="demo",
+            surface=Surface.DESKTOP_APP,
+            action=ActionKind.CONNECT,
+        )
+    )
+
+    assert feedback.state == "DOWN"
+    assert feedback.acknowledged is False
+    assert "exit_code=7" in feedback.detail
+
+
+def test_observe_preserves_request_id_in_persisted_feedback(tmp_path: Path) -> None:
+    executable = Path(sys.executable)
+    feedback_path = tmp_path / "feedback.jsonl"
+    adapter = DesktopPaperSurfaceAdapter(
+        DesktopPaperConfig(
+            venue_id="demo",
+            executable_path=str(executable),
+            launch_args=("-c", "import time; time.sleep(2)"),
+            feedback_path=str(feedback_path),
+        )
+    )
+    launched = adapter.execute(
+        SurfaceAction(
+            request_id="connect-observe",
+            venue_id="demo",
+            surface=Surface.DESKTOP_APP,
+            action=ActionKind.CONNECT,
+        )
+    )
+    assert launched.state == "CONNECTED"
+
+    observed = adapter.execute(
+        SurfaceAction(
+            request_id="observe-request-42",
+            venue_id="demo",
+            surface=Surface.DESKTOP_APP,
+            action=ActionKind.OBSERVE,
+        )
+    )
+
+    assert observed.request_id == "observe-request-42"
+    stored = feedback_path.read_text(encoding="utf-8")
+    assert '"request_id": "observe-request-42"' in stored
+    adapter._process.terminate()  # type: ignore[union-attr]
+
+
+def test_directory_is_not_accepted_as_executable(tmp_path: Path) -> None:
+    adapter = DesktopPaperSurfaceAdapter(
+        DesktopPaperConfig(venue_id="demo", executable_path=str(tmp_path))
+    )
+
+    feedback = adapter.probe()
+
+    assert feedback.state == "DOWN"
+    assert feedback.acknowledged is False
