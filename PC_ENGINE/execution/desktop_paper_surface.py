@@ -95,7 +95,7 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             return self._process is not None and self._process.poll() is None
         try:
             completed = subprocess.run(
-                ["tasklist", "/FI", f"IMAGENAME eq {name}"],
+                ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV", "/NH"],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -103,7 +103,14 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             )
         except (OSError, subprocess.SubprocessError):
             return False
-        return completed.returncode == 0 and name.lower() in completed.stdout.lower()
+        if completed.returncode != 0:
+            return False
+        expected = name.strip().strip('"').casefold()
+        for line in completed.stdout.splitlines():
+            image_name = line.split(",", 1)[0].strip().strip('"').casefold()
+            if image_name == expected:
+                return True
+        return False
 
     def _process_running_posix(self) -> bool:
         name = self.config.process_name
@@ -111,7 +118,7 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             return self._process is not None and self._process.poll() is None
         try:
             completed = subprocess.run(
-                ["pgrep", "-f", name],
+                ["pgrep", "-x", name],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -147,11 +154,11 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             + (f";title={matches[0]}" if matches else "")
         )
 
-    def probe(self) -> SurfaceFeedback:
+    def _probe(self, request_id: str) -> SurfaceFeedback:
         executable = self._executable()
-        if not executable.exists():
+        if not executable.is_file():
             return self._feedback(
-                "desktop-probe",
+                request_id,
                 state="DOWN",
                 acknowledged=False,
                 detail=f"executable_not_found:{executable}",
@@ -166,7 +173,7 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
         running = self._process_running()
         if not running:
             return self._feedback(
-                "desktop-probe",
+                request_id,
                 state="DISCONNECTED",
                 acknowledged=False,
                 detail="desktop_application_not_running",
@@ -178,12 +185,15 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             detail="desktop_application_running;" + self._window_observation(),
         )
 
+    def probe(self) -> SurfaceFeedback:
+        return self._probe("desktop-probe")
+
     def observe(self) -> SurfaceFeedback:
-        return self.probe()
+        return self._probe("desktop-observe")
 
     def _launch(self, request_id: str) -> SurfaceFeedback:
         executable = self._executable()
-        if not executable.exists():
+        if not executable.is_file():
             return self._feedback(
                 request_id,
                 state="DOWN",
@@ -206,11 +216,21 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
                 acknowledged=False,
                 detail=f"launch_failed:{type(exc).__name__}",
             )
+        # Popen only proves process creation was accepted. Detect fast failures.
+        time.sleep(0.05)
+        exit_code = self._process.poll()
+        if exit_code is not None:
+            return self._feedback(
+                request_id,
+                state="DOWN",
+                acknowledged=False,
+                detail=f"launch_process_exited_immediately:exit_code={exit_code}",
+            )
         return self._feedback(
             request_id,
             state="CONNECTED",
             acknowledged=True,
-            detail="desktop_application_launched",
+            detail="desktop_application_launched;process_alive_at_observation",
         )
 
     def execute(self, action: SurfaceAction) -> SurfaceFeedback:
@@ -233,17 +253,7 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             return self._launch(action.request_id)
 
         if action.action is ActionKind.OBSERVE:
-            feedback = self.observe()
-            return SurfaceFeedback(
-                request_id=action.request_id,
-                surface=feedback.surface,
-                venue_id=feedback.venue_id,
-                state=feedback.state,
-                acknowledged=feedback.acknowledged,
-                observed_at_ms=feedback.observed_at_ms,
-                detail=feedback.detail,
-                order_reference=None,
-            )
+            return self._probe(action.request_id)
 
         if action.action in {ActionKind.BUY, ActionKind.SELL, ActionKind.CANCEL}:
             return self._feedback(
