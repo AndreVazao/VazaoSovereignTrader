@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from PC_ENGINE.radar.hot_path import HotPathLeadLagEngine, HotPathOpportunity
+from PC_ENGINE.radar.hot_path_outcomes import HotPathOutcomeTracker
 from PC_ENGINE.radar.lead_lag_learning import LeadLagLearningEngine
 from PC_ENGINE.radar.websocket_radar import WebSocketMarketRadar
 from PC_ENGINE.research.paper_study import load_states, run_study, write_report
@@ -85,10 +86,17 @@ def main() -> None:
     )
     opportunity_queue: list[HotPathOpportunity] = []
     opportunity_lock = threading.Lock()
+    outcome_tracker = HotPathOutcomeTracker(
+        max_pending=int(radar_cfg.get("hot_path_max_pending_outcomes", 4096))
+    )
+    outcomes_path = data_dir / "hot_path_outcomes.jsonl"
 
     def on_market_event(event) -> None:
+        # Callback stays memory-only: no disk I/O, blocking research, or orders.
+        outcome_tracker.on_market_event(event)
         opportunity = hot_path.on_market_event(event)
         if opportunity is not None:
+            outcome_tracker.register(opportunity)
             with opportunity_lock:
                 opportunity_queue.append(opportunity)
                 if len(opportunity_queue) > 256:
@@ -111,7 +119,12 @@ def main() -> None:
     )
 
     radar.start()
-    write_health("RUNNING", radar=radar.snapshot())
+    write_health(
+        "RUNNING",
+        radar=radar.snapshot(),
+        hot_path=hot_path.snapshot(),
+        hot_path_outcomes=outcome_tracker.snapshot(),
+    )
     print(json.dumps({
         "service": "market_data_collector",
         "status": "RUNNING",
@@ -161,6 +174,11 @@ def main() -> None:
                 opportunity_queue.clear()
             for opportunity in queued:
                 hot_path.persist(opportunity)
+            completed_outcomes = outcome_tracker.drain_completed()
+            if completed_outcomes:
+                with outcomes_path.open("a", encoding="utf-8") as handle:
+                    for outcome in completed_outcomes:
+                        handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\\n")
 
             if study_enabled and now >= next_study:
                 states_path = data_dir / str(study_cfg.get("states_filename", "market_states.jsonl"))
@@ -189,6 +207,7 @@ def main() -> None:
                         "RUNNING",
                         radar=radar.snapshot(),
                         hot_path=hot_path.snapshot(),
+                        hot_path_outcomes=outcome_tracker.snapshot(),
                         study={
                             "enabled": True,
                             "state_samples": len(states),
@@ -199,13 +218,29 @@ def main() -> None:
                         },
                     )
                 except Exception as exc:
-                    write_health("RUNNING", radar=radar.snapshot(), hot_path=hot_path.snapshot(), study={"enabled": True, "error": f"{type(exc).__name__}: {exc}"})
+                    write_health(
+                        "RUNNING",
+                        radar=radar.snapshot(),
+                        hot_path=hot_path.snapshot(),
+                        hot_path_outcomes=outcome_tracker.snapshot(),
+                        study={"enabled": True, "error": f"{type(exc).__name__}: {exc}"},
+                    )
                 next_study = now + max(60.0, study_minutes * 60.0)
             stop.wait(1.0)
     finally:
         radar.stop()
         learner.learn()
-        write_health("STOPPED", radar=radar.snapshot(), hot_path=hot_path.snapshot())
+        completed_outcomes = outcome_tracker.drain_completed()
+        if completed_outcomes:
+            with outcomes_path.open("a", encoding="utf-8") as handle:
+                for outcome in completed_outcomes:
+                    handle.write(json.dumps(outcome, ensure_ascii=False, sort_keys=True) + "\\n")
+        write_health(
+            "STOPPED",
+            radar=radar.snapshot(),
+            hot_path=hot_path.snapshot(),
+            hot_path_outcomes=outcome_tracker.snapshot(),
+        )
         print("Market-data collector stopped cleanly.", flush=True)
 
 
