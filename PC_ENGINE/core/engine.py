@@ -1321,7 +1321,7 @@ class SovereignEngine:
                 recovery = gate.evaluate_recovery(
                     readiness_ok=bool(report.get("ready")) and bool((report.get("paper_review") or {}).get("ready")),
                     reconciliation_ok=bool(reconciliation.get("ok", False)),
-                    timing_ok=bool(report.get("timing_validation", {}).get("eligible_for_economic_interpretation", False)),
+                    timing_ok=bool((report.get("websocket_timing") or {}).get("eligible_for_economic_interpretation", False)) and bool((report.get("websocket_timing") or {}).get("fresh", False)),
                 )
                 if not recovery.allowed:
                     self._enter_real_fail_safe("execution_gate_recovery_blocked", {"reason": recovery.reason})
