@@ -306,6 +306,7 @@ def test_sell_pending_preserves_execution_intent_until_pending_is_durable():
         "binance", "BTC/USDT", 100.0, 1.0, 98.0, 104.0, 1.0, 0.10
     )
     engine._persist_recovery = lambda: None
+    engine._enter_safe_state = lambda reason, data=None: setattr(engine.state, "status", "SAFE_MODE")
     engine.log = lambda *args, **kwargs: None
     engine.risk = RiskStub()
     engine.champion = ChampionStub()
