@@ -1439,7 +1439,16 @@ class SovereignEngine:
             price = float(ticker.get("last") or 0.0)
             signal = signals.get(symbol)
             if price <= position.stop or price >= position.take_profit or (signal and signal.action == "SELL"):
-                self._close_position(exchange, position, price, signal.reason if signal else "stop/take-profit", spreads.get(symbol, 0.0))
+                self._close_position(
+                    exchange, position, price, signal.reason if signal else "stop/take-profit",
+                    spreads.get(symbol, 0.0),
+                    execution_checks={
+                        "opportunity_ok": bool(price <= position.stop or price >= position.take_profit or (signal and signal.action == "SELL")),
+                        "risk_ok": True,
+                        "exchange_ok": bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
+                        "stale_ok": self._ticker_is_fresh(ticker),
+                    },
+                )
 
         for decision in allocations:
             symbol = decision.symbol
@@ -1505,21 +1514,51 @@ class SovereignEngine:
                 continue
 
             qty = notional / price
-            self._open_position(exchange, symbol, price, qty, signal.stop_pct, signal.take_profit_pct, signal.reason, spreads.get(symbol, 0.0))
+            self._open_position(
+                exchange, symbol, price, qty, signal.stop_pct, signal.take_profit_pct,
+                signal.reason, spreads.get(symbol, 0.0),
+                execution_checks={
+                    "opportunity_ok": signal.action == "BUY" and scores.get(symbol, 0.0) > 0,
+                    "risk_ok": bool(risk_decision.authorized),
+                    "exchange_ok": bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
+                    "stale_ok": self._ticker_is_fresh(ticker),
+                },
+            )
 
         self._persist_recovery()
 
-    def _open_position(self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float, stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0) -> None:
+    def _ticker_is_fresh(self, ticker: dict, *, now_ms: float | None = None) -> bool:
+        """Fail closed when an execution ticker has no trustworthy timestamp."""
+        if not isinstance(ticker, dict):
+            return False
+        try:
+            timestamp = float(ticker.get("timestamp") or 0.0)
+        except (TypeError, ValueError):
+            return False
+        if timestamp <= 0:
+            return False
+        quality_cfg = self.config.get("market_data_quality", {})
+        max_age_seconds = max(0.1, float(quality_cfg.get("max_ticker_age_seconds", 10.0)))
+        current_ms = float(now_ms if now_ms is not None else time.time() * 1000.0)
+        age_ms = current_ms - timestamp
+        return -2000.0 <= age_ms <= max_age_seconds * 1000.0
+
+    def _open_position(
+        self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float,
+        stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0,
+        execution_checks: dict | None = None,
+    ) -> None:
         if not getattr(self, "paper", True):
             gate = getattr(self, "execution_gate", None)
             if gate is None:
                 self._enter_real_fail_safe("execution_gate_missing")
                 return
+            checks = execution_checks if isinstance(execution_checks, dict) else {}
             decision = gate.can_submit(
-                opportunity_ok=True,
-                risk_ok=True,
-                exchange_ok=bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
-                stale_ok=True,
+                opportunity_ok=bool(checks.get("opportunity_ok", False)),
+                risk_ok=bool(checks.get("risk_ok", False)),
+                exchange_ok=bool(checks.get("exchange_ok", False)),
+                stale_ok=bool(checks.get("stale_ok", False)),
             )
             if not decision.allowed:
                 self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": symbol, "side": "buy", "state": decision.state.value, "reason": decision.reason})
@@ -1601,17 +1640,21 @@ class SovereignEngine:
         self._persist_recovery()
         self.log("POSITION_OPENED", {"symbol": symbol, "price": result.price, "qty": result.qty, "fee": result.fee, "reason": reason})
 
-    def _close_position(self, exchange: CcxtExchangeClient, position: Position, price: float, reason: str, spread_pct: float = 0.0) -> None:
+    def _close_position(
+        self, exchange: CcxtExchangeClient, position: Position, price: float,
+        reason: str, spread_pct: float = 0.0, execution_checks: dict | None = None,
+    ) -> None:
         if not getattr(self, "paper", True):
             gate = getattr(self, "execution_gate", None)
             if gate is None:
                 self._enter_real_fail_safe("execution_gate_missing")
                 return
+            checks = execution_checks if isinstance(execution_checks, dict) else {}
             decision = gate.can_submit(
-                opportunity_ok=True,
-                risk_ok=True,
-                exchange_ok=bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
-                stale_ok=True,
+                opportunity_ok=bool(checks.get("opportunity_ok", False)),
+                risk_ok=bool(checks.get("risk_ok", False)),
+                exchange_ok=bool(checks.get("exchange_ok", False)),
+                stale_ok=bool(checks.get("stale_ok", False)),
             )
             if not decision.allowed:
                 self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": position.symbol, "side": "sell", "state": decision.state.value, "reason": decision.reason})
