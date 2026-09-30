@@ -165,7 +165,7 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             )
         if not os.access(executable, os.X_OK) and platform.system() != "Windows":
             return self._feedback(
-                "desktop-probe",
+                request_id,
                 state="DOWN",
                 acknowledged=False,
                 detail=f"executable_not_executable:{executable}",
@@ -179,7 +179,7 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
                 detail="desktop_application_not_running",
             )
         return self._feedback(
-            "desktop-probe",
+            request_id,
             state="OBSERVED",
             acknowledged=True,
             detail="desktop_application_running;" + self._window_observation(),
