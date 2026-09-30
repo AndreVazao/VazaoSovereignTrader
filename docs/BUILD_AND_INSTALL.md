@@ -92,3 +92,10 @@ Isto não ativa REAL nem substitui preflight, reconciliação, Risk Engine ou Re
 ## Estado da investigação no cockpit
 
 O endpoint autenticado `/research/status` expõe, em modo somente leitura, o estado dos relatórios PAPER contínuos (`paper_study_report.json` e `websocket_timing_validation.json`), idade dos artefactos, intervalo configurado e conteúdo estatístico disponível. O endpoint nunca envia ordens, altera risco ou promove REAL.
+
+
+## Relatório de saúde da instalação Windows
+
+`verify_pc_install.ps1` passa a gerar `PC_ENGINE/data/logs/installation_health.json` depois de concluir as verificações. O relatório regista versão do schema, timestamp UTC, runtime Python, configuração PAPER, dependências, Playwright, resultado da suite Python, presença das duas Scheduled Tasks e se o token local está disponível na sessão.
+
+A ausência das Scheduled Tasks é reportada como estado, não como erro, porque o script de verificação pode ser executado antes da instalação do autostart. O relatório é local e não contém tokens ou credenciais.
