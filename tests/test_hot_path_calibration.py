@@ -130,7 +130,7 @@ def test_calibration_penalizes_positive_serial_dependence(tmp_path):
     assert stat["effective_samples"] < stat["samples"]
     assert stat["ci95_sample_basis"] == "effective_samples"
     assert stat["lag1_autocorrelation"] > 0
-    assert stat["execution_authorized"] is False
+    assert report["execution_authorized"] is False
 
 
 def test_calibration_keeps_legacy_rows_usable_without_fake_temporal_data(tmp_path):
