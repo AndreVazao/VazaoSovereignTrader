@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at 6f3e809b81fd3eb459213ab377e266884e4100d6; public top-of-book spread evidence in progress
+Last updated: 2026-09-30 (UTC) — main at 05d8896ce29049a2d2f2e72d46557de8660f648a; top-of-book collector merged, post-merge CI pending
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -586,3 +586,23 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. Verify post-merge Python and Windows checks on the resulting main SHA.
 3. The top-of-book collector is a separate opt-in process and is not automatically started by the trading runtime. No orders, credentials, private APIs, or REAL execution are involved.
 4. Keep operational venue health, economic evidence and execution authorization independent. No cloud provisioning, deployments, paid services or spend without explicit authorization.
+
+## 28. Handoff — 2026-09-30, public top-of-book spread collection merged
+
+### Verified state
+- PR #281 (`feat: collect public top-of-book spread evidence`) merged via squash at main SHA `05d8896ce29049a2d2f2e72d46557de8660f648a`.
+- Exact-head checks on PR SHA `7a846e954ac54b0a78d10066b727acfc152c14b6` passed: Python tests run `36754312523` and Windows EXE build/smoke run `36754312460`.
+- Post-merge Python run `36754653576` and Windows EXE run `36754653589` were still in progress at handoff creation. Do not call this main SHA fully validated until both finish successfully.
+
+### Delivered in PR #281
+- Added optional standalone public top-of-book collector `PC_ENGINE/tools/run_top_of_book_collector.py` using the existing public ticker adapters. It is not auto-started by the trading runtime. It writes normalized observations to `websocket_ticker_events.jsonl`, rotates one bounded backup, and retries failed connections with backoff.
+- Fixed Binance `bookTicker` parsing for payloads without `e` event-type or `E` timestamp fields; added parser tests for Binance, OKX and Coinbase bid/ask observations.
+- Venue economic evidence now optionally reads `evidence_reports.top_of_book` (default file `websocket_ticker_events.jsonl`) and calculates mean quoted spread in bps only from positive, non-crossed, fresh, deduplicated observations marked `paper_only=true`, `orders_submitted=false`, `execution_authorized=false`. Default max age 30 seconds, 20 observations minimum and 100,000-row bounded read.
+- Added integrity counters and tests for malformed JSON, invalid/crossed quotes, non-PAPER rows, insufficient samples and end-to-end refresh integration. Dashboard shows measured spread and sample count only when evidence is available.
+- The metric is quoted spread, not a complete executable trading cost estimate. It does not include a guaranteed fill, depth/market impact, fees, slippage or latency; these remain separate fields and require their own evidence.
+
+### Safety and next steps
+1. Verify post-merge Python and Windows EXE checks for SHA `05d8896ce29049a2d2f2e72d46557de8660f648a`.
+2. If checks pass, next evaluate freshness/coverage diagnostics by venue and symbol, and ensure spread data is joined to the correct venue-symbol configuration without mixing symbols or stale data.
+3. Keep the collector opt-in, bounded, public-data-only and separate from trading execution. No orders, credentials, REAL-mode changes, cloud provisioning, deployments, paid services or spend without explicit authorization.
+4. Maintain separation between operational health, economic evidence, OOS uncertainty and execution authorization. Positive spread/OOS evidence is never permission to trade.
