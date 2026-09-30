@@ -53,3 +53,20 @@ PAPER primeiro. REAL só depois de validação estatística, replay/PAPER e revi
 O PC e o telefone são independentes. Se o PC encontrar um login, 2FA/OTP, CAPTCHA ou outra barreira humana, cria um pedido persistente no Human Interaction Bridge. Quando o telefone estiver disponível através da Tailscale, mostra o pedido e envia a intervenção de volta ao PC.
 
 A fila de pedidos é persistente, mas dados sensíveis não são: passwords, OTPs e outros segredos enviados pelo telefone ficam apenas em RAM no processo do PC até serem consumidos. O browser mantém a sessão local no PC. CAPTCHA/2FA são sempre intervenção humana normal, sem bypass.
+
+
+## Diagnóstico operacional
+
+O cockpit autenticado inclui agora **Diagnóstico operacional**, que consolida em modo PAPER:
+- estado do motor e watchdog/preflight/reconciliação;
+- estado do Market Data Collector e idade do heartbeat;
+- eventos totais por venue e último evento por venue/símbolo;
+- reconnect/error counters;
+- tamanho atual dos dados locais e crescimento desde a última leitura;
+- exportação do snapshot para `vazao-operational-diagnostics.json`.
+
+Endpoints:
+- `GET /diagnostics` — requer `read_private_state`.
+- `GET /diagnostics/export` — requer `read_private_state` e devolve o snapshot como ficheiro JSON.
+
+O diagnóstico é observacional. Não envia ordens, não ativa REAL e não depende de cloud.
