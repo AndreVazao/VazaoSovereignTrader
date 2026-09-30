@@ -38,7 +38,7 @@ def _configured_exchanges(config: dict[str, Any]) -> list[str]:
 
     def add_values(values: Any) -> None:
         for value in _items(values):
-            if not isinstance(value, (str, int, float)):
+            if not isinstance(value, str):
                 continue
             name = str(value).strip().lower()
             if name and name not in names:
@@ -92,17 +92,17 @@ def _venue_activity(
                 continue
             if str(snapshot.get("exchange", "")).strip().lower() != exchange:
                 continue
-            observation_count += 1
             ts = _timestamp_ms(snapshot.get("local_ts_ms"), now_ms=now_ms) or row_ts
             if ts is not None:
+                observation_count += 1
                 last_observation_ms = max(last_observation_ms or ts, ts)
 
     for row in websocket_rows:
         if str(row.get("exchange", "")).strip().lower() != exchange:
             continue
-        websocket_count += 1
         ts = _timestamp_ms(row.get("local_ts_ms"), now_ms=now_ms)
         if ts is not None:
+            websocket_count += 1
             last_websocket_ms = max(last_websocket_ms or ts, ts)
 
     timestamps = [
@@ -123,7 +123,10 @@ def build_venue_health(config: dict[str, Any], *, now_ms: int | None = None) -> 
     now = int(now_ms if now_ms is not None else time.time_ns() // 1_000_000)
     root = _mapping(config)
     radar = _mapping(root.get("radar"))
-    data_dir = resolve_config_path(radar.get("data_dir", "PC_ENGINE/data/radar"))
+    try:
+        data_dir = resolve_config_path(radar.get("data_dir", "PC_ENGINE/data/radar"))
+    except (TypeError, ValueError):
+        data_dir = resolve_config_path("PC_ENGINE/data/radar")
 
     def positive_int(key: str, default: int, minimum: int) -> int:
         try:
@@ -141,7 +144,7 @@ def build_venue_health(config: dict[str, Any], *, now_ms: int | None = None) -> 
     polling = {
         str(x).strip().lower()
         for x in _items(radar.get("polling_exchanges"))
-        if isinstance(x, (str, int, float)) and str(x).strip()
+        if isinstance(x, str) and str(x).strip()
     }
     websocket = {
         str(x).strip().lower()
