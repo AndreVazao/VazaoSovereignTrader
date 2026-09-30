@@ -150,17 +150,16 @@ A stacked feature branch was created from `feat/secure-onboarding-foundation-cle
 - Branch: `feat/device-proof-and-admin-approval`
 - Latest known commit before final context update: `24f91f11263527bbc2819903a5458878219110e7` (onboarding docs); fetch live branch head before acting.
 - Changes implemented so far: `verifyDeviceProof` uses Node crypto to verify signatures against the registered public key; tests cover valid Ed25519 signature, altered challenge and malformed signature. Added migration `202609300001_device_proof_and_approval.sql` with a one-time challenge table, `possession_verified_at`, and a database function that rechecks active admin role/account/password-rotation state, only approves pending devices with verified possession, and writes the audit event atomically. Added `POST /api/v1/devices/challenge`, `POST /api/v1/devices/verify`, and `POST /api/v1/devices/approve`; docs describe the flow. Challenges are 5-minute, hash-only at rest and single-use; verification consumes the challenge before checking signature to prevent replay. Device stays pending after proof until an eligible admin approves it.
-- No CI results exist yet for this new branch head. Do not treat earlier green CI on parent SHA `96a1b9cd2f90e4af5b297ba2cce0c3e0002e7347` as validation of these changes.
+- Stacked PR #221: https://github.com/AndreVazao/VazaoSovereignTrader/pull/221 (open, non-draft, base `feat/secure-onboarding-foundation-clean`, not merged). Shared Learning Service workflow run `36669360478` completed SUCCESS on code/context head `d9ceeeca22aab1b03580e78ce271d0a6cf57eea8`; `npm test` and `npm run build` both passed. Python/Windows workflows were not returned for this stacked PR and these changes are cloud-service-only. Any subsequent commit requires rechecking CI for the new head.
 - Security gaps still requiring review: no rate limiting/abuse monitoring yet; no end-to-end integration tests against a disposable Supabase database; approval auth has server-side active-admin and password-rotation checks but MFA/step-up authentication is not wired; route-level failure/race behavior needs review. Do not deploy.
 
 ## 9. Immediate next action for the next chat
 
-1. Fetch live branch head and inspect every file changed in `feat/device-proof-and-admin-approval`.
-2. Check the TypeScript/test workflow and all other relevant CI. Fix any test/type/build failures on this branch.
-3. Review SQL function and routes for signature canonicalization, challenge replay/expiry/races, admin authorization, atomic audit, and Supabase RPC permissions. Add route/integration tests and rate limiting before considering production.
-4. Open a stacked PR targeting `feat/secure-onboarding-foundation-clean` only after code review and tests are green, or otherwise prepare a clean minimal PR. Keep PR #219 open and unmerged.
+1. Fetch live PR #221 head SHA and verify the Shared Learning Service workflow again after this context-only update.
+2. Review SQL function and routes for signature canonicalization, challenge replay/expiry/races, admin authorization, atomic audit, and Supabase RPC permissions. Add route/integration tests and rate limiting before considering production.
+3. Keep PR #221 stacked on PR #219 and keep both open/unmerged unless André explicitly authorizes merge.
+4. Continue with trusted account provisioning/login, MFA/owner recovery, signed configuration governance, vault restore UX, and sync runtime validation in that order.
 5. Update this context file with exact PR number, branch head SHA, CI run IDs/outcomes, blockers and next action.
-6. Continue with trusted account provisioning/login, MFA/owner recovery, signed configuration governance, vault restore UX, and sync runtime validation in that order.
 
 ## 10. Original continuity prompt for a new ChatGPT conversation
 
