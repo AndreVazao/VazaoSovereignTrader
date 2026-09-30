@@ -688,3 +688,14 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 - Safety remains unchanged: all feedback is PAPER-only; no orders are submitted; execution authorization remains false; operational health is not economic/OOS/Risk/REAL evidence.
 - Exact-head CI must validate this branch before merge. After merge, verify main CI on the resulting SHA.
 - Next engineering sequence after merge: Desktop local bridge, then Android ADB/emulator/device bridge, both reusing the same transport feedback contract/store; continue Windows PAPER restart/recovery and bounded multi-day evidence.
+
+
+## Handoff — 2026-09-30, Windows-first desktop PAPER local bridge
+
+- PR #289 merged by squash at main SHA `145dd17f498a09853ba1dbacd5cbe41ffcf9a787`. Exact-head Python and Windows checks on #289 passed before merge.
+- PR #290 is the active desktop bridge branch `feat/desktop-paper-local-bridge`, based on that main SHA; current head will be recorded after the final documentation commit.
+- Added `PC_ENGINE/execution/desktop_paper_surface.py`: Windows-first local desktop surface adapter using a configured executable, local subprocess launch, process observation and optional read-only Windows UI Automation window-title inspection through optional `pywinauto`.
+- Desktop CONNECT only launches the explicitly configured local application. OBSERVE/PROBE return deterministic operational feedback. BUY/SELL/CANCEL are PAPER intent records only: no order controls are clicked, no forms submitted, no private APIs called and no exchange fill is claimed.
+- Reuses `ExecutionSurfaceFeedbackStore` for bounded local persistence and dashboard telemetry; all records remain PAPER-only and execution authorization remains false.
+- Added `tests/test_desktop_paper_surface.py` and `docs/EXECUTION_DESKTOP_ADAPTER.md`.
+- Next: validate exact-head Python and Windows EXE checks for PR #290; merge only when clean/mergeable and all required checks pass. Then verify post-merge main CI. Android ADB/emulator/device bridge follows, reusing the same surface contract and feedback store.
