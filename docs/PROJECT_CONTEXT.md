@@ -375,3 +375,28 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 3. Continue the separate venue economic-evidence dimension (spread, fee assumptions, slippage, latency and PAPER lead/lag) only with adequate samples; operational GREEN must never imply economic viability.
 4. Continue PAPER accumulation, chronological OOS/regime validation and stress-cost analysis. Do not claim profitability without sufficient evidence.
 5. Preserve PAPER as default and every REAL gate. No real orders, cloud resources, paid services, secrets or new costs without explicit authorization.
+
+
+## 19. Handoff — 2026-09-30, after PR #270
+
+### Verified repository state
+- Current main SHA after squash merge: `3cbd636aae75ffdaea232535dcdec4ecab46679e`.
+- PR #270 (`feat: add relationship-level PAPER OOS evidence`) merged from exact head `1c61100db7cdfbf3540f1ce705a1edb88caf029f`; merge commit `3cbd636aae75ffdaea232535dcdec4ecab46679e`.
+- Before merge, exact-head checks were green: Python test runs `36745730764` and `36745722415`, and Windows EXE build/smoke run `36745730758`. All reported success on the exact PR head SHA.
+- Post-merge validation for main SHA `3cbd636aae75ffdaea232535dcdec4ecab46679e` is pending: Python run `36745981889` is in progress; Windows EXE run `36745981965` is queued. Verify both before declaring main fully validated.
+- No open PRs were present immediately after the merge.
+
+### PR #270 — per-relationship chronological OOS
+- Added `PC_ENGINE/radar/hot_path_relationship_oos.py`, invoked only through the explicit evidence-refresh/report pipeline; no full JSONL study is run in `on_market_event`.
+- Reads completed PAPER outcomes only (`status=COMPLETED`, `paper_only=true`, `orders_submitted=false`), validates finite metrics and timestamps, rejects future timestamps, tolerates malformed UTF-8/JSON lines, and deduplicates only after validating records.
+- Produces a per-`symbol/leader/follower/direction/horizon` chronological train/test holdout, avoiding splits across equal timestamps. Reports sample sufficiency, means, median, positive rate, data-integrity counters and atomic JSON output.
+- OOS intervals use deterministic moving-block bootstrap (minimum 500 replicates; unavailable below 8 test samples) rather than an IID normal approximation. Positive lower bound is only a candidate for further PAPER review, never a profitability guarantee or execution authorization.
+- Integrated with `refresh_runtime_evidence_reports`, configurable `evidence_reports.relationship_oos` path, and the evidence scorecard. Missing/invalid reports remain fail-closed; `execution_authorized=false`, `paper_only=true`, and `orders_submitted=false`.
+- Tests cover chronological splitting, equal-timestamp boundaries, corrupt input, invalid-first deduplication, sample thresholds, atomic report writes, configured paths and scorecard evidence presence. No changes to REAL gates, RealModeGuard, Risk Engine, preflight, reconciliation or order submission.
+
+### Next engineering actions
+1. Verify post-merge Python run `36745981889` and Windows EXE run `36745981965` for the exact main SHA above.
+2. Continue the venue economic-evidence dimension separately from operational health: only configured/observed venues, and only enough PAPER samples for spreads, fees, slippage and lead/lag. GREEN operational health must not imply economic viability.
+3. Add/verify an end-to-end path test from collector append to explicit refresh output using the same configured relative and absolute `hot_path_outcomes_path`; keep all expensive report generation out of market-event callbacks.
+4. Continue chronological OOS, regime stratification and cost-stress accumulation. Do not declare profitability without adequate evidence.
+5. Keep PAPER as default. Never submit live orders, enable REAL or bypass any gate. No paid/cloud resources or costs without explicit approval.
