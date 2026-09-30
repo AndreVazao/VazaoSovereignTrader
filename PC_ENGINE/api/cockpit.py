@@ -92,7 +92,10 @@ async function refreshExecutionSurfaces(){
   $('executionSurfaces').innerHTML=rows.map(v=>{
     const cls=v.state==='HEALTHY'?'green':v.state==='DOWN'?'red':'';
     const tone=v.state==='HEALTHY'?'ok':v.state==='DOWN'?'bad':'warn';
-    return '<div class="venue"><span class="dot '+cls+'"></span><div><div class="venue-name">'+esc(v.venue_id)+' · '+esc(v.surface)+'</div><div class="venue-meta">'+esc(v.detail||'')+' · fonte '+esc(v.source||'')+' · probe live '+(v.live_probe?'sim':'não')+'</div></div><b class="'+tone+'">'+esc(v.state)+'</b></div>';
+    const age=v.last_feedback_age_ms==null?'sem feedback':Math.round(v.last_feedback_age_ms/1000)+'s';
+    const reconnects=Number(v.reconnects||0);
+    const write=v.data_write_health||'UNKNOWN';
+    return '<div class="venue"><span class="dot '+cls+'"></span><div><div class="venue-name">'+esc(v.venue_id)+' · '+esc(v.surface)+'</div><div class="venue-meta">'+esc(v.connection_state||'SEM_FEEDBACK')+' · último feedback '+age+' · reconnects '+reconnects+' · escrita '+esc(write)+' · fonte '+esc(v.source||'')+'</div><div class="venue-meta">'+esc(v.detail||'')+' · probe live '+(v.live_probe?'sim':'não')+'</div></div><b class="'+tone+'">'+esc(v.state)+'</b></div>';
   }).join('')+'<div class="venue-meta">PAPER only · ordens enviadas: não · autorização REAL: não</div>';
  }catch(e){$('executionSurfaces').innerHTML='<span class="bad">Superfícies indisponíveis: '+esc(e.message)+'</span>'}
 }
