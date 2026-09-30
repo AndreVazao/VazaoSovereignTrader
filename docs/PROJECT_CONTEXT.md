@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at f288905b229e9c24b1c9d64ddb936ce841c9c49c after PR #274; post-merge CI pending
+Last updated: 2026-09-30 (UTC) — main at d44c67f875df4c7d88d39389c10825da52f64551 after PR #275; dashboard venue economics implementation underway
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -467,3 +467,23 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 3. Only add measured spread metrics after collectors reliably capture timestamped bid/ask data; never infer spread from trade prints.
 4. Keep GREEN operational health distinct from profitability; positive OOS means candidate for further PAPER review only, never automatic venue promotion/removal or execution authorization.
 5. Preserve PAPER defaults and every REAL gate. No Supabase/Vercel resources, deployments, paid services, credentials, live orders or costs without explicit authorization.
+
+## 23. Handoff — 2026-09-30, dashboard venue economics integration in progress
+
+### Verified baseline
+- PR #275 (documentation handoff after PR #274) merged by squash with merge commit `d44c67f875df4c7d88d39389c10825da52f64551`.
+- PR #274 venue economic evidence is merged. Its exact-head Python and Windows EXE checks passed; post-merge Python and Windows EXE checks on `f288905b229e9c24b1c9d64ddb936ce841c9c49c` both completed successfully.
+- Feature branch `feat/dashboard-venue-economics` was created from the verified main after PR #275.
+
+### Dashboard integration — implementation in progress
+- Added authenticated read-only `GET /venue-economic-evidence`, which reads the configured `evidence_reports.venue_economic_evidence` file (or the default report path), returns `NOT_STARTED` when absent, and fails closed if the report is malformed or its PAPER/order/execution safety flags do not match expected invariants.
+- Added a separate cockpit panel for PAPER venue economics, distinct from the operational GREEN/YELLOW/RED signal. It displays outcome/OOS sample counts, holdout net mean and recorded fee/slippage/latency assumptions. Positive OOS evidence is labelled as a candidate for review, never green/approved; spread is explicitly unavailable without bid/ask data.
+- The existing explicit PAPER evidence refresh now reloads the economic panel. The panel is also read-only on page load; it does not trigger heavy report generation automatically.
+- Added authenticated endpoint tests for missing token, configured report paths and fail-closed safety invariant validation. Python/Windows CI still needs to validate the exact PR head.
+- No changes to trading execution, REAL readiness gates, RealModeGuard, Risk Engine, preflight or reconciliation. No Supabase/Vercel provisioning, deployment, spend, credentials or real orders.
+
+### Next actions
+1. Inspect the final diff, wait for exact-head Python and Windows EXE build/smoke checks, and fix any issues before merging.
+2. Verify post-merge Python and Windows EXE checks on the new main SHA.
+3. Keep economic signals separate from operational health and execution authorization. Do not estimate spread from trade prints.
+4. Continue only with safe PAPER evidence improvements; do not provision cloud resources or incur costs without explicit authorization.
