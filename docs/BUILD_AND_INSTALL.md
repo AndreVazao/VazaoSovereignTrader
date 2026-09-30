@@ -104,3 +104,20 @@ A ausência das Scheduled Tasks é reportada como estado, não como erro, porque
 ## Cockpit — investigação PAPER
 
 O painel local inclui agora um bloco de investigação contínua com amostras, média líquida em bps, volume do conjunto OOS e estado da validação temporal WebSocket. O resumo detalhado mostra walk-forward, regimes e Monte Carlo. Tudo é somente leitura e não controla execução.
+
+
+## Diagnóstico operacional
+
+O cockpit autenticado inclui **Diagnóstico operacional**, consolidando em modo PAPER:
+- estado do motor, watchdog, preflight e reconciliação;
+- estado e idade do Market Data Collector;
+- eventos por venue e último evento por venue/símbolo;
+- reconnect/error counters;
+- tamanho e crescimento dos dados locais;
+- exportação do snapshot para `vazao-operational-diagnostics.json`.
+
+Endpoints autenticados:
+- `GET /diagnostics` — requer `read_private_state`.
+- `GET /diagnostics/export` — requer `read_private_state`.
+
+O diagnóstico é observacional: não envia ordens, não ativa REAL e não depende de cloud.
