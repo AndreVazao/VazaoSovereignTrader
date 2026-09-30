@@ -320,12 +320,12 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 ## 17. Current handoff — 2026-09-30, after PR #266
 
 ### Verified repository state
-- Current main SHA: `ec8eafb9d306a9146cdaeb329062fed1cc68363b`.
+- Main SHA at the PR #266 handoff: `ec8eafb9d306a9146cdaeb329062fed1cc68363b` (historical; see Section 18 for current state).
 - PR #264 merged: context and continuity documentation.
 - PR #265 merged: defensive venue-health telemetry parsing. Merge commit `3786be983c0dcce1eabc2044b26b2102e915d710`; exact PR head `ca2d4febce1a4bba12a0919a5acdb29862223ab5`. Exact-head Python tests passed (run 36741856987) and Windows EXE build/smoke test passed (run 36741857149).
 - PR #266 merged: resilient PAPER evidence ingestion and atomic report writes. Merge commit `ec8eafb9d306a9146cdaeb329062fed1cc68363b`; exact PR head `4a992b33729840ac23ee8fbd63ccd280e354c1d1`. Exact-head Python tests passed (run 36742870332) and Windows EXE build/smoke test passed (run 36742870298).
-- Post-merge CI for current main SHA `ec8eafb9d306a9146cdaeb329062fed1cc68363b` was in progress at the time of this handoff: Python run 36743092034 and Windows EXE run 36743092059. Verify both before declaring post-merge validation complete.
-- PR #243 remains the only open implementation PR, but its base is stale (`765dee0a95a75e1c808753f6e787c4979f9394f7`). Do not merge it without reviewing its diff against current main and running fresh exact-head CI. Its per-relationship OOS holdout analysis may add useful detail, but its collector integration and report handling must be reconciled with the now-current evidence pipeline first.
+- At the time of this handoff, post-merge CI for `ec8eafb9d306a9146cdaeb329062fed1cc68363b` was still in progress. Later results and subsequent changes are recorded in Section 18.
+- PR #243 was open at this historical handoff; its later review and closure are recorded in Section 18.
 
 ### PR #265 — venue health hardening
 - JSONL files are read line-by-line as bytes; malformed JSON and invalid UTF-8 rows are skipped without hiding later valid rows.
@@ -347,3 +347,31 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 4. Add a separate economic evidence dimension for venues (spread, fee assumptions, slippage, latency and PAPER lead/lag outcomes) only when samples are sufficient. Operational GREEN must never imply economic viability.
 5. Continue PAPER accumulation and chronological OOS/regime/cost validation. Do not state profitability without adequate evidence.
 6. Keep every REAL gate intact; no real orders, cloud resources, paid services or new costs without explicit authorization.
+
+
+## 18. Current handoff — 2026-09-30, after PR #268
+
+### Verified repository state
+- Current main SHA immediately after PR #268 merge: `d85b75f7a7585fd8d8a71bcbd944ee151e0c5301`.
+- PR #268 merged by squash: `fix: validate PAPER outcomes before deduplication`. Exact PR head: `5e0c116413a256440fcf21fa89d4e652a517faf0`; merge commit: `d85b75f7a7585fd8d8a71bcbd944ee151e0c5301`.
+- Exact-head CI for PR #268 passed: Python tests run `36744031527` and Windows EXE build/smoke test run `36744031535`. The required checks `test` and `build-exe` were both completed/successful on the exact head SHA before merge.
+- Post-merge Python and Windows EXE workflows for main SHA `d85b75f7a7585fd8d8a71bcbd944ee151e0c5301` were still queued/in progress at the last check (runs `36744277691` and `36744277832`). Verify both before declaring post-merge validation complete.
+- No open PRs were present immediately after the merge. PR #243 was closed unmerged after review; its remote branch remains intact.
+
+### PR #268 — outcome deduplication correctness
+- Fixed a calibration bug where the first record reserved its identity before validation. An invalid/incomplete first occurrence could therefore suppress a later valid PAPER outcome sharing the same `outcome_id`.
+- Required fields and finite metrics are now checked before reserving the identity. Invalid rows remain accounted for as invalid, while valid duplicates continue to be deduplicated.
+- Added regression coverage for invalid-first / valid-later records with the same explicit identity. The valid row contributes to calibration; invalid and duplicate counters remain auditable.
+- No changes to execution behavior, REAL gates, Risk Engine, RealModeGuard or order submission.
+
+### PR #243 review outcome
+- PR #243 (`feat: add chronological OOS study for lead-lag outcomes`) was reviewed against the hardened evidence pipeline and closed unmerged.
+- Reason: the collector integration performs a full JSONL read/study (up to 100,000 records) inside `on_market_event`, potentially repeating heavy work on every market event and interfering with feed processing. Its UTF-8 text-mode loader also does not tolerate invalid UTF-8, unlike the hardened evidence readers.
+- The per-relationship OOS analysis may still be useful. Rebuild it later on a fresh branch, based on current main, with robust line-by-line parsing, bounded/explicit refresh cadence, atomic report writes, chronological holdout and no REAL authorization. The closed PR's branch is retained as reference.
+
+### Next engineering actions
+1. Verify post-merge Python and Windows EXE runs `36744277691` and `36744277832` for main SHA `d85b75f7a7585fd8d8a71bcbd944ee151e0c5301`.
+2. Rebuild per-relationship lead/lag OOS analysis safely, outside the per-market-event callback. Prefer integrating it with the explicit PAPER evidence refresh/report pipeline.
+3. Continue the separate venue economic-evidence dimension (spread, fee assumptions, slippage, latency and PAPER lead/lag) only with adequate samples; operational GREEN must never imply economic viability.
+4. Continue PAPER accumulation, chronological OOS/regime validation and stress-cost analysis. Do not claim profitability without sufficient evidence.
+5. Preserve PAPER as default and every REAL gate. No real orders, cloud resources, paid services, secrets or new costs without explicit authorization.
