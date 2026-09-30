@@ -20,6 +20,7 @@ COCKPIT_HTML = r'''<!doctype html>
 <section class="card wide"><div class="label">💬 Dizer ao Trader</div><div class="muted">Escreve uma ideia, pergunta ou cola um website. O trader investiga; não transforma a mensagem diretamente numa ordem.</div><textarea id="researchMessage" rows="3" style="width:100%;margin-top:8px;resize:vertical;background:#09111f;color:#eef4ff;border:1px solid #334968;border-radius:11px;padding:12px;font:inherit" placeholder="Ex.: Analisa este website e procura padrões ou ideias que possam melhorar o trader: https://..."></textarea><div class="row"><button class="go" onclick="submitResearch()">ENVIAR AO TRADER</button></div><div id="researchStatus" class="notice">A verificar…</div><details><summary>Investigações recentes</summary><div id="researchList"></div></details></section>
 
 <section class="card wide"><div class="label">🟢🟡🔴 Exchanges / Plataformas</div><div class="muted">Sinalética operacional das venues que o trader observa. Verde = OK · amarelo = em teste/evidência insuficiente · vermelho = indisponível/candidato a revisão.</div><div id="venues" class="notice">A verificar exchanges…</div></section>
+<section class="card wide"><div class="label">📈 Economia PAPER por exchange</div><div class="muted">Dimensão económica separada da saúde operacional. Resultados são observações PAPER, não fills reais nem autorização de execução.</div><div id="venueEconomics" class="notice">A carregar evidência económica…</div><div class="venue-meta">Spread: só será mostrado quando existirem observações bid/ask válidas. Um candidato positivo exige revisão adicional.</div></section>
 <section class="card wide"><div class="label">🧾 Evidência PAPER / prontidão de investigação</div><div class="muted">Checklist de amostras, walk-forward, regimes, custos e bootstrap. Não é autorização de execução REAL.</div><div id="evidenceSummary" class="big">A verificar…</div><div class="row"><button class="blue" onclick="refreshEvidenceReports()">↻ ATUALIZAR EVIDÊNCIA PAPER</button></div><div id="evidenceChecks" class="notice">A carregar checklist…</div><details><summary>Relatórios usados</summary><pre id="evidencePaths"></pre></details></section>
 <section class="card wide"><div class="label">📊 Investigação PAPER contínua</div><div class="grid"><div class="card"><div class="label">Amostras</div><div id="studySamples" class="big">---</div></div><div class="card"><div class="label">Mean net bps</div><div id="studyMean" class="big">---</div></div><div class="card"><div class="label">OOS</div><div id="studyOos" class="big">---</div></div><div class="card"><div class="label">Timing WebSocket</div><div id="studyTiming" class="big">---</div></div></div><div id="studyMeta" class="notice">A verificar investigação…</div><details><summary>Resumo estatístico</summary><pre id="studyReport">---</pre></details></section>
 <section class="card wide"><div class="label">Diagnóstico operacional</div><div id="diagSummary" class="notice">A verificar motor e recolha de mercado…</div><div class="row"><button class="blue" onclick="refreshDiagnostics()">↻ ATUALIZAR DIAGNÓSTICO</button><button class="blue" onclick="exportDiagnostics()">⇩ EXPORTAR DIAGNÓSTICO</button></div><details><summary>Detalhes de operação</summary><pre id="diagDetails">---</pre></details></section><section class="card wide"><div class="label">Ativos</div><table><thead><tr><th>Ativo</th><th>Score</th><th>Regime</th></tr></thead><tbody id="assets"></tbody></table></section>
@@ -71,6 +72,7 @@ async function refreshEvidenceReports(){
  try{
   const d=await api('/evidence-scorecard/refresh',{method:'POST'});
   await refreshEvidenceScorecard();
+  await refreshVenueEconomicEvidence();
   summary.textContent='Relatórios atualizados · '+Number(d.scorecard?.requirements_met||0)+' / '+Number(d.scorecard?.requirements_total||0)+' requisitos presentes';
  }catch(e){summary.textContent='Falha ao atualizar: '+e.message}
 }
@@ -95,6 +97,28 @@ async function refreshVenueHealth(){
   }).join(''):'Sem exchanges configuradas.';
  }catch(e){$('venues').innerHTML='<span class="bad">Sinalética indisponível: '+esc(e.message)+'</span>'}
 }
+async function refreshVenueEconomicEvidence(){
+ try{
+  const d=await api('/venue-economic-evidence');
+  const rows=d.venues||[];
+  if(d.status==='NOT_STARTED'||!rows.length){
+   $('venueEconomics').textContent='Sem relatório económico PAPER disponível. Usa “ATUALIZAR EVIDÊNCIA PAPER” para gerar o relatório.';
+   return;
+  }
+  $('venueEconomics').innerHTML=rows.map(v=>{
+   const candidate=v.status==='POSITIVE_OOS_CANDIDATE';
+   const nonPositive=v.status==='NON_POSITIVE_OOS';
+   const cls=nonPositive?'red':'';
+   const tone=nonPositive?'bad':'warn';
+   const mean=v.oos_mean_realized_net_bps==null?'n/d':Number(v.oos_mean_realized_net_bps).toFixed(2)+' bps';
+   const fees=v.mean_recorded_fees_bps==null?'n/d':Number(v.mean_recorded_fees_bps).toFixed(2)+' bps';
+   const slip=v.mean_recorded_slippage_bps==null?'n/d':Number(v.mean_recorded_slippage_bps).toFixed(2)+' bps';
+   const latency=v.mean_recorded_latency_penalty_bps==null?'n/d':Number(v.mean_recorded_latency_penalty_bps).toFixed(2)+' bps';
+   const label=candidate?'CANDIDATO PAPER · REVER':nonPositive?'OOS NÃO POSITIVO':'AMOSTRA INSUFICIENTE';
+   return '<div class="venue"><span class="dot '+cls+'"></span><div><div class="venue-name">'+esc(v.venue)+' <span class="'+tone+'">'+label+'</span></div><div class="venue-meta">Amostras '+Number(v.paper_outcome_samples||0)+' · OOS '+Number(v.oos_samples||0)+' · média líquida OOS '+mean+' · comissões '+fees+' · slippage '+slip+' · latência '+latency+' · spread indisponível</div></div><b class="'+tone+'">'+esc(v.status)+'</b></div>';
+  }).join('')+'<div class="venue-meta">PAPER only · ordens enviadas: não · autorização REAL: não · '+esc(d.note||'')+'</div>';
+ }catch(e){$('venueEconomics').innerHTML='<span class="bad">Evidência económica indisponível: '+esc(e.message)+'</span>'}
+}
 async function refreshStudy(){
  try{
   const d=await api('/research/status');
@@ -113,5 +137,5 @@ async function refreshStudy(){
 async function refreshResearch(){
  try{const d=await api('/research');$('researchStatus').innerHTML='<span class="ok">'+d.pending+' pendente(s)</span> · '+d.active+' em análise · '+d.completed+' concluída(s) · '+d.discarded+' descartada(s)';$('researchList').innerHTML=(d.requests||[]).slice(0,8).map(x=>'<div class="notice"><b>'+esc(x.status)+'</b> · '+new Date(x.created_at*1000).toLocaleString()+'<div>'+esc(x.message)+'</div></div>').join('')}catch(e){$('researchStatus').textContent='Pesquisa indisponível'}
 }
-setInterval(refresh,4000);setInterval(refreshDiagnostics,5000);setInterval(refreshBridge,3000);refresh();refreshDiagnostics();refreshVenueHealth();refreshEvidenceScorecard();refreshBridge();refreshResearch();refreshStudy();
+setInterval(refresh,4000);setInterval(refreshDiagnostics,5000);setInterval(refreshBridge,3000);refresh();refreshDiagnostics();refreshVenueHealth();refreshEvidenceScorecard();refreshVenueEconomicEvidence();refreshBridge();refreshResearch();refreshStudy();
 </script></body></html>'''
