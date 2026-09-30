@@ -37,6 +37,20 @@ test("accepts only UUID device identifiers", () => {
   assert.throws(() => parseDeviceId("not-a-uuid"), /invalid_device_id/);
 });
 
+test("verifies device proof signatures for supported RSA and EC keys", () => {
+  const challenge = "vst-device-proof:" + "B".repeat(64);
+  for (const pair of [
+    generateKeyPairSync("rsa", { modulusLength: 2048 }),
+    generateKeyPairSync("ec", { namedCurve: "prime256v1" }),
+    generateKeyPairSync("ec", { namedCurve: "secp384r1" })
+  ]) {
+    const pem = pair.publicKey.export({ type: "spki", format: "pem" }).toString();
+    const signature = cryptoSign("sha256", Buffer.from(challenge, "utf8"), pair.privateKey).toString("base64url");
+    assert.equal(verifyDeviceProof(pem, challenge, signature), true);
+    assert.equal(verifyDeviceProof(pem, challenge + "x", signature), false);
+  }
+});
+
 test("verifies device proof-of-possession and rejects wrong signatures", () => {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const challenge = "vst-device-proof:" + "A".repeat(64);
