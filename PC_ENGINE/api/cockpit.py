@@ -20,6 +20,7 @@ COCKPIT_HTML = r'''<!doctype html>
 <section class="card wide"><div class="label">💬 Dizer ao Trader</div><div class="muted">Escreve uma ideia, pergunta ou cola um website. O trader investiga; não transforma a mensagem diretamente numa ordem.</div><textarea id="researchMessage" rows="3" style="width:100%;margin-top:8px;resize:vertical;background:#09111f;color:#eef4ff;border:1px solid #334968;border-radius:11px;padding:12px;font:inherit" placeholder="Ex.: Analisa este website e procura padrões ou ideias que possam melhorar o trader: https://..."></textarea><div class="row"><button class="go" onclick="submitResearch()">ENVIAR AO TRADER</button></div><div id="researchStatus" class="notice">A verificar…</div><details><summary>Investigações recentes</summary><div id="researchList"></div></details></section>
 
 <section class="card wide"><div class="label">🟢🟡🔴 Exchanges / Plataformas</div><div class="muted">Sinalética operacional das venues que o trader observa. Verde = OK · amarelo = em teste/evidência insuficiente · vermelho = indisponível/candidato a revisão.</div><div id="venues" class="notice">A verificar exchanges…</div></section>
+<section class="card wide"><div class="label">🧾 Evidência PAPER / prontidão de investigação</div><div class="muted">Checklist de amostras, walk-forward, regimes, custos e bootstrap. Não é autorização de execução REAL.</div><div id="evidenceSummary" class="big">A verificar…</div><div id="evidenceChecks" class="notice">A carregar checklist…</div><details><summary>Relatórios usados</summary><pre id="evidencePaths"></pre></details></section>
 <section class="card wide"><div class="label">📊 Investigação PAPER contínua</div><div class="grid"><div class="card"><div class="label">Amostras</div><div id="studySamples" class="big">---</div></div><div class="card"><div class="label">Mean net bps</div><div id="studyMean" class="big">---</div></div><div class="card"><div class="label">OOS</div><div id="studyOos" class="big">---</div></div><div class="card"><div class="label">Timing WebSocket</div><div id="studyTiming" class="big">---</div></div></div><div id="studyMeta" class="notice">A verificar investigação…</div><details><summary>Resumo estatístico</summary><pre id="studyReport">---</pre></details></section>
 <section class="card wide"><div class="label">Diagnóstico operacional</div><div id="diagSummary" class="notice">A verificar motor e recolha de mercado…</div><div class="row"><button class="blue" onclick="refreshDiagnostics()">↻ ATUALIZAR DIAGNÓSTICO</button><button class="blue" onclick="exportDiagnostics()">⇩ EXPORTAR DIAGNÓSTICO</button></div><details><summary>Detalhes de operação</summary><pre id="diagDetails">---</pre></details></section><section class="card wide"><div class="label">Ativos</div><table><thead><tr><th>Ativo</th><th>Score</th><th>Regime</th></tr></thead><tbody id="assets"></tbody></table></section>
 <section class="grid"><div class="card"><div class="label">Posições</div><pre id="positions">---</pre></div><div class="card"><div class="label">Modelos</div><pre id="models">---</pre></div><div class="card"><div class="label">Eventos</div><pre id="logs">---</pre></div><div class="card"><div class="label">Preflight</div><pre id="preflight">---</pre></div></section>
@@ -65,6 +66,15 @@ async function cancel(id){
 async function submitResearch(){
  try{const message=$('researchMessage').value.trim();if(!message)return;$('researchStatus').textContent='A enviar ao cérebro…';await api('/research',{method:'POST',body:JSON.stringify({message})});$('researchMessage').value='';$('researchStatus').innerHTML='<span class="ok">✓ Pedido entregue ao trader.</span>';refreshResearch()}catch(e){$('researchStatus').textContent='Não foi possível enviar: '+e.message}
 }
+async function refreshEvidenceScorecard(){
+ try{
+  const d=await api('/evidence-scorecard');
+  $('evidenceSummary').textContent=Number(d.requirements_met||0)+' / '+Number(d.requirements_total||0)+' requisitos presentes';
+  $('evidenceSummary').className='big '+(Number(d.requirements_missing?.length||0)===1?'ok':'warn');
+  $('evidenceChecks').innerHTML=(d.checks||[]).map(x=>'<div class="venue"><span class="dot '+(x.status==='MET'?'green':'red')+'"></span><div><div class="venue-name">'+esc(x.requirement.replaceAll('_',' '))+'</div><div class="venue-meta">'+esc(x.detail||'')+'</div></div><b class="'+(x.status==='MET'?'ok':'bad')+'">'+esc(x.status)+'</b></div>').join('')+'<div class="venue-meta">PAPER only · ordens enviadas: não · autorização REAL: não</div>';
+  $('evidencePaths').textContent=JSON.stringify(d.report_paths||{},null,2);
+ }catch(e){$('evidenceSummary').textContent='Indisponível';$('evidenceChecks').textContent=e.message}
+}
 async function refreshVenueHealth(){
  try{
   const d=await api('/venue-health');
@@ -95,5 +105,5 @@ async function refreshStudy(){
 async function refreshResearch(){
  try{const d=await api('/research');$('researchStatus').innerHTML='<span class="ok">'+d.pending+' pendente(s)</span> · '+d.active+' em análise · '+d.completed+' concluída(s) · '+d.discarded+' descartada(s)';$('researchList').innerHTML=(d.requests||[]).slice(0,8).map(x=>'<div class="notice"><b>'+esc(x.status)+'</b> · '+new Date(x.created_at*1000).toLocaleString()+'<div>'+esc(x.message)+'</div></div>').join('')}catch(e){$('researchStatus').textContent='Pesquisa indisponível'}
 }
-setInterval(refresh,4000);setInterval(refreshDiagnostics,5000);setInterval(refreshBridge,3000);refresh();refreshDiagnostics();refreshVenueHealth();refreshBridge();refreshResearch();refreshStudy();
+setInterval(refresh,4000);setInterval(refreshDiagnostics,5000);setInterval(refreshBridge,3000);refresh();refreshDiagnostics();refreshVenueHealth();refreshEvidenceScorecard();refreshBridge();refreshResearch();refreshStudy();
 </script></body></html>'''
