@@ -202,7 +202,7 @@ def test_collector_append_path_is_consumed_by_explicit_evidence_refresh(tmp_path
         }
         for i in range(2)
     ]
-    ticker_path.write_text("\\n".join(json.dumps(row) for row in ticker_rows) + "\\n", encoding="utf-8")
+    ticker_path.write_text("\n".join(json.dumps(row) for row in ticker_rows) + "\n", encoding="utf-8")
 
     result = refresh_runtime_evidence_reports({"radar": radar_config})
     relationship_report = result["reports"]["relationship_oos"]
