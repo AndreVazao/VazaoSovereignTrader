@@ -1,4 +1,3 @@
-# Path: tests/test_hot_path_calibration.py
 import json
 
 from PC_ENGINE.radar.hot_path_calibration import build_hot_path_calibration, write_hot_path_calibration
@@ -23,9 +22,7 @@ def _outcome(realized_net: float, expected_net: float = 3.0):
 def test_calibration_is_diagnostic_and_never_authorizes_execution(tmp_path):
     source = tmp_path / "hot_path_outcomes.jsonl"
     source.write_text("\n".join(json.dumps(_outcome(2.0 + i * 0.01)) for i in range(10)) + "\n", encoding="utf-8")
-
     report = build_hot_path_calibration(source, min_samples=5)
-
     assert report["paper_only"] is True
     assert report["orders_submitted"] is False
     assert report["execution_authorized"] is False
@@ -38,9 +35,7 @@ def test_calibration_requires_minimum_samples_and_positive_lower_bound(tmp_path)
     source = tmp_path / "hot_path_outcomes.jsonl"
     rows = [_outcome(1.0) for _ in range(3)] + [_outcome(-5.0) for _ in range(10)]
     source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
-
     report = build_hot_path_calibration(source, min_samples=5)
-
     assert report["stats"][0]["samples"] == 2
     assert report["duplicate_outcomes_ignored"] == 11
     assert report["stats"][0]["eligible_for_paper_review"] is False
@@ -57,9 +52,7 @@ def test_calibration_ignores_non_paper_incomplete_or_malformed_rows_and_writes_a
         encoding="utf-8",
     )
     destination = tmp_path / "report.json"
-
     report = write_hot_path_calibration(source, destination, min_samples=2)
-
     assert destination.exists()
     assert json.loads(destination.read_text(encoding="utf-8"))["outcome_samples"] == 1
     assert report["outcome_samples"] == 1
@@ -69,18 +62,12 @@ def test_calibration_ignores_non_paper_incomplete_or_malformed_rows_and_writes_a
 def test_calibration_keeps_market_regimes_separate_and_marks_missing_regime(tmp_path):
     source = tmp_path / "hot_path_outcomes.jsonl"
     rows = [
-        {**_outcome(2.0 + i * 0.01), "market_regime": "TRENDING"}
-        for i in range(4)
+        {**_outcome(2.0 + i * 0.01), "market_regime": "TRENDING"} for i in range(4)
     ] + [
-        {**_outcome(-2.0 - i * 0.01), "market_regime": "RANGING"}
-        for i in range(4)
-    ] + [
-        _outcome(1.0)
-    ]
+        {**_outcome(-2.0 - i * 0.01), "market_regime": "RANGING"} for i in range(4)
+    ] + [_outcome(1.0)]
     source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
-
     report = build_hot_path_calibration(source, min_samples=2)
-
     by_regime = {row["market_regime"]: row for row in report["stats"]}
     assert set(by_regime) == {"TRENDING", "RANGING", "UNCLASSIFIED"}
     assert by_regime["TRENDING"]["samples"] == 4
@@ -95,9 +82,7 @@ def test_calibration_deduplicates_identical_legacy_rows(tmp_path):
     source = tmp_path / "hot_path_outcomes.jsonl"
     row = _outcome(2.0)
     source.write_text("\n".join(json.dumps(value) for value in [row, row, row]) + "\n", encoding="utf-8")
-
     report = build_hot_path_calibration(source, min_samples=2)
-
     assert report["outcome_samples"] == 1
     assert report["duplicate_outcomes_ignored"] == 2
     assert report["stats"][0]["samples"] == 1
@@ -109,13 +94,8 @@ def test_calibration_uses_stable_outcome_id_to_deduplicate(tmp_path):
     source = tmp_path / "hot_path_outcomes.jsonl"
     first = {**_outcome(2.0), "outcome_id": "outcome-123"}
     duplicate_with_conflicting_values = {**_outcome(99.0), "outcome_id": "outcome-123"}
-    source.write_text(
-        json.dumps(first) + "\n" + json.dumps(duplicate_with_conflicting_values) + "\n",
-        encoding="utf-8",
-    )
-
+    source.write_text(json.dumps(first) + "\n" + json.dumps(duplicate_with_conflicting_values) + "\n", encoding="utf-8")
     report = build_hot_path_calibration(source, min_samples=2)
-
     assert report["outcome_samples"] == 1
     assert report["duplicate_outcomes_ignored"] == 1
     assert report["stats"][0]["mean_realized_net_bps"] == 2.0
@@ -127,16 +107,40 @@ def test_calibration_does_not_count_completed_but_invalid_rows_as_samples(tmp_pa
     missing_metric = {**_outcome(100.0)}
     del missing_metric["expected_net_bps"]
     invalid_number = {**_outcome(200.0), "realized_net_bps": float("nan")}
-    source.write_text(
-        "\n".join(json.dumps(row) for row in [valid, missing_metric, invalid_number]) + "\n",
-        encoding="utf-8",
-    )
-
+    source.write_text("\n".join(json.dumps(row) for row in [valid, missing_metric, invalid_number]) + "\n", encoding="utf-8")
     report = build_hot_path_calibration(source, min_samples=2)
-
     assert report["outcome_records_loaded"] == 3
     assert report["unique_completed_paper_records"] == 3
     assert report["outcome_samples"] == 1
     assert report["invalid_outcomes_ignored"] == 2
     assert report["stats"][0]["samples"] == 1
     assert report["execution_authorized"] is False
+
+
+def test_calibration_penalizes_positive_serial_dependence(tmp_path):
+    source = tmp_path / "hot_path_outcomes.jsonl"
+    rows = []
+    for i in range(12):
+        rows.append({**_outcome(2.0 + (i // 4) * 0.1), "outcome_local_ts_ms": 1_000 + i * 500})
+    source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    report = build_hot_path_calibration(source, min_samples=5)
+    stat = report["stats"][0]
+    assert stat["temporal_dependence_assessment"] == "AVAILABLE"
+    assert stat["timestamped_samples"] == 12
+    assert stat["effective_samples"] < stat["samples"]
+    assert stat["ci95_sample_basis"] == "effective_samples"
+    assert stat["lag1_autocorrelation"] > 0
+    assert stat["execution_authorized"] is False
+
+
+def test_calibration_keeps_legacy_rows_usable_without_fake_temporal_data(tmp_path):
+    source = tmp_path / "hot_path_outcomes.jsonl"
+    rows = [{**_outcome(2.0 + i * 0.01), "outcome_id": f"legacy-{i}"} for i in range(6)]
+    source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    report = build_hot_path_calibration(source, min_samples=5)
+    stat = report["stats"][0]
+    assert stat["temporal_dependence_assessment"] == "UNAVAILABLE"
+    assert stat["timestamped_samples"] == 0
+    assert stat["effective_samples"] == 6
+    assert stat["ci95_sample_basis"] == "samples"
+    assert stat["eligible_for_paper_review"] is True
