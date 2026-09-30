@@ -22,7 +22,7 @@ from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 from PC_ENGINE.diagnostics.operational import build_operational_diagnostics, latest_events_by_venue_symbol, storage_metrics
 from PC_ENGINE.diagnostics.venue_health import build_venue_health
-from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scorecard
+from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scorecard, refresh_runtime_evidence_reports
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -148,6 +148,21 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             storage=storage,
             recovery=getattr(getattr(engine, "recovery", None), "diagnostics", lambda: {})(),
         ))
+
+    @app.post("/evidence-scorecard/refresh")
+    def evidence_scorecard_refresh():
+        require_scope("read_private_state")
+        try:
+            return jsonify(refresh_runtime_evidence_reports(engine.config))
+        except (OSError, ValueError, TypeError) as exc:
+            return jsonify({
+                "ok": False,
+                "error": "evidence_refresh_failed",
+                "detail": str(exc),
+                "paper_only": True,
+                "orders_submitted": False,
+                "execution_authorized": False,
+            }), 409
 
     @app.get("/evidence-scorecard")
     def evidence_scorecard():
