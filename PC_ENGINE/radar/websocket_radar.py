@@ -81,6 +81,11 @@ class WebSocketMarketRadar:
         self._last_price: dict[tuple[str, str], float] = {}
         self._last_move: dict[tuple[str, str], MarketEvent] = {}
         self._lock = threading.RLock()
+        self._events_total = 0
+        self._events_by_exchange: dict[str, int] = {}
+        self._last_event: dict[str, dict] = {}
+        self._reconnects: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
+        self._errors: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
 
     @staticmethod
     def normalize_symbol(symbol: str) -> tuple[str, str]:
@@ -90,6 +95,25 @@ class WebSocketMarketRadar:
     @staticmethod
     def _now_ms() -> int:
         return time.time_ns() // 1_000_000
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            now = self._now_ms()
+            last = dict(self._last_event)
+            return {
+                "running": bool(self._threads),
+                "symbols": list(self.symbols),
+                "exchanges": list(self.exchanges),
+                "events_total": self._events_total,
+                "events_by_exchange": dict(self._events_by_exchange),
+                "last_event": last,
+                "reconnects": dict(self._reconnects),
+                "errors": dict(self._errors),
+                "last_event_age_ms": {
+                    exchange: max(0, now - int(row["local_ts_ms"]))
+                    for exchange, row in last.items()
+                },
+            }
 
     def start(self) -> None:
         self._stop.clear()
@@ -112,6 +136,14 @@ class WebSocketMarketRadar:
         with self._lock:
             previous_moves = list(self._last_move.items())
             self._last_price[key] = event.price
+            self._events_total += 1
+            self._events_by_exchange[event.exchange] = self._events_by_exchange.get(event.exchange, 0) + 1
+            self._last_event[event.exchange] = {
+                "symbol": event.symbol,
+                "price": event.price,
+                "exchange_ts_ms": event.exchange_ts_ms,
+                "local_ts_ms": event.local_ts_ms,
+            }
             if event.price_before is not None:
                 move = (event.price - event.price_before) / event.price_before if event.price_before else 0.0
                 if abs(move) >= self.min_move:
@@ -270,7 +302,13 @@ class WebSocketMarketRadar:
                 app.run_forever(ping_interval=20, ping_timeout=10)
                 delay = 1.0
             except Exception:
+                with self._lock:
+                    self._errors[exchange] = self._errors.get(exchange, 0) + 1
                 delay = min(delay * 2.0, 30.0)
+            else:
+                with self._lock:
+                    if not self._stop.is_set():
+                        self._reconnects[exchange] = self._reconnects.get(exchange, 0) + 1
             if not self._stop.is_set():
                 self._stop.wait(delay)
 

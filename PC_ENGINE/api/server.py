@@ -78,6 +78,30 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             "owner_id": engine.owner_id,
         })
 
+    @app.get("/market-data-health")
+    def market_data_health():
+        require_scope("read_private_state")
+        radar_cfg = engine.config.get("radar", {})
+        raw_dir = radar_cfg.get("data_dir", "PC_ENGINE/data/radar")
+        health_path = __import__("pathlib").Path(raw_dir) / "market_data_health.json"
+        if not health_path.exists():
+            return jsonify({
+                "ok": False,
+                "status": "NOT_STARTED",
+                "reason": "market_data_health_file_missing",
+                "health_path": str(health_path),
+            })
+        try:
+            payload = __import__("json").loads(health_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            return jsonify({"ok": False, "status": "INVALID", "error": str(exc)}), 409
+        now_ms = __import__("time").time_ns() // 1_000_000
+        age_ms = max(0, now_ms - int(payload.get("timestamp_ms", now_ms)))
+        payload["health_age_ms"] = age_ms
+        payload["stale"] = age_ms > int(radar_cfg.get("health_stale_seconds", 30)) * 1000
+        payload["ok"] = payload.get("status") == "RUNNING" and not payload["stale"]
+        return jsonify(payload)
+
     @app.get("/identity")
     def identity_route():
         principal = require_token()
