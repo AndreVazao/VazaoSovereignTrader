@@ -361,3 +361,33 @@ def test_operational_diagnostics_export_is_authenticated(monkeypatch):
     assert response.status_code == 200
     assert "attachment" in response.headers["Content-Disposition"]
     assert "vazao-operational-diagnostics.json" in response.headers["Content-Disposition"]
+
+
+
+def test_market_data_health_resolves_relative_data_dir_from_repo_root(tmp_path, monkeypatch):
+    import time
+    from PC_ENGINE.diagnostics import path_utils
+
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    monkeypatch.setattr(path_utils, "REPO_ROOT", tmp_path)
+    data_dir = tmp_path / "runtime" / "radar"
+    data_dir.mkdir(parents=True)
+    (data_dir / "market_data_health.json").write_text(json.dumps({
+        "service": "market_data_collector",
+        "status": "RUNNING",
+        "timestamp_ms": time.time_ns() // 1_000_000,
+        "paper_only": True,
+    }), encoding="utf-8")
+    engine = FakeEngine()
+    engine.config = {
+        "real_mode_guard": {"enabled": True},
+        "radar": {"data_dir": "runtime/radar"},
+        "human_bridge": {"data_dir": str(tmp_path / "bridge")},
+        "research": {"data_dir": str(tmp_path / "research")},
+    }
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+
+    response = client.get("/market-data-health", headers={"X-Token": "secret-token"})
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
