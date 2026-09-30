@@ -48,12 +48,16 @@ def append_paper_outcomes(path: str | Path, outcomes: Iterable[dict[str, Any]]) 
     ]
     if not safe_rows:
         return 0
+    # Serialize the complete batch before touching the file; invalid numeric values
+    # must not leave a partial batch behind.
+    payload = b"".join(
+        (json.dumps(row, ensure_ascii=False, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
+        for row in safe_rows
+    )
     destination.parent.mkdir(parents=True, exist_ok=True)
     _repair_incomplete_tail(destination)
     with destination.open("ab") as handle:
-        for row in safe_rows:
-            encoded = (json.dumps(row, ensure_ascii=False, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
-            handle.write(encoded)
+        handle.write(payload)
         handle.flush()
         os.fsync(handle.fileno())
     return len(safe_rows)
