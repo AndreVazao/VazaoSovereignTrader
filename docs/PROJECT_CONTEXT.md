@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — PR #225–#230 merged; cockpit research-status integration is now active
+Last updated: 2026-09-30 (UTC) — PR #225–#231 merged; Windows installation health reporting is now active
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -161,6 +161,18 @@ Implemented:
 - exposes PAPER study and WebSocket timing report state, age and payload;
 - explicit PAPER-only/read-only semantics;
 - tests and installation documentation.
+
+## 11. Active implementation — Windows installation health report
+
+Branch: feat/windows-installation-health-report
+
+Implemented:
+- verify_pc_install.ps1 now writes PC_ENGINE/data/logs/installation_health.json after all required verification steps pass;
+- report includes runtime/config/dependency/Playwright/test status, scheduled-task state and token-presence boolean;
+- report contains no secret material;
+- documentation updated.
+
+This improves deterministic post-install verification without creating cloud resources or changing execution mode.
 
 ## 11. Next actions
 
