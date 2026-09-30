@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
-import { parseDeviceId, parseDeviceRegistration } from "../lib/identity";
+import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
+import { parseDeviceId, parseDeviceRegistration, verifyDeviceProof } from "../lib/identity";
 
 test("normalizes a valid device public key and fingerprints the canonical key", () => {
   const { publicKey } = generateKeyPairSync("ed25519");
@@ -35,4 +35,15 @@ test("rejects unknown fields and malformed public keys", () => {
 test("accepts only UUID device identifiers", () => {
   assert.equal(parseDeviceId("123e4567-e89b-42d3-a456-426614174000"), "123e4567-e89b-42d3-a456-426614174000");
   assert.throws(() => parseDeviceId("not-a-uuid"), /invalid_device_id/);
+});
+
+test("verifies device proof-of-possession and rejects wrong signatures", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const challenge = "vst-device-proof:" + "A".repeat(64);
+  const signature = cryptoSign(null, Buffer.from(challenge, "utf8"), privateKey).toString("base64url");
+  const pem = publicKey.export({ type: "spki", format: "pem" }).toString();
+  assert.equal(verifyDeviceProof(pem, challenge, signature), true);
+  assert.equal(verifyDeviceProof(pem, challenge + "x", signature), false);
+  assert.equal(verifyDeviceProof(pem, challenge, "A".repeat(80)), false);
+  assert.equal(verifyDeviceProof(pem, challenge, "not-a-signature"), false);
 });
