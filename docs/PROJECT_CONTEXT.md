@@ -162,6 +162,18 @@ Safety: research/PAPER only. No order submission, risk mutation, cloud activatio
 7. Then expand the study pipeline: common PAPER harness, strategy comparison, OOS/walk-forward, Monte Carlo and regime analysis.
 8. Then validate WebSocket timestamps/latency rigorously before treating lead/lag as economically meaningful.
 
+## 10. Active implementation — REAL readiness timing gate
+
+Branch: feat/readiness-timing-gate
+
+Implemented:
+- REAL readiness requires a fresh WebSocket timing validation report by default;
+- missing, stale or failed timing validation adds `websocket_timing_validation_required` to blockers;
+- timing status is exposed in readiness output;
+- configuration and documentation updated.
+
+This is an additional fail-closed gate. It does not activate REAL or bypass any existing control.
+
 ## 10. Installation target
 
 1. Install/prepare runtime.

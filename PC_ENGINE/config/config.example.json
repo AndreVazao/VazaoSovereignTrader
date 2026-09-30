@@ -132,6 +132,8 @@
     "require_paper_reconciliation": true,
     "max_evidence_age_seconds": 900,
     "max_validation_age_seconds": 86400,
+    "require_websocket_timing_validation": true,
+    "websocket_timing_report_path": "PC_ENGINE/data/radar/websocket_timing_validation.json",
     "history_enabled": true,
     "history_path": "PC_ENGINE/data/radar/readiness_history.jsonl",
     "history_limit": 1000,
