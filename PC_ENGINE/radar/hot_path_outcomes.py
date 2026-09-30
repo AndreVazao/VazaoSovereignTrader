@@ -102,7 +102,21 @@ class HotPathOutcomeTracker:
                     self._dropped += 1
             self._pending = remaining
 
+    def peek_completed(self, limit: int = 2048) -> list[dict[str, Any]]:
+        """Return a stable prefix without removing it, so failed disk writes can retry."""
+        with self._lock:
+            count = max(1, int(limit))
+            return [dict(row) for row in self._completed[:count]]
+
+    def acknowledge_completed(self, count: int) -> int:
+        """Remove only records confirmed persisted by the cold-path writer."""
+        with self._lock:
+            amount = min(len(self._completed), max(0, int(count)))
+            del self._completed[:amount]
+            return amount
+
     def drain_completed(self, limit: int = 2048) -> list[dict[str, Any]]:
+        # Compatibility helper for callers that intentionally consume in memory.
         with self._lock:
             count = max(1, int(limit))
             rows = self._completed[:count]
