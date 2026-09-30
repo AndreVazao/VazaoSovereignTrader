@@ -73,3 +73,10 @@ Nenhuma etapa do estudo envia ordens, altera risco ou promove REAL. O objetivo �
 Antes de interpretar lead/lag como evidência económica, o nó pode executar `PC_ENGINE/tools/validate_websocket_timing.py`. A validação verifica timestamps de exchange/local, latência de receção, duplicados, eventos fora de ordem e consistência entre `exchange_lag_ms` e `receive_lag_ms`.
 
 O relatório `PC_ENGINE/data/radar/websocket_timing_validation.json` só marca `eligible_for_economic_interpretation` quando os gates temporais configurados passam. Um resultado bloqueado não é transformado em sinal de trading.
+
+
+## Estudos PAPER contínuos
+
+O Market Data Collector passou a executar automaticamente, por defeito a cada 15 minutos, o estudo estatístico local e a validação temporal do WebSocket. Os relatórios ficam em `PC_ENGINE/data/radar/paper_study_report.json` e `PC_ENGINE/data/radar/websocket_timing_validation.json`.
+
+A periodicidade, custos, horizonte, número de folds, Monte Carlo e thresholds temporais são configuráveis em `paper_study` no `config.local.json`. O ciclo continua estritamente PAPER/observacional e falha fechado: relatórios nunca alteram risco nem autorizam REAL.
