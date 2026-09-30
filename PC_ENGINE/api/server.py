@@ -24,6 +24,7 @@ from PC_ENGINE.diagnostics.operational import build_operational_diagnostics, lat
 from PC_ENGINE.diagnostics.venue_health import build_venue_health
 from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scorecard, refresh_runtime_evidence_reports
+from PC_ENGINE.diagnostics.execution_surface_catalog import build_execution_surface_catalog
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -169,6 +170,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def evidence_scorecard():
         require_scope("read_private_state")
         return jsonify(build_runtime_evidence_scorecard(engine.config))
+
+    @app.get("/execution-surfaces")
+    def execution_surfaces():
+        require_scope("read_private_state")
+        return jsonify(build_execution_surface_catalog(engine.config))
 
     @app.get("/venue-health")
     def venue_health():
