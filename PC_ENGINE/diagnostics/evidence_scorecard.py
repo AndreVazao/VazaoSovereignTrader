@@ -8,17 +8,18 @@ from PC_ENGINE.radar.hot_path_calibration import write_hot_path_calibration
 from PC_ENGINE.radar.hot_path_walk_forward import write_walk_forward_report
 from PC_ENGINE.radar.hot_path_regime_walk_forward import write_regime_walk_forward_report
 from PC_ENGINE.radar.hot_path_oos_robustness import write_oos_robustness_report
+from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 
 
 def build_runtime_evidence_scorecard(config: dict[str, Any]) -> dict[str, Any]:
     """Build a read-only runtime view of evidence reports; never authorizes execution."""
     radar = config.get("radar", {})
-    data_dir = Path(radar.get("data_dir", "PC_ENGINE/data/radar"))
+    data_dir = resolve_config_path(radar.get("data_dir", "PC_ENGINE/data/radar"))
     report_cfg = radar.get("evidence_reports", {})
 
     def report_path(key: str, default_name: str) -> Path:
         configured = report_cfg.get(key)
-        return Path(configured) if configured else data_dir / default_name
+        return resolve_config_path(configured) if configured else data_dir / default_name
 
     report = build_evidence_scorecard(
         calibration_report_path=report_path("calibration", "hot_path_calibration.json"),
@@ -44,7 +45,7 @@ def refresh_runtime_evidence_reports(config: dict[str, Any]) -> dict[str, Any]:
     radar = config.get("radar", {})
     data_dir = Path(radar.get("data_dir", "PC_ENGINE/data/radar"))
     report_cfg = radar.get("evidence_reports", {})
-    outcomes_path = Path(radar.get("hot_path_outcomes_path", data_dir / "hot_path_outcomes.jsonl"))
+    outcomes_path = resolve_config_path(radar.get("hot_path_outcomes_path", data_dir / "hot_path_outcomes.jsonl"))
 
     def report_path(key: str, default_name: str) -> Path:
         configured = report_cfg.get(key)

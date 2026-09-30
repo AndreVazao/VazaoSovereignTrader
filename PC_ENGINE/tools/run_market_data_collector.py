@@ -20,9 +20,14 @@ from PC_ENGINE.research.websocket_timing_validation import validate_paths, write
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _resolve_path(raw: str) -> Path:
+def _resolve_path(raw: str | Path) -> Path:
     path = Path(raw)
     return path if path.is_absolute() else REPO_ROOT / path
+
+
+def _outcomes_path(radar_cfg: dict, data_dir: Path) -> Path:
+    configured = radar_cfg.get("hot_path_outcomes_path")
+    return _resolve_path(configured) if configured else data_dir / "hot_path_outcomes.jsonl"
 
 
 def _load_config(path: Path) -> dict:
@@ -91,7 +96,7 @@ def main() -> None:
     outcome_tracker = HotPathOutcomeTracker(
         max_pending=int(radar_cfg.get("hot_path_max_pending_outcomes", 4096))
     )
-    outcomes_path = data_dir / "hot_path_outcomes.jsonl"
+    outcomes_path = _outcomes_path(radar_cfg, data_dir)
 
     def persist_completed_outcomes() -> int:
         # Keep buffered rows until the append and fsync have both succeeded.

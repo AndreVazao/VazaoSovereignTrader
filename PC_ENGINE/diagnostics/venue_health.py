@@ -5,6 +5,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from PC_ENGINE.diagnostics.path_utils import resolve_config_path
+
 
 def _configured_exchanges(config: dict[str, Any]) -> list[str]:
     radar = config.get("radar", {})
@@ -85,7 +87,7 @@ def _venue_activity(data_dir: Path, exchange: str) -> dict[str, int | None]:
 def build_venue_health(config: dict[str, Any], *, now_ms: int | None = None) -> dict[str, Any]:
     now = int(now_ms if now_ms is not None else time.time_ns() // 1_000_000)
     radar = config.get("radar", {})
-    data_dir = Path(radar.get("data_dir", "PC_ENGINE/data/radar"))
+    data_dir = resolve_config_path(radar.get("data_dir", "PC_ENGINE/data/radar"))
     freshness_seconds = max(5, int(radar.get("health_stale_seconds", 30)))
     green_samples = max(1, int(radar.get("venue_health_min_samples", 3)))
     red_after_seconds = max(freshness_seconds * 5, int(radar.get("venue_health_red_after_seconds", freshness_seconds * 5)))
