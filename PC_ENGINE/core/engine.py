@@ -633,6 +633,11 @@ class SovereignEngine:
             raise ValueError("mode must be PAPER or REAL")
         if mode == "REAL" and not real_authorized:
             raise RuntimeError("REAL mode requires guarded operator authorization")
+        if mode == "REAL" and not autonomous:
+            guard = getattr(self, "real_mode_guard", None)
+            guard_state = getattr(guard, "state", None)
+            if guard_state is None or str(getattr(guard_state, "last_reason", "")) != "authorization consumed":
+                raise RuntimeError("REAL mode requires a freshly consumed human authorization")
         if mode == "REAL" and not bool(self.config.get("autonomous_execution", {}).get("allow_real", False)):
             raise RuntimeError("REAL mode disabled by configuration")
         if mode == "REAL" and self.state.status == "RUNNING" and not autonomous:
@@ -644,10 +649,12 @@ class SovereignEngine:
             gate = getattr(self, "execution_gate", None)
             if gate is None:
                 raise RuntimeError("REAL mode execution gate is not initialized")
-            if not gate.human_authorized:
+            if not gate.human_authorized or (gate.state == ExecutionState.SAFEGUARD_PAPER and not autonomous):
                 gate.human_authorize()
-            if gate.state == ExecutionState.PAPER:
-                gate.activate_real()
+            if gate.state in {ExecutionState.PAPER, ExecutionState.REAL_AUTHORIZED}:
+                activation = gate.activate_real()
+                if not activation.allowed:
+                    raise RuntimeError(f"REAL execution gate blocked: {activation.reason}")
             elif gate.state not in {ExecutionState.REAL_ACTIVE, ExecutionState.SAFEGUARD_PAPER, ExecutionState.REAL_RECOVERY_ELIGIBLE}:
                 raise RuntimeError(f"REAL execution gate blocked: {gate.state.value}")
         elif getattr(self, "execution_gate", None) is not None:
