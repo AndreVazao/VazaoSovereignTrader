@@ -18,12 +18,16 @@ Deploy this directory as a separate Vercel project with Root Directory `cloud/sh
 - `POST /api/v1/artifacts`: submit one artifact, with `Authorization: Bearer <Supabase access token>`.
 - `GET /api/v1/artifacts?limit=50`: retrieve eligible, unexpired artifacts with the same authentication.
 - `POST /api/v1/devices`: register a validated device public key; registration always starts as `pending`.
+- `POST /api/v1/devices/challenge`: issue a short-lived one-time challenge for a pending device owned by the authenticated user.
+- `POST /api/v1/devices/verify`: verify a signature made by the registered private key, consume the challenge once, and mark proof-of-possession verified. This does **not** approve the device.
+- `POST /api/v1/devices/approve`: approve only a pending device with verified proof-of-possession; requires an active administrator profile with mandatory password rotation complete; the database function rechecks role/state and writes an audit event atomically.
 - `GET /api/v1/devices`: list the authenticated user's devices after account activation and mandatory password rotation.
 - `DELETE /api/v1/devices?id=<uuid>`: revoke only a device belonging to the authenticated user.
 
 ## Database migrations
 1. `supabase/migrations/202609280001_shared_learning_artifacts.sql`
 2. `supabase/migrations/202609290001_identity_devices_vault_config.sql`
+3. `supabase/migrations/202609300001_device_proof_and_approval.sql`
 
 The second migration reserves the exact usernames `AndreVazao` (intended administrator) and `DiogoRocha` (member). These are reservations only, not live Auth accounts. No passwords are included in source control. See `docs/INITIAL_IDENTITY_AND_ONBOARDING.md`.
 
@@ -32,7 +36,7 @@ The second migration reserves the exact usernames `AndreVazao` (intended adminis
 2. Apply both migrations and verify RLS and grants.
 3. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in Vercel server-side environment variables only.
 4. Import this repository into Vercel and set Root Directory to `cloud/shared-learning`.
-5. Implement and test trusted account provisioning, mandatory password rotation, MFA/owner recovery, a secure pending-device approval/proof-of-possession flow, configuration signing/approval/rollback, and client-side vault encryption before onboarding. Registration and owner-scoped revocation endpoints exist; approval and proof-of-possession remain blockers.
+5. Implement and test trusted account provisioning, mandatory password rotation, MFA/owner recovery, configuration signing/approval/rollback, and end-to-end client-side vault encryption before onboarding. The current feature branch adds one-time device proof-of-possession and audited admin approval foundations; these still require CI/security review, rate limiting, integration tests, and deployment migration validation.
 6. Deploy a preview and test invalid/missing tokens, private fields, duplicates, expiry, cross-tenant access, role escalation, device revocation, vault confidentiality, and rollback.
 7. Configure rate limiting and abuse monitoring before broad rollout.
 
