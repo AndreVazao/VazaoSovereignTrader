@@ -60,3 +60,28 @@ def test_calibration_ignores_non_paper_or_malformed_rows_and_writes_atomically(t
     assert json.loads(destination.read_text(encoding="utf-8"))["outcome_samples"] == 1
     assert report["outcome_samples"] == 1
     assert report["stats"][0]["eligible_for_paper_review"] is False
+
+
+def test_calibration_keeps_market_regimes_separate_and_marks_missing_regime(tmp_path):
+    source = tmp_path / "hot_path_outcomes.jsonl"
+    rows = [
+        {**_outcome(2.0 + i * 0.01), "market_regime": "TRENDING"}
+        for i in range(4)
+    ] + [
+        {**_outcome(-2.0 - i * 0.01), "market_regime": "RANGING"}
+        for i in range(4)
+    ] + [
+        _outcome(1.0)
+    ]
+    source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    report = build_hot_path_calibration(source, min_samples=2)
+
+    by_regime = {row["market_regime"]: row for row in report["stats"]}
+    assert set(by_regime) == {"TRENDING", "RANGING", "UNCLASSIFIED"}
+    assert by_regime["TRENDING"]["samples"] == 4
+    assert by_regime["RANGING"]["samples"] == 4
+    assert by_regime["UNCLASSIFIED"]["samples"] == 1
+    assert by_regime["TRENDING"]["mean_realized_net_bps"] > 0
+    assert by_regime["RANGING"]["mean_realized_net_bps"] < 0
+    assert report["execution_authorized"] is False
