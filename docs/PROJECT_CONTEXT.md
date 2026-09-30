@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at 373b3ca588a6f2a0f2421d266600d0ceeb4b401d after PR #277; post-merge CI pending
+Last updated: 2026-09-30 (UTC) — main at fd02f7954628649571cd32cdee0918fed00f5988; venue OOS uncertainty improvement in progress
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -526,3 +526,23 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 
 ### Next action
 - Verify current main post-merge CI. Then evaluate whether a separately tested public bid/ask collector can safely gather top-of-book snapshots with freshness, rate-limit, reconnect and timestamp integrity controls. Do not conflate operational status, economic evidence or REAL authorization.
+
+## 25. Handoff — 2026-09-30, bootstrap uncertainty for venue economic evidence
+
+### Verified state
+- PR #276 dashboard economic panel merged at `6b5794c5ac4b770d9da5de44b159715766a0d28e`; its exact-head Python and Windows EXE checks passed.
+- PR #277 documentation handoff merged at `373b3ca588a6f2a0f2421d266600d0ceeb4b401d`; post-merge Python and Windows EXE checks both passed on that SHA (`36751831415`, `36751831289`).
+- PR #278 documentation handoff merged at `fd02f7954628649571cd32cdee0918fed00f5988`. Post-merge Python run `36752233265` passed; Windows EXE run `36752233112` was still in progress at the last check. Verify its final conclusion.
+- Current feature branch `feat/venue-oos-bootstrap-uncertainty` was created from `fd02f7954628649571cd32cdee0918fed00f5988`.
+
+### Venue economics confidence intervals — implementation in progress
+- The prior report called a positive chronological holdout mean a candidate even when the OOS sample was too small to estimate uncertainty. This change adds a deterministic moving-block bootstrap 95% interval, preserving short-range chronological dependence; fewer than 8 OOS observations yields an unavailable interval.
+- `POSITIVE_OOS_CANDIDATE` now requires the interval's lower bound to be above zero. `NON_POSITIVE_OOS` requires the upper bound below zero. Intervals spanning zero become `UNCERTAIN_OOS`; too few OOS observations become `INSUFFICIENT_OOS_FOR_CI`.
+- The dashboard panel is being updated to show the interval and distinguish uncertain evidence from non-positive or insufficient evidence. None of these statuses changes operational venue health or authorizes execution.
+- Tests cover positive supported evidence, negative holdout, mixed/uncertain holdout, and too-small samples. Exact-head CI is not yet validated.
+
+### Next actions
+1. Verify the main Windows EXE run `36752233112` for SHA `fd02f7954628649571cd32cdee0918fed00f5988`.
+2. Finish reviewing the feature diff and run exact-head Python tests plus Windows EXE build/smoke checks.
+3. Merge only after all required checks succeed on the exact PR head and the PR is clean/mergeable; then verify post-merge CI.
+4. Continue to keep PAPER evidence, operational health, and REAL authorization independent. Spread stays unavailable until valid timestamped bid/ask observations are actually collected and validated.
