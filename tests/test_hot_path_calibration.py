@@ -190,3 +190,25 @@ def test_calibration_excludes_future_timestamps_from_temporal_evidence(tmp_path)
     report = build_hot_path_calibration(source, min_samples=5)
     assert report["outcome_samples"] == 12
     assert report["stats"][0]["timestamped_samples"] == 11
+
+
+
+def test_invalid_first_occurrence_does_not_suppress_later_valid_outcome(tmp_path):
+    source = tmp_path / "outcomes.jsonl"
+    invalid_first = {**_outcome(999.0), "outcome_id": "same-outcome"}
+    del invalid_first["expected_net_bps"]
+    valid_later = {**_outcome(2.5), "outcome_id": "same-outcome"}
+    source.write_text(
+        json.dumps(invalid_first) + "\n" + json.dumps(valid_later) + "\n",
+        encoding="utf-8",
+    )
+
+    report = build_hot_path_calibration(source, min_samples=2)
+
+    assert report["outcome_records_loaded"] == 2
+    assert report["unique_completed_paper_records"] == 2
+    assert report["outcome_samples"] == 1
+    assert report["invalid_outcomes_ignored"] == 1
+    assert report["duplicate_outcomes_ignored"] == 0
+    assert report["stats"][0]["mean_realized_net_bps"] == 2.5
+    assert report["execution_authorized"] is False

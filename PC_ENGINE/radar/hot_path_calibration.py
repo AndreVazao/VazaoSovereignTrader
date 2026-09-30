@@ -149,6 +149,30 @@ def build_hot_path_calibration(
     seen: set[str] = set()
     duplicate_outcomes_ignored = 0
     for row in raw_rows:
+        # Invalid records must not reserve an identity: a later valid outcome with
+        # the same ID/legacy identity still needs to be eligible for analysis.
+        try:
+            symbol = str(row["symbol"]).strip().upper()
+            leader = str(row["leader"]).strip().lower()
+            follower = str(row["follower"]).strip().lower()
+            direction = str(row["direction"]).strip().upper()
+            horizon = int(row["horizon_ms"])
+            expected = float(row["expected_net_bps"])
+            realized = float(row["realized_net_bps"])
+            gross = float(row["realized_response_bps"])
+            is_valid = bool(
+                symbol and leader and follower
+                and direction in {"UP", "DOWN"}
+                and horizon > 0
+                and all(math.isfinite(value) for value in (expected, realized, gross))
+            )
+        except (KeyError, TypeError, ValueError, OverflowError):
+            is_valid = False
+
+        if not is_valid:
+            rows.append(row)
+            continue
+
         identity = _outcome_identity(row)
         if identity in seen:
             duplicate_outcomes_ignored += 1
