@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at 6b5794c5ac4b770d9da5de44b159715766a0d28e after PR #276; post-merge CI pending
+Last updated: 2026-09-30 (UTC) — main at 373b3ca588a6f2a0f2421d266600d0ceeb4b401d after PR #277; post-merge CI pending
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -508,3 +508,21 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 2. Next research improvement: only implement spread evidence if public collectors can capture valid timestamped bid/ask snapshots; trade prints alone are not enough.
 3. Continue accumulating PAPER outcomes and require sufficient chronological OOS evidence before interpreting venue economics. Positive mean remains a candidate for review, not proof of profitability.
 4. Keep operational status, economic evidence and REAL authorization as three separate concepts. Preserve all gates and do not provision Supabase/Vercel resources or incur costs without explicit authorization.
+
+## 25. Handoff — 2026-09-30, after PR #277
+
+### Verified repository state
+- PR #277 (documentation handoff after dashboard venue economics integration) merged by squash; merge commit/main SHA `373b3ca588a6f2a0f2421d266600d0ceeb4b401d`.
+- PR #276 dashboard integration exact-head checks passed: Python run `36751325469`, Windows EXE run `36751325456` on head `9ac706a26c446f68f008f2cb2145abdd31ae54e1`.
+- Post-merge Python and Windows EXE checks for parent main SHA `6b5794c5ac4b770d9da5de44b159715766a0d28e` both succeeded (runs `36751581750` and `36751581645`).
+- Current main SHA `373b3ca588a6f2a0f2421d266600d0ceeb4b401d` post-merge Python run `36751831415` and Windows EXE run `36751831289` are in progress; verify both before declaring current main fully validated.
+- No open PRs were present immediately after PR #277 merge. This context refresh is on branch `docs/handoff-after-dashboard-panel`.
+
+### Current product behavior
+- The dashboard now shows operational venue health and PAPER venue economics in separate panels. The economics panel reads the report through authenticated GET `/venue-economic-evidence`; it does not refresh expensive reports on page load.
+- The explicit PAPER evidence refresh regenerates the venue economic report and reloads the panel. Positive chronological holdout mean remains a review candidate only; insufficient samples and non-positive holdout are separately labelled.
+- Spread remains unavailable until reliable timestamped bid/ask observations are collected. No trade-print-derived spread estimates are allowed.
+- No changes to execution or REAL gates. No cloud resources, deployments, paid services, credentials or live orders.
+
+### Next action
+- Verify current main post-merge CI. Then evaluate whether a separately tested public bid/ask collector can safely gather top-of-book snapshots with freshness, rate-limit, reconnect and timestamp integrity controls. Do not conflate operational status, economic evidence or REAL authorization.
