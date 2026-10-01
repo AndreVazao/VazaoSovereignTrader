@@ -39,7 +39,7 @@ jobs:
       - name: Installer smoke test
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -Path installer-output -Filter *.exe -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "\\build\\|\\dist\\" } | Select-Object -First 1
+          $installer = Get-ChildItem -Path "$env:GITHUB_WORKSPACE\installer-output" -Filter *.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $installer) {
             Write-Host "Installer directory contents:"
             Get-ChildItem -Path installer -Recurse -Force | Select-Object FullName,Length
