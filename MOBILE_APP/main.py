@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import requests
+import urllib.error
+import urllib.request
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
@@ -13,13 +14,26 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
+
+
+class _MobileHTTPResponse:
+    def __init__(self, status_code, content):
+        self.status_code = status_code
+        self.content = content
+
+    def json(self):
+        return json.loads(self.content.decode("utf-8"))
+
+
 REAL_PHRASE = "EU ACEITO O RISCO"
 
 class MobileCockpit(App):
     """Remote cockpit. Exchange credentials never live in this app."""
     def build(self):
         self.lang = self._load_lang("pt")
-        self.pc_url = "http://127.0.0.1:8765"
+        self.pc_url = self._load_connection_url()
+        self._saved_pc_url = self.pc_url
+        self.connection_state = "NOT_TESTED"
         self.human_widgets = {}
         self.exchange_box = BoxLayout(orientation="vertical", spacing=4, size_hint_y=None)
         self.exchange_box.bind(minimum_height=self.exchange_box.setter("height"))
@@ -30,7 +44,8 @@ class MobileCockpit(App):
         self.balance = Label(text="Saldo/equity: ---", size_hint_y=None, height=28)
         self.risk = Label(text="Risco: ---", size_hint_y=None, height=28)
         self.readiness = Label(text="REAL: ---", size_hint_y=None, height=28)
-        self.ip_input = TextInput(text=self.pc_url, hint_text="PC Tailscale: http://100.x.y.z:8765", multiline=False, size_hint_y=None, height=42)
+        self.ip_input = TextInput(text=self.pc_url, hint_text="PC local/Tailscale: http://100.x.y.z:8765", multiline=False, size_hint_y=None, height=42)
+        self.ip_input.bind(text=self._on_url_changed)
         self.token_input = TextInput(hint_text="Token VST_LOCAL_TOKEN", multiline=False, password=True, size_hint_y=None, height=42)
         row_conn = BoxLayout(orientation="horizontal", spacing=5, size_hint_y=None, height=42)
         row_conn.add_widget(Button(text="TESTAR", on_press=lambda _: self.test_connection()))
@@ -193,22 +208,98 @@ class MobileCockpit(App):
         path = Path(__file__).parent / "lang" / f"{code}.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
+    def _connection_config_path(self):
+        return Path(self.user_data_dir) / "connection.json"
+
+    def _load_connection_url(self):
+        default = "http://127.0.0.1:8765"
+        try:
+            path = self._connection_config_path()
+            if path.exists():
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                url = str(payload.get("pc_url", "")).strip().rstrip("/")
+                if url.startswith(("http://", "https://")):
+                    return url
+        except (OSError, ValueError, TypeError):
+            pass
+        return default
+
+    def _save_connection_url(self, url=None):
+        value = (url if url is not None else self.ip_input.text).strip().rstrip("/")
+        if not value.startswith(("http://", "https://")):
+            return
+        try:
+            path = self._connection_config_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if value != getattr(self, "_saved_pc_url", None):
+                path.write_text(json.dumps({"pc_url": value}, indent=2), encoding="utf-8")
+                self._saved_pc_url = value
+            self.pc_url = value
+        except OSError:
+            # Connection still works for this session if Android storage is unavailable.
+            pass
+
+    def _on_url_changed(self, _widget, value):
+        self.pc_url = value.strip().rstrip("/")
+
     def headers(self):
+        # Deliberately do not persist the local control token in the app config.
         return {"X-Token": self.token_input.text.strip()}
 
     def base_url(self):
         return self.ip_input.text.strip().rstrip("/")
 
     def _request(self, method, endpoint, **kwargs):
-        return requests.request(method, self.base_url() + endpoint, headers=self.headers(), timeout=8, **kwargs)
+        headers = self.headers()
+        timeout = kwargs.pop("timeout", 8)
+        payload = None
+        if "json" in kwargs:
+            payload = json.dumps(kwargs.pop("json")).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        elif "files" in kwargs:
+            files = kwargs.pop("files")
+            boundary = "----VazaoMobileBoundary7MA4YWxkTrZu0gW"
+            chunks = []
+            for field, (filename, data) in files.items():
+                chunks.append((
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
+                    "Content-Type: application/octet-stream\r\n\r\n"
+                ).encode("utf-8"))
+                chunks.append(data)
+                chunks.append(b"\r\n")
+            chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+            payload = b"".join(chunks)
+            headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        if kwargs:
+            raise ValueError(f"Opções HTTP não suportadas: {', '.join(kwargs)}")
+        request = urllib.request.Request(
+            self.base_url() + endpoint,
+            data=payload,
+            headers=headers,
+            method=method.upper(),
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as result:
+                return _MobileHTTPResponse(result.status, result.read())
+        except urllib.error.HTTPError as exc:
+            return _MobileHTTPResponse(exc.code, exc.read())
+
 
     def test_connection(self):
         try:
-            response = requests.get(self.base_url() + "/health", timeout=5)
-            self.status.text = f"PC: HTTP {response.status_code}"
-            self.refresh(0)
+            response = self._request("GET", "/health", timeout=5)
+            if response.status_code == 200:
+                self._save_connection_url(self.base_url())
+                self.connection_state = "CONNECTED"
+                self.status.text = f"PC: ligado | {self.base_url()}"
+                self.refresh(0)
+            else:
+                self.connection_state = "RETRYING"
+                self.status.text = f"PC: resposta HTTP {response.status_code}"
         except Exception as exc:
-            self.status.text = "PC: offline"
+            self.connection_state = "OFFLINE"
+            self.status.text = "PC: offline — vou tentar novamente automaticamente"
             self.readiness.text = f"Bridge: {exc}"
 
     def command(self, endpoint):
@@ -292,13 +383,16 @@ class MobileCockpit(App):
                 self.status.text = f"PC: acesso recusado ({response.status_code})"
                 return
             data = response.json()
-            self.status.text = f"PC: {data.get('status', '---')} | Modo: {data.get('mode', '---')}"
+            self.connection_state = "CONNECTED"
+            self._save_connection_url(self.base_url())
+            self.status.text = f"PC: ligado | {data.get('status', '---')} | Modo: {data.get('mode', '---')}"
             self.balance.text = f"Saldo: {float(data.get('balance', 0)):.2f} | Equity: {float(data.get('equity', 0)):.2f}"
             self.risk.text = f"Dia: {float(data.get('pnl_today_pct', 0))*100:.2f}% | Semana: {float(data.get('pnl_week_pct', 0))*100:.2f}% | DD: {float(data.get('drawdown_pct', 0))*100:.2f}%"
             guard = data.get("real_mode_guard", {})
             self.readiness.text = f"REAL: {'ARMADO' if guard.get('armed') else 'bloqueado'} | {guard.get('remaining_seconds', 0)}s"
         except Exception:
-            self.status.text = "PC: offline — Tailscale/API indisponível"
+            self.connection_state = "OFFLINE"
+            self.status.text = "PC: offline — reconexão automática a cada 5 s"
 
 if __name__ == "__main__":
     MobileCockpit().run()
