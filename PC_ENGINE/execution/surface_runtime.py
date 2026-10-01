@@ -39,14 +39,17 @@ class ExecutionSurfaceRuntime:
         runtime_id = str(runtime_id or "").strip()
         if not runtime_id:
             raise ValueError("runtime_id is required")
-        if runtime_id in self._adapters:
-            raise ValueError(f"runtime_id already instantiated: {runtime_id}")
+        if runtime_id in self._records:
+            raise ValueError(f"runtime_id already used: {runtime_id}")
         registration = get_adapter_registration(surface)
         if registration is None:
             raise ValueError(f"no adapter registered for surface={surface.value}")
         if not registration.paper_only:
             raise RuntimeError("runtime lifecycle only accepts PAPER adapters")
         adapter = instantiate_adapter(surface, config)
+        adapter_surface = getattr(adapter, "surface", None)
+        if adapter_surface is not surface:
+            raise RuntimeError(f"adapter surface mismatch: expected={surface.value}")
         venue_id = str(getattr(config, "venue_id", "") or "").strip()
         if not venue_id:
             raise ValueError("adapter config venue_id is required")

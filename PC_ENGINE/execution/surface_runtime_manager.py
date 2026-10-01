@@ -48,6 +48,11 @@ class ExecutionSurfaceRuntimeManager:
         if not venue_id:
             raise ValueError('venue_id is required')
         raw = self._surface_config(venue_id)
+        configured_surface = str(raw.get('surface', '')).strip().upper()
+        if configured_surface and configured_surface != surface.value:
+            raise ValueError(
+                f'surface mismatch for venue_id={venue_id}: configured={configured_surface}, requested={surface.value}'
+            )
         feedback_path = str(raw.get('feedback_path') or self._feedback_path())
         max_records = int(raw.get('feedback_max_records', self._feedback_max_records()))
 

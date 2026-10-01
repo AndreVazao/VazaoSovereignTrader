@@ -843,3 +843,13 @@ Live GitHub verification at review time:
 - All lifecycle APIs remain PAPER-only: no order submission, private trading API, credential persistence, readiness/Risk Engine/reconciliation/RealModeGuard bypass, cloud resource or paid-service creation.
 - Added tests for inert manager construction, explicit browser instantiation without probing, desktop/Android config construction, fail-closed missing configuration and truthful catalogue runtime overlay.
 - Added `docs/EXECUTION_SURFACE_RUNTIME_INTEGRATION.md`.
+
+
+## 36. Handoff — 2026-10-01, runtime lifecycle identity hardening
+
+- Baseline main SHA: `0409e019be3f28fda7c132631ff17187f96f1964`; Python and Windows post-merge checks for the previous integration were green before this feature.
+- Hardened `ExecutionSurfaceRuntime` so a `runtime_id` is process-lifetime unique: a CLOSED runtime cannot silently reuse the same identity and overwrite historical lifecycle state.
+- Added an adapter surface-binding check immediately after registry instantiation; any adapter reporting a surface different from the requested surface fails closed before the runtime is recorded active.
+- Hardened `ExecutionSurfaceRuntimeManager.build_adapter_config()` to reject a configured venue when its declared `surface` conflicts with the requested surface. This prevents accidentally constructing a desktop/Android adapter from a browser-configured venue (or vice versa).
+- Added regression tests for runtime-ID reuse, adapter surface mismatch and configured surface mismatch.
+- No transport is started by these checks; all changes remain PAPER-only and observational. No order path, credentials, readiness, Risk Engine, reconciliation or `RealModeGuard` behavior was changed.

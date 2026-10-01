@@ -53,3 +53,14 @@ def test_manager_requires_explicit_configured_venue(tmp_path):
         assert 'surface configuration not found' in str(exc)
     else:
         raise AssertionError('missing venue configuration must fail closed')
+
+
+
+def test_manager_rejects_requested_surface_mismatch(tmp_path):
+    manager = ExecutionSurfaceRuntimeManager(_config(tmp_path))
+    try:
+        manager.build_adapter_config(venue_id='browser-demo', surface=Surface.DESKTOP_APP)
+    except ValueError as exc:
+        assert 'surface mismatch' in str(exc)
+    else:
+        raise AssertionError('configured surface mismatch must fail closed')
