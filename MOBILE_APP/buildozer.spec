@@ -14,7 +14,8 @@ android.python_version = 3.11
 p4a.python_version = 3.11
 android.minapi = 24
 android.archs = arm64-v8a
-p4a.branch = v2024.01.21
+p4a.branch = master
+p4a.commit = 957a3e5f8c270f7aa648ba185e5a68c1077a798d
 
 [buildozer]
 log_level = 2
