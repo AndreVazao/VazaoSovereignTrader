@@ -1003,3 +1003,22 @@ Review points before merge:
 - Added hardening tests for five-minute challenge expiry, corrupt registry fail-closed behaviour, and recovery of owner-token authentication when the pairing registry is corrupt. The latest Python suite passed on the implementation SHA before the docs-only fix.
 - Remaining review: inspect exact final diff, confirm all required exact-head checks green, ensure PR mergeable, squash merge, then verify main SHA and post-merge CI. Physical Android/Windows pairing validation remains unperformed until a real authorized device completes the flow.
 - No REAL-mode changes, cloud resources, public port forwarding, exchange credentials, or live orders are authorized or introduced.
+
+
+## 46. Verified handoff — 2026-10-01 UTC
+
+### PR #306 — secure revocable Android pairing
+- Merged by squash after exact-head checks passed.
+- PR head: `dffd04b925c58fca6c53b3239c9b48052eb93915`.
+- Merge commit / current main at branch start: `82865d584d5d81daabfcee4a9f42dd73f4b77448`.
+- Exact-head CI passed: Python tests (run 36918083737), Android APK (run 36918083729), Windows EXE/installer (run 36918083616).
+- Post-merge Python and Windows workflows were queued at the time of verification; check their final status on merge SHA before declaring post-merge CI complete.
+- Physical Windows + Android pairing / OEM Keystore validation remains unperformed.
+
+### Current implementation branch — Android ADB bridge hardening
+- Branch: `feat/android-adb-device-bridge`, created from main after PR #306 merge.
+- Existing adapter: `PC_ENGINE/execution/android_adb_paper_surface.py`; runtime manager is explicitly inert until instantiate/probe calls.
+- Changes in progress: reject mismatched surface actions instead of treating them as Android actions; give direct probe/observe calls unique correlation IDs; add regression tests and `docs/ANDROID_ADB_BRIDGE.md`.
+- Android ADB operations remain read-only, bounded by subprocess timeouts, and use `shell=False`. No automatic install/launch, no UI interaction, no live orders, no REAL authorization.
+- Exact branch head after initial code/test changes must be read live from GitHub. Wait for exact-head Python and Windows CI, inspect final diff, create PR, and merge only if checks pass and no blocking defect.
+- After merging this bridge-hardening PR, verify all post-merge workflows and update this context with the actual SHA/results.
