@@ -27,7 +27,7 @@ The USB-assisted setup remains the transport bootstrap. This branch adds a PC-ap
 ## Subsequent use
 
 - The APK stores only the PC endpoint in its private app data and retries its existing polling/health calls while running.
-- The local control token is deliberately **not** written to the connection configuration. The operator must enter it in the app after a fresh app process until secure Android Keystore storage and one-time device pairing are implemented.
+- The owner control token is deliberately **not** written to the connection configuration or persisted by the app. After pairing, the per-device token is encrypted with Android Keystore; if Keystore is unavailable, storage fails closed and the app attempts server-side revocation.
 - On the same Wi-Fi, use a reachable PC LAN address and ensure Windows Firewall allows the intended private-network traffic.
 - Away from home, install and sign in to Tailscale on both PC and Android, then use the PC's Tailscale address. Do not expose port 8765 directly to the public Internet.
 - The endpoint persists, but a successful network connection still depends on the PC service being online, the selected route being reachable, the token being supplied, and the firewall/network policy.
@@ -38,7 +38,7 @@ The USB-assisted setup remains the transport bootstrap. This branch adds a PC-ap
 - USB debugging is an explicit Android user authorization and should be disabled when no longer needed if the operator does not require ADB.
 - This helper does not disable Android security controls, bypass login/2FA/CAPTCHA, configure a public port forward, or change PAPER/REAL controls.
 - ADB reverse is a temporary bootstrap/diagnostic tunnel, not the final authenticated device-pairing protocol.
-- The next milestone is a local one-time pairing challenge with explicit PC approval, a revocable device identity, and secure token storage backed by Android Keystore; then guided LAN/Tailscale selection and connection status.
+- The one-time pairing challenge, explicit PC approval, revocable device identity, and Android Keystore-backed token storage are described in the Secure device pairing section below. Guided LAN/Tailscale selection and real-device validation remain follow-up work.
 
 
 ## Secure device pairing (new)
