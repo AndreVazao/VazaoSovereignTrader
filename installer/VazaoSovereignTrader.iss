@@ -44,10 +44,10 @@ Name: "{group}\Pasta de troca - INBOX"; Filename: "{app}\data\operator_exchange\
 Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange\OUTBOX"
 
 [Run]
-Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""VazaoSovereignTrader"" /SC ONLOGON /TR """"""{app}\{#AppExeName}"""""" /RL LIMITED /F"; Flags: runhidden
-Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""VazaoSovereignTrader-MarketData"" /SC ONLOGON /TR """"""{app}\{#CollectorExeName}"""" --config """"{app}\config\config.local.json"""" --data-dir """"{app}\data\radar"""""" /RL LIMITED /F"; Flags: runhidden
+Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""VazaoSovereignTrader"" /SC ONLOGON /TR ""{app}\{#AppExeName}"" /RL LIMITED /F"; Flags: runhidden
+Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""VazaoSovereignTrader-MarketData"" /SC ONLOGON /TR ""{app}\{#CollectorExeName}"" --config ""{app}\config\config.local.json"" --data-dir ""{app}\data\radar"" /RL LIMITED /F"; Flags: runhidden
 Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Description: "Iniciar o VazaoSovereignTrader agora"; Flags: nowait postinstall skipifsilent
-Filename: "{sys}\explorer.exe"; Parameters: ""{app}\data\operator_exchange"""; Description: "Abrir pasta de troca (INBOX / OUTBOX)"; Flags: nowait postinstall skipifsilent unchecked
+Filename: "{sys}\explorer.exe"; Parameters: "{app}\data\operator_exchange"; Description: "Abrir pasta de troca (INBOX / OUTBOX)"; Flags: nowait postinstall skipifsilent unchecked
 
 [UninstallRun]
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden
