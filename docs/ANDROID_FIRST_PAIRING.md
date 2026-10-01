@@ -53,7 +53,7 @@ The USB-assisted setup remains the transport bootstrap. This branch adds a PC-ap
 
    Select the matching device, enter the code shown on the phone, and type `APROVAR`. The request expires after five minutes. Do not approve an unfamiliar device.
 4. Return to Android and press **CONCLUIR**. The server issues a random per-device token once. The Android app encrypts it using a non-exportable AES-GCM key in Android Keystore, then clears the owner-token input.
-5. A paired device receives only `read_private_state` and `trade_paper` scopes. It cannot use owner-management or REAL-mode scopes. The PC remains authoritative for all risk gates.
+5. A paired device receives only `read_private_state`, `trade_paper`, and `respond_human_interaction` scopes. The last scope permits explicit responses to PC-originated human prompts (including login/2FA/CAPTCHA interaction), but not creating prompts or managing owner settings. It cannot use REAL-mode or exchange-account management scopes. The PC remains authoritative for all risk gates.
 6. To revoke a device at the PC console:
 
    ```powershell
