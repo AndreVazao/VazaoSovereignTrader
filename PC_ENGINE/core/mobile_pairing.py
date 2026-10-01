@@ -6,6 +6,7 @@ import json
 import os
 import secrets
 import threading
+from contextlib import contextmanager
 import time
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,35 @@ class MobilePairingStore:
         self.path = self.root / "mobile_pairing.json"
         self.owner_id = str(owner_id).strip().lower()
         self._lock = threading.RLock()
+
+    @contextmanager
+    def _guard(self):
+        """Serialize transactions across threads and separate CLI/server processes."""
+        with self._lock:
+            self.root.mkdir(parents=True, exist_ok=True)
+            lock_path = self.path.with_suffix(".lock")
+            with lock_path.open("a+b") as lock_file:
+                lock_file.seek(0, os.SEEK_END)
+                if lock_file.tell() == 0:
+                    lock_file.write(b"\\0")
+                    lock_file.flush()
+                lock_file.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    if os.name == "nt":
+                        import msvcrt
+                        lock_file.seek(0)
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def _hash(value: str) -> str:
@@ -78,7 +108,7 @@ class MobilePairingStore:
         now = int(time.time())
         challenge_id = secrets.token_urlsafe(24)
         code = f"{secrets.randbelow(1_000_000):06d}"
-        with self._lock:
+        with self._guard():
             payload = self._read()
             self._expire(payload, now)
             payload["challenges"] = {
@@ -108,7 +138,7 @@ class MobilePairingStore:
 
     def list_pending(self) -> list[dict[str, Any]]:
         now = int(time.time())
-        with self._lock:
+        with self._guard():
             payload = self._read()
             self._expire(payload, now)
             self._write(payload)
@@ -120,7 +150,7 @@ class MobilePairingStore:
 
     def approve(self, challenge_id: str, confirmation_code: str) -> dict[str, Any]:
         now = int(time.time())
-        with self._lock:
+        with self._guard():
             payload = self._read()
             self._expire(payload, now)
             item = payload["challenges"].get(str(challenge_id))
@@ -141,7 +171,7 @@ class MobilePairingStore:
 
     def challenge_status(self, challenge_id: str) -> dict[str, Any]:
         now = int(time.time())
-        with self._lock:
+        with self._guard():
             payload = self._read()
             self._expire(payload, now)
             self._write(payload)
@@ -157,7 +187,7 @@ class MobilePairingStore:
 
     def complete(self, challenge_id: str, confirmation_code: str) -> dict[str, Any]:
         now = int(time.time())
-        with self._lock:
+        with self._guard():
             payload = self._read()
             self._expire(payload, now)
             item = payload["challenges"].get(str(challenge_id))
@@ -202,7 +232,7 @@ class MobilePairingStore:
             return None
         token_hash = self._hash(token)
         now = int(time.time())
-        with self._lock:
+        with self._guard():
             payload = self._read()
             for device_id, item in payload["devices"].items():
                 if item.get("status") != "ACTIVE":
@@ -222,7 +252,7 @@ class MobilePairingStore:
         return None
 
     def list_devices(self) -> list[dict[str, Any]]:
-        with self._lock:
+        with self._guard():
             payload = self._read()
             return [
                 {key: item.get(key) for key in ("device_id", "device_name", "status", "created_at", "last_seen_at", "scopes")}
@@ -230,7 +260,7 @@ class MobilePairingStore:
             ]
 
     def revoke(self, device_id: str) -> dict[str, Any]:
-        with self._lock:
+        with self._guard():
             payload = self._read()
             item = payload["devices"].get(str(device_id))
             if not item:
