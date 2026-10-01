@@ -7,6 +7,7 @@ from typing import Any
 from .surface_adapter_registry import get_adapter_registration, instantiate_adapter
 from .surface_adapters import ExecutionSurfaceAdapter, Surface, SurfaceFeedback
 
+
 @dataclass
 class AdapterRuntimeRecord:
     runtime_id: str
@@ -19,13 +20,19 @@ class AdapterRuntimeRecord:
     last_feedback_acknowledged: bool | None = None
     error: str | None = None
 
+
 class ExecutionSurfaceRuntime:
     """Explicit PAPER adapter lifecycle; never an execution-authorization path.
 
     Registration is inert. Instantiation is explicit and does not call probe(),
     observe(), execute(), launch a process, open a browser, or invoke ADB.
     Transport probing is a separate explicit operation.
+
+    Health is observational only: it is derived from explicit probe feedback
+    timestamps and never from configuration or instantiation alone.
     """
+
+    DEFAULT_STALE_AFTER_MS = 30_000
 
     def __init__(self) -> None:
         self._adapters: dict[str, ExecutionSurfaceAdapter] = {}
@@ -34,6 +41,39 @@ class ExecutionSurfaceRuntime:
     @staticmethod
     def _now_ms() -> int:
         return int(time.time() * 1000)
+
+    @classmethod
+    def _health(cls, record: AdapterRuntimeRecord, *, now_ms: int, stale_after_ms: int) -> tuple[str, bool | None, int | None]:
+        if record.state == "CLOSED":
+            return "CLOSED", None, None
+        if record.state == "PROBE_FAILED":
+            return "PROBE_FAILED", None, None
+        if record.last_feedback_at_ms is None:
+            return "NEVER_PROBED", None, None
+        age_ms = max(0, now_ms - record.last_feedback_at_ms)
+        stale = age_ms > stale_after_ms
+        if stale:
+            return "STALE", True, age_ms
+        return "FRESH", False, age_ms
+
+    @classmethod
+    def _snapshot_record(cls, record: AdapterRuntimeRecord, *, now_ms: int, stale_after_ms: int) -> dict[str, Any]:
+        health, stale, age_ms = cls._health(record, now_ms=now_ms, stale_after_ms=stale_after_ms)
+        return {
+            "runtime_id": record.runtime_id,
+            "surface": record.surface.value,
+            "venue_id": record.venue_id,
+            "state": record.state,
+            "instance_created_at_ms": record.instance_created_at_ms,
+            "last_feedback_at_ms": record.last_feedback_at_ms,
+            "last_feedback_state": record.last_feedback_state,
+            "last_feedback_acknowledged": record.last_feedback_acknowledged,
+            "error": record.error,
+            "health": health,
+            "stale": stale,
+            "feedback_age_ms": age_ms,
+            "stale_after_ms": stale_after_ms,
+        }
 
     def instantiate(self, *, runtime_id: str, surface: Surface, config: Any) -> AdapterRuntimeRecord:
         runtime_id = str(runtime_id or "").strip()
@@ -53,7 +93,13 @@ class ExecutionSurfaceRuntime:
         venue_id = str(getattr(config, "venue_id", "") or "").strip()
         if not venue_id:
             raise ValueError("adapter config venue_id is required")
-        record = AdapterRuntimeRecord(runtime_id=runtime_id, surface=surface, venue_id=venue_id, state="INSTANTIATED", instance_created_at_ms=self._now_ms())
+        record = AdapterRuntimeRecord(
+            runtime_id=runtime_id,
+            surface=surface,
+            venue_id=venue_id,
+            state="INSTANTIATED",
+            instance_created_at_ms=self._now_ms(),
+        )
         self._adapters[runtime_id] = adapter
         self._records[runtime_id] = record
         return record
@@ -90,16 +136,24 @@ class ExecutionSurfaceRuntime:
         if record is not None:
             record.state = "CLOSED"
 
-    def snapshot(self) -> dict[str, Any]:
+    def snapshot(self, *, stale_after_ms: int = DEFAULT_STALE_AFTER_MS) -> dict[str, Any]:
+        stale_after_ms = int(stale_after_ms)
+        if stale_after_ms < 0:
+            raise ValueError("stale_after_ms must be >= 0")
+        now_ms = self._now_ms()
         return {
-            "observational_only": True, "paper_only": True, "orders_submitted": False,
+            "observational_only": True,
+            "paper_only": True,
+            "orders_submitted": False,
             "execution_authorized": False,
+            "health_policy": {
+                "stale_after_ms": stale_after_ms,
+                "automatic_probe": False,
+                "automatic_restart": False,
+            },
             "adapters": [
-                {"runtime_id": r.runtime_id, "surface": r.surface.value, "venue_id": r.venue_id,
-                 "state": r.state, "instance_created_at_ms": r.instance_created_at_ms,
-                 "last_feedback_at_ms": r.last_feedback_at_ms, "last_feedback_state": r.last_feedback_state,
-                 "last_feedback_acknowledged": r.last_feedback_acknowledged, "error": r.error}
-                for r in self._records.values()
+                self._snapshot_record(record, now_ms=now_ms, stale_after_ms=stale_after_ms)
+                for record in self._records.values()
             ],
         }
 
