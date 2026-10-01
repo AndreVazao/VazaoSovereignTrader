@@ -85,6 +85,12 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             raise PermissionError(f"scope_required:{scope}")
         return principal
 
+    def require_any_scope(*scopes: str) -> AuthenticatedPrincipal:
+        principal = require_token()
+        if not any(principal.has(scope) for scope in scopes):
+            raise PermissionError("scope_required")
+        return principal
+
     @app.errorhandler(PermissionError)
     def handle_unauthorized(_: PermissionError):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
@@ -703,7 +709,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/human-interaction/respond")
     def human_interaction_respond():
-        require_scope("manage_owner_settings")
+        require_any_scope("manage_owner_settings", "respond_human_interaction")
         payload = request.get_json(force=True) or {}
         request_id = str(payload.get("request_id", ""))
         values = payload.get("values") or {}
@@ -715,7 +721,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.post("/human-interaction/cancel")
     def human_interaction_cancel():
-        require_scope("manage_owner_settings")
+        require_any_scope("manage_owner_settings", "respond_human_interaction")
         request_id = str((request.get_json(force=True) or {}).get("request_id", ""))
         ok = human_bridge.cancel(request_id)
         return jsonify({"ok": ok}), (200 if ok else 404)
