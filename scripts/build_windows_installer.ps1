@@ -20,11 +20,14 @@ New-Item -ItemType Directory -Force -Path $build, (Join-Path $build "config"), (
 
 $env:PLAYWRIGHT_BROWSERS_PATH = "0"
 & $python -m playwright install chromium
+if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium installation failed." }
+$env:PLAYWRIGHT_BROWSERS_PATH = "0"
 
-& pyinstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --paths . --collect-all playwright PC_ENGINE/main.py
+
+& $python -m PyInstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --paths . --collect-all playwright PC_ENGINE/main.py
 if ($LASTEXITCODE -ne 0) { throw "PC engine EXE build failed." }
 
-& pyinstaller --noconfirm --clean --onefile --console --name VazaoSovereignTrader-MarketData --paths . PC_ENGINE/tools/run_market_data_collector.py
+& $python -m PyInstaller --noconfirm --clean --onefile --console --name VazaoSovereignTrader-MarketData --paths . PC_ENGINE/tools/run_market_data_collector.py
 if ($LASTEXITCODE -ne 0) { throw "Market-data collector EXE build failed." }
 
 Copy-Item (Join-Path $dist "VazaoSovereignTrader.exe") $build
