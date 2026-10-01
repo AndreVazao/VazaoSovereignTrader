@@ -20,6 +20,7 @@ class MobileCockpit(App):
     def build(self):
         self.lang = self._load_lang("pt")
         self.pc_url = self._load_connection_url()
+        self._saved_pc_url = self.pc_url
         self.connection_state = "NOT_TESTED"
         self.human_widgets = {}
         self.exchange_box = BoxLayout(orientation="vertical", spacing=4, size_hint_y=None)
@@ -218,7 +219,9 @@ class MobileCockpit(App):
         try:
             path = self._connection_config_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"pc_url": value}, indent=2), encoding="utf-8")
+            if value != getattr(self, "_saved_pc_url", None):
+                path.write_text(json.dumps({"pc_url": value}, indent=2), encoding="utf-8")
+                self._saved_pc_url = value
             self.pc_url = value
         except OSError:
             # Connection still works for this session if Android storage is unavailable.
