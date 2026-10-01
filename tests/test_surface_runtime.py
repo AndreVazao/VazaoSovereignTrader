@@ -83,3 +83,70 @@ def test_runtime_rejects_adapter_surface_mismatch(monkeypatch):
         assert 'surface mismatch' in str(exc)
     else:
         raise AssertionError('surface mismatch must fail closed')
+
+
+def test_runtime_health_is_never_probed_until_explicit_feedback(tmp_path):
+    runtime = ExecutionSurfaceRuntime()
+    cfg = AndroidAdbConfig("android", adb_path=str(tmp_path / "missing-adb"))
+    runtime.instantiate(runtime_id="health-1", surface=Surface.ANDROID_APK, config=cfg)
+    item = runtime.snapshot()["adapters"][0]
+    assert item["health"] == "NEVER_PROBED"
+    assert item["stale"] is None
+    assert item["feedback_age_ms"] is None
+
+
+def test_runtime_health_becomes_fresh_from_explicit_probe(monkeypatch, tmp_path):
+    runtime = ExecutionSurfaceRuntime()
+    cfg = AndroidAdbConfig("android", adb_path=str(tmp_path / "missing-adb"))
+    runtime.instantiate(runtime_id="health-2", surface=Surface.ANDROID_APK, config=cfg)
+    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 2_000))
+    runtime.probe("health-2")
+    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 2_500))
+    item = runtime.snapshot(stale_after_ms=1_000)["adapters"][0]
+    assert item["health"] == "FRESH"
+    assert item["stale"] is False
+    assert item["feedback_age_ms"] == 500
+
+
+def test_runtime_health_becomes_stale_without_automatic_probe(monkeypatch, tmp_path):
+    runtime = ExecutionSurfaceRuntime()
+    cfg = AndroidAdbConfig("android", adb_path=str(tmp_path / "missing-adb"))
+    runtime.instantiate(runtime_id="health-3", surface=Surface.ANDROID_APK, config=cfg)
+    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 2_000))
+    runtime.probe("health-3")
+    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 3_501))
+    item = runtime.snapshot(stale_after_ms=1_000)["adapters"][0]
+    assert item["health"] == "STALE"
+    assert item["stale"] is True
+    assert item["feedback_age_ms"] == 1_501
+
+
+def test_runtime_health_marks_probe_failure(monkeypatch, tmp_path):
+    runtime = ExecutionSurfaceRuntime()
+    cfg = PlaywrightPaperConfig("browser", "https://example.invalid")
+    runtime.instantiate(runtime_id="health-4", surface=Surface.WEB_BROWSER, config=cfg)
+
+    class FailingAdapter:
+        def probe(self):
+            raise RuntimeError("probe exploded")
+
+    runtime._adapters["health-4"] = FailingAdapter()
+    try:
+        runtime.probe("health-4")
+    except RuntimeError as exc:
+        assert "probe exploded" in str(exc)
+    else:
+        raise AssertionError("probe failure must propagate")
+    item = runtime.snapshot()["adapters"][0]
+    assert item["health"] == "PROBE_FAILED"
+    assert item["stale"] is None
+
+
+def test_runtime_health_marks_closed_without_claiming_freshness(tmp_path):
+    runtime = ExecutionSurfaceRuntime()
+    cfg = DesktopPaperConfig("desktop", str(tmp_path / "missing.exe"))
+    runtime.instantiate(runtime_id="health-5", surface=Surface.DESKTOP_APP, config=cfg)
+    runtime.close("health-5")
+    item = runtime.snapshot()["adapters"][0]
+    assert item["health"] == "CLOSED"
+    assert item["stale"] is None
