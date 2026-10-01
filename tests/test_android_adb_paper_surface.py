@@ -165,8 +165,8 @@ def test_mismatched_surface_is_rejected_without_invoking_adb(tmp_path: Path, mon
 
 def test_probe_request_ids_are_unique(tmp_path: Path, monkeypatch) -> None:
     _mock_adb(monkeypatch, [
-        _completed("version"), _completed("List of devices attached\\n\\n"),
-        _completed("version"), _completed("List of devices attached\\n\\n"),
+        _completed("version"), _completed("List of devices attached\n\n"),
+        _completed("version"), _completed("List of devices attached\n\n"),
     ])
     adapter = _adapter(tmp_path)
     first = adapter.probe()
