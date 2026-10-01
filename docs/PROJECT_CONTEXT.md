@@ -714,3 +714,15 @@ Live GitHub verification at review time:
 - Android bridge remains the next feature only after #290 has passed exact-head CI, been reviewed, merged, and the resulting main SHA has successful post-merge Python and Windows checks.
 - PAPER-only safety unchanged: no order controls clicked, no forms submitted, no private exchange APIs called, no REAL authorization, no cloud resources or paid services.
 
+
+
+## Desktop bridge final review — 2026-10-01
+
+- Repository context was read from `main` at SHA `145dd17f498a09853ba1dbacd5cbe41ffcf9a787` before continuing.
+- PR #290 remains the dedicated branch `feat/desktop-paper-local-bridge`, targeting `main`; do not infer its current HEAD from this note—query GitHub immediately before merge.
+- The exact prior reviewed HEAD `c48d0b35d42bd59b2587210bd37ca4db1babe324` passed Python tests (PR run `36778539991`), Windows EXE (PR run `36778539998`) and Python push CI (`36778532171`). These checks do not cover subsequent changes below.
+- Additional review hardening: commit `ff80161c5719a995a62c39f3b26cf139e29c9995` prevents repeated CONNECT from launching another child while the adapter's child is alive and removes raw UI window titles from persisted feedback; only a boolean title-filter match is retained.
+- Regression tests were added in commit `93fedf247d577b9c2587a7cd5afd697dba870972` for duplicate CONNECT and window-title redaction. Adapter semantics were documented in commit `845b9b8b7b6ba29b2bbc1c37c743e527200ac559`.
+- Final review requirements remain: inspect the complete diff; wait for both Python and Windows EXE checks to pass on the exact final PR HEAD; confirm the PR is open, mergeable and conflict-free; squash merge with expected HEAD SHA; then verify Python and Windows checks on the resulting `main` SHA.
+- No merge has been performed at this checkpoint. Android bridge remains deferred until the Desktop PR and post-merge CI are complete.
+- Safety: PAPER-only; no order UI interactions, private APIs, REAL authorization, cloud resources, paid services, or automatic runtime startup. Window titles are not stored verbatim; process-liveness evidence is operational only.
