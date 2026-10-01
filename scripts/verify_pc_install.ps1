@@ -20,8 +20,6 @@ if (-not (Test-Path (Join-Path $repo "PC_ENGINE\tools\run_market_data_bootstrap.
 if (-not (Test-Path (Join-Path $repo "PC_ENGINE\tools\run_market_data_collector.py"))) {
     throw "Continuous market-data collector is missing."
 }
-if ($LASTEXITCODE -ne 0) { throw "Required Python dependencies are missing." }
-
 & $python -m playwright --version
 if ($LASTEXITCODE -ne 0) { throw "Playwright runtime is not available." }
 
