@@ -776,3 +776,23 @@ Live GitHub verification at review time:
 3. Continue Windows PAPER restart/recovery verification and bounded multi-day evidence collection. Report missing/stale evidence explicitly; never infer readiness from file existence alone.
 4. Keep all changes PAPER-only. Never submit orders, activate REAL, bypass readiness/preflight/reconciliation/Risk Engine/RealModeGuard, provision cloud resources, deploy, or incur costs without André's explicit authorization.
 5. For each feature, use a dedicated branch and PR; inspect the exact final diff and exact-head CI, merge only when clean/mergeable and required checks are green, then verify Python and Windows EXE checks on the resulting main SHA.
+
+
+## 32. Handoff — 2026-10-01, execution-surface runtime wiring audit
+
+### Scope
+- Baseline verified main SHA: `3892b9c23d9cd7152570f7561f1c2958fce0fcdc`.
+- Post-merge Python tests run `36815891620`: SUCCESS.
+- Post-merge Windows EXE build/smoke run `36815891648`: SUCCESS.
+- The runtime audit does not start browsers, desktop applications, ADB devices, APKs, or trading runtimes.
+
+### Truthful dashboard/runtime signal
+- The execution-surface catalogue now exposes an explicit `adapter_runtime_audit` inventory for WEB_BROWSER, DESKTOP_APP, and ANDROID_APK.
+- Each configured venue identifies its concrete PAPER adapter implementation.
+- `runtime_wiring=FEEDBACK_SEEN` is emitted only when persisted runtime feedback exists for that venue/surface.
+- `runtime_wiring=NOT_OBSERVED` and `library_only=true` make the absence of runtime feedback explicit; configuration alone is not presented as an active adapter.
+- The audit is observational telemetry only and does not imply authentication, execution authorization, profitability, or readiness.
+
+### Validation
+- Added catalog tests covering both library-only/configuration state and persisted runtime-feedback evidence.
+- PAPER-only guarantees remain unchanged: no order UI interaction, no private API calls, no APK installation/launch, no order submission, and no REAL-mode changes.
