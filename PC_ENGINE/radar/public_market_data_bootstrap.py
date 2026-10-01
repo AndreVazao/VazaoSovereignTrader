@@ -53,6 +53,7 @@ def bootstrap_public_market_data(
             "public_only": True,
             "private_credentials_used": False,
         }
+        client = None
         try:
             client = factory(exchange_name)
             try:
@@ -97,10 +98,9 @@ def bootstrap_public_market_data(
         except Exception as exc:
             venue["error"] = f"{type(exc).__name__}: {exc}"
         finally:
-            close = locals().get("client")
-            if close is not None:
+            if client is not None:
                 try:
-                    close.close()
+                    client.close()
                 except Exception:
                     pass
 
