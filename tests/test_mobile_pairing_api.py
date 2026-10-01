@@ -4,8 +4,14 @@ from PC_ENGINE.api.server import create_app
 from PC_ENGINE.core.mobile_pairing import MobilePairingStore
 
 
+class FakeOwnerContext:
+    def snapshot(self):
+        return {"owner_id": "andre"}
+
+
 class FakeEngine:
     owner_id = "andre"
+    owner_context = FakeOwnerContext()
     mode = "PAPER"
     config = {"real_mode_guard": {"enabled": True}}
 
