@@ -14,7 +14,10 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
-from MOBILE_APP.secure_token import delete_device_token, load_device_token, save_device_token
+try:
+    from secure_token import delete_device_token, load_device_token, save_device_token
+except ImportError:
+    from MOBILE_APP.secure_token import delete_device_token, load_device_token, save_device_token
 
 
 
