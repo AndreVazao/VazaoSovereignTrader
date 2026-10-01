@@ -64,3 +64,23 @@ def test_manager_rejects_requested_surface_mismatch(tmp_path):
         assert 'surface mismatch' in str(exc)
     else:
         raise AssertionError('configured surface mismatch must fail closed')
+
+
+def test_manager_exposes_configured_runtime_health_window(tmp_path):
+    config = _config(tmp_path)
+    config["execution_surface"]["runtime_health_stale_after_ms"] = 12_345
+    manager = ExecutionSurfaceRuntimeManager(config)
+    assert manager.runtime_health_stale_after_ms() == 12_345
+    assert manager.snapshot()["health_policy"]["stale_after_ms"] == 12_345
+
+
+def test_manager_rejects_negative_runtime_health_window(tmp_path):
+    config = _config(tmp_path)
+    config["execution_surface"]["runtime_health_stale_after_ms"] = -1
+    manager = ExecutionSurfaceRuntimeManager(config)
+    try:
+        manager.snapshot()
+    except ValueError as exc:
+        assert "must be >= 0" in str(exc)
+    else:
+        raise AssertionError("negative runtime health window must fail closed")
