@@ -43,3 +43,43 @@ def test_close_marks_runtime_closed(tmp_path: Path) -> None:
     runtime.close("desktop-1")
     assert runtime.snapshot()["adapters"][0]["state"] == "CLOSED"
     assert runtime.get("desktop-1") is None
+
+
+
+def test_runtime_id_cannot_be_reused_after_close():
+    from PC_ENGINE.execution.surface_runtime import ExecutionSurfaceRuntime
+    from PC_ENGINE.execution.surface_adapters import Surface
+    from PC_ENGINE.execution.playwright_paper_surface import PlaywrightPaperConfig
+
+    runtime = ExecutionSurfaceRuntime()
+    cfg = PlaywrightPaperConfig(venue_id='demo', url='https://example.invalid')
+    runtime.instantiate(runtime_id='r1', surface=Surface.WEB_BROWSER, config=cfg)
+    runtime.close('r1')
+    try:
+        runtime.instantiate(runtime_id='r1', surface=Surface.WEB_BROWSER, config=cfg)
+    except ValueError as exc:
+        assert 'already used' in str(exc)
+    else:
+        raise AssertionError('closed runtime ids must not be reused')
+
+
+def test_runtime_rejects_adapter_surface_mismatch(monkeypatch):
+    from PC_ENGINE.execution.surface_runtime import ExecutionSurfaceRuntime
+    from PC_ENGINE.execution.surface_adapters import Surface
+    from PC_ENGINE.execution.playwright_paper_surface import PlaywrightPaperConfig
+
+    class WrongSurfaceAdapter:
+        surface = Surface.DESKTOP_APP
+
+    monkeypatch.setattr(
+        'PC_ENGINE.execution.surface_runtime.instantiate_adapter',
+        lambda surface, config: WrongSurfaceAdapter(),
+    )
+    runtime = ExecutionSurfaceRuntime()
+    cfg = PlaywrightPaperConfig(venue_id='demo', url='https://example.invalid')
+    try:
+        runtime.instantiate(runtime_id='r1', surface=Surface.WEB_BROWSER, config=cfg)
+    except RuntimeError as exc:
+        assert 'surface mismatch' in str(exc)
+    else:
+        raise AssertionError('surface mismatch must fail closed')
