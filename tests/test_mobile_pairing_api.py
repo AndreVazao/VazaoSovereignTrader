@@ -82,6 +82,8 @@ def test_pairing_routes_issue_restricted_revocable_device_token(tmp_path, monkey
     principal = identity.get_json()["principal"]
     assert principal["device_id"] == device["device_id"]
     assert "trade_paper" in principal["scopes"]
+    assert "respond_human_interaction" in principal["scopes"]
+    assert "manage_owner_settings" not in principal["scopes"]
     assert "trade_real" not in principal["scopes"]
     assert "manage_exchange_accounts" not in principal["scopes"]
 
