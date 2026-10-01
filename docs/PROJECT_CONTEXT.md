@@ -913,3 +913,15 @@ Path traversal is rejected and arbitrary filesystem paths are never exposed. The
 ### Scope
 
 This is deployment/operator infrastructure only. It does not change the execution authorization chain. The architecture remains PAPER-first and preserves readiness, reconciliation, Risk Engine and `RealModeGuard` boundaries.
+
+
+## 40. Handoff — 2026-10-01, Windows installer bundle-size hardening
+
+The first merged installer pipeline produced a Windows Actions artifact too large for the connected artifact handoff limit. The installer is being adjusted so Playwright Chromium is bundled once as a separate `ms-playwright` directory instead of being embedded inside the frozen engine executable.
+
+- Build installs Chromium to `installer/build/ms-playwright`.
+- The Inno Setup package installs that browser bundle under the application directory.
+- Frozen `PC_ENGINE/main.py` sets `PLAYWRIGHT_BROWSERS_PATH` to the installed bundle path before importing the engine.
+- The goal is a normal downloadable setup artifact while retaining offline-first installation and avoiding a separate browser download on the operator's PC.
+- This remains PAPER/read-only and does not change execution authorization.
+- The exact-head Windows installer artifact must pass build and smoke tests, and its size must be checked before the package is considered ready for handoff.

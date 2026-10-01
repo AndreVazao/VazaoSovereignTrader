@@ -25,6 +25,7 @@ RestartApplications=no
 [Files]
 Source: "build\VazaoSovereignTrader.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\VazaoSovereignTrader-MarketData.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\ms-playwright\*"; DestDir: "{app}\ms-playwright"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "build\config\config.example.json"; DestDir: "{app}\config"; Flags: ignoreversion onlyifdoesntexist
 Source: "build\config\config.example.json"; DestDir: "{app}\config"; DestName: "config.local.json"; Flags: ignoreversion onlyifdoesntexist
 Source: "build\README.md"; DestDir: "{app}"; Flags: ignoreversion
