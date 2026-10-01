@@ -5,6 +5,7 @@ from typing import Any
 from PC_ENGINE.execution.surface_health import ExecutionSurface, SurfaceState
 from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 from PC_ENGINE.execution.surface_feedback_store import ExecutionSurfaceFeedbackStore
+from PC_ENGINE.execution.surface_adapter_registry import adapter_registrations
 
 
 def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
@@ -22,10 +23,10 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
     browser_enabled = bool(browser_cfg.get("enabled", False))
     platforms = browser_cfg.get("platforms") or {}
 
+    adapter_registry = adapter_registrations()
     adapter_implementations = {
-        ExecutionSurface.WEB_BROWSER.value: "PlaywrightPaperSurfaceAdapter",
-        ExecutionSurface.DESKTOP_APP.value: "DesktopPaperSurfaceAdapter",
-        ExecutionSurface.ANDROID_APK.value: "AndroidAdbPaperSurfaceAdapter",
+        surface: details["implementation"]
+        for surface, details in adapter_registry.items()
     }
 
     rows: list[dict[str, Any]] = []
@@ -50,6 +51,8 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "source": live["source"] if live and enabled else "configuration",
             "live_probe": runtime_seen,
             "adapter_implementation": implementation,
+            "adapter_registered": bool(implementation and adapter_registry.get(surface.value, {}).get("registered")),
+            "adapter_instantiated": False,
             "runtime_wiring": "FEEDBACK_SEEN" if runtime_seen else "NOT_OBSERVED",
             "library_only": not runtime_seen,
             "connection_state": live["connection_state"] if live and enabled else None,
@@ -71,6 +74,8 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "source": "configuration",
             "live_probe": False,
             "adapter_implementation": adapter_implementations[ExecutionSurface.WEB_BROWSER.value],
+            "adapter_registered": True,
+            "adapter_instantiated": False,
             "runtime_wiring": "NOT_OBSERVED",
             "library_only": True,
             "detail": (
@@ -91,6 +96,8 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "venue_id": live["venue_id"], "surface": live["surface"], "state": live["state"],
             "enabled": True, "source": live["source"], "live_probe": True,
             "adapter_implementation": adapter_implementations.get(live["surface"]),
+            "adapter_registered": bool(adapter_registry.get(live["surface"], {}).get("registered")),
+            "adapter_instantiated": False,
             "runtime_wiring": "FEEDBACK_SEEN", "library_only": False,
             "connection_state": live["connection_state"], "last_feedback_age_ms": live["last_feedback_age_ms"],
             "reconnects": live["reconnects"], "data_write_health": feedback["data_write_health"],
@@ -103,6 +110,7 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "observational_only": True,
             "meaning": "FEEDBACK_SEEN means runtime feedback was persisted; NOT_OBSERVED means no runtime feedback was observed and the adapter may be library-only.",
             "implementations": adapter_implementations,
+            "registrations": adapter_registry,
         },
         "operational_only": True,
         "paper_only": True,

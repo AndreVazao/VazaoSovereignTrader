@@ -85,3 +85,22 @@ def test_surface_catalog_marks_runtime_feedback_as_wired(monkeypatch, tmp_path) 
     assert row["runtime_wiring"] == "FEEDBACK_SEEN"
     assert row["library_only"] is False
     assert row["live_probe"] is True
+
+
+def test_surface_catalog_exposes_registration_without_claiming_instantiation() -> None:
+    report = build_execution_surface_catalog({
+        "browser": {
+            "enabled": True,
+            "platforms": {
+                "demo": {"enabled": True, "surface": "WEB_BROWSER"},
+            },
+        }
+    })
+
+    audit = report["adapter_runtime_audit"]
+    assert audit["registrations"]["WEB_BROWSER"]["registered"] is True
+    assert audit["registrations"]["WEB_BROWSER"]["implementation"] == "PlaywrightPaperSurfaceAdapter"
+    assert audit["registrations"]["WEB_BROWSER"]["instantiated"] is False
+    row = report["venues"][0]
+    assert row["adapter_registered"] is True
+    assert row["adapter_instantiated"] is False
