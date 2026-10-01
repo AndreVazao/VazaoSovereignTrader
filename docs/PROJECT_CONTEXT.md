@@ -726,3 +726,27 @@ Live GitHub verification at review time:
 - Final review requirements remain: inspect the complete diff; wait for both Python and Windows EXE checks to pass on the exact final PR HEAD; confirm the PR is open, mergeable and conflict-free; squash merge with expected HEAD SHA; then verify Python and Windows checks on the resulting `main` SHA.
 - No merge has been performed at this checkpoint. Android bridge remains deferred until the Desktop PR and post-merge CI are complete.
 - Safety: PAPER-only; no order UI interactions, private APIs, REAL authorization, cloud resources, paid services, or automatic runtime startup. Window titles are not stored verbatim; process-liveness evidence is operational only.
+
+
+## Handoff — 2026-10-01, Android ADB PAPER bridge in progress
+
+### Verified baseline (supersedes earlier desktop handoff status above)
+- PR #290 (Windows-first desktop PAPER local bridge) was squash-merged to `main` at `24c28f86af3af8880792524f1fd3849ea307c945`.
+- Post-merge Python tests passed: run `36811401254`, https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/36811401254 .
+- Post-merge Windows EXE build/smoke passed: run `36811401232`, https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/36811401232 .
+- Android work is isolated on `feat/android-adb-paper-bridge`, based on that verified main SHA.
+
+### Android implementation
+- Added `PC_ENGINE/execution/android_adb_paper_surface.py` with `AndroidAdbConfig` and `AndroidAdbPaperSurfaceAdapter`, reusing the existing transport-neutral contract and bounded feedback store.
+- Read-only ADB operations: resolve adb, run `adb version`, enumerate `adb devices -l`, optionally inspect a configured package process with `adb shell pidof`.
+- Explicit states include `ADB_UNAVAILABLE`, `NO_DEVICE`, `DEVICE_UNAUTHORIZED`, `DEVICE_OFFLINE`, `MULTIPLE_DEVICES`, `APK_NOT_CONFIGURED`, `APP_NOT_OBSERVED`, `APP_OBSERVED`, and `COMMUNICATION_ERROR`.
+- Configurable command timeout, optional device serial/package, persistent request-correlated feedback and bounded retention. Raw device serials and raw ADB output are not persisted in feedback details.
+- `CONNECT` is observation-only; it does not install or launch an APK. BUY/SELL/CANCEL are PAPER intent records and never invoke ADB or interact with the Android UI.
+- Added `tests/test_android_adb_paper_surface.py` and `docs/EXECUTION_ANDROID_ADB_ADAPTER.md`, covering missing ADB, empty device list, unauthorized/offline/permission states, malformed output, timeouts, multiple devices, package/app states, request correlation and no ADB invocation for PAPER intents.
+
+### Validation gates and next steps
+1. Review the exact current PR diff and run Python tests plus Windows EXE build/smoke on the final PR HEAD.
+2. Fix all failures and re-run checks; merge only when the PR is open, clean/mergeable, and all required exact-head checks pass.
+3. After merge, verify both Python and Windows checks on the resulting `main` SHA.
+4. Do not provision SDK/ADB, install drivers/APKs, enable developer options, authorize devices, or perform any cloud/paid action automatically. These remain explicit local user actions.
+5. Keep PAPER as default. No order submission, private API use, credential/OTP/session capture, MFA/CAPTCHA bypass, REAL-mode changes, risk/readiness gate bypass, or automatic trading-runtime startup.
