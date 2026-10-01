@@ -62,7 +62,8 @@ if (-not $iscc) {
 }
 if (-not $iscc) { throw "Inno Setup ISCC.exe not found." }
 
-& $iscc $iss
+& $iscc $iss "/O$repo\installer-output"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+if (-not (Test-Path (Join-Path $repo "installer-output"))) { throw "Inno Setup did not create installer-output." }
 
 Write-Host "Windows installer created in installer\installer-output." -ForegroundColor Green
