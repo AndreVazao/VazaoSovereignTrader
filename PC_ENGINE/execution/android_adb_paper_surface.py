@@ -184,12 +184,14 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
         return self._feedback(request_id, state="COMMUNICATION_ERROR", acknowledged=False, detail=f"app_process_observation_exit_code={return_code}")
 
     def probe(self) -> SurfaceFeedback:
-        return self._observe("android-adb-probe")
+        return self._observe(f"android-adb-probe-{time.time_ns()}")
 
     def observe(self) -> SurfaceFeedback:
-        return self._observe("android-adb-observe")
+        return self._observe(f"android-adb-observe-{time.time_ns()}")
 
     def execute(self, action: SurfaceAction) -> SurfaceFeedback:
+        if action.surface is not self.surface:
+            return self._feedback(action.request_id, state="REJECTED", acknowledged=False, detail="surface_mismatch")
         if action.venue_id != self.config.venue_id:
             return self._feedback(action.request_id, state="REJECTED", acknowledged=False, detail="venue_id_mismatch")
         if action.action in {ActionKind.CONNECT, ActionKind.OBSERVE}:
