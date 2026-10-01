@@ -84,3 +84,30 @@ jobs:
           name: vazaosovereigntrader-windows
           path: VazaoSovereignTrader-Windows.zip
           if-no-files-found: error
+
+  build-installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - name: Build one-click installer
+        shell: pwsh
+        run: .\scripts\build_windows_installer.ps1
+      - name: Installer smoke test
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:GITHUB_WORKSPACE "installer-output\VazaoSovereignTrader-Setup.exe"
+          if (-not (Test-Path $installer)) { throw "Installer artifact was not produced: $installer" }
+          Write-Host "Installer: $installer"
+          Write-Host "SHA256: $((Get-FileHash $installer -Algorithm SHA256).Hash)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vazaosovereigntrader-windows-installer
+          path: installer-output
+          if-no-files-found: error

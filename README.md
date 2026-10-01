@@ -127,6 +127,19 @@ Artefactos principais:
 
 Isto não é aconselhamento financeiro e não garante lucro. Usa apenas APIs oficiais das exchanges, sem withdraw permission, e começa sempre em PAPER.
 
+## Instalação Windows com um clique
+
+A distribuição Windows também pode ser instalada através de um único `.exe` produzido pelo GitHub Actions. O instalador prepara o engine, collector público, Chromium/Playwright, configuração, pastas de dados e arranque automático em Windows sem exigir a sequência manual de PowerShell.
+
+Depois da instalação, o operador encontra:
+
+- `data\\operator_exchange\\INBOX`: enviar ficheiros do telemóvel para o PC;
+- `data\\operator_exchange\\OUTBOX`: receber relatórios/artefactos do PC no telemóvel.
+
+O cockpit Android inclui a ponte de ficheiros autenticada. A troca nunca expõe o sistema de ficheiros inteiro e permanece separada da execução.
+
+Documentação: `docs/WINDOWS_ONE_CLICK_INSTALL.md`.
+
 ## Primeira instalação e recolha de dados
 
 No Windows, a sequência operacional é:
