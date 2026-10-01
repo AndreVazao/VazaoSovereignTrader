@@ -45,6 +45,42 @@ jobs:
           Write-Host "Installer: $($installer.Name)"
           Write-Host "SHA256: $hash"
 
+          $smoke = Join-Path $env:RUNNER_TEMP "VazaoSovereignTrader-Smoke"
+          if (Test-Path $smoke) { Remove-Item $smoke -Recurse -Force }
+          & $installer.FullName /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="$smoke"
+          if ($LASTEXITCODE -ne 0) { throw "Silent installer failed with exit code $LASTEXITCODE." }
+
+          foreach ($required in @(
+              "$smoke\VazaoSovereignTrader.exe",
+              "$smoke\VazaoSovereignTrader-MarketData.exe",
+              "$smoke\config\config.local.json",
+              "$smoke\data\operator_exchange\INBOX",
+              "$smoke\data\operator_exchange\OUTBOX"
+          )) {
+              if (-not (Test-Path $required)) { throw "Installer did not create required path: $required" }
+          }
+
+          $proc = Start-Process -FilePath "$smoke\VazaoSovereignTrader.exe" -WorkingDirectory $smoke -PassThru
+          try {
+              $ready = $false
+              for ($i = 0; $i -lt 20; $i++) {
+                  Start-Sleep -Seconds 1
+                  try {
+                      $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/health -TimeoutSec 2
+                      if ($response.StatusCode -eq 200) { $ready = $true; break }
+                  } catch {}
+                  if ($proc.HasExited) { throw "Installed engine exited before health check (exit code $($proc.ExitCode))." }
+              }
+              if (-not $ready) { throw "Installed engine health endpoint did not become ready." }
+          } finally {
+              if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+
+          $uninstaller = Join-Path $smoke "unins000.exe"
+          if (Test-Path $uninstaller) {
+              & $uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: vazaosovereigntrader-windows-installer
