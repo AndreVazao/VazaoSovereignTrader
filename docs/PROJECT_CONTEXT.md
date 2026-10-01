@@ -925,3 +925,16 @@ The first merged installer pipeline produced a Windows Actions artifact too larg
 - The goal is a normal downloadable setup artifact while retaining offline-first installation and avoiding a separate browser download on the operator's PC.
 - This remains PAPER/read-only and does not change execution authorization.
 - The exact-head Windows installer artifact must pass build and smoke tests, and its size must be checked before the package is considered ready for handoff.
+
+
+## 41. Handoff — 2026-10-01, Android first-pairing and reconnect foundation
+
+- Baseline main SHA: `e4c7b1398a228b72e5a0fea21efccfc465fb77f4`; post-merge Python tests and Windows EXE (including installer job) are green on that exact SHA (runs 36839565488 and 36839565481).
+- Branch: `feat/android-first-pairing-reconnect`.
+- Android cockpit now loads and saves the PC endpoint in its private app data after a successful connection; only the endpoint is persisted, never the local API token.
+- Existing polling provides retry attempts while the app is running, with explicit offline/reconnect status text.
+- Added `scripts/pair_android_usb.ps1`: requires exactly one authorized Android device, supports optional APK install, and creates a temporary ADB reverse tunnel for port 8765. It never reads/prints tokens and does not bypass Android user authorization.
+- Added `docs/ANDROID_FIRST_PAIRING.md` and updated the mobile README to explain USB bootstrap, LAN setup, Tailscale remote access, endpoint persistence and current limitations.
+- Important limitations remain explicit: no cryptographic one-time pairing challenge/device revocation yet; no Android Keystore-backed token persistence; the operator must enter the token again after a fresh app process; Tailscale installation/sign-in remains user-driven; USB reverse is temporary only.
+- No direct Internet port forwarding, cloud provisioning, private exchange API, order submission or REAL-mode changes.
+- Next work after CI/review: implement PC-approved one-time pairing and revocable device identity with Android Keystore-backed secret storage, then a guided LAN/Tailscale connection diagnostic.
