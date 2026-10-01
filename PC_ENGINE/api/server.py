@@ -26,6 +26,7 @@ from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scorecard, refresh_runtime_evidence_reports
 from PC_ENGINE.diagnostics.execution_surface_catalog import build_execution_surface_catalog
 from PC_ENGINE.execution.surface_runtime_manager import ExecutionSurfaceRuntimeManager
+from PC_ENGINE.api.operator_exchange import OperatorExchange
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -47,6 +48,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
     research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
     surface_runtime = ExecutionSurfaceRuntimeManager(engine.config)
+    exchange_cfg = dict(engine.config.get("operator_exchange", {}))
+    operator_exchange = OperatorExchange(
+        exchange_cfg.get("data_dir", "PC_ENGINE/data/operator_exchange"),
+        max_upload_mb=int(exchange_cfg.get("max_upload_mb", 25)),
+    )
 
     def require_token() -> AuthenticatedPrincipal:
         provided = request.headers.get("X-Token", "")
@@ -76,6 +82,47 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.get("/dashboard")
     def dashboard():
         return Response(DASHBOARD_HTML, mimetype="text/html")
+
+    @app.get("/operator-files")
+    def operator_files():
+        require_scope("read_private_state")
+        return jsonify({
+            "ok": True,
+            "root": str(operator_exchange.root),
+            "folders": {
+                "INBOX": operator_exchange.list_files("INBOX"),
+                "OUTBOX": operator_exchange.list_files("OUTBOX"),
+            },
+            "upload_folder": "INBOX",
+            "paper_only": True,
+        })
+
+    @app.post("/operator-files/upload")
+    def operator_files_upload():
+        require_scope("read_private_state")
+        uploaded = request.files.get("file")
+        if uploaded is None or not uploaded.filename:
+            return jsonify({"ok": False, "error": "file_required"}), 400
+        try:
+            result = operator_exchange.save_upload("INBOX", uploaded.filename, uploaded.stream)
+            return jsonify({
+                "ok": True,
+                "file": result,
+                "folder": "INBOX",
+                "paper_only": True,
+                "execution_authorized": False,
+            })
+        except (OSError, ValueError, PermissionError) as exc:
+            return jsonify({"ok": False, "error": "operator_file_upload_failed", "detail": str(exc)}), 400
+
+    @app.get("/operator-files/<folder>/<filename>")
+    def operator_file_download(folder: str, filename: str):
+        require_scope("read_private_state")
+        try:
+            path = operator_exchange.resolve_download(folder, filename)
+        except (OSError, ValueError, FileNotFoundError) as exc:
+            return jsonify({"ok": False, "error": "operator_file_not_found", "detail": str(exc)}), 404
+        return send_file(path, as_attachment=True, download_name=path.name)
 
     @app.get("/health")
     def health():
