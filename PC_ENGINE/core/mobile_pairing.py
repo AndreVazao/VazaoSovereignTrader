@@ -208,8 +208,10 @@ class MobilePairingStore:
                 if item.get("status") != "ACTIVE":
                     continue
                 if hmac.compare_digest(token_hash, str(item.get("token_hash", ""))):
-                    item["last_seen_at"] = now
-                    self._write(payload)
+                    last_seen = int(item.get("last_seen_at", 0))
+                    if now - last_seen >= 60:
+                        item["last_seen_at"] = now
+                        self._write(payload)
                     return AuthenticatedPrincipal(
                         user_id=str(item.get("owner_id", self.owner_id)),
                         owner_id=str(item.get("owner_id", self.owner_id)),
