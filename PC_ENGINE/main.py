@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+# The Windows installer ships Chromium separately from the frozen engine so
+# the setup artifact stays downloadable. Resolve that browser bundle at runtime.
+if getattr(sys, "frozen", False):
+    os.environ.setdefault(
+        "PLAYWRIGHT_BROWSERS_PATH",
+        str(Path(sys.executable).resolve().parent / "ms-playwright"),
+    )
 
 # Allows running both from repo root (`python PC_ENGINE/main.py`) and from PC_ENGINE (`python main.py`).
 REPO_ROOT = Path(__file__).resolve().parents[1]
