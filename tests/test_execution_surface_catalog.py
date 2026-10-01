@@ -104,3 +104,53 @@ def test_surface_catalog_exposes_registration_without_claiming_instantiation() -
     row = report["venues"][0]
     assert row["adapter_registered"] is True
     assert row["adapter_instantiated"] is False
+
+
+def test_surface_catalog_exposes_actual_in_process_runtime():
+    report = build_execution_surface_catalog(
+        {
+            "browser": {
+                "enabled": True,
+                "platforms": {"demo": {"enabled": True, "surface": "WEB_BROWSER"}},
+            }
+        },
+        runtime_snapshot={
+            "adapters": [{
+                "runtime_id": "demo-runtime",
+                "venue_id": "demo",
+                "surface": "WEB_BROWSER",
+                "state": "PROBED",
+            }]
+        },
+    )
+
+    row = report["venues"][0]
+    assert row["adapter_instantiated"] is True
+    assert row["runtime_id"] == "demo-runtime"
+    assert row["runtime_state"] == "PROBED"
+    assert row["runtime_wiring"] == "IN_PROCESS_PROBED"
+    assert row["library_only"] is False
+
+
+def test_surface_catalog_does_not_keep_closed_runtime_as_instantiated():
+    report = build_execution_surface_catalog(
+        {
+            "browser": {
+                "enabled": True,
+                "platforms": {"demo": {"enabled": True, "surface": "WEB_BROWSER"}},
+            }
+        },
+        runtime_snapshot={
+            "adapters": [{
+                "runtime_id": "demo-runtime",
+                "venue_id": "demo",
+                "surface": "WEB_BROWSER",
+                "state": "CLOSED",
+            }]
+        },
+    )
+
+    row = report["venues"][0]
+    assert row["adapter_instantiated"] is False
+    assert row["runtime_state"] == "CLOSED"
+    assert row["runtime_wiring"] == "NOT_OBSERVED"
