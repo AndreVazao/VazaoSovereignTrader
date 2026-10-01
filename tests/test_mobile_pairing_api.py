@@ -80,7 +80,7 @@ def test_pairing_routes_issue_restricted_revocable_device_token(tmp_path, monkey
     assert "manage_exchange_accounts" not in principal["scopes"]
 
     real_arm = client.post("/real/arm", headers=device_headers, json={"phrase": "EU ACEITO O RISCO"})
-    assert real_arm.status_code == 403
+    assert real_arm.status_code == 401
 
     revoke = client.post(
         "/mobile-pairing/revoke",
