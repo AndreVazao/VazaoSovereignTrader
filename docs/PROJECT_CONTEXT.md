@@ -946,3 +946,17 @@ The first merged installer pipeline produced a Windows Actions artifact too larg
 - Removed the explicit `requests` and `charset-normalizer` app requirements and migrated the mobile cockpit's HTTP calls to Python's standard-library `urllib`, including JSON requests/responses and multipart file upload. This avoids the problematic requests dependency resolver path and keeps Android networking dependency-light.
 - The change is on `feat/android-first-pairing-reconnect`; do not merge until the Android APK workflow, Python tests and Windows EXE/installer workflow pass on the exact same PR head.
 - This is a transport implementation change only: API token remains in memory and is not persisted; only the successful PC endpoint is saved in app-private storage. No trading execution, exchange credentials, public port forwarding or REAL-mode changes.
+
+
+## 43. Handoff — 2026-10-01, Android USB bridge merged and post-merge CI verified
+
+- Verified live GitHub main HEAD: `2b9351de72e21f3920e4b01000b704514c4412f5`.
+- PR #304, `feat(android): add USB first-pairing and reconnect foundation`, merged by squash into main at the above SHA. PR: https://github.com/AndreVazao/VazaoSovereignTrader/pull/304
+- Exact PR-head SHA before merge: `d61124fb97cf05e2c0b208e5bbb78715220d5149`. Python tests, Windows EXE, and Android APK workflows completed successfully on this SHA. The Windows workflow also completed the installer job successfully.
+- Post-merge CI is now verified green on exact main SHA `2b9351de72e21f3920e4b01000b704514c4412f5`: Python tests, Windows EXE, and installer all completed with success. Runs: https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/36895961808 and https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/36895961777
+- Android mobile cockpit persists only the PC endpoint in app-private storage after a successful connection; the control token is not persisted and must be entered again after a fresh app process. HTTP transport uses Python standard-library urllib to avoid the python-for-android dependency resolution failure.
+- `scripts/pair_android_usb.ps1` requires exactly one authorized ADB device, optionally installs a configured APK, and establishes a temporary `adb reverse` tunnel for local bridge port 8765. USB debugging is still user-authorized; no credentials are read or printed.
+- Explicitly unimplemented: cryptographic one-time pairing challenge, revocable per-device identity, Android Keystore token storage, and guided LAN/Tailscale diagnostics. The current USB tunnel is temporary and does not itself provide a complete pairing protocol.
+- Safety unchanged: PAPER is default; no order submission, no exchange credentials, no public port forwarding, no cloud provisioning, and no REAL-mode gate changes.
+- Next engineering step: create one dedicated feature branch/PR for PC-approved one-time pairing, revocable device identity, Android Keystore-backed secret storage, and tests for replay, expiry, unauthorized device, revocation, reconnect, and malformed requests. Keep all secrets out of source/logs. Do not claim hardware validation until tested against a real authorized Android device and Windows PC.
+- The main context file previously lagged behind the live repository; this handoff must be merged through a dedicated documentation PR rather than direct edits to main.
