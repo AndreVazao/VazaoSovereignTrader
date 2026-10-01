@@ -62,7 +62,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         provided = request.headers.get("X-Token", "")
         tailscale_identity = request.headers.get("X-Tailscale-Identity", "")
         device_id = request.headers.get("X-Device-ID", "")
-        principal = mobile_pairing.authenticate(provided)
+        try:
+            principal = mobile_pairing.authenticate(provided)
+        except RuntimeError:
+            # A corrupt pairing registry must fail device auth closed without locking out the owner token.
+            principal = None
         if principal is None:
             principal = identity.authenticate(
                 provided,
