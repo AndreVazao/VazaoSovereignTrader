@@ -960,3 +960,34 @@ The first merged installer pipeline produced a Windows Actions artifact too larg
 - Safety unchanged: PAPER is default; no order submission, no exchange credentials, no public port forwarding, no cloud provisioning, and no REAL-mode gate changes.
 - Next engineering step: create one dedicated feature branch/PR for PC-approved one-time pairing, revocable device identity, Android Keystore-backed secret storage, and tests for replay, expiry, unauthorized device, revocation, reconnect, and malformed requests. Keep all secrets out of source/logs. Do not claim hardware validation until tested against a real authorized Android device and Windows PC.
 - The main context file previously lagged behind the live repository; this handoff must be merged through a dedicated documentation PR rather than direct edits to main.
+
+
+## 44. Secure Android device pairing — implementation branch opened 2026-10-01
+
+Current implementation branch: `feat/android-revocable-device-pairing`, based on main SHA `1f882c28ba2cb104d936d425f91a2c3dc9ec5b9a`. Do not treat this work as merged or hardware-validated until its PR, exact-head CI, review, merge, and post-merge CI are complete.
+
+Files added/changed in this branch:
+- `PC_ENGINE/core/mobile_pairing.py`: local JSON registry; five-minute one-time challenge; explicit approval state; SHA-256 token hashes; random per-device bearer tokens; atomic writes; active/revoked state; restricted scopes `read_private_state` and `trade_paper`; throttled last-seen persistence.
+- `PC_ENGINE/api/server.py`: owner-token-protected challenge creation/status/completion, device listing, and server-side revocation routes. Device tokens authenticate as separate principals; malformed pairing-store state fails device auth closed while retaining owner-token recovery.
+- `MOBILE_APP/secure_token.py`: Android Keystore AES-GCM encryption/decryption of the device token; fails closed off Android and never writes plaintext.
+- `MOBILE_APP/main.py`: pairing UI, temporary owner-token use, approval status check, Keystore persistence, local token forgetting, and UI-level block on REAL actions for paired device tokens.
+- `scripts/approve_mobile_pairing.py`: explicit local-console approval requiring selected device, code from Android, and typed `APROVAR`.
+- `scripts/revoke_mobile_device.py`: explicit local-console revocation requiring selected device and typed `REVOGAR`.
+- Tests: `tests/test_mobile_pairing.py`, `tests/test_mobile_pairing_api.py`, `tests/test_mobile_secure_token.py`.
+- `docs/ANDROID_FIRST_PAIRING.md`: setup, pairing, revocation, limitations, and hardware-validation status.
+
+Security invariants:
+- Pairing challenges expire after five minutes and cannot be completed twice.
+- The raw device token and confirmation code are not persisted; only the device-token SHA-256 digest is stored.
+- Device tokens have only `read_private_state` and `trade_paper` scopes; no `trade_real`, owner-management, or exchange-account management scopes.
+- PC console approval is separate from mobile challenge creation and requires the six-digit code shown on the phone.
+- Android token persistence uses a non-exportable AES-GCM key in Android Keystore; storage failure triggers a server revocation attempt and no plaintext fallback.
+- The existing owner token is never saved in mobile config. It is required temporarily to initiate and complete pairing.
+- `ESQUECER` removes local material only; server-side revocation is separate and is provided by the PC console helper.
+- No public port forwarding, cloud provisioning, exchange credential handling, order submission, or REAL-mode gate modification.
+
+Review points before merge:
+- Confirm Android python-for-android packaging can import `secure_token.py` and that Pyjnius Java-array / AndroidKeyStore calls work on a real supported device.
+- Check route authorization and response semantics, malformed/corrupt registry handling, concurrent writes, challenge expiry, replay, revocation, and scope restriction.
+- CI must run Python tests, Windows EXE, installer, and Android APK on the exact PR head SHA. These checks and physical Android validation are not yet claimed as complete.
+- Keep PAPER as default and do not claim end-to-end pairing validated until an authorized physical Android device and Windows PC have completed the flow.
