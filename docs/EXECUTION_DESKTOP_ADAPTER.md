@@ -9,7 +9,7 @@ The desktop surface is the Windows-first implementation of the transport-neutral
 - verify that the configured executable path is a file, not merely an existing directory;
 - launch that executable through a local subprocess with 'shell=False';
 - observe process liveness;
-- optionally inspect visible Windows UI Automation window titles when 'pywinauto' is installed;
+- optionally inspect visible Windows UI Automation window titles when 'pywinauto' is installed, recording only whether a configured title filter matched and never persisting the raw title;
 - persist deterministic PAPER feedback through 'ExecutionSurfaceFeedbackStore';
 - record PAPER BUY/SELL/CANCEL intents without clicking order controls.
 
@@ -44,7 +44,7 @@ The adapter is local-only. Relative application/data paths should be resolved by
 - 'DISCONNECTED' when the executable exists but the process is not running;
 - 'OBSERVED' when the application process is running at observation time.
 
-A process that exits immediately after launch is reported as 'DOWN' rather than treated as a successful connection. Windows process-name checks use exact CSV image-name matching; POSIX checks use exact-name `pgrep -x` matching. These are operational signals, not proof that the intended exchange account is authenticated or usable.
+A process that exits immediately after launch is reported as 'DOWN' rather than treated as a successful connection. Repeated CONNECT requests do not launch a duplicate process while the adapter's current child is alive. Windows process-name checks use exact CSV image-name matching; POSIX checks use exact-name `pgrep -x` matching. These are operational signals, not proof that the intended exchange account is authenticated or usable.
 
 'CONNECT' starts only the configured desktop process. 'OBSERVE' reads operational state and preserves the caller's request ID in persisted feedback. BUY/SELL/CANCEL produce 'PAPER_INTENT_RECORDED' feedback and no trading-side effect.
 
