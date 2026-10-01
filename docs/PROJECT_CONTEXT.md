@@ -796,3 +796,18 @@ Live GitHub verification at review time:
 ### Validation
 - Added catalog tests covering both library-only/configuration state and persisted runtime-feedback evidence.
 - PAPER-only guarantees remain unchanged: no order UI interaction, no private API calls, no APK installation/launch, no order submission, and no REAL-mode changes.
+
+
+## 33. Handoff — 2026-10-01, explicit execution-surface adapter registry
+
+- Baseline main SHA: `f2205920763d98f3635db53f1672e5b92e160312`, after PR #294 and its post-merge Python/Windows verification.
+- Added `PC_ENGINE/execution/surface_adapter_registry.py` as the single explicit registration point for the PAPER browser, desktop and Android adapters.
+- The dashboard/catalog audit now distinguishes:
+  - `adapter_registered=true`: a concrete adapter implementation is registered for the surface.
+  - `adapter_instantiated=false`: the catalogue itself has not instantiated or started a transport.
+  - `runtime_wiring=FEEDBACK_SEEN`: persisted runtime feedback exists, but this remains evidence of observed transport telemetry rather than proof of a specific adapter instance.
+  - `runtime_wiring=NOT_OBSERVED`: no persisted runtime feedback was observed.
+- The registry exposes a controlled `instantiate_adapter()` path for future runtime wiring. Instantiation alone does not probe, launch, connect or submit an order.
+- Tests verify all supported surfaces are registered and that constructing the adapters does not create feedback files or start a transport.
+- This change is observational/structural only. It does not alter execution authorization, readiness, Risk Engine, reconciliation or RealModeGuard.
+- PAPER-only guarantees remain unchanged: no exchange order submission, no private API trading, no credential persistence, no automatic browser/desktop/ADB startup.
