@@ -938,3 +938,11 @@ The first merged installer pipeline produced a Windows Actions artifact too larg
 - Important limitations remain explicit: no cryptographic one-time pairing challenge/device revocation yet; no Android Keystore-backed token persistence; the operator must enter the token again after a fresh app process; Tailscale installation/sign-in remains user-driven; USB reverse is temporary only.
 - No direct Internet port forwarding, cloud provisioning, private exchange API, order submission or REAL-mode changes.
 - Next work after CI/review: implement PC-approved one-time pairing and revocable device identity with Android Keystore-backed secret storage, then a guided LAN/Tailscale connection diagnostic.
+
+
+## 42. Handoff — 2026-10-01, Android APK dependency compatibility repair
+
+- Android CI on PR #304 exposed a build failure in python-for-android's pure-Python dependency installation: it resolved a CPython 3.14 Android wheel for `charset-normalizer`, then pip rejected that wheel in the build environment. The failure was confirmed from the exact workflow job logs.
+- Removed the explicit `requests` and `charset-normalizer` app requirements and migrated the mobile cockpit's HTTP calls to Python's standard-library `urllib`, including JSON requests/responses and multipart file upload. This avoids the problematic requests dependency resolver path and keeps Android networking dependency-light.
+- The change is on `feat/android-first-pairing-reconnect`; do not merge until the Android APK workflow, Python tests and Windows EXE/installer workflow pass on the exact same PR head.
+- This is a transport implementation change only: API token remains in memory and is not persisted; only the successful PC endpoint is saved in app-private storage. No trading execution, exchange credentials, public port forwarding or REAL-mode changes.
