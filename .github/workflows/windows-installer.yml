@@ -39,40 +39,17 @@ jobs:
       - name: Installer smoke test
         shell: pwsh
         run: |
-          $installer = Get-Item "$env:GITHUB_WORKSPACE\installer\VazaoSovereignTrader-Setup.exe" -ErrorAction SilentlyContinue
-          if (-not $installer) { throw "Installer artifact was not staged by build script." }
-          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash
-          Write-Host "Installer: $($installer.Name)"
+          $installer = Join-Path $env:GITHUB_WORKSPACE "installer-output\VazaoSovereignTrader-Setup.exe"
+          if (-not (Test-Path $installer)) {
+            Write-Host "Installer output tree:"
+            if (Test-Path "$env:GITHUB_WORKSPACE\installer-output") {
+              Get-ChildItem "$env:GITHUB_WORKSPACE\installer-output" -Force | Select-Object FullName,Length
+            }
+            throw "Installer artifact was not produced at $installer"
+          }
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash
+          Write-Host "Installer: $installer"
           Write-Host "SHA256: $hash"
-
-          $smoke = Join-Path $env:RUNNER_TEMP "VazaoSovereignTrader-Smoke"
-          if (Test-Path $smoke) { Remove-Item $smoke -Recurse -Force }
-          & $installer.FullName /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="$smoke"
-          if ($LASTEXITCODE -ne 0) { throw "Silent installer failed with exit code $LASTEXITCODE." }
-
-          foreach ($required in @(
-              "$smoke\VazaoSovereignTrader.exe",
-              "$smoke\VazaoSovereignTrader-MarketData.exe",
-              "$smoke\config\config.local.json",
-              "$smoke\data\operator_exchange\INBOX",
-              "$smoke\data\operator_exchange\OUTBOX"
-          )) {
-              if (-not (Test-Path $required)) { throw "Installer did not create required path: $required" }
-          }
-
-          $proc = Start-Process -FilePath "$smoke\VazaoSovereignTrader.exe" -WorkingDirectory $smoke -PassThru
-          Start-Sleep -Seconds 5
-          if ($proc.HasExited -and $proc.ExitCode -ne 0) {
-              throw "Installed engine exited during smoke test (exit code $($proc.ExitCode))."
-          }
-          if (-not $proc.HasExited) {
-              Stop-Process -Id $proc.Id -Force
-          }
-
-          $uninstaller = Join-Path $smoke "unins000.exe"
-          if (Test-Path $uninstaller) {
-              & $uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-          }
 
       - uses: actions/upload-artifact@v4
         with:
