@@ -99,9 +99,11 @@ def test_runtime_health_becomes_fresh_from_explicit_probe(monkeypatch, tmp_path)
     runtime = ExecutionSurfaceRuntime()
     cfg = AndroidAdbConfig("android", adb_path=str(tmp_path / "missing-adb"))
     runtime.instantiate(runtime_id="health-2", surface=Surface.ANDROID_APK, config=cfg)
-    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 2_000))
     runtime.probe("health-2")
-    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 2_500))
+    record = runtime._records["health-2"]
+    now = runtime._now_ms()
+    record.last_feedback_at_ms = now - 500
+    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: now))
     item = runtime.snapshot(stale_after_ms=1_000)["adapters"][0]
     assert item["health"] == "FRESH"
     assert item["stale"] is False
@@ -112,9 +114,11 @@ def test_runtime_health_becomes_stale_without_automatic_probe(monkeypatch, tmp_p
     runtime = ExecutionSurfaceRuntime()
     cfg = AndroidAdbConfig("android", adb_path=str(tmp_path / "missing-adb"))
     runtime.instantiate(runtime_id="health-3", surface=Surface.ANDROID_APK, config=cfg)
-    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 2_000))
     runtime.probe("health-3")
-    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: 3_501))
+    record = runtime._records["health-3"]
+    now = runtime._now_ms()
+    record.last_feedback_at_ms = now - 1_501
+    monkeypatch.setattr(runtime, "_now_ms", staticmethod(lambda: now))
     item = runtime.snapshot(stale_after_ms=1_000)["adapters"][0]
     assert item["health"] == "STALE"
     assert item["stale"] is True
