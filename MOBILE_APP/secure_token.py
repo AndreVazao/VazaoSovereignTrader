@@ -16,7 +16,7 @@ def _android_crypto():
     KeyProperties = autoclass("android.security.keystore.KeyProperties")
     Cipher = autoclass("javax.crypto.Cipher")
     GCMParameterSpec = autoclass("javax.crypto.spec.GCMParameterSpec")
-    return KeyStore, KeyGenerator, KeyProperties, Cipher, GCMParameterSpec, jarray
+    return autoclass, KeyStore, KeyGenerator, KeyProperties, Cipher, GCMParameterSpec, jarray
 
 
 def _to_java_bytes(data: bytes, jarray):
@@ -36,7 +36,7 @@ def save_device_token(path: str | Path, token: str) -> bool:
     if not token:
         return False
     try:
-        KeyStore, KeyGenerator, KeyProperties, Cipher, _, jarray = _android_crypto()
+        autoclass, KeyStore, KeyGenerator, KeyProperties, Cipher, _, jarray = _android_crypto()
         store = KeyStore.getInstance("AndroidKeyStore")
         store.load(None)
         if not store.containsAlias(_ALIAS):
@@ -73,7 +73,7 @@ def load_device_token(path: str | Path) -> str:
         if len(packed) < 13:
             return ""
         iv, encrypted = packed[:12], packed[12:]
-        KeyStore, _, _, Cipher, GCMParameterSpec, jarray = _android_crypto()
+        _, KeyStore, _, _, Cipher, GCMParameterSpec, jarray = _android_crypto()
         store = KeyStore.getInstance("AndroidKeyStore")
         store.load(None)
         key = store.getKey(_ALIAS, None)
@@ -93,7 +93,7 @@ def delete_device_token(path: str | Path) -> None:
     except OSError:
         pass
     try:
-        KeyStore, _, _, _, _, _ = _android_crypto()
+        _, KeyStore, _, _, _, _, _ = _android_crypto()
         store = KeyStore.getInstance("AndroidKeyStore")
         store.load(None)
         if store.containsAlias(_ALIAS):
