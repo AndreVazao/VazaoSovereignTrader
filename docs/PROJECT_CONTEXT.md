@@ -979,7 +979,7 @@ Files added/changed in this branch:
 Security invariants:
 - Pairing challenges expire after five minutes and cannot be completed twice.
 - The raw device token and confirmation code are not persisted; only the device-token SHA-256 digest is stored.
-- Device tokens have only `read_private_state` and `trade_paper` scopes; no `trade_real`, owner-management, or exchange-account management scopes.
+- Device tokens have only `read_private_state`, `trade_paper`, and `respond_human_interaction` scopes. The last scope permits responding to an explicit PC-originated human prompt only; it does not grant prompt creation, owner settings, `trade_real`, or exchange-account management.
 - PC console approval is separate from mobile challenge creation and requires the six-digit code shown on the phone.
 - Android token persistence uses a non-exportable AES-GCM key in Android Keystore; storage failure triggers a server revocation attempt and no plaintext fallback.
 - The existing owner token is never saved in mobile config. It is required temporarily to initiate and complete pairing.
