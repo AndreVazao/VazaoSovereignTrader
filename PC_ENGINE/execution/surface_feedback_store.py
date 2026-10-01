@@ -16,6 +16,12 @@ class ExecutionSurfaceFeedbackStore:
     Writes are atomic and the retained record count is bounded.
     """
 
+    _DOWN_STATES = {
+        "DOWN", "DISCONNECTED", "ADB_UNAVAILABLE", "NO_DEVICE",
+        "DEVICE_UNAUTHORIZED", "DEVICE_OFFLINE", "COMMUNICATION_ERROR",
+    }
+    _HEALTHY_STATES = {"CONNECTED", "READY", "OBSERVED", "APP_OBSERVED"}
+
     def __init__(self, path: str | Path, *, max_records: int = 2_000) -> None:
         if max_records < 1:
             raise ValueError("max_records must be positive")
@@ -80,7 +86,7 @@ class ExecutionSurfaceFeedbackStore:
             if not key[0] or not key[1]:
                 continue
             state = str(item.get("state", "UNKNOWN")).upper()
-            if state in {"CONNECTED", "READY", "OBSERVED"} and previous_state.get(key) in {"DOWN", "DISCONNECTED"}:
+            if state in self._HEALTHY_STATES and previous_state.get(key) in self._DOWN_STATES:
                 reconnects[key] = reconnects.get(key, 0) + 1
             previous_state[key] = state
             latest[key] = item
@@ -90,9 +96,9 @@ class ExecutionSurfaceFeedbackStore:
             observed_at = int(item.get("observed_at_ms", 0) or 0)
             age = max(0, now_ms - observed_at) if observed_at > 0 else None
             state = str(item.get("state", "UNKNOWN")).upper()
-            if state in {"DOWN", "DISCONNECTED"}:
+            if state in self._DOWN_STATES:
                 operational_state = "DOWN"
-            elif age is None or age > stale_after_ms:
+            elif state not in self._HEALTHY_STATES or age is None or age > stale_after_ms:
                 operational_state = "DEGRADED"
             else:
                 operational_state = "HEALTHY"
