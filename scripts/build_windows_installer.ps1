@@ -66,11 +66,16 @@ if (-not $iscc) { throw "Inno Setup ISCC.exe not found." }
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
 $output = Join-Path $repo "installer-output"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-$builtInstaller = Get-ChildItem -Path $repo -Filter *.exe -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -notmatch "\\installer\\build\\|\\dist\\|\\.git\\" } |
+$installerName = "VazaoSovereignTrader-Setup.exe"
+$expected = Join-Path $output $installerName
+$generated = Get-ChildItem -Path $repo -Filter "VazaoSovereignTrader-Setup*.exe" -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch "\\.git\\|\\installer\\build\\" } |
+    Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
-if (-not $builtInstaller) { throw "Inno Setup completed but no installer EXE was found." }
-Copy-Item $builtInstaller.FullName (Join-Path $output "VazaoSovereignTrader-Setup.exe") -Force
-Copy-Item $builtInstaller.FullName (Join-Path $repo "installer\VazaoSovereignTrader-Setup.exe") -Force
+if (-not $generated) { throw "Inno Setup completed but no setup EXE was found." }
+if ($generated.FullName -ne $expected) {
+    Copy-Item $generated.FullName $expected -Force
+}
+if (-not (Test-Path $expected)) { throw "Installer normalization failed: $expected" }
 
 Write-Host "Windows installer created in installer\installer-output." -ForegroundColor Green
