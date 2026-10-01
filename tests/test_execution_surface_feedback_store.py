@@ -65,7 +65,7 @@ def test_android_unavailable_state_is_not_reported_healthy(tmp_path):
 
 
 def test_android_unconfigured_app_state_is_degraded_not_healthy(tmp_path):
-        from PC_ENGINE.execution.surface_adapters import Surface, SurfaceFeedback
+    from PC_ENGINE.execution.surface_adapters import Surface, SurfaceFeedback
 
     store = ExecutionSurfaceFeedbackStore(tmp_path / "feedback.jsonl", max_records=10)
     feedback = SurfaceFeedback(
