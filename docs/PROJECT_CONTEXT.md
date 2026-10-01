@@ -877,3 +877,39 @@ Live GitHub verification at review time:
 - O collector WebSocket existente continua separado do PC Engine e grava health + eventos + aprendizagem PAPER.
 - A instalação operacional passa a ter sequência clara: setup -> verify install -> verify public market data -> install Windows autostart.
 - Nada nesta fase ativa REAL ou altera os gates de Risk Engine, reconciliation, readiness ou RealModeGuard.
+
+
+## 39. Handoff — 2026-10-01, one-click Windows installer + operator file exchange
+
+This feature adds a distributable Windows installation path intended to replace the multi-step first-install PowerShell sequence for normal users.
+
+### Windows installer
+
+- `installer/VazaoSovereignTrader.iss` defines an Inno Setup installer.
+- `scripts/build_windows_installer.ps1` builds two frozen executables:
+  - `VazaoSovereignTrader.exe` — PC engine, with Playwright Chromium bundled for the browser execution surface.
+  - `VazaoSovereignTrader-MarketData.exe` — continuous public/read-only market-data collector.
+- `.github/workflows/windows-installer.yml` builds the installer in GitHub Actions and uploads a single `.exe` artifact.
+- The installer is user-local under `%LOCALAPPDATA%\\VazaoSovereignTrader` and does not require administrator elevation.
+- The installer creates Windows logon tasks for the engine and market-data collector and starts the engine after installation.
+- Configuration is preserved on upgrades; `config.local.json` is only created from the example when it does not already exist.
+- Runtime remains PAPER/read-only; installation never creates exchange credentials, submits orders or enables REAL execution.
+
+### Operator file exchange
+
+Two explicit folders are created below the installed runtime:
+
+- `data/operator_exchange/INBOX`: operator/mobile -> PC.
+- `data/operator_exchange/OUTBOX`: PC -> operator/mobile.
+
+The authenticated API exposes only these folders through:
+
+- `GET /operator-files`
+- `POST /operator-files/upload` (INBOX only, bounded upload size)
+- `GET /operator-files/<folder>/<filename>`
+
+Path traversal is rejected and arbitrary filesystem paths are never exposed. The mobile cockpit now has file exchange controls; Android uses the system document picker for upload/download targets. The downloaded OUTBOX file can therefore be saved to a user-selected phone location and then attached/shared from the phone.
+
+### Scope
+
+This is deployment/operator infrastructure only. It does not change the execution authorization chain. The architecture remains PAPER-first and preserves readiness, reconciliation, Risk Engine and `RealModeGuard` boundaries.
