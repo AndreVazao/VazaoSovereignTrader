@@ -20,6 +20,10 @@ Documentação: docs/CANDLESTICK_PATTERN_LIBRARY.md.
 
 ## Configuração
 
+O endpoint do PC é guardado no armazenamento privado da aplicação após uma ligação bem-sucedida. O token não é persistido; após reiniciar a aplicação, introduz o token manualmente. A aplicação volta a tentar comunicar enquanto estiver aberta.
+
+Para o assistente de configuração inicial por USB e o estado exato das funcionalidades, consulta [Android first pairing](../docs/ANDROID_FIRST_PAIRING.md).
+
 1. Instale Tailscale no PC e no Android e entre na mesma tailnet.
 2. No PC, obtenha o IP Tailscale (normalmente 100.x.y.z).
 3. No APK, coloque http://100.x.y.z:8765.
