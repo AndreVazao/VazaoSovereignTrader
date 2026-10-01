@@ -71,5 +71,6 @@ $builtInstaller = Get-ChildItem -Path $repo -Filter *.exe -Recurse -ErrorAction 
     Select-Object -First 1
 if (-not $builtInstaller) { throw "Inno Setup completed but no installer EXE was found." }
 Copy-Item $builtInstaller.FullName (Join-Path $output "VazaoSovereignTrader-Setup.exe") -Force
+Copy-Item $builtInstaller.FullName (Join-Path $repo "installer\VazaoSovereignTrader-Setup.exe") -Force
 
 Write-Host "Windows installer created in installer\installer-output." -ForegroundColor Green
