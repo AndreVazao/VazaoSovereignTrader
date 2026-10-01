@@ -8,7 +8,7 @@ from PC_ENGINE.execution.surface_feedback_store import ExecutionSurfaceFeedbackS
 from PC_ENGINE.execution.surface_adapter_registry import adapter_registrations
 
 
-def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
+def build_execution_surface_catalog(config: dict[str, Any], runtime_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build a read-only operational catalog for dashboard signalling.
 
     This is configuration/transport metadata only. It does not probe venues,
@@ -24,6 +24,16 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
     platforms = browser_cfg.get("platforms") or {}
 
     adapter_registry = adapter_registrations()
+    runtime_rows = {}
+    for runtime in (runtime_snapshot or {}).get("adapters", []):
+        key = (str(runtime.get("venue_id", "")), str(runtime.get("surface", "")))
+        state = str(runtime.get("state", ""))
+        if key[0] and key[1]:
+            runtime_rows[key] = {
+                "runtime_id": str(runtime.get("runtime_id", "")),
+                "state": state,
+                "active": state != "CLOSED",
+            }
     adapter_implementations = {
         surface: details["implementation"]
         for surface, details in adapter_registry.items()
@@ -43,6 +53,12 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
         live = live_rows.get(base_key)
         implementation = adapter_implementations.get(surface.value)
         runtime_seen = bool(live and enabled)
+        runtime = runtime_rows.get(base_key)
+        adapter_instantiated = bool(runtime and runtime["active"])
+        runtime_wiring = (
+            f"IN_PROCESS_{runtime['state']}" if adapter_instantiated
+            else ("FEEDBACK_SEEN" if runtime_seen else "NOT_OBSERVED")
+        )
         rows.append({
             "venue_id": str(venue_id),
             "surface": surface.value,
@@ -52,9 +68,11 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "live_probe": runtime_seen,
             "adapter_implementation": implementation,
             "adapter_registered": bool(implementation and adapter_registry.get(surface.value, {}).get("registered")),
-            "adapter_instantiated": False,
-            "runtime_wiring": "FEEDBACK_SEEN" if runtime_seen else "NOT_OBSERVED",
-            "library_only": not runtime_seen,
+            "adapter_instantiated": adapter_instantiated,
+            "runtime_id": runtime["runtime_id"] if runtime else None,
+            "runtime_state": runtime["state"] if runtime else None,
+            "runtime_wiring": runtime_wiring,
+            "library_only": not runtime_seen and not adapter_instantiated,
             "connection_state": live["connection_state"] if live and enabled else None,
             "last_feedback_age_ms": live["last_feedback_age_ms"] if live and enabled else None,
             "reconnects": live["reconnects"] if live and enabled else 0,
@@ -76,6 +94,8 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "adapter_implementation": adapter_implementations[ExecutionSurface.WEB_BROWSER.value],
             "adapter_registered": True,
             "adapter_instantiated": False,
+            "runtime_id": None,
+            "runtime_state": None,
             "runtime_wiring": "NOT_OBSERVED",
             "library_only": True,
             "detail": (
@@ -98,6 +118,8 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "adapter_implementation": adapter_implementations.get(live["surface"]),
             "adapter_registered": bool(adapter_registry.get(live["surface"], {}).get("registered")),
             "adapter_instantiated": False,
+            "runtime_id": None,
+            "runtime_state": None,
             "runtime_wiring": "FEEDBACK_SEEN", "library_only": False,
             "connection_state": live["connection_state"], "last_feedback_age_ms": live["last_feedback_age_ms"],
             "reconnects": live["reconnects"], "data_write_health": feedback["data_write_health"],

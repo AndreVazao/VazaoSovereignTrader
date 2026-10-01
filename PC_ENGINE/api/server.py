@@ -25,6 +25,7 @@ from PC_ENGINE.diagnostics.venue_health import build_venue_health
 from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scorecard, refresh_runtime_evidence_reports
 from PC_ENGINE.diagnostics.execution_surface_catalog import build_execution_surface_catalog
+from PC_ENGINE.execution.surface_runtime_manager import ExecutionSurfaceRuntimeManager
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -45,6 +46,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         )
         human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
     research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
+    surface_runtime = ExecutionSurfaceRuntimeManager(engine.config)
 
     def require_token() -> AuthenticatedPrincipal:
         provided = request.headers.get("X-Token", "")
@@ -174,7 +176,48 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.get("/execution-surfaces")
     def execution_surfaces():
         require_scope("read_private_state")
-        return jsonify(build_execution_surface_catalog(engine.config))
+        return jsonify(build_execution_surface_catalog(engine.config, runtime_snapshot=surface_runtime.snapshot()))
+
+    @app.get("/execution-surfaces/runtime")
+    def execution_surfaces_runtime():
+        require_scope("read_private_state")
+        return jsonify(surface_runtime.snapshot())
+
+    @app.post("/execution-surfaces/runtime/instantiate")
+    def execution_surfaces_runtime_instantiate():
+        require_scope("trade_paper")
+        payload = request.get_json(silent=True) or {}
+        try:
+            from PC_ENGINE.execution.surface_adapters import Surface
+            surface = Surface(str(payload.get("surface", "")).strip().upper())
+            result = surface_runtime.instantiate(
+                runtime_id=str(payload.get("runtime_id", "")),
+                venue_id=str(payload.get("venue_id", "")),
+                surface=surface,
+            )
+            return jsonify({"ok": True, "record": result, "paper_only": True, "orders_submitted": False, "execution_authorized": False})
+        except (KeyError, ValueError, TypeError, RuntimeError) as exc:
+            return jsonify({"ok": False, "error": "runtime_instantiate_failed", "detail": str(exc)}), 400
+
+    @app.post("/execution-surfaces/runtime/probe")
+    def execution_surfaces_runtime_probe():
+        require_scope("trade_paper")
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = surface_runtime.probe(str(payload.get("runtime_id", "")))
+            return jsonify({"ok": True, "feedback": result, "paper_only": True, "orders_submitted": False, "execution_authorized": False})
+        except (KeyError, ValueError, TypeError, RuntimeError) as exc:
+            return jsonify({"ok": False, "error": "runtime_probe_failed", "detail": str(exc)}), 400
+
+    @app.post("/execution-surfaces/runtime/close")
+    def execution_surfaces_runtime_close():
+        require_scope("trade_paper")
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = surface_runtime.close(str(payload.get("runtime_id", "")))
+            return jsonify({"ok": True, "runtime": result, "paper_only": True, "orders_submitted": False, "execution_authorized": False})
+        except (KeyError, ValueError, TypeError, RuntimeError) as exc:
+            return jsonify({"ok": False, "error": "runtime_close_failed", "detail": str(exc)}), 400
 
     @app.get("/venue-health")
     def venue_health():

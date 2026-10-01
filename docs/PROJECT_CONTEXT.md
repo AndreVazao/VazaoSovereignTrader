@@ -824,3 +824,22 @@ Live GitHub verification at review time:
 - Added `tests/test_surface_runtime.py` covering inert instantiation, explicit probing and close lifecycle.
 - Added `docs/EXECUTION_SURFACE_RUNTIME.md`.
 - Safety remains PAPER-only: no order submission, no private trading API, no automatic runtime startup, no credential persistence and no changes to readiness/Risk Engine/reconciliation/RealModeGuard.
+
+
+## 35. Handoff — 2026-10-01, explicit application runtime lifecycle integration
+
+- Baseline main SHA: `57ccca2c870cb8d628052cf8343286b3c11e3d6a`; post-merge Python and Windows checks both passed on that exact SHA before this feature started.
+- Added `PC_ENGINE/execution/surface_runtime_manager.py` as the application-owned bridge between configuration and the explicit PAPER lifecycle manager.
+- The manager is instantiated when the Flask application is created, but it contains no adapters until an explicit lifecycle request is made.
+- Added explicit API lifecycle endpoints:
+  - `GET /execution-surfaces/runtime`: reports actual in-process lifecycle records.
+  - `POST /execution-surfaces/runtime/instantiate`: explicitly creates one configured PAPER adapter instance.
+  - `POST /execution-surfaces/runtime/probe`: explicitly performs transport observation for one instantiated runtime.
+  - `POST /execution-surfaces/runtime/close`: explicitly closes one runtime.
+- Lifecycle control endpoints require the existing `trade_paper` scope; the read-only snapshots remain under `read_private_state`.
+- Existing `browser.platforms` remains supported. A new optional `execution_surface.platforms` map can configure WEB_BROWSER, DESKTOP_APP and ANDROID_APK with shared feedback persistence defaults.
+- The dashboard catalogue now accepts the actual runtime snapshot and reports `adapter_instantiated`, `runtime_id`, `runtime_state` and `IN_PROCESS_*` wiring only when a real in-process lifecycle record exists. CLOSED records are not presented as active instances.
+- No automatic browser launch, desktop process launch or ADB invocation was introduced. Probe remains the first explicit operation allowed to touch a transport.
+- All lifecycle APIs remain PAPER-only: no order submission, private trading API, credential persistence, readiness/Risk Engine/reconciliation/RealModeGuard bypass, cloud resource or paid-service creation.
+- Added tests for inert manager construction, explicit browser instantiation without probing, desktop/Android config construction, fail-closed missing configuration and truthful catalogue runtime overlay.
+- Added `docs/EXECUTION_SURFACE_RUNTIME_INTEGRATION.md`.
