@@ -40,3 +40,42 @@ def test_feedback_store_classifies_stale_and_counts_reconnect(tmp_path):
     assert row["connection_state"] == "CONNECTED"
     assert row["last_feedback_age_ms"] is not None
     assert row["reconnects"] == 1
+
+
+
+def test_android_unavailable_state_is_not_reported_healthy(tmp_path):
+    from PC_ENGINE.execution.surface_adapters import Surface, SurfaceFeedback
+
+    store = ExecutionSurfaceFeedbackStore(tmp_path / "feedback.jsonl", max_records=10)
+    feedback = SurfaceFeedback(
+        request_id="adb-down",
+        surface=Surface.ANDROID_APK,
+        venue_id="android-demo",
+        state="ADB_UNAVAILABLE",
+        acknowledged=False,
+        observed_at_ms=int(time.time() * 1000),
+        detail="adb missing",
+    )
+    assert store.append(feedback)
+    row = store.snapshot()["surfaces"][0]
+    assert row["state"] == "DOWN"
+    assert row["connection_state"] == "ADB_UNAVAILABLE"
+
+
+def test_android_unconfigured_app_state_is_degraded_not_healthy(tmp_path):
+        from PC_ENGINE.execution.surface_adapters import Surface, SurfaceFeedback
+
+    store = ExecutionSurfaceFeedbackStore(tmp_path / "feedback.jsonl", max_records=10)
+    feedback = SurfaceFeedback(
+        request_id="apk-unconfigured",
+        surface=Surface.ANDROID_APK,
+        venue_id="android-demo",
+        state="APK_NOT_CONFIGURED",
+        acknowledged=True,
+        observed_at_ms=int(time.time() * 1000),
+        detail="package not configured",
+    )
+    assert store.append(feedback)
+    row = store.snapshot()["surfaces"][0]
+    assert row["state"] == "DEGRADED"
+    assert row["connection_state"] == "APK_NOT_CONFIGURED"
