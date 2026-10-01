@@ -57,13 +57,13 @@ def test_unauthorized_device_is_not_reported_connected(tmp_path: Path, monkeypat
 
 
 def test_offline_device_is_reported(tmp_path: Path, monkeypatch) -> None:
-    _mock_adb(monkeypatch, [_completed("version"), _completed("List of devices attached\\nemulator-5554 offline\\n")])
+    _mock_adb(monkeypatch, [_completed("version"), _completed("List of devices attached\nemulator-5554 offline\n")])
     feedback = _adapter(tmp_path).probe()
     assert feedback.state == "DEVICE_OFFLINE"
 
 
 def test_no_permissions_state_is_not_malformed(tmp_path: Path, monkeypatch) -> None:
-    _mock_adb(monkeypatch, [_completed("version"), _completed("List of devices attached\\nphone123 no permissions (user in plugdev group)\\n")])
+    _mock_adb(monkeypatch, [_completed("version"), _completed("List of devices attached\nphone123 no permissions (user in plugdev group)\n")])
     feedback = _adapter(tmp_path).probe()
     assert feedback.state == "DEVICE_UNAUTHORIZED"
 
