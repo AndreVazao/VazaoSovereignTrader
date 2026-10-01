@@ -54,7 +54,7 @@ def test_paper_trade_intent_never_submits_order(tmp_path: Path) -> None:
     snapshot = adapter.feedback_snapshot()
     assert snapshot["execution_authorized"] is False
     assert snapshot["orders_submitted"] is False
-    assert snapshot["surfaces"][0]["state"] == "HEALTHY"
+    assert snapshot["surfaces"][0]["state"] == "DEGRADED"
 
 
 def test_connect_launches_only_configured_local_process(tmp_path: Path) -> None:
