@@ -154,3 +154,31 @@ def test_surface_catalog_does_not_keep_closed_runtime_as_instantiated():
     assert row["adapter_instantiated"] is False
     assert row["runtime_state"] == "CLOSED"
     assert row["runtime_wiring"] == "NOT_OBSERVED"
+
+
+def test_surface_catalog_exposes_runtime_health_truthfully():
+    report = build_execution_surface_catalog(
+        {
+            "browser": {
+                "enabled": True,
+                "platforms": {"demo": {"enabled": True, "surface": "WEB_BROWSER"}},
+            }
+        },
+        runtime_snapshot={
+            "adapters": [{
+                "runtime_id": "demo-runtime",
+                "venue_id": "demo",
+                "surface": "WEB_BROWSER",
+                "state": "PROBED",
+                "health": "STALE",
+                "stale": True,
+                "feedback_age_ms": 45_000,
+                "last_feedback_at_ms": 123_000,
+            }]
+        },
+    )
+    row = report["venues"][0]
+    assert row["runtime_health"] == "STALE"
+    assert row["runtime_stale"] is True
+    assert row["runtime_feedback_age_ms"] == 45_000
+    assert row["runtime_last_feedback_at_ms"] == 123_000
