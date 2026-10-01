@@ -14,7 +14,7 @@ from typing import Any
 from PC_ENGINE.core.identity import AuthenticatedPrincipal
 
 
-DEVICE_SCOPES = frozenset({"read_private_state", "trade_paper"})
+DEVICE_SCOPES = frozenset({"read_private_state", "trade_paper", "respond_human_interaction"})
 CHALLENGE_TTL_SECONDS = 300
 MAX_DEVICES = 50
 MAX_CHALLENGES = 100
