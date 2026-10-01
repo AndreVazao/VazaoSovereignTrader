@@ -5,7 +5,7 @@ package.domain = pt.andrevazao
 source.dir = .
 source.include_exts = py,json,png
 version = 0.4.0
-requirements = python3,kivy,requests
+requirements = python3,kivy,requests==2.31.0,charset-normalizer==3.3.2
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET,ACCESS_NETWORK_STATE
