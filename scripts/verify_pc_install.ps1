@@ -14,6 +14,14 @@ if ($LASTEXITCODE -ne 0) { throw "Python compile check failed." }
 & $python -c "import ccxt, flask, pydantic, requests, websocket, playwright; print('Python dependencies: OK')"
 if ($LASTEXITCODE -ne 0) { throw "Required Python dependencies are missing." }
 
+if (-not (Test-Path (Join-Path $repo "PC_ENGINE\tools\run_market_data_bootstrap.py"))) {
+    throw "Public market-data bootstrap tool is missing."
+}
+if (-not (Test-Path (Join-Path $repo "PC_ENGINE\tools\run_market_data_collector.py"))) {
+    throw "Continuous market-data collector is missing."
+}
+if ($LASTEXITCODE -ne 0) { throw "Required Python dependencies are missing." }
+
 & $python -m playwright --version
 if ($LASTEXITCODE -ne 0) { throw "Playwright runtime is not available." }
 
