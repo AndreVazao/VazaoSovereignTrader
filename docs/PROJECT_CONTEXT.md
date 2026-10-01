@@ -853,3 +853,15 @@ Live GitHub verification at review time:
 - Hardened `ExecutionSurfaceRuntimeManager.build_adapter_config()` to reject a configured venue when its declared `surface` conflicts with the requested surface. This prevents accidentally constructing a desktop/Android adapter from a browser-configured venue (or vice versa).
 - Added regression tests for runtime-ID reuse, adapter surface mismatch and configured surface mismatch.
 - No transport is started by these checks; all changes remain PAPER-only and observational. No order path, credentials, readiness, Risk Engine, reconciliation or `RealModeGuard` behavior was changed.
+
+
+## 37. Handoff — 2026-10-01, explicit runtime health/staleness
+- Added observational runtime health to \`PC_ENGINE/execution/surface_runtime.py\`.
+- Health is derived only from explicit probe feedback timestamps: \`NEVER_PROBED\`, \`FRESH\`, \`STALE\`, \`PROBE_FAILED\`, \`CLOSED\`.
+- Snapshot now reports \`feedback_age_ms\`, \`stale\`, \`last_feedback_at_ms\`, and an explicit health policy. Default stale threshold is 30 seconds and can be configured with \`execution_surface.runtime_health_stale_after_ms\`.
+- \`ExecutionSurfaceRuntimeManager\` owns the configuration bridge; negative thresholds fail closed.
+- \`execution_surface_catalog.py\` exposes runtime health/staleness without inferring health from configuration or adapter registration.
+- No background heartbeat, automatic probe, reconnect, restart, or execution authorization was introduced.
+- Recovery remains explicit and runtime IDs remain process-lifetime unique.
+- Health is deliberately separate from authentication, market-data quality, strategy readiness, reconciliation, Risk Engine, and \`RealModeGuard\`.
+- Tests cover never-probed, fresh, stale, probe-failed, closed, configuration, and catalog semantics.

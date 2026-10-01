@@ -33,6 +33,10 @@ def build_execution_surface_catalog(config: dict[str, Any], runtime_snapshot: di
                 "runtime_id": str(runtime.get("runtime_id", "")),
                 "state": state,
                 "active": state != "CLOSED",
+                "health": str(runtime.get("health", "")),
+                "stale": runtime.get("stale"),
+                "feedback_age_ms": runtime.get("feedback_age_ms"),
+                "last_feedback_at_ms": runtime.get("last_feedback_at_ms"),
             }
     adapter_implementations = {
         surface: details["implementation"]
@@ -72,6 +76,10 @@ def build_execution_surface_catalog(config: dict[str, Any], runtime_snapshot: di
             "runtime_id": runtime["runtime_id"] if runtime else None,
             "runtime_state": runtime["state"] if runtime else None,
             "runtime_wiring": runtime_wiring,
+            "runtime_health": runtime["health"] if runtime else None,
+            "runtime_stale": runtime["stale"] if runtime else None,
+            "runtime_feedback_age_ms": runtime["feedback_age_ms"] if runtime else None,
+            "runtime_last_feedback_at_ms": runtime["last_feedback_at_ms"] if runtime else None,
             "library_only": not runtime_seen and not adapter_instantiated,
             "connection_state": live["connection_state"] if live and enabled else None,
             "last_feedback_age_ms": live["last_feedback_age_ms"] if live and enabled else None,
