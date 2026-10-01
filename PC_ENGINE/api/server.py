@@ -260,7 +260,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             or payload.get("execution_authorized") is not False
             or not isinstance(payload.get("venues"), list)
         ):
-            return jsonify({                "status": "INVALID",
+            return jsonify({
+                "status": "INVALID",
                 "error": "venue_economic_evidence_safety_invariant_failed",
                 "paper_only": True,
                 "orders_submitted": False,
@@ -479,7 +480,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             "ok": True,
             "mode": engine.mode,
             "target_mode": "REAL",
-            "autonomous_enabled": bool(auto_cfg.get("enabled", False)),            "auto_promote_real": bool(auto_cfg.get("auto_promote_real", False)),
+            "autonomous_enabled": bool(auto_cfg.get("enabled", False)),
+            "auto_promote_real": bool(auto_cfg.get("auto_promote_real", False)),
             "allow_real": bool(auto_cfg.get("allow_real", False)),
             "promotion_attempted": False,
             "readiness": report,
@@ -698,7 +700,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             if not authorized:
                 return jsonify({"ok": False, "error": "real_mode_not_authorized", "reason": reason, "guard": guard.snapshot()}), 403
             engine.set_mode("REAL", real_authorized=True)
-            preflight = engine.run_preflight()            reconciliation = engine.reconcile_account_state()
+            preflight = engine.run_preflight()
+            reconciliation = engine.reconcile_account_state()
             report = readiness.collect(engine)
             paper_review_ready = bool(report.get("paper_review", {}).get("ready", False))
             if (
