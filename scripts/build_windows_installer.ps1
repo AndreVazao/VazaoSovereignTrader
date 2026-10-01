@@ -18,10 +18,12 @@ New-Item -ItemType Directory -Force -Path $build, (Join-Path $build "config"), (
 & $python -m pip install -r requirements-pc.txt
 & $python -m pip install pyinstaller
 
-$env:PLAYWRIGHT_BROWSERS_PATH = "0"
+$browserBundle = Join-Path $build "ms-playwright"
+if (Test-Path $browserBundle) { Remove-Item $browserBundle -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $browserBundle | Out-Null
+$env:PLAYWRIGHT_BROWSERS_PATH = $browserBundle
 & $python -m playwright install chromium
 if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium installation failed." }
-$env:PLAYWRIGHT_BROWSERS_PATH = "0"
 
 
 & $python -m PyInstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --paths . --collect-all playwright PC_ENGINE/main.py
