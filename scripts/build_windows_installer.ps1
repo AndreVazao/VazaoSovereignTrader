@@ -67,7 +67,7 @@ if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
 $output = Join-Path $repo "installer-output"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 $builtInstaller = Get-ChildItem -Path $repo -Filter *.exe -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -notmatch "\\installer-output\\|\\installer\\build\\|\\dist\\|\\.git\\" } |
+    Where-Object { $_.FullName -notmatch "\\installer\\build\\|\\dist\\|\\.git\\" } |
     Select-Object -First 1
 if (-not $builtInstaller) { throw "Inno Setup completed but no installer EXE was found." }
 Copy-Item $builtInstaller.FullName (Join-Path $output "VazaoSovereignTrader-Setup.exe") -Force
