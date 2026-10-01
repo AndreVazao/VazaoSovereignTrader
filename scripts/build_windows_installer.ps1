@@ -22,7 +22,7 @@ $browserBundle = Join-Path $build "ms-playwright"
 if (Test-Path $browserBundle) { Remove-Item $browserBundle -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $browserBundle | Out-Null
 $env:PLAYWRIGHT_BROWSERS_PATH = $browserBundle
-& $python -m playwright install chromium
+& $python -m playwright install chromium --no-shell
 if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium installation failed." }
 
 
