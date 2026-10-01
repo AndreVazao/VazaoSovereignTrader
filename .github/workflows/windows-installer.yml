@@ -39,12 +39,8 @@ jobs:
       - name: Installer smoke test
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -Path "$env:GITHUB_WORKSPACE\installer-output" -Filter *.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $installer) {
-            Write-Host "Installer directory contents:"
-            Get-ChildItem -Path installer -Recurse -Force | Select-Object FullName,Length
-            throw "Installer artifact was not produced."
-          }
+          $installer = Get-Item "$env:GITHUB_WORKSPACE\installer\VazaoSovereignTrader-Setup.exe" -ErrorAction SilentlyContinue
+          if (-not $installer) { throw "Installer artifact was not staged by build script." }
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash
           Write-Host "Installer: $($installer.Name)"
           Write-Host "SHA256: $hash"
