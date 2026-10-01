@@ -988,6 +988,6 @@ Security invariants:
 
 Review points before merge:
 - Confirm Android python-for-android packaging can import `secure_token.py` and that Pyjnius Java-array / AndroidKeyStore calls work on a real supported device.
-- Check route authorization and response semantics, malformed/corrupt registry handling, concurrent writes, challenge expiry, replay, revocation, and scope restriction.
+- Check route authorization and response semantics, malformed/corrupt registry handling (including owner-token recovery), cross-process writes, challenge expiry, replay, revocation, and scope restriction.
 - CI must run Python tests, Windows EXE, installer, and Android APK on the exact PR head SHA. These checks and physical Android validation are not yet claimed as complete.
 - Keep PAPER as default and do not claim end-to-end pairing validated until an authorized physical Android device and Windows PC have completed the flow.

@@ -73,6 +73,14 @@ class MobilePairingStore:
             raise RuntimeError("mobile_pairing_store_invalid")
         if not isinstance(payload.get("challenges"), dict) or not isinstance(payload.get("devices"), dict):
             raise RuntimeError("mobile_pairing_store_invalid")
+        required_challenge = {"challenge_id", "device_name", "confirmation_hash", "created_at", "expires_at", "status"}
+        required_device = {"device_id", "device_name", "owner_id", "token_hash", "scopes", "status", "created_at", "last_seen_at"}
+        for item in payload["challenges"].values():
+            if not isinstance(item, dict) or not required_challenge.issubset(item):
+                raise RuntimeError("mobile_pairing_store_invalid")
+        for item in payload["devices"].values():
+            if not isinstance(item, dict) or not required_device.issubset(item):
+                raise RuntimeError("mobile_pairing_store_invalid")
         return payload
 
     def _write(self, payload: dict[str, Any]) -> None:
@@ -96,9 +104,28 @@ class MobilePairingStore:
                 pass
 
     @staticmethod
+    def _safe_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _created_at(item: dict[str, Any]) -> int:
+        try:
+            return int(item.get("created_at", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
     def _expire(payload: dict[str, Any], now: int) -> None:
         for item in payload["challenges"].values():
-            if item.get("status") in {"PENDING", "APPROVED"} and int(item.get("expires_at", 0)) <= now:
+            try:
+                expires_at = int(item.get("expires_at", 0))
+            except (TypeError, ValueError):
+                item["status"] = "INVALID"
+                continue
+            if item.get("status") in {"PENDING", "APPROVED"} and expires_at <= now:
                 item["status"] = "EXPIRED"
 
     def create_challenge(self, device_name: str) -> dict[str, Any]:
@@ -113,7 +140,7 @@ class MobilePairingStore:
             self._expire(payload, now)
             payload["challenges"] = {
                 key: value for key, value in payload["challenges"].items()
-                if int(value.get("created_at", 0)) >= now - 86400
+                if self._created_at(value) >= now - 86400
             }
             if len(payload["challenges"]) >= MAX_CHALLENGES:
                 raise RuntimeError("too_many_pairing_challenges")
@@ -238,7 +265,7 @@ class MobilePairingStore:
                 if item.get("status") != "ACTIVE":
                     continue
                 if hmac.compare_digest(token_hash, str(item.get("token_hash", ""))):
-                    last_seen = int(item.get("last_seen_at", 0))
+                    last_seen = self._safe_int(item.get("last_seen_at"))
                     if now - last_seen >= 60:
                         item["last_seen_at"] = now
                         self._write(payload)

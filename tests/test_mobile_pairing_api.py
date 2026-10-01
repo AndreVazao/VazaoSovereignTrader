@@ -121,3 +121,20 @@ def test_pairing_routes_do_not_allow_device_token_to_manage_devices(tmp_path, mo
         json={"request_id": "not-a-real-request"},
     )
     assert human_response.status_code == 404
+
+def test_corrupt_pairing_registry_does_not_lock_out_owner_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "owner-secret")
+    pairing_dir = tmp_path / "pairing"
+    pairing_dir.mkdir()
+    (pairing_dir / "mobile_pairing.json").write_text(
+        '{"version":1,"challenges":{},"devices":{"broken":"not-an-object"}}',
+        encoding="utf-8",
+    )
+    engine = FakeEngine()
+    engine.config = {
+        "real_mode_guard": {"enabled": True},
+        "mobile_pairing": {"data_dir": str(pairing_dir)},
+    }
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+    response = client.get("/identity", headers={"X-Token": "owner-secret"})
+    assert response.status_code == 200

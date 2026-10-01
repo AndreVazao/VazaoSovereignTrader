@@ -76,3 +76,13 @@ def test_challenge_expires_after_five_minutes(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="challenge_not_pending_or_expired"):
         store.approve(challenge["challenge_id"], challenge["confirmation_code"])
+
+def test_corrupt_registry_fails_closed(tmp_path):
+    path = tmp_path / "mobile_pairing.json"
+    path.write_text(
+        '{"version":1,"challenges":{},"devices":{"broken":"not-an-object"}}',
+        encoding="utf-8",
+    )
+    store = MobilePairingStore(tmp_path)
+    with pytest.raises(RuntimeError, match="mobile_pairing_store_invalid"):
+        store.authenticate("some-token")
