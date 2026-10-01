@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import requests
+import urllib.error
+import urllib.request
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
@@ -12,6 +13,17 @@ from kivy.uix.popup import Popup
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
+
+
+
+class _MobileHTTPResponse:
+    def __init__(self, status_code, content):
+        self.status_code = status_code
+        self.content = content
+
+    def json(self):
+        return json.loads(self.content.decode("utf-8"))
+
 
 REAL_PHRASE = "EU ACEITO O RISCO"
 
@@ -238,11 +250,45 @@ class MobileCockpit(App):
         return self.ip_input.text.strip().rstrip("/")
 
     def _request(self, method, endpoint, **kwargs):
-        return requests.request(method, self.base_url() + endpoint, headers=self.headers(), timeout=8, **kwargs)
+        headers = self.headers()
+        timeout = kwargs.pop("timeout", 8)
+        payload = None
+        if "json" in kwargs:
+            payload = json.dumps(kwargs.pop("json")).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        elif "files" in kwargs:
+            files = kwargs.pop("files")
+            boundary = "----VazaoMobileBoundary7MA4YWxkTrZu0gW"
+            chunks = []
+            for field, (filename, data) in files.items():
+                chunks.append(
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
+                    "Content-Type: application/octet-stream\r\n\r\n".encode("utf-8")
+                )
+                chunks.append(data)
+                chunks.append(b"\r\n")
+            chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+            payload = b"".join(chunks)
+            headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        if kwargs:
+            raise ValueError(f"Opções HTTP não suportadas: {', '.join(kwargs)}")
+        request = urllib.request.Request(
+            self.base_url() + endpoint,
+            data=payload,
+            headers=headers,
+            method=method.upper(),
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as result:
+                return _MobileHTTPResponse(result.status, result.read())
+        except urllib.error.HTTPError as exc:
+            return _MobileHTTPResponse(exc.code, exc.read())
+
 
     def test_connection(self):
         try:
-            response = requests.get(self.base_url() + "/health", timeout=5)
+            response = self._request("GET", "/health", timeout=5)
             if response.status_code == 200:
                 self._save_connection_url(self.base_url())
                 self.connection_state = "CONNECTED"
