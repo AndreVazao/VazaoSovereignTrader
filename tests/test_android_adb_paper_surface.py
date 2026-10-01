@@ -56,6 +56,18 @@ def test_unauthorized_device_is_not_reported_connected(tmp_path: Path, monkeypat
     assert feedback.acknowledged is False
 
 
+def test_offline_device_is_reported(tmp_path: Path, monkeypatch) -> None:
+    _mock_adb(monkeypatch, [_completed("version"), _completed("List of devices attached\\nemulator-5554 offline\\n")])
+    feedback = _adapter(tmp_path).probe()
+    assert feedback.state == "DEVICE_OFFLINE"
+
+
+def test_no_permissions_state_is_not_malformed(tmp_path: Path, monkeypatch) -> None:
+    _mock_adb(monkeypatch, [_completed("version"), _completed("List of devices attached\\nphone123 no permissions (user in plugdev group)\\n")])
+    feedback = _adapter(tmp_path).probe()
+    assert feedback.state == "DEVICE_UNAUTHORIZED"
+
+
 def test_malformed_devices_output_is_communication_error(tmp_path: Path, monkeypatch) -> None:
     _mock_adb(monkeypatch, [_completed("version"), _completed("unexpected output")])
     feedback = _adapter(tmp_path).probe()
@@ -97,7 +109,6 @@ def test_package_process_observed_is_operational_only(tmp_path: Path, monkeypatc
     ])
     feedback = _adapter(tmp_path, package_name="com.example.paper").probe()
     assert feedback.state == "APP_OBSERVED"
-    snapshot = _adapter(tmp_path).feedback_snapshot()
     assert feedback.order_reference is None
 
 
