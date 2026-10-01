@@ -1,0 +1,52 @@
+name: Windows One-Click Installer
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "installer/**"
+      - "scripts/build_windows_installer.ps1"
+      - "PC_ENGINE/**"
+      - "requirements-pc.txt"
+      - "docs/WINDOWS_ONE_CLICK_INSTALL.md"
+  push:
+    branches:
+      - main
+    tags:
+      - "pc-v*"
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --version=7.1.0 --no-progress -y
+
+      - name: Build one-click installer
+        shell: pwsh
+        run: |
+          .\scripts\build_windows_installer.ps1
+
+      - name: Installer smoke test
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem installer\installer-output\*.exe | Select-Object -First 1
+          if (-not $installer) { throw "Installer artifact was not produced." }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash
+          Write-Host "Installer: $($installer.Name)"
+          Write-Host "SHA256: $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vazaosovereigntrader-windows-installer
+          path: installer/installer-output/*.exe
+          if-no-files-found: error
