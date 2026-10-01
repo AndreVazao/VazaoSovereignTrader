@@ -139,6 +139,22 @@ class MobilePairingStore:
                 "approved_at": now,
             }
 
+    def challenge_status(self, challenge_id: str) -> dict[str, Any]:
+        now = int(time.time())
+        with self._lock:
+            payload = self._read()
+            self._expire(payload, now)
+            self._write(payload)
+            item = payload["challenges"].get(str(challenge_id))
+            if not item:
+                raise ValueError("challenge_not_found")
+            return {
+                "challenge_id": item["challenge_id"],
+                "device_name": item["device_name"],
+                "status": item["status"],
+                "expires_at": item["expires_at"],
+            }
+
     def complete(self, challenge_id: str, confirmation_code: str) -> dict[str, Any]:
         now = int(time.time())
         with self._lock:
