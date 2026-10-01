@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from PC_ENGINE.execution.desktop_paper_surface import (
     DesktopPaperConfig,
@@ -152,3 +153,71 @@ def test_directory_is_not_accepted_as_executable(tmp_path: Path) -> None:
 
     assert feedback.state == "DOWN"
     assert feedback.acknowledged is False
+
+
+def test_connect_does_not_launch_duplicate_process(tmp_path: Path) -> None:
+    executable = Path(sys.executable)
+    adapter = DesktopPaperSurfaceAdapter(
+        DesktopPaperConfig(
+            venue_id="demo",
+            executable_path=str(executable),
+            launch_args=("-c", "import time; time.sleep(3)"),
+        )
+    )
+    first = adapter.execute(
+        SurfaceAction(
+            request_id="connect-once",
+            venue_id="demo",
+            surface=Surface.DESKTOP_APP,
+            action=ActionKind.CONNECT,
+        )
+    )
+    process = adapter._process
+    second = adapter.execute(
+        SurfaceAction(
+            request_id="connect-twice",
+            venue_id="demo",
+            surface=Surface.DESKTOP_APP,
+            action=ActionKind.CONNECT,
+        )
+    )
+    try:
+        assert first.state == "CONNECTED"
+        assert second.state == "CONNECTED"
+        assert "no_duplicate_launch" in second.detail
+        assert adapter._process is process
+    finally:
+        if process is not None and process.poll() is None:
+            process.terminate()
+
+
+def test_window_observation_never_returns_raw_window_title(monkeypatch) -> None:
+    class FakeWindow:
+        def window_text(self) -> str:
+            return "Exchange - account@example.invalid"
+
+    class FakeDesktop:
+        def __init__(self, backend: str) -> None:
+            assert backend == "uia"
+
+        def windows(self, visible_only: bool) -> list[FakeWindow]:
+            assert visible_only is True
+            return [FakeWindow()]
+
+    monkeypatch.setitem(
+        sys.modules,
+        "pywinauto",
+        SimpleNamespace(Desktop=FakeDesktop),
+    )
+    adapter = DesktopPaperSurfaceAdapter(
+        DesktopPaperConfig(
+            venue_id="demo",
+            executable_path=sys.executable,
+            window_title_contains="Exchange",
+        )
+    )
+
+    result = adapter._window_observation()
+
+    assert result == "window_title_match=True"
+    assert "account@example.invalid" not in result
