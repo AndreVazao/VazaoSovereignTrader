@@ -127,6 +127,19 @@ Artefactos principais:
 
 Isto não é aconselhamento financeiro e não garante lucro. Usa apenas APIs oficiais das exchanges, sem withdraw permission, e começa sempre em PAPER.
 
+## Primeira instalação e recolha de dados
+
+No Windows, a sequência operacional é:
+
+```powershell
+scripts\setup_windows.ps1
+scripts\verify_pc_install.ps1
+scripts\verify_public_market_data.ps1
+scripts\install_windows_autostart.ps1
+```
+
+`verify_public_market_data.ps1` faz uma verificação pública/read-only de ticker + OHLCV e qualidade dos dados. Não são necessárias API keys para começar a recolher dados públicos. O collector contínuo usa WebSockets públicos para Binance, Coinbase e OKX e permanece PAPER/observational-only.
+
 ## Arranque rápido PC
 
 ```bash
