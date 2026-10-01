@@ -22,6 +22,12 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
     browser_enabled = bool(browser_cfg.get("enabled", False))
     platforms = browser_cfg.get("platforms") or {}
 
+    adapter_implementations = {
+        ExecutionSurface.WEB_BROWSER.value: "PlaywrightPaperSurfaceAdapter",
+        ExecutionSurface.DESKTOP_APP.value: "DesktopPaperSurfaceAdapter",
+        ExecutionSurface.ANDROID_APK.value: "AndroidAdbPaperSurfaceAdapter",
+    }
+
     rows: list[dict[str, Any]] = []
     for venue_id, venue_cfg_raw in platforms.items():
         venue_cfg = dict(venue_cfg_raw or {})
@@ -34,13 +40,18 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
 
         base_key = (str(venue_id), surface.value)
         live = live_rows.get(base_key)
+        implementation = adapter_implementations.get(surface.value)
+        runtime_seen = bool(live and enabled)
         rows.append({
             "venue_id": str(venue_id),
             "surface": surface.value,
             "state": live["state"] if live and enabled else (SurfaceState.DEGRADED.value if enabled else SurfaceState.NOT_CONFIGURED.value),
             "enabled": enabled,
             "source": live["source"] if live and enabled else "configuration",
-            "live_probe": bool(live and enabled),
+            "live_probe": runtime_seen,
+            "adapter_implementation": implementation,
+            "runtime_wiring": "FEEDBACK_SEEN" if runtime_seen else "NOT_OBSERVED",
+            "library_only": not runtime_seen,
             "connection_state": live["connection_state"] if live and enabled else None,
             "last_feedback_age_ms": live["last_feedback_age_ms"] if live and enabled else None,
             "reconnects": live["reconnects"] if live and enabled else 0,
@@ -59,6 +70,9 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
             "enabled": browser_enabled,
             "source": "configuration",
             "live_probe": False,
+            "adapter_implementation": adapter_implementations[ExecutionSurface.WEB_BROWSER.value],
+            "runtime_wiring": "NOT_OBSERVED",
+            "library_only": True,
             "detail": (
                 "Browser global ativo; venues ainda sem configuração específica"
                 if browser_enabled
@@ -76,6 +90,8 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
         rows.append({
             "venue_id": live["venue_id"], "surface": live["surface"], "state": live["state"],
             "enabled": True, "source": live["source"], "live_probe": True,
+            "adapter_implementation": adapter_implementations.get(live["surface"]),
+            "runtime_wiring": "FEEDBACK_SEEN", "library_only": False,
             "connection_state": live["connection_state"], "last_feedback_age_ms": live["last_feedback_age_ms"],
             "reconnects": live["reconnects"], "data_write_health": feedback["data_write_health"],
             "detail": live["detail"], "paper_only": True, "orders_submitted": False, "execution_authorized": False,
@@ -83,6 +99,11 @@ def build_execution_surface_catalog(config: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "ok": True,
+        "adapter_runtime_audit": {
+            "observational_only": True,
+            "meaning": "FEEDBACK_SEEN means runtime feedback was persisted; NOT_OBSERVED means no runtime feedback was observed and the adapter may be library-only.",
+            "implementations": adapter_implementations,
+        },
         "operational_only": True,
         "paper_only": True,
         "orders_submitted": False,
