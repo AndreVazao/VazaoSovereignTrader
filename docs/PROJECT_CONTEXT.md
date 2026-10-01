@@ -811,3 +811,16 @@ Live GitHub verification at review time:
 - Tests verify all supported surfaces are registered and that constructing the adapters does not create feedback files or start a transport.
 - This change is observational/structural only. It does not alter execution authorization, readiness, Risk Engine, reconciliation or RealModeGuard.
 - PAPER-only guarantees remain unchanged: no exchange order submission, no private API trading, no credential persistence, no automatic browser/desktop/ADB startup.
+
+
+## 34. Handoff — 2026-10-01, explicit execution-surface runtime lifecycle
+
+- Baseline main SHA: `4c35528c6f6358bea13db2a3f7fdc039df746556`; post-merge Python and Windows verification for PR #295 both passed on this exact SHA.
+- New branch: `feat/explicit-surface-runtime-lifecycle`.
+- Added `PC_ENGINE/execution/surface_runtime.py` with an explicit PAPER-only lifecycle manager.
+- Lifecycle states distinguish REGISTERED, INSTANTIATED, PROBED, CLOSED and PROBE_FAILED.
+- Instantiation delegates to the explicit adapter registry but does not call probe/observe/execute and therefore does not start a browser, desktop process or ADB operation.
+- Probing is a separate explicit call. The runtime snapshot records actual in-process instances and feedback state without treating them as execution authorization.
+- Added `tests/test_surface_runtime.py` covering inert instantiation, explicit probing and close lifecycle.
+- Added `docs/EXECUTION_SURFACE_RUNTIME.md`.
+- Safety remains PAPER-only: no order submission, no private trading API, no automatic runtime startup, no credential persistence and no changes to readiness/Risk Engine/reconciliation/RealModeGuard.
