@@ -11,6 +11,7 @@ from PC_ENGINE.api.dashboard import DASHBOARD_HTML
 from PC_ENGINE.core.config import env_value
 from PC_ENGINE.core.engine import SovereignEngine
 from PC_ENGINE.core.identity import IdentityAuthenticator, AuthenticatedPrincipal
+from PC_ENGINE.core.mobile_pairing import MobilePairingStore
 from PC_ENGINE.core.real_mode_guard import RealModeGuard
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
 from PC_ENGINE.tools.run_readiness_pipeline import run as run_readiness_pipeline
@@ -37,6 +38,9 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     guard = RealModeGuard(guard_settings)
     engine.real_mode_guard = guard
     identity = IdentityAuthenticator(engine.config, env_value, fallback_token_env=token_env)
+    pairing_cfg = engine.config.get("mobile_pairing", {})
+    pairing_dir = resolve_config_path(pairing_cfg.get("data_dir", "PC_ENGINE/data/mobile_pairing"))
+    mobile_pairing = MobilePairingStore(pairing_dir, owner_id=engine.owner_id)
     human_cfg = engine.config.get("human_bridge", {})
     human_bridge = getattr(engine, "human_bridge", None)
     human_watchdog = getattr(engine, "human_bridge_watchdog", None)
@@ -58,11 +62,13 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         provided = request.headers.get("X-Token", "")
         tailscale_identity = request.headers.get("X-Tailscale-Identity", "")
         device_id = request.headers.get("X-Device-ID", "")
-        principal = identity.authenticate(
-            provided,
-            tailscale_identity=tailscale_identity,
-            device_id=device_id,
-        )
+        principal = mobile_pairing.authenticate(provided)
+        if principal is None:
+            principal = identity.authenticate(
+                provided,
+                tailscale_identity=tailscale_identity,
+                device_id=device_id,
+            )
         if principal.owner_id != engine.owner_id:
             raise PermissionError("owner_mismatch")
         human_watchdog.heartbeat("pc")
@@ -324,6 +330,69 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         response = Response(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", mimetype="application/json")
         response.headers["Content-Disposition"] = 'attachment; filename="vazao-operational-diagnostics.json"'
         return response
+
+    @app.post("/mobile-pairing/request")
+    def mobile_pairing_request():
+        principal = require_token()
+        if principal.auth_method != "local_token":
+            return jsonify({"ok": False, "error": "owner_token_required"}), 403
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = mobile_pairing.create_challenge(str(payload.get("device_name", "")))
+            return jsonify({"ok": True, **result})
+        except (ValueError, RuntimeError, OSError) as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+
+    @app.get("/mobile-pairing/status/<challenge_id>")
+    def mobile_pairing_status(challenge_id: str):
+        principal = require_token()
+        if principal.auth_method != "local_token":
+            return jsonify({"ok": False, "error": "owner_token_required"}), 403
+        try:
+            state = mobile_pairing.challenge_status(challenge_id)
+            return jsonify({"ok": True, **state})
+        except (ValueError, RuntimeError, OSError) as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 404
+
+    @app.post("/mobile-pairing/complete")
+    def mobile_pairing_complete():
+        principal = require_token()
+        if principal.auth_method != "local_token":
+            return jsonify({"ok": False, "error": "owner_token_required"}), 403
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = mobile_pairing.complete(
+                str(payload.get("challenge_id", "")),
+                str(payload.get("confirmation_code", "")),
+            )
+            return jsonify({"ok": True, **result})
+        except PermissionError:
+            return jsonify({"ok": False, "error": "confirmation_code_invalid"}), 403
+        except (ValueError, RuntimeError, OSError) as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+
+    @app.get("/mobile-pairing/devices")
+    def mobile_pairing_devices():
+        principal = require_token()
+        if principal.auth_method != "local_token":
+            return jsonify({"ok": False, "error": "owner_token_required"}), 403
+        try:
+            return jsonify({"ok": True, "devices": mobile_pairing.list_devices()})
+        except (RuntimeError, OSError) as exc:
+            return jsonify({"ok": False, "error": "pairing_store_unavailable"}), 409
+
+    @app.post("/mobile-pairing/revoke")
+    def mobile_pairing_revoke():
+        principal = require_token()
+        if principal.auth_method != "local_token":
+            return jsonify({"ok": False, "error": "owner_token_required"}), 403
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify({"ok": True, **mobile_pairing.revoke(str(payload.get("device_id", "")))})
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 404
+        except (RuntimeError, OSError):
+            return jsonify({"ok": False, "error": "pairing_store_unavailable"}), 409
 
     @app.get("/identity")
     def identity_route():
