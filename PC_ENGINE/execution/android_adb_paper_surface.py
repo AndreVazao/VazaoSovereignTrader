@@ -20,10 +20,7 @@ from .surface_feedback_store import ExecutionSurfaceFeedbackStore
 
 @dataclass(frozen=True)
 class AndroidAdbConfig:
-    """Configuration for read-only Android device/emulator observation.
-
-    The adapter never installs, launches, taps, types into, or controls an APK.
-    """
+    """Configuration for read-only Android device/emulator observation."""
 
     venue_id: str
     adb_path: str | None = None
@@ -35,12 +32,7 @@ class AndroidAdbConfig:
 
 
 class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
-    """Read-only ADB bridge with PAPER-only action feedback.
-
-    ADB is used only for version/device enumeration and, when a package name is
-    configured, a read-only process observation. Trading intents are recorded
-    as PAPER metadata and never translated into Android UI interactions.
-    """
+    """Read-only ADB bridge with PAPER-only action feedback."""
 
     surface = Surface.ANDROID_APK
 
@@ -53,35 +45,19 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             raise ValueError("feedback_max_records must be positive")
         self.config = config
         self._feedback_store = (
-            ExecutionSurfaceFeedbackStore(
-                config.feedback_path,
-                max_records=config.feedback_max_records,
-            )
-            if config.feedback_path
-            else None
+            ExecutionSurfaceFeedbackStore(config.feedback_path, max_records=config.feedback_max_records)
+            if config.feedback_path else None
         )
 
     @staticmethod
     def _now_ms() -> int:
         return int(time.time() * 1000)
 
-    def _feedback(
-        self,
-        request_id: str,
-        *,
-        state: str,
-        acknowledged: bool,
-        detail: str,
-    ) -> SurfaceFeedback:
+    def _feedback(self, request_id: str, *, state: str, acknowledged: bool, detail: str) -> SurfaceFeedback:
         feedback = SurfaceFeedback(
-            request_id=request_id,
-            surface=self.surface,
-            venue_id=self.config.venue_id,
-            state=state,
-            acknowledged=acknowledged,
-            observed_at_ms=self._now_ms(),
-            detail=detail,
-            order_reference=None,
+            request_id=request_id, surface=self.surface, venue_id=self.config.venue_id,
+            state=state, acknowledged=acknowledged, observed_at_ms=self._now_ms(),
+            detail=detail, order_reference=None,
         )
         validate_feedback(feedback)
         if self._feedback_store is not None:
@@ -97,12 +73,8 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
     def _run(self, command: list[str]) -> tuple[str, str, int | None, str | None]:
         try:
             completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=self.config.command_timeout_seconds,
-                check=False,
-                shell=False,
+                command, capture_output=True, text=True,
+                timeout=self.config.command_timeout_seconds, check=False, shell=False,
             )
         except subprocess.TimeoutExpired:
             return "", "", None, "TIMEOUT"
@@ -114,7 +86,7 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
     def _parse_devices(output: str) -> tuple[list[tuple[str, str]], bool]:
         lines = output.splitlines()
         header_index = next(
-            (index for index, line in enumerate(lines) if line.strip().startswith("List of devices attached")),
+            (i for i, line in enumerate(lines) if line.strip().startswith("List of devices attached")),
             None,
         )
         if header_index is None:
@@ -122,7 +94,11 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
 
         devices: list[tuple[str, str]] = []
         malformed = False
-        for line in lines[header_index + 1 :]:
+        allowed = {
+            "device", "offline", "unauthorized", "authorizing", "no permissions",
+            "recovery", "sideload", "bootloader", "connecting",
+        }
+        for line in lines[header_index + 1:]:
             stripped = line.strip()
             if not stripped:
                 continue
@@ -130,8 +106,10 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             if len(parts) < 2:
                 malformed = True
                 continue
-            serial, state = parts[0], parts[1].lower()
-            if state not in {"device", "offline", "unauthorized", "authorizing", "no permissions", "recovery", "sideload", "bootloader", "connecting"}:
+            serial = parts[0]
+            # ADB may emit a multi-word state such as "no permissions".
+            state = "no permissions" if len(parts) >= 3 and parts[1].lower() == "no" and parts[2].lower() == "permissions" else parts[1].lower()
+            if state not in allowed:
                 malformed = True
                 continue
             devices.append((serial, state))
@@ -140,12 +118,7 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
     def _observe(self, request_id: str) -> SurfaceFeedback:
         adb = self._resolve_adb()
         if not adb:
-            return self._feedback(
-                request_id,
-                state="ADB_UNAVAILABLE",
-                acknowledged=False,
-                detail="adb_executable_unavailable_or_invalid",
-            )
+            return self._feedback(request_id, state="ADB_UNAVAILABLE", acknowledged=False, detail="adb_executable_unavailable_or_invalid")
 
         _, _, version_code, version_error = self._run([adb, "version"])
         if version_error == "TIMEOUT":
@@ -171,32 +144,26 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             devices = [item for item in devices if item[0] == self.config.device_serial]
             if not devices:
                 return self._feedback(request_id, state="NO_DEVICE", acknowledged=False, detail="configured_device_not_present")
-
         if not devices:
             return self._feedback(request_id, state="NO_DEVICE", acknowledged=False, detail="no_android_device_or_emulator_connected")
 
         online = [item for item in devices if item[1] == "device"]
         if not online:
-            states = sorted({state for _, state in devices})
-            if "unauthorized" in states or "authorizing" in states:
-                return self._feedback(request_id, state="DEVICE_UNAUTHORIZED", acknowledged=False, detail="device_requires_local_adb_authorization")
+            states = {state for _, state in devices}
+            if states.intersection({"unauthorized", "authorizing", "no permissions"}):
+                return self._feedback(request_id, state="DEVICE_UNAUTHORIZED", acknowledged=False, detail="device_requires_local_adb_authorization_or_permissions")
             if "offline" in states:
                 return self._feedback(request_id, state="DEVICE_OFFLINE", acknowledged=False, detail="adb_device_offline")
             return self._feedback(request_id, state="COMMUNICATION_ERROR", acknowledged=False, detail="no_usable_adb_device_state")
 
         if len(online) > 1 and not self.config.device_serial:
             return self._feedback(
-                request_id,
-                state="MULTIPLE_DEVICES",
-                acknowledged=True,
+                request_id, state="MULTIPLE_DEVICES", acknowledged=True,
                 detail=f"multiple_online_devices:{len(online)};configure_device_serial_to_select_one",
             )
-
         if not self.config.package_name:
             return self._feedback(
-                request_id,
-                state="APK_NOT_CONFIGURED",
-                acknowledged=True,
+                request_id, state="APK_NOT_CONFIGURED", acknowledged=True,
                 detail="adb_device_connected;package_name_not_configured;app_state_not_checked",
             )
 
@@ -226,14 +193,11 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
         if action.venue_id != self.config.venue_id:
             return self._feedback(action.request_id, state="REJECTED", acknowledged=False, detail="venue_id_mismatch")
         if action.action in {ActionKind.CONNECT, ActionKind.OBSERVE}:
-            # CONNECT deliberately does not install or start an APK. It only
-            # refreshes read-only ADB/device/app observation.
+            # CONNECT is intentionally read-only: no APK install or launch.
             return self._observe(action.request_id)
         if action.action in {ActionKind.BUY, ActionKind.SELL, ActionKind.CANCEL}:
             return self._feedback(
-                action.request_id,
-                state="PAPER_INTENT_RECORDED",
-                acknowledged=True,
+                action.request_id, state="PAPER_INTENT_RECORDED", acknowledged=True,
                 detail=(
                     f"paper_{action.action.value.lower()}_intent_recorded;"
                     "no_android_ui_interaction;no_apk_install_or_launch;"
@@ -244,11 +208,5 @@ class AndroidAdbPaperSurfaceAdapter(ExecutionSurfaceAdapter):
 
     def feedback_snapshot(self) -> dict[str, Any]:
         if self._feedback_store is None:
-            return {
-                "operational_only": True,
-                "paper_only": True,
-                "orders_submitted": False,
-                "execution_authorized": False,
-                "surfaces": [],
-            }
+            return {"operational_only": True, "paper_only": True, "orders_submitted": False, "execution_authorized": False, "surfaces": []}
         return self._feedback_store.snapshot()
