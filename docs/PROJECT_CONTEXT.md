@@ -991,3 +991,15 @@ Review points before merge:
 - Check route authorization and response semantics, malformed/corrupt registry handling (including owner-token recovery), cross-process writes, challenge expiry, replay, revocation, and scope restriction.
 - CI must run Python tests, Windows EXE, installer, and Android APK on the exact PR head SHA. These checks and physical Android validation are not yet claimed as complete.
 - Keep PAPER as default and do not claim end-to-end pairing validated until an authorized physical Android device and Windows PC have completed the flow.
+
+
+## 45. Handoff — 2026-10-01, secure Android pairing review continuation
+
+- PR #306 remains open: https://github.com/AndreVazao/VazaoSovereignTrader/pull/306
+- Implementation branch: `feat/android-revocable-device-pairing`. Before this context-only update, latest implementation/docs fix SHA was `c118d1c65ee9a3e159a6cda0d3cdbe638466d0c8`; use live GitHub for the exact current head after this commit.
+- Exact-head Python checks passed on `4fa07d244124af8ba1ae48556059d6da7686e7dc`. The docs correction that removes contradictory pre-pairing instructions triggered a new CI cycle; Python, Windows EXE/installer, and Android APK checks on the final head must be verified before merge.
+- The Windows EXE build job succeeded on the previous head, but the installer subjob was still running. Android APK build was still running. Do not infer success from jobs on older SHAs.
+- Review found and corrected stale wording in `docs/ANDROID_FIRST_PAIRING.md`: the owner token remains non-persistent, while the paired device token is encrypted with Android Keystore; no plaintext fallback exists.
+- Added hardening tests for five-minute challenge expiry, corrupt registry fail-closed behaviour, and recovery of owner-token authentication when the pairing registry is corrupt. The latest Python suite passed on the implementation SHA before the docs-only fix.
+- Remaining review: inspect exact final diff, confirm all required exact-head checks green, ensure PR mergeable, squash merge, then verify main SHA and post-merge CI. Physical Android/Windows pairing validation remains unperformed until a real authorized device completes the flow.
+- No REAL-mode changes, cloud resources, public port forwarding, exchange credentials, or live orders are authorized or introduced.
