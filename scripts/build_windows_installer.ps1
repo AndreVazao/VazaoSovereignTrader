@@ -35,13 +35,27 @@ Copy-Item "docs\WINDOWS_ONE_CLICK_INSTALL.md" (Join-Path $build "docs\WINDOWS_ON
 
 $iss = Join-Path $repo "installer\VazaoSovereignTrader.iss"
 $iscc = $null
-foreach ($candidate in @(
-    "$env:ProgramFiles(x86)\Inno Setup 7\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
-    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-)) {
-    if ($candidate -and (Test-Path $candidate)) { $iscc = $candidate; break }
+$command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+if ($command) {
+    $iscc = $command.Source
+}
+if (-not $iscc) {
+    foreach ($candidate in @(
+        "$env:ProgramFiles(x86)\Inno Setup 7\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
+        "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+    )) {
+        if ($candidate -and (Test-Path $candidate)) { $iscc = $candidate; break }
+    }
+}
+if (-not $iscc) {
+    $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)})
+    foreach ($root in $roots) {
+        if (-not $root) { continue }
+        $found = Get-ChildItem -Path $root -Filter ISCC.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) { $iscc = $found.FullName; break }
+    }
 }
 if (-not $iscc) { throw "Inno Setup ISCC.exe not found." }
 
