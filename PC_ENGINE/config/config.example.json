@@ -395,6 +395,12 @@
     "dedupe_seconds": 3600,
     "notes": "Research may originate from the operator or autonomous market observations. Public-source findings and internal hypotheses are evidence only; they must be measured on own data and pass PAPER/OOS/readiness gates before any execution relevance."
   },
+  "operator_exchange": {
+    "enabled": true,
+    "data_dir": "PC_ENGINE/data/operator_exchange",
+    "max_upload_mb": 25,
+    "notes": "Authenticated mobile/PC file bridge. INBOX is operator-to-PC; OUTBOX is PC-to-operator. It never exposes arbitrary filesystem paths and never authorizes execution."
+  },
   "human_bridge": {
     "enabled": true,
     "data_dir": "PC_ENGINE/data/human_bridge",
