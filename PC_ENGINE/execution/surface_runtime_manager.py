@@ -101,5 +101,13 @@ class ExecutionSurfaceRuntimeManager:
         self.runtime.close(runtime_id)
         return self.runtime.snapshot()
 
+    def runtime_health_stale_after_ms(self) -> int:
+        execution_cfg = dict(self.config.get('execution_surface', {}))
+        value = execution_cfg.get('runtime_health_stale_after_ms', 30_000)
+        value = int(value)
+        if value < 0:
+            raise ValueError('runtime_health_stale_after_ms must be >= 0')
+        return value
+
     def snapshot(self) -> dict[str, Any]:
-        return self.runtime.snapshot()
+        return self.runtime.snapshot(stale_after_ms=self.runtime_health_stale_after_ms())
