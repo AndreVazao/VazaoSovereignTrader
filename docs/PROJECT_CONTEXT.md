@@ -750,3 +750,29 @@ Live GitHub verification at review time:
 3. After merge, verify both Python and Windows checks on the resulting `main` SHA.
 4. Do not provision SDK/ADB, install drivers/APKs, enable developer options, authorize devices, or perform any cloud/paid action automatically. These remain explicit local user actions.
 5. Keep PAPER as default. No order submission, private API use, credential/OTP/session capture, MFA/CAPTCHA bypass, REAL-mode changes, risk/readiness gate bypass, or automatic trading-runtime startup.
+
+
+## 31. Handoff — 2026-10-01, Android ADB PAPER bridge merged and verified
+
+### Verified repository state
+- Main SHA: `d412b52b75a4dee52985c37a2b41ff085059b48e`.
+- PR #291 (read-only Android ADB PAPER bridge) was squash-merged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/291
+- Exact PR-head checks on `605fcd4c79d5da91ac90a7c509efe6b0dbd75e38` passed:
+  - Python tests run `36814308848`: SUCCESS.
+  - Windows EXE build/smoke run `36814313304`: SUCCESS.
+- Post-merge checks on the exact resulting main SHA `d412b52b75a4dee52985c37a2b41ff085059b48e` passed:
+  - Python tests run `36814698151`: SUCCESS.
+  - Windows EXE build/smoke run `36814698203`: SUCCESS.
+- No open PRs were present after the merge. No cloud resources or paid services were created.
+
+### Current execution surface adapters
+- Browser PAPER adapter, persistent feedback store/dashboard catalogue, Windows desktop PAPER bridge, and Android ADB PAPER bridge are present on main.
+- Desktop and Android actions remain observational/PAPER-only. Android CONNECT does not install or launch APKs; BUY/SELL/CANCEL only record PAPER intent.
+- Surface feedback is operational telemetry only and never grants execution authorization or proves exchange authentication, economic quality, or profitability.
+
+### Next engineering focus
+1. Audit the runtime integration of browser/desktop/Android adapters and their feedback paths. Confirm which adapters are instantiated by the app versus currently being library components, and do not add automatic device control or trading-runtime startup.
+2. Harden feedback persistence health reporting: the dashboard constructs its own feedback-store instance, so process-local write-error counters may not reflect write failures from another adapter instance or prior process. Define and test a truthful durable/observable health contract before showing a green status.
+3. Continue Windows PAPER restart/recovery verification and bounded multi-day evidence collection. Report missing/stale evidence explicitly; never infer readiness from file existence alone.
+4. Keep all changes PAPER-only. Never submit orders, activate REAL, bypass readiness/preflight/reconciliation/Risk Engine/RealModeGuard, provision cloud resources, deploy, or incur costs without André's explicit authorization.
+5. For each feature, use a dedicated branch and PR; inspect the exact final diff and exact-head CI, merge only when clean/mergeable and required checks are green, then verify Python and Windows EXE checks on the resulting main SHA.
