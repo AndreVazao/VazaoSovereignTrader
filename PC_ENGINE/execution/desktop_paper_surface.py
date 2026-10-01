@@ -148,11 +148,10 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             titles = [str(window.window_text()) for window in windows if window.window_text()]
         except Exception as exc:
             return f"window_title_check=error:{type(exc).__name__}"
-        matches = [title for title in titles if title_filter.lower() in title.lower()]
-        return (
-            f"window_title_match={bool(matches)}"
-            + (f";title={matches[0]}" if matches else "")
-        )
+        matches = [title for title in titles if title_filter.casefold() in title.casefold()]
+        # Do not persist raw window titles: they may contain account identifiers
+        # or other user-specific data. Record only the match result.
+        return f"window_title_match={bool(matches)}"
 
     def _probe(self, request_id: str) -> SurfaceFeedback:
         executable = self._executable()
@@ -192,6 +191,13 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
         return self._probe("desktop-observe")
 
     def _launch(self, request_id: str) -> SurfaceFeedback:
+        if self._process is not None and self._process.poll() is None:
+            return self._feedback(
+                request_id,
+                state="CONNECTED",
+                acknowledged=True,
+                detail="desktop_application_already_running;no_duplicate_launch",
+            )
         executable = self._executable()
         if not executable.is_file():
             return self._feedback(
