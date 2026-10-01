@@ -28,6 +28,7 @@ class ExecutionSurfaceFeedbackStore:
         self.path = Path(path)
         self.max_records = int(max_records)
         self._write_errors = 0
+        self._health_path = self.path.with_suffix(self.path.suffix + ".health.json")
 
     def append(self, feedback: SurfaceFeedback | dict[str, Any]) -> bool:
         record = feedback_record(feedback) if isinstance(feedback, SurfaceFeedback) else dict(feedback)
@@ -46,9 +47,16 @@ class ExecutionSurfaceFeedbackStore:
                 encoding="utf-8",
             )
             os.replace(tmp, self.path)
+            self._write_errors = 0
+            self._persist_write_health(status="HEALTHY", write_errors=0, last_error=None)
             return True
-        except (OSError, TypeError, ValueError):
+        except (OSError, TypeError, ValueError) as exc:
             self._write_errors += 1
+            self._persist_write_health(
+                status="DEGRADED",
+                write_errors=self._write_errors,
+                last_error=f"{type(exc).__name__}: {exc}",
+            )
             try:
                 tmp = self.path.with_suffix(self.path.suffix + ".tmp")
                 tmp.unlink(missing_ok=True)
@@ -71,6 +79,32 @@ class ExecutionSurfaceFeedbackStore:
                 if isinstance(item, dict):
                     records.append(item)
         return records[-self.max_records :]
+
+    def _persist_write_health(self, *, status: str, write_errors: int, last_error: str | None) -> None:
+        payload = {
+            "status": status,
+            "write_errors": max(0, int(write_errors)),
+            "last_error": last_error,
+            "updated_at_ms": int(time.time() * 1000),
+        }
+        try:
+            self._health_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._health_path.with_suffix(self._health_path.suffix + ".tmp")
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+            os.replace(tmp, self._health_path)
+        except (OSError, TypeError, ValueError):
+            try:
+                tmp = self._health_path.with_suffix(self._health_path.suffix + ".tmp")
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _persisted_write_health(self) -> dict[str, Any]:
+        try:
+            payload = json.loads(self._health_path.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
 
     def snapshot(self, *, stale_after_ms: int = 30_000) -> dict[str, Any]:
         now_ms = int(time.time() * 1000)
@@ -120,6 +154,16 @@ class ExecutionSurfaceFeedbackStore:
                 "execution_authorized": False,
             })
 
+        persisted_health = self._persisted_write_health()
+        persisted_status = str(persisted_health.get("status", "")).upper()
+        persisted_errors = int(persisted_health.get("write_errors", 0) or 0)
+        write_errors = max(self._write_errors, persisted_errors)
+        data_write_health = (
+            "DEGRADED"
+            if self._write_errors > 0 or persisted_status == "DEGRADED" or persisted_errors > 0
+            else "HEALTHY"
+        )
+
         return {
             "operational_only": True,
             "paper_only": True,
@@ -128,7 +172,9 @@ class ExecutionSurfaceFeedbackStore:
             "feedback_path": str(self.path),
             "records_retained": len(records),
             "max_records": self.max_records,
-            "data_write_health": "HEALTHY" if self._write_errors == 0 else "DEGRADED",
-            "write_errors": self._write_errors,
+            "data_write_health": data_write_health,
+            "write_errors": write_errors,
+            "last_write_error": persisted_health.get("last_error"),
+            "write_health_path": str(self._health_path),
             "surfaces": rows,
         }
