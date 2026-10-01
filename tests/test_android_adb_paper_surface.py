@@ -147,3 +147,28 @@ def test_connect_and_observe_preserve_request_id_in_persistent_feedback(tmp_path
     stored = (tmp_path / "feedback.jsonl").read_text(encoding="utf-8")
     assert '"request_id": "request-android-42"' in stored
     assert '"execution_authorized": false' in stored
+
+
+def test_mismatched_surface_is_rejected_without_invoking_adb(tmp_path: Path, monkeypatch) -> None:
+    def unexpected_run(*args, **kwargs):
+        raise AssertionError("a mismatched surface must not invoke ADB")
+
+    monkeypatch.setattr(android_module.subprocess, "run", unexpected_run)
+    adapter = _adapter(tmp_path)
+    feedback = adapter.execute(
+        SurfaceAction("wrong-surface", "demo", Surface.DESKTOP_APP, ActionKind.OBSERVE)
+    )
+    assert feedback.state == "REJECTED"
+    assert feedback.acknowledged is False
+    assert feedback.detail == "surface_mismatch"
+
+
+def test_probe_request_ids_are_unique(tmp_path: Path, monkeypatch) -> None:
+    _mock_adb(monkeypatch, [
+        _completed("version"), _completed("List of devices attached\\n\\n"),
+        _completed("version"), _completed("List of devices attached\\n\\n"),
+    ])
+    adapter = _adapter(tmp_path)
+    first = adapter.probe()
+    second = adapter.probe()
+    assert first.request_id != second.request_id
