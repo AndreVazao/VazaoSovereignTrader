@@ -25,7 +25,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip openjdk-17-jdk libffi-dev libssl-dev
+          sudo apt-get install -y git zip unzip openjdk-17-jdk libffi-dev libssl-dev autoconf automake libtool libtool-bin libltdl-dev pkg-config
       - name: Install Buildozer
         run: pip install --upgrade buildozer cython
       - name: Build debug APK
