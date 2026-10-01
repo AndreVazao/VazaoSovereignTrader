@@ -14,6 +14,8 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
+from MOBILE_APP.secure_token import delete_device_token, load_device_token, save_device_token
+
 
 
 class _MobileHTTPResponse:
@@ -46,10 +48,18 @@ class MobileCockpit(App):
         self.readiness = Label(text="REAL: ---", size_hint_y=None, height=28)
         self.ip_input = TextInput(text=self.pc_url, hint_text="PC local/Tailscale: http://100.x.y.z:8765", multiline=False, size_hint_y=None, height=42)
         self.ip_input.bind(text=self._on_url_changed)
-        self.token_input = TextInput(hint_text="Token VST_LOCAL_TOKEN", multiline=False, password=True, size_hint_y=None, height=42)
+        self.token_input = TextInput(hint_text="Token proprietário (não é guardado)", multiline=False, password=True, size_hint_y=None, height=42)
+        self._secure_token_path = Path(self.user_data_dir) / "paired_device_token.bin"
+        self.device_token = load_device_token(self._secure_token_path)
+        self.pairing_challenge = None
+        self.pairing_code = ""
         row_conn = BoxLayout(orientation="horizontal", spacing=5, size_hint_y=None, height=42)
         row_conn.add_widget(Button(text="TESTAR", on_press=lambda _: self.test_connection()))
         row_conn.add_widget(Button(text="ATUALIZAR", on_press=lambda _: self.refresh(0)))
+        row_pairing = BoxLayout(orientation="horizontal", spacing=5, size_hint_y=None, height=42)
+        row_pairing.add_widget(Button(text="EMPARELHAR", on_press=lambda _: self.begin_pairing()))
+        row_pairing.add_widget(Button(text="CONCLUIR", on_press=lambda _: self.complete_pairing()))
+        row_pairing.add_widget(Button(text="ESQUECER", on_press=lambda _: self.forget_device()))
         row1 = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=42)
         for label, endpoint in (("INICIAR", "/start"), ("PAUSAR", "/pause"), ("RETOMAR", "/resume"), ("PARAR", "/stop")):
             row1.add_widget(Button(text=label, on_press=lambda _, e=endpoint: self.command(e)))
@@ -67,7 +77,7 @@ class MobileCockpit(App):
         self.human_box.bind(minimum_height=self.human_box.setter("height"))
         human_scroll = ScrollView(size_hint_y=0.35)
         human_scroll.add_widget(self.human_box)
-        for w in (self.ip_input, self.token_input, row_conn, self.status, self.balance, self.risk, self.readiness, row1, row2, exchange_row, exchange_scroll, human_scroll):
+        for w in (self.ip_input, self.token_input, row_conn, row_pairing, self.status, self.balance, self.risk, self.readiness, row1, row2, exchange_row, exchange_scroll, human_scroll):
             root.add_widget(w)
         Clock.schedule_interval(self.refresh, 5)
         Clock.schedule_interval(self.refresh_human, 3)
@@ -243,14 +253,17 @@ class MobileCockpit(App):
         self.pc_url = value.strip().rstrip("/")
 
     def headers(self):
-        # Deliberately do not persist the local control token in the app config.
-        return {"X-Token": self.token_input.text.strip()}
+        # Paired token is decrypted only in memory from Android Keystore; the owner token is never persisted.
+        return {"X-Token": self.device_token or self.token_input.text.strip()}
 
     def base_url(self):
         return self.ip_input.text.strip().rstrip("/")
 
     def _request(self, method, endpoint, **kwargs):
         headers = self.headers()
+        auth_token = kwargs.pop("auth_token", None)
+        if auth_token is not None:
+            headers["X-Token"] = str(auth_token).strip()
         timeout = kwargs.pop("timeout", 8)
         payload = None
         if "json" in kwargs:
@@ -286,6 +299,88 @@ class MobileCockpit(App):
             return _MobileHTTPResponse(exc.code, exc.read())
 
 
+    def begin_pairing(self):
+        owner_token = self.token_input.text.strip()
+        if not owner_token:
+            self.status.text = "Emparelhamento: introduz temporariamente o token proprietário."
+            return
+        try:
+            response = self._request(
+                "POST", "/mobile-pairing/request",
+                auth_token=owner_token,
+                json={"device_name": "Android VazaoSovereignTrader"},
+                timeout=8,
+            )
+            payload = response.json()
+            if response.status_code != 200 or not payload.get("challenge_id"):
+                self.status.text = f"Emparelhamento recusado: HTTP {response.status_code}"
+                return
+            self.pairing_challenge = payload["challenge_id"]
+            self.pairing_code = str(payload["confirmation_code"])
+            self.readiness.text = "No PC, executa scripts/approve_mobile_pairing.py e confirma o código."
+            content = Label(
+                text=f"Confirma que este é o teu telemóvel.\n\nCódigo de confirmação: {self.pairing_code}\n\nNo PC, executa scripts/approve_mobile_pairing.py. Depois regressa e carrega CONCLUIR.",
+                halign="center",
+                valign="middle",
+            )
+            content.bind(size=lambda widget, size: setattr(widget, "text_size", (size[0] - 20, size[1] - 20)))
+            Popup(title="Emparelhamento pendente", content=content, size_hint=(0.9, 0.55)).open()
+            self.status.text = "Emparelhamento pendente de aprovação física no PC."
+        except Exception as exc:
+            self.status.text = f"Não foi possível iniciar emparelhamento: {exc}"
+
+    def complete_pairing(self):
+        owner_token = self.token_input.text.strip()
+        if not owner_token or not self.pairing_challenge or not self.pairing_code:
+            self.status.text = "Inicia o emparelhamento e mantém o token proprietário apenas durante este processo."
+            return
+        try:
+            status_response = self._request(
+                "GET", f"/mobile-pairing/status/{self.pairing_challenge}",
+                auth_token=owner_token, timeout=5,
+            )
+            status_payload = status_response.json()
+            if status_response.status_code != 200 or status_payload.get("status") != "APPROVED":
+                self.status.text = f"A aguardar aprovação explícita no PC ({status_payload.get('status', status_response.status_code)})."
+                return
+            response = self._request(
+                "POST", "/mobile-pairing/complete",
+                auth_token=owner_token,
+                json={"challenge_id": self.pairing_challenge, "confirmation_code": self.pairing_code},
+                timeout=8,
+            )
+            payload = response.json()
+            if response.status_code != 200 or not payload.get("device_token"):
+                self.status.text = f"Conclusão do emparelhamento falhou: HTTP {response.status_code}"
+                return
+            token = str(payload["device_token"])
+            if not save_device_token(self._secure_token_path, token):
+                try:
+                    self._request(
+                        "POST", "/mobile-pairing/revoke",
+                        auth_token=owner_token,
+                        json={"device_id": payload.get("device_id", "")},
+                    )
+                finally:
+                    self.status.text = "Android Keystore indisponível; dispositivo revogado por segurança. Não feches a app e tenta novamente num dispositivo Android compatível."
+                return
+            self.device_token = token
+            self.token_input.text = ""
+            self.pairing_challenge = None
+            self.pairing_code = ""
+            self.status.text = f"Dispositivo emparelhado: {payload.get('device_name', 'Android')}."
+            self.readiness.text = "Token protegido pelo Android Keystore; permissões limitadas a leitura e PAPER."
+            self.refresh(0)
+        except Exception as exc:
+            self.status.text = f"Conclusão do emparelhamento falhou: {exc}"
+
+    def forget_device(self):
+        delete_device_token(self._secure_token_path)
+        self.device_token = ""
+        self.token_input.text = ""
+        self.status.text = "Token local removido. Para voltar a ligar, introduz o token proprietário ou emparelha novamente."
+        self.readiness.text = "A remoção local não revoga o dispositivo no PC; usa scripts/revoke_mobile_device.py para revogação remota."
+
     def test_connection(self):
         try:
             response = self._request("GET", "/health", timeout=5)
@@ -311,6 +406,9 @@ class MobileCockpit(App):
             self.status.text = f"PC: offline — {exc}"
 
     def arm_real(self):
+        if self.device_token:
+            self.status.text = "Bloqueado: tokens de dispositivo móvel não podem armar REAL."
+            return
         try:
             self._request("POST", "/real/arm", json={"phrase": REAL_PHRASE})
             self.refresh(0)
@@ -318,6 +416,9 @@ class MobileCockpit(App):
             self.status.text = f"ARM erro: {exc}"
 
     def set_mode(self, mode):
+        if self.device_token and str(mode).upper() == "REAL":
+            self.status.text = "Bloqueado: tokens de dispositivo móvel não podem mudar para REAL."
+            return
         try:
             self._request("POST", "/mode", json={"mode": mode})
             self.refresh(0)
