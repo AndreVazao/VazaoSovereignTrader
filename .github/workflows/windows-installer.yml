@@ -29,7 +29,7 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --version=7.1.0 --no-progress -y
+          choco install innosetup --no-progress -y
 
       - name: Build one-click installer
         shell: pwsh
