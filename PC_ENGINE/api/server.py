@@ -8,7 +8,7 @@ import json
 from flask import Flask, Response, jsonify, request, send_file
 
 from PC_ENGINE.api.dashboard import DASHBOARD_HTML
-from PC_ENGINE.core.config import env_value
+from PC_ENGINE.core.config import DATA_DIR, env_value
 from PC_ENGINE.core.engine import SovereignEngine
 from PC_ENGINE.core.identity import IdentityAuthenticator, AuthenticatedPrincipal
 from PC_ENGINE.core.mobile_pairing import MobilePairingStore
@@ -39,7 +39,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     engine.real_mode_guard = guard
     identity = IdentityAuthenticator(engine.config, env_value, fallback_token_env=token_env)
     pairing_cfg = engine.config.get("mobile_pairing", {})
-    pairing_dir = resolve_config_path(pairing_cfg.get("data_dir", "PC_ENGINE/data/mobile_pairing"))
+    configured_pairing_dir = pairing_cfg.get("data_dir")
+    pairing_dir = resolve_config_path(configured_pairing_dir) if configured_pairing_dir else DATA_DIR / "mobile_pairing"
     mobile_pairing = MobilePairingStore(pairing_dir, owner_id=engine.owner_id)
     human_cfg = engine.config.get("human_bridge", {})
     human_bridge = getattr(engine, "human_bridge", None)
