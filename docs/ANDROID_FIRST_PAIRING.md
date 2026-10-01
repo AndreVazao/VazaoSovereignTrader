@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This is the first safe increment of the USB-assisted setup. It installs the APK optionally and creates an ADB reverse tunnel for initial local verification. It does **not** yet implement cryptographic device pairing, automatic Tailscale installation, or Android Keystore-backed token storage. Those remain explicit follow-up work and must not be described as completed.
+The USB-assisted setup remains the transport bootstrap. This branch adds a PC-approved, expiring one-time pairing challenge, revocable per-device bearer tokens, restricted device scopes, and Android Keystore-backed token encryption. The Android/Windows hardware flow still requires a real-device validation pass; CI cannot prove OEM-specific Keystore behaviour.
 
 ## USB bootstrap on Windows
 
@@ -39,3 +39,36 @@ This is the first safe increment of the USB-assisted setup. It installs the APK 
 - This helper does not disable Android security controls, bypass login/2FA/CAPTCHA, configure a public port forward, or change PAPER/REAL controls.
 - ADB reverse is a temporary bootstrap/diagnostic tunnel, not the final authenticated device-pairing protocol.
 - The next milestone is a local one-time pairing challenge with explicit PC approval, a revocable device identity, and secure token storage backed by Android Keystore; then guided LAN/Tailscale selection and connection status.
+
+
+## Secure device pairing (new)
+
+1. Start the PC service in its usual explicit manner and connect the Android app over USB reverse, LAN, or an already configured private Tailscale network. Never expose port 8765 publicly.
+2. In the app, enter the owner token temporarily and press **EMPARELHAR**. The app shows a short confirmation code; the owner token is not saved.
+3. At the physical PC console, run:
+
+   ```powershell
+   python .\\scripts\\approve_mobile_pairing.py
+   ```
+
+   Select the matching device, enter the code shown on the phone, and type `APROVAR`. The request expires after five minutes. Do not approve an unfamiliar device.
+4. Return to Android and press **CONCLUIR**. The server issues a random per-device token once. The Android app encrypts it using a non-exportable AES-GCM key in Android Keystore, then clears the owner-token input.
+5. A paired device receives only `read_private_state` and `trade_paper` scopes. It cannot use owner-management or REAL-mode scopes. The PC remains authoritative for all risk gates.
+6. To revoke a device at the PC console:
+
+   ```powershell
+   python .\\scripts\\revoke_mobile_device.py
+   ```
+
+   Select the device and type `REVOGAR`. The server stores only a SHA-256 digest of each device token. Revocation blocks subsequent authenticated requests; it does not erase the token from a phone, so also use **ESQUECER** on a device you still control.
+
+### Pairing protocol boundaries
+
+- Creating and completing pairing requires the existing owner token; local PC approval is a separate console action and requires the confirmation code.
+- Challenges expire after five minutes and cannot be completed twice. The server persists the token hash, device name, status, scopes, and timestamps; it never persists the raw token or confirmation code.
+- The owner token is not stored by the Android app. Device token persistence fails closed if Android Keystore is unavailable; the app attempts to revoke the newly issued token rather than writing plaintext.
+- The token is a bearer credential. Use only a trusted local route, USB reverse tunnel, or private overlay network. Do not use plain HTTP across an untrusted network.
+- `ESQUECER` removes local token material only. It is not a remote revocation; use the PC helper for server-side revocation.
+- The server stores device state in `PC_ENGINE/data/mobile_pairing/mobile_pairing.json` by default. Protect this local file and PC account. Atomic writes are used; last-seen persistence is throttled to once per minute per device.
+- The secure-token helper uses the Android Keystore when running in Android. On non-Android hosts it returns failure and never falls back to plaintext.
+- Automated tests cover challenge approval, replay rejection, restricted scopes, revocation, and fail-closed storage on non-Android hosts. Physical USB, Android Keystore, and OEM-specific validation remain pending until exercised on a real device.
