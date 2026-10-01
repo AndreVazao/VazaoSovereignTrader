@@ -114,3 +114,10 @@ def test_pairing_routes_do_not_allow_device_token_to_manage_devices(tmp_path, mo
 
     response = client.get("/mobile-pairing/devices", headers={"X-Token": result["device_token"]})
     assert response.status_code == 403
+    # A paired device may answer an explicit PC-originated prompt, but cannot create/manage prompts.
+    human_response = client.post(
+        "/human-interaction/cancel",
+        headers={"X-Token": result["device_token"]},
+        json={"request_id": "not-a-real-request"},
+    )
+    assert human_response.status_code == 404

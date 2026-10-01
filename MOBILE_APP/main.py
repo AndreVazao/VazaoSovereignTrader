@@ -372,7 +372,7 @@ class MobileCockpit(App):
             self.pairing_challenge = None
             self.pairing_code = ""
             self.status.text = f"Dispositivo emparelhado: {payload.get('device_name', 'Android')}."
-            self.readiness.text = "Token protegido pelo Android Keystore; permissões limitadas a leitura e PAPER."
+            self.readiness.text = "Token protegido pelo Android Keystore; permissões limitadas a leitura, PAPER e resposta humana explícita."
             self.refresh(0)
         except Exception as exc:
             self.status.text = f"Conclusão do emparelhamento falhou: {exc}"

@@ -64,3 +64,15 @@ def test_device_name_is_required(tmp_path):
     store = MobilePairingStore(tmp_path)
     with pytest.raises(ValueError, match="device_name_required"):
         store.create_challenge("   ")
+
+def test_challenge_expires_after_five_minutes(tmp_path, monkeypatch):
+    import PC_ENGINE.core.mobile_pairing as pairing_module
+
+    now = 1_800_000_000
+    monkeypatch.setattr(pairing_module.time, "time", lambda: now)
+    store = MobilePairingStore(tmp_path)
+    challenge = store.create_challenge("Phone")
+    monkeypatch.setattr(pairing_module.time, "time", lambda: now + 301)
+
+    with pytest.raises(ValueError, match="challenge_not_pending_or_expired"):
+        store.approve(challenge["challenge_id"], challenge["confirmation_code"])

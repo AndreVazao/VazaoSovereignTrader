@@ -967,7 +967,7 @@ The first merged installer pipeline produced a Windows Actions artifact too larg
 Current implementation branch: `feat/android-revocable-device-pairing`, based on main SHA `1f882c28ba2cb104d936d425f91a2c3dc9ec5b9a`. Do not treat this work as merged or hardware-validated until its PR, exact-head CI, review, merge, and post-merge CI are complete.
 
 Files added/changed in this branch:
-- `PC_ENGINE/core/mobile_pairing.py`: local JSON registry; five-minute one-time challenge; explicit approval state; SHA-256 token hashes; random per-device bearer tokens; atomic writes; active/revoked state; restricted scopes `read_private_state` and `trade_paper`; throttled last-seen persistence.
+- `PC_ENGINE/core/mobile_pairing.py`: local JSON registry; five-minute one-time challenge; explicit approval state; SHA-256 token hashes; random per-device bearer tokens; atomic writes and cross-process locking; active/revoked state; restricted scopes `read_private_state`, `trade_paper`, and `respond_human_interaction`; throttled last-seen persistence.
 - `PC_ENGINE/api/server.py`: owner-token-protected challenge creation/status/completion, device listing, and server-side revocation routes. Device tokens authenticate as separate principals; malformed pairing-store state fails device auth closed while retaining owner-token recovery.
 - `MOBILE_APP/secure_token.py`: Android Keystore AES-GCM encryption/decryption of the device token; fails closed off Android and never writes plaintext.
 - `MOBILE_APP/main.py`: pairing UI, temporary owner-token use, approval status check, Keystore persistence, local token forgetting, and UI-level block on REAL actions for paired device tokens.
@@ -979,7 +979,7 @@ Files added/changed in this branch:
 Security invariants:
 - Pairing challenges expire after five minutes and cannot be completed twice.
 - The raw device token and confirmation code are not persisted; only the device-token SHA-256 digest is stored.
-- Device tokens have only `read_private_state`, `trade_paper`, and `respond_human_interaction` scopes. The last scope permits responding to an explicit PC-originated human prompt only; it does not grant prompt creation, owner settings, `trade_real`, or exchange-account management.
+- Device tokens have only `read_private_state`, `trade_paper`, and `respond_human_interaction` scopes. The last scope permits responding to an explicit PC-originated human prompt only; it does not grant prompt creation, owner settings, `trade_real`, or exchange-account management. Source-mode registry path is `PC_ENGINE/data/mobile_pairing`; the packaged EXE defaults to `data/mobile_pairing` beside the EXE.
 - PC console approval is separate from mobile challenge creation and requires the six-digit code shown on the phone.
 - Android token persistence uses a non-exportable AES-GCM key in Android Keystore; storage failure triggers a server revocation attempt and no plaintext fallback.
 - The existing owner token is never saved in mobile config. It is required temporarily to initiate and complete pairing.
