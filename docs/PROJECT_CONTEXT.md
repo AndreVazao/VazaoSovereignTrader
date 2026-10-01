@@ -688,3 +688,41 @@ Continue the project `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal).
 - Safety remains unchanged: all feedback is PAPER-only; no orders are submitted; execution authorization remains false; operational health is not economic/OOS/Risk/REAL evidence.
 - Exact-head CI must validate this branch before merge. After merge, verify main CI on the resulting SHA.
 - Next engineering sequence after merge: Desktop local bridge, then Android ADB/emulator/device bridge, both reusing the same transport feedback contract/store; continue Windows PAPER restart/recovery and bounded multi-day evidence.
+
+
+## Handoff — 2026-09-30, Windows-first desktop PAPER local bridge
+
+- PR #289 merged by squash at main SHA `145dd17f498a09853ba1dbacd5cbe41ffcf9a787`. Exact-head Python and Windows checks on #289 passed before merge.
+- PR #290 is the active desktop bridge branch `feat/desktop-paper-local-bridge`, based on that main SHA; current head will be recorded after the final documentation commit.
+- Added `PC_ENGINE/execution/desktop_paper_surface.py`: Windows-first local desktop surface adapter using a configured executable, local subprocess launch, process observation and optional read-only Windows UI Automation window-title inspection through optional `pywinauto`.
+- Desktop CONNECT only launches the explicitly configured local application. OBSERVE/PROBE return deterministic operational feedback. BUY/SELL/CANCEL are PAPER intent records only: no order controls are clicked, no forms submitted, no private APIs called and no exchange fill is claimed.
+- Reuses `ExecutionSurfaceFeedbackStore` for bounded local persistence and dashboard telemetry; all records remain PAPER-only and execution authorization remains false.
+- Added `tests/test_desktop_paper_surface.py` and `docs/EXECUTION_DESKTOP_ADAPTER.md`.
+- Next: validate exact-head Python and Windows EXE checks for PR #290; merge only when clean/mergeable and all required checks pass. Then verify post-merge main CI. Android ADB/emulator/device bridge follows, reusing the same surface contract and feedback store.
+
+
+## Review update — 2026-09-30, desktop PAPER bridge hardening
+
+Live GitHub verification at review time:
+- Main remains at `145dd17f498a09853ba1dbacd5cbe41ffcf9a787` (PR #289 squash merge).
+- PR #290 is open on `feat/desktop-paper-local-bridge`; the initially reviewed head was `0027640692ec50b990e79a2d3cd907f8eb1686be`, clean/mergeable, with Python test and Windows EXE checks successful on that exact SHA.
+- Code review found cases not covered by the first green CI: process creation could be reported as connected even if the process exited immediately; an existing directory could be accepted as an executable path; OBSERVE feedback persistence used a generic probe request ID rather than the caller's request ID; process-name matching could be ambiguous.
+- Hardened `PC_ENGINE/execution/desktop_paper_surface.py`: executable path must be a file; fast process exits are reported DOWN with the exit code; OBSERVE preserves the request ID in persisted feedback; Windows process-name observation uses CSV image-name exact matching and POSIX uses `pgrep -x`.
+- Added regression tests for fast process exit, request-ID correlation in persisted feedback, and directory-as-executable rejection.
+- Updated `docs/EXECUTION_DESKTOP_ADAPTER.md` to clarify process-liveness semantics and limits. These observations remain operational-only and do not prove exchange authentication, economic performance or permission to trade.
+- The hardening commits were pushed to this same PR branch: adapter fixes `68e759a3425b62b9247a436b1bafa6123aa1448d` and `00fa540e46e2d58fe390b1c32ff474b02a05cfa0`, regression tests `05d9071f646e5d924ae10b26b1dda6db36b1e407`, adapter docs `3dd4b7c0fc368625954bce8ff72cc40d39f18752`, and context update `8dcda5f15835f84db657b823138861247cd8cab2`. A final request-ID correction was made in `00fa540...`; all CI must be checked against the resulting live PR HEAD after this context update. Do not merge based on any earlier SHA's green checks.
+- Android bridge remains the next feature only after #290 has passed exact-head CI, been reviewed, merged, and the resulting main SHA has successful post-merge Python and Windows checks.
+- PAPER-only safety unchanged: no order controls clicked, no forms submitted, no private exchange APIs called, no REAL authorization, no cloud resources or paid services.
+
+
+
+## Desktop bridge final review — 2026-10-01
+
+- Repository context was read from `main` at SHA `145dd17f498a09853ba1dbacd5cbe41ffcf9a787` before continuing.
+- PR #290 remains the dedicated branch `feat/desktop-paper-local-bridge`, targeting `main`; do not infer its current HEAD from this note—query GitHub immediately before merge.
+- The exact prior reviewed HEAD `c48d0b35d42bd59b2587210bd37ca4db1babe324` passed Python tests (PR run `36778539991`), Windows EXE (PR run `36778539998`) and Python push CI (`36778532171`). These checks do not cover subsequent changes below.
+- Additional review hardening: commit `ff80161c5719a995a62c39f3b26cf139e29c9995` prevents repeated CONNECT from launching another child while the adapter's child is alive and removes raw UI window titles from persisted feedback; only a boolean title-filter match is retained.
+- Regression tests were added in commit `93fedf247d577b9c2587a7cd5afd697dba870972` for duplicate CONNECT and window-title redaction. Adapter semantics were documented in commit `845b9b8b7b6ba29b2bbc1c37c743e527200ac559`.
+- Final review requirements remain: inspect the complete diff; wait for both Python and Windows EXE checks to pass on the exact final PR HEAD; confirm the PR is open, mergeable and conflict-free; squash merge with expected HEAD SHA; then verify Python and Windows checks on the resulting `main` SHA.
+- No merge has been performed at this checkpoint. Android bridge remains deferred until the Desktop PR and post-merge CI are complete.
+- Safety: PAPER-only; no order UI interactions, private APIs, REAL authorization, cloud resources, paid services, or automatic runtime startup. Window titles are not stored verbatim; process-liveness evidence is operational only.
