@@ -261,11 +261,11 @@ class MobileCockpit(App):
             boundary = "----VazaoMobileBoundary7MA4YWxkTrZu0gW"
             chunks = []
             for field, (filename, data) in files.items():
-                chunks.append(
+                chunks.append((
                     f"--{boundary}\r\n"
                     f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
-                    "Content-Type: application/octet-stream\r\n\r\n".encode("utf-8")
-                )
+                    "Content-Type: application/octet-stream\r\n\r\n"
+                ).encode("utf-8"))
                 chunks.append(data)
                 chunks.append(b"\r\n")
             chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
