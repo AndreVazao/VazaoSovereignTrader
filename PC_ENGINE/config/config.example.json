@@ -215,6 +215,12 @@
     "outcome_path": "PC_ENGINE/data/radar/state_outcomes.jsonl",
     "notes": "The PAPER collector continuously records public market states and refreshes descriptive signature learning. Radar remains observational-only and cannot create or execute orders.",
     "data_dir": "PC_ENGINE/data/radar",
+    "bootstrap": {
+      "enabled": true,
+      "report_path": "PC_ENGINE/data/radar/market_data_bootstrap.json",
+      "require_all_polling_exchanges": true,
+      "notes": "Public/read-only connectivity and OHLCV quality verification before installation is considered data-ready. No private credentials or orders are used."
+    },
     "lead_lag_min_samples": 100,
     "lead_lag_fee_bps_per_side": 10,
     "lead_lag_slippage_bps_per_side": 4,

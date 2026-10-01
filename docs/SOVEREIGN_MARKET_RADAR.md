@@ -412,3 +412,20 @@ Somente depois das fases anteriores:
 - Não permitir que IA ultrapasse o Risk Engine.
 - Não promover aprendizagem diretamente para REAL.
 - Medir tudo antes de acreditar na vantagem.
+
+
+## Instalação e primeira validação de dados públicos
+
+Antes de considerar o PC pronto para recolha contínua, executar os scripts setup_windows.ps1, verify_pc_install.ps1 e verify_public_market_data.ps1.
+
+O último comando executa um bootstrap público/read-only contra as exchanges configuradas no Radar. Para cada venue e símbolo verifica ticker, OHLCV e o Data Quality Gate antes de escrever PC_ENGINE/data/radar/market_data_bootstrap.json.
+
+O bootstrap não lê API keys, não chama balances, não autentica, não cria/cancela ordens, não altera PAPER/REAL e falha fechado quando uma venue obrigatória ou um símbolo não passa o gate.
+
+Depois da validação, install_windows_autostart.ps1 instala dois processos independentes: o PC Engine, que permanece PAPER por defeito, e o Market Data Collector, que recolhe trades públicos por WebSocket e reconecta após falhas.
+
+A recolha contínua grava websocket_events.jsonl, websocket_lead_lag.jsonl, websocket_latency_edges.jsonl e os artefactos PAPER de aprendizagem. O serviço escreve ainda market_data_health.json, permitindo distinguir RUNNING, STOPPED e degradações sem inferir saúde a partir de configuração.
+
+A configuração de exemplo cobre BTC, ETH, BNB, SOL e DOGE nos streams públicos Binance, Coinbase e OKX. A camada REST continua disponível para snapshots OHLCV e recuperação; WebSocket é usado para a recolha de baixa latência observacional.
+
+Nenhum destes processos autoriza execução REAL.

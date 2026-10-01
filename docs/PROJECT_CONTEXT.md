@@ -865,3 +865,15 @@ Live GitHub verification at review time:
 - Recovery remains explicit and runtime IDs remain process-lifetime unique.
 - Health is deliberately separate from authentication, market-data quality, strategy readiness, reconciliation, Risk Engine, and \`RealModeGuard\`.
 - Tests cover never-probed, fresh, stale, probe-failed, closed, configuration, and catalog semantics.
+
+
+## 38. Handoff — 2026-10-01, instalação pronta para recolha pública de market data
+- Adicionado public market-data bootstrap em PC_ENGINE/radar/public_market_data_bootstrap.py.
+- O bootstrap verifica ticker + OHLCV público por venue/símbolo e aplica o Data Quality Gate antes de produzir market_data_bootstrap.json.
+- Adicionado CLI PC_ENGINE/tools/run_market_data_bootstrap.py e script Windows scripts/verify_public_market_data.ps1.
+- O bootstrap é explicitamente público/read-only: não usa credenciais privadas, balances, autenticação ou ordens.
+- A configuração de exemplo passa a observar BTC/USDT, ETH/USDT, BNB/USDT, SOL/USDT e DOGE/USDT nos WebSockets públicos Binance/Coinbase/OKX.
+- verify_pc_install.ps1 verifica também a presença do bootstrap e do collector contínuo.
+- O collector WebSocket existente continua separado do PC Engine e grava health + eventos + aprendizagem PAPER.
+- A instalação operacional passa a ter sequência clara: setup -> verify install -> verify public market data -> install Windows autostart.
+- Nada nesta fase ativa REAL ou altera os gates de Risk Engine, reconciliation, readiness ou RealModeGuard.
