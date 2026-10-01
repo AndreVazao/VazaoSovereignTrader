@@ -8,6 +8,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.popup import Popup
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
@@ -20,6 +21,10 @@ class MobileCockpit(App):
         self.lang = self._load_lang("pt")
         self.pc_url = "http://127.0.0.1:8765"
         self.human_widgets = {}
+        self.exchange_box = BoxLayout(orientation="vertical", spacing=4, size_hint_y=None)
+        self.exchange_box.bind(minimum_height=self.exchange_box.setter("height"))
+        self._android_activity_bound = False
+        self._pending_download = None
         root = BoxLayout(orientation="vertical", padding=8, spacing=5)
         self.status = Label(text="PC: ---", font_size=19, size_hint_y=None, height=35)
         self.balance = Label(text="Saldo/equity: ---", size_hint_y=None, height=28)
@@ -38,16 +43,151 @@ class MobileCockpit(App):
         row2.add_widget(Button(text="ARM REAL", on_press=lambda _: self.arm_real()))
         row2.add_widget(Button(text="REAL", on_press=lambda _: self.set_mode("REAL")))
         row2.add_widget(Button(text="DESARMAR", on_press=lambda _: self.command("/real/disarm")))
+        exchange_row = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=42)
+        exchange_row.add_widget(Button(text="FICHEIROS", on_press=lambda _: self.refresh_exchange()))
+        exchange_row.add_widget(Button(text="ENVIAR FICHEIRO AO PC", on_press=lambda _: self.open_upload_picker()))
+        exchange_scroll = ScrollView(size_hint_y=0.22)
+        exchange_scroll.add_widget(self.exchange_box)
         self.human_box = BoxLayout(orientation="vertical", spacing=5, size_hint_y=None)
         self.human_box.bind(minimum_height=self.human_box.setter("height"))
         human_scroll = ScrollView(size_hint_y=0.35)
         human_scroll.add_widget(self.human_box)
-        for w in (self.ip_input, self.token_input, row_conn, self.status, self.balance, self.risk, self.readiness, row1, row2, human_scroll):
+        for w in (self.ip_input, self.token_input, row_conn, self.status, self.balance, self.risk, self.readiness, row1, row2, exchange_row, exchange_scroll, human_scroll):
             root.add_widget(w)
         Clock.schedule_interval(self.refresh, 5)
         Clock.schedule_interval(self.refresh_human, 3)
+        self._bind_android_activity()
         Clock.schedule_interval(self.heartbeat, 10)
         return root
+
+    def _bind_android_activity(self):
+        try:
+            from android import activity
+            activity.bind(on_activity_result=self._on_android_activity_result)
+            self._android_activity_bound = True
+        except Exception:
+            self._android_activity_bound = False
+
+    def _android_intent(self, action: str, filename: str | None = None):
+        from jnius import autoclass
+        Intent = autoclass("android.content.Intent")
+        intent = Intent(action)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+        intent.setType("*/*")
+        if filename:
+            intent.putExtra(Intent.EXTRA_TITLE, filename)
+        return intent
+
+    def open_upload_picker(self):
+        try:
+            from android import activity
+            activity.startActivityForResult(self._android_intent("android.intent.action.OPEN_DOCUMENT"), 4101)
+        except Exception as exc:
+            self.status.text = f"Seletor Android indisponível: {exc}"
+
+    def _on_android_activity_result(self, request_code, result_code, intent):
+        try:
+            from jnius import autoclass
+            Activity = autoclass("android.app.Activity")
+            if result_code != Activity.RESULT_OK or intent is None:
+                return
+            uri = intent.getData()
+            if request_code == 4101:
+                self._upload_android_uri(uri)
+            elif request_code == 4102 and self._pending_download:
+                self._write_android_download(uri, self._pending_download)
+        except Exception as exc:
+            self.status.text = f"Ficheiro Android: {exc}"
+
+    @staticmethod
+    def _read_android_uri(uri):
+        from jnius import autoclass
+        PythonActivity = autoclass("org.renpy.android.PythonActivity")
+        resolver = PythonActivity.mActivity.getContentResolver()
+        stream = resolver.openInputStream(uri)
+        chunks = []
+        buffer = bytearray(64 * 1024)
+        try:
+            while True:
+                count = stream.read(buffer)
+                if count is None or int(count) <= 0:
+                    break
+                chunks.append(bytes(buffer[:int(count)]))
+        finally:
+            stream.close()
+        return b"".join(chunks)
+
+    def _upload_android_uri(self, uri):
+        try:
+            data = self._read_android_uri(uri)
+            name = str(uri.getLastPathSegment() or "mobile-upload.bin").split("/")[-1]
+            response = self._request(
+                "POST",
+                "/operator-files/upload",
+                files={"file": (name, data)},
+                timeout=30,
+            )
+            if response.status_code == 200:
+                self.status.text = f"INBOX: {name} enviado ao PC"
+                self.refresh_exchange()
+            else:
+                self.status.text = f"Upload recusado: HTTP {response.status_code}"
+        except Exception as exc:
+            self.status.text = f"Upload falhou: {exc}"
+
+    def refresh_exchange(self):
+        try:
+            response = self._request("GET", "/operator-files")
+            if response.status_code != 200:
+                self.status.text = f"Ficheiros: HTTP {response.status_code}"
+                return
+            payload = response.json()
+            self.exchange_box.clear_widgets()
+            self.exchange_box.add_widget(Label(text="OUTBOX — ficheiros preparados pelo PC", size_hint_y=None, height=30))
+            files = payload.get("folders", {}).get("OUTBOX", [])
+            if not files:
+                self.exchange_box.add_widget(Label(text="Sem ficheiros no OUTBOX.", size_hint_y=None, height=28))
+            for item in files:
+                row = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=38)
+                row.add_widget(Label(text=f"{item.get('name')} ({item.get('size', 0)} B)"))
+                row.add_widget(Button(text="BAIXAR", size_hint_x=0.28, on_press=lambda _, x=item: self.download_exchange_file("OUTBOX", x["name"])))
+                self.exchange_box.add_widget(row)
+            self.exchange_box.add_widget(Label(text="INBOX — ficheiros enviados do telemóvel", size_hint_y=None, height=30))
+            inbox = payload.get("folders", {}).get("INBOX", [])
+            if not inbox:
+                self.exchange_box.add_widget(Label(text="Sem ficheiros no INBOX.", size_hint_y=None, height=28))
+            for item in inbox[-20:]:
+                self.exchange_box.add_widget(Label(text=f"✓ {item.get('name')} ({item.get('size', 0)} B)", size_hint_y=None, height=28))
+        except Exception as exc:
+            self.status.text = f"Ficheiros: {exc}"
+
+    def download_exchange_file(self, folder, name):
+        try:
+            response = self._request("GET", f"/operator-files/{folder}/{name}", timeout=30)
+            if response.status_code != 200:
+                self.status.text = f"Download recusado: HTTP {response.status_code}"
+                return
+            self._pending_download = (name, response.content)
+            from android import activity
+            activity.startActivityForResult(self._android_intent("android.intent.action.CREATE_DOCUMENT", name), 4102)
+        except Exception as exc:
+            self.status.text = f"Download falhou: {exc}"
+
+    def _write_android_download(self, uri, payload):
+        name, data = payload
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass("org.renpy.android.PythonActivity")
+            resolver = PythonActivity.mActivity.getContentResolver()
+            stream = resolver.openOutputStream(uri)
+            try:
+                stream.write(data)
+                stream.flush()
+            finally:
+                stream.close()
+            self.status.text = f"Guardado no telemóvel: {name}"
+        finally:
+            self._pending_download = None
 
     def _load_lang(self, code):
         path = Path(__file__).parent / "lang" / f"{code}.json"
