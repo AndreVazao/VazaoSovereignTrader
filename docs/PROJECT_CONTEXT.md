@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-09-30 (UTC) — main at 05d8896ce29049a2d2f2e72d46557de8660f648a; top-of-book collector merged, post-merge CI pending
+Last updated: 2026-10-02 (UTC) — main at 54caed8d584f09c75aca50a6b836425a7e525610; PR #307 merged and post-merge Python/Windows CI passed
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1022,3 +1022,24 @@ Review points before merge:
 - Android ADB operations remain read-only, bounded by subprocess timeouts, and use `shell=False`. No automatic install/launch, no UI interaction, no live orders, no REAL authorization.
 - Exact branch head after initial code/test changes must be read live from GitHub. Wait for exact-head Python and Windows CI, inspect final diff, create PR, and merge only if checks pass and no blocking defect.
 - After merging this bridge-hardening PR, verify all post-merge workflows and update this context with the actual SHA/results.
+
+
+## 47. Verified handoff — 2026-10-02 UTC
+
+### PR #307 — Android ADB PAPER bridge hardening
+- PR: https://github.com/AndreVazao/VazaoSovereignTrader/pull/307 — merged by squash.
+- Implementation head before merge: `08f893f9f4bdb42c2f9f3602b2328a3402d770dd`.
+- Merge commit and current main at this handoff: `54caed8d584f09c75aca50a6b836425a7e525610`.
+- Exact-head PR Python tests passed: run 36920600519. Exact-head Windows EXE and installer passed: run 36920600487.
+- Post-merge Python tests passed on main SHA `54caed8d584f09c75aca50a6b836425a7e525610`: run 36921375392.
+- Post-merge Windows EXE and installer passed on main SHA `54caed8d584f09c75aca50a6b836425a7e525610`: run 36921375538.
+- Verified main SHA directly from GitHub. At verification time there were no open pull requests.
+- Code changes: mismatched non-ANDROID_APK surface actions are rejected before ADB invocation; probe/observe request IDs are unique; regression tests and `docs/ANDROID_ADB_BRIDGE.md` added.
+- Safety boundary unchanged: ADB bridge is read-only operational telemetry, no APK installation/launch, no UI automation/order submission, PAPER-only, no REAL authorization.
+- PR #306 secure revocable Android pairing is also merged at predecessor main SHA `82865d584d5d81daabfcee4a9f42dd73f4b77448`; physical Android/Windows pairing and Android Keystore/OEM validation remain unperformed.
+
+### Next actions
+1. Continue from this exact main SHA and create a dedicated feature branch/PR for the next bounded implementation task.
+2. Prefer reliability and testability work for continuous PAPER data collection/research; inspect the current code and tests before choosing the change.
+3. Preserve fail-closed risk/readiness/RealModeGuard boundaries, no silent runtime start, no secrets, no cloud costs, and no REAL order submission.
+4. Require exact-head CI and post-merge CI verification; physical device/emulator validation remains an explicit outstanding item.
