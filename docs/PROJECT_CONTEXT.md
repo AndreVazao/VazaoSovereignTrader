@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — main at cabd98b20d49eeba924eb6f776bbd2ab775e7f4d; PR #309 merged; exact-head Python and Windows EXE/installer CI passed
+Last updated: 2026-10-02 (UTC) — main at 364ee150bcfe29e073d6ce8905099fdd6ccfe394; PR #311 merged; post-merge Python and Windows EXE/installer CI passed
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1055,3 +1055,37 @@ Review points before merge:
 - This is observational/PAPER-only; no exchange execution, order submission, risk controls, REAL authorization, or service auto-start changed.
 - Post-merge CI on resulting main SHA `cabd98b20d49eeba924eb6f776bbd2ab775e7f4d` was queued at handoff; verify Python and Windows EXE/installer workflows to completion.
 - Physical Android/Windows pairing and Android Keystore/OEM validation remain outstanding.
+
+
+## 49. Verified handoff — 2026-10-02 (PR #311)
+
+### Current main and CI
+- PR #311: https://github.com/AndreVazao/VazaoSovereignTrader/pull/311
+- Purpose: reject malformed top-of-book ticker values without allowing numeric conversion failures to escape validation.
+- Merged commit / current main at handoff: `364ee150bcfe29e073d6ce8905099fdd6ccfe394`.
+- Exact PR head: `ad33958798977562de7fc3114a7347e0bb272537`.
+- Exact-head Python tests: run 36964990001 SUCCESS.
+- Exact-head Windows EXE and installer: run 36964989999 SUCCESS.
+- PR #310 post-merge Python run 36963300302 SUCCESS on main `b9d0a148c3496e4af577664e8b62b56405b3ca50`.
+- PR #310 post-merge Windows EXE/installer run 36963300317 SUCCESS on main `b9d0a148c3496e4af577664e8b62b56405b3ca50`.
+- Post-merge CI for PR #311 on `364ee150bcfe29e073d6ce8905099fdd6ccfe394` must be checked after this handoff; the PR-triggered exact-head CI above is green.
+
+### Code change
+- Added `_is_valid_top_of_book(event)` in `PC_ENGINE/tools/run_top_of_book_collector.py`.
+- Rejects non-numeric bid/ask, NaN/infinity, non-positive bid, ask <= bid, malformed/missing fields and non-positive/invalid local receive timestamp.
+- Regression tests cover malformed bid, non-finite values, invalid market values, invalid timestamp and valid numeric-string inputs.
+- Invalid records are discarded before serialization; PAPER-only collection semantics remain unchanged.
+- No order submission, REAL-mode authorization, secrets, cloud provisioning or auto-start changes.
+
+### Platform execution capability — explicit gap, do not overstate
+- `PC_ENGINE/execution/surface_adapters.py` defines shared surfaces and actions for WEB_BROWSER, DESKTOP_APP and ANDROID_APK, including BUY/SELL/CANCEL action kinds and shared feedback structures.
+- `AndroidAdbPaperSurfaceAdapter` currently performs bounded, read-only ADB observation. CONNECT/OBSERVE only probe; BUY/SELL/CANCEL record PAPER intent and do not interact with app UI or submit orders.
+- ADB docs explicitly state there is no APK installation/launch, UI interaction, private API call or order submission. Physical Android/emulator/OEM validation remains outstanding.
+- Do not claim that browser/desktop/Android order execution is complete merely because surface abstractions or a dashboard exist. Inspect the live implementation and tests before each capability claim.
+
+### Next actions
+1. Verify post-merge Python and Windows EXE/installer workflows on commit `364ee150bcfe29e073d6ce8905099fdd6ccfe394`.
+2. Continue one implementation PR at a time. First inspect current platform-runtime registry, authenticated endpoints, browser/desktop adapters, RealModeGuard/Risk Engine and order reconciliation code to establish actual supported paths.
+3. Build a capability matrix per venue and surface: observe; authenticated state; order preview; PAPER submission/simulation; cancel/replace; fill/balance reconciliation; timeout/unknown-outcome recovery; supported REAL pathway. Mark unimplemented items honestly.
+4. Implement one safe, testable platform capability per branch/PR. Keep Android auth/MFA/CAPTCHA and anti-bot boundaries intact; never store exchange credentials in code/logs.
+5. REAL execution remains disabled unless the existing independent readiness, preflight, risk, RealModeGuard, operator authorization and reconciliation gates are all satisfied. Do not enable it as part of platform-interaction work.
