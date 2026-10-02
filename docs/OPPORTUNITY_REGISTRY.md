@@ -28,7 +28,7 @@ Source timestamps and provenance are mandatory. HTTPS URLs with embedded usernam
 - `CLAIMED_OR_ENABLED_CONFIRMED`: authoritative evidence says the external action occurred; the registry does not perform it.
 - `EXPIRED`, `BLOCKED`, `UNSUPPORTED`, `REJECTED_BY_POLICY`, `UNKNOWN_OUTCOME`: explicit terminal or uncertainty states.
 
-Transitions are validated against an allowlist. Expired records cannot be promoted to an active state. Discovery cannot authorize execution; setting `execution_authorized=true` or `paper_only=false` is rejected. The registry deliberately has no execution-adapter dependency.
+New registry records must begin in `DISCOVERED`; direct insertion into a later state is rejected. Transitions are validated against an allowlist. Expired records cannot be promoted to an active state. Discovery cannot authorize execution; setting `execution_authorized=true` or `paper_only=false` is rejected. The registry deliberately has no execution-adapter dependency.
 
 ## Persistence
 
