@@ -1,11 +1,44 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import re
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
+
+
+_HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+
+
+def _valid_allowlisted_host(host: str) -> bool:
+    """Accept explicit DNS hostnames only; reject IP literals and local names."""
+    if not host or host != host.lower() or host.endswith(".") or any(c.isspace() for c in host):
+        return False
+    if "/" in host or ":" in host or "@" in host or "%" in host:
+        return False
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        pass
+    else:
+        return False
+    if host == "localhost" or host.endswith((".localhost", ".local", ".internal", ".test", ".invalid")):
+        return False
+    labels = host.split(".")
+    if len(labels) < 2 or any(not _HOST_LABEL_RE.fullmatch(label) for label in labels):
+        return False
+    return True
+
+
+def _path_matches(path: str, prefix: str) -> bool:
+    """Match a path prefix on segment boundaries, never /api against /apix."""
+    if prefix == "/":
+        return path.startswith("/")
+    normalized = prefix.rstrip("/")
+    return path == normalized or path.startswith(normalized + "/")
 
 
 @dataclass(frozen=True)
@@ -27,32 +60,41 @@ class OfficialSourceDefinition:
         if self.max_bytes < 1 or self.timeout_seconds <= 0 or self.max_redirects < 0:
             raise ValueError("fetch limits must be positive (redirect count may be zero)")
         for host in self.allowed_hosts:
-            if (
-                not host
-                or host != host.lower()
-                or "/" in host
-                or ":" in host
-                or host.endswith(".")
-                or any(char.isspace() for char in host)
-            ):
-                raise ValueError("allowed hosts must be lowercase hostnames without ports")
+            if not _valid_allowlisted_host(host):
+                raise ValueError("allowed hosts must be explicit public DNS hostnames, not IPs or local names")
         for prefix in self.allowed_path_prefixes:
-            if not prefix.startswith("/") or "?" in prefix or "#" in prefix:
-                raise ValueError("allowed path prefixes must be absolute paths without query or fragment")
+            if (
+                not prefix.startswith("/")
+                or "?" in prefix
+                or "#" in prefix
+                or "\\" in prefix
+                or "%" in prefix
+                or any(part in (".", "..") for part in prefix.split("/"))
+            ):
+                raise ValueError("path prefixes must be absolute normalized paths without query, fragment, encoding, or dot segments")
 
     def allows_url(self, url: str) -> bool:
         try:
             parsed = urlsplit(url)
             host = parsed.hostname or ""
-            return (
-                parsed.scheme == "https"
-                and parsed.port in (None, 443)
-                and host in self.allowed_hosts
-                and parsed.username is None
-                and parsed.password is None
-                and not parsed.fragment
-                and any(parsed.path.startswith(prefix) for prefix in self.allowed_path_prefixes)
-            )
+            path = parsed.path or "/"
+            # Reject ambiguous encodings and path traversal before urllib normalizes anything.
+            decoded_path = unquote(path)
+            if (
+                parsed.scheme.lower() != "https"
+                or parsed.port not in (None, 443)
+                or host not in self.allowed_hosts
+                or not _valid_allowlisted_host(host)
+                or parsed.username is not None
+                or parsed.password is not None
+                or not parsed.netloc
+                or parsed.fragment
+                or "\\" in path
+                or any(part in (".", "..") for part in decoded_path.split("/"))
+                or re.search(r"%(?:2f|5c|2e)", path, re.IGNORECASE)
+            ):
+                return False
+            return any(_path_matches(path, prefix) for prefix in self.allowed_path_prefixes)
         except (TypeError, ValueError):
             return False
 
@@ -102,10 +144,15 @@ class OfficialSourceFetcher:
     def fetch(self, url: str, *, now_ms: int | None = None) -> OfficialSourceSnapshot:
         if not self.definition.allows_url(url):
             raise ValueError("URL is outside the configured HTTPS host/path allowlist")
+        if now_ms is not None and (isinstance(now_ms, bool) or not isinstance(now_ms, int) or now_ms <= 0):
+            raise ValueError("now_ms must be a positive integer")
 
         request = urllib.request.Request(
             url,
-            headers={"User-Agent": "VazaoSovereignTrader-Research/1.0", "Accept": ", ".join(self._ALLOWED_CONTENT_TYPES)},
+            headers={
+                "User-Agent": "VazaoSovereignTrader-Research/1.0",
+                "Accept": ", ".join(self._ALLOWED_CONTENT_TYPES),
+            },
             method="GET",
         )
         opener = urllib.request.build_opener(_AllowlistedRedirectHandler(self.definition))
@@ -137,7 +184,7 @@ class OfficialSourceFetcher:
             source_id=self.definition.source_id,
             requested_url=url,
             final_url=final_url,
-            retrieved_at_ms=int(time.time() * 1000) if now_ms is None else int(now_ms),
+            retrieved_at_ms=int(time.time() * 1000) if now_ms is None else now_ms,
             status_code=status_code,
             content_type=content_type,
             content_length=len(body),
