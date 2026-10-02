@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — main at 54caed8d584f09c75aca50a6b836425a7e525610; PR #307 merged and post-merge Python/Windows CI passed
+Last updated: 2026-10-02 (UTC) — main at 76b745cb9295f4168d6c9c3a2b60fff1c443fea7; PR #308 merged; bounded top-of-book persistence work in progress
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1043,3 +1043,14 @@ Review points before merge:
 2. Prefer reliability and testability work for continuous PAPER data collection/research; inspect the current code and tests before choosing the change.
 3. Preserve fail-closed risk/readiness/RealModeGuard boundaries, no silent runtime start, no secrets, no cloud costs, and no REAL order submission.
 4. Require exact-head CI and post-merge CI verification; physical device/emulator validation remains an explicit outstanding item.
+
+
+## 48. Handoff — 2026-10-02 UTC: bounded PAPER market-data persistence
+
+- PR #308 merged by squash; merge commit/current main at start of next implementation: `76b745cb9295f4168d6c9c3a2b60fff1c443fea7`.
+- PR #308 exact-head Python CI passed: run 36961284224. PR #307 post-merge Python and Windows EXE/installer passed on predecessor main SHA `54caed8d584f09c75aca50a6b836425a7e525610` (runs 36921375392 and 36921375538).
+- Current implementation branch: `feat/bounded-top-of-book-persistence`.
+- Work in progress: ensure the public top-of-book JSONL collector never writes a single event larger than its configured maximum file size; track dropped oversized records explicitly and add rotation/bounds regression tests.
+- The change is observational/PAPER-only. It does not alter exchange execution, order submission, risk controls, REAL authorization, or service auto-start.
+- Exact-head CI, review, PR creation, merge, and post-merge CI remain to be completed for this branch.
+- Physical Android/Windows pairing and Android Keystore/OEM validation remain outstanding.
