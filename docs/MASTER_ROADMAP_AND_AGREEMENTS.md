@@ -327,3 +327,8 @@ The fetch/cache adapter, content size/type/time limits, source freshness and exp
 ## 18. Next bounded source-ingestion increment
 
 Implement a separate read-only public-source fetch/cache adapter only after the source policy boundary is available on main. Require explicit invocation; no background crawl by default. Apply connect/read timeouts, response-size and content-type limits, bounded redirects with exact-origin revalidation, rate limits, canonical URL/source hashing, cache freshness/expiry, and explicit unavailable/stale/unknown states. Treat all retrieved text as untrusted input. Add deterministic tests with mocked transport; never access private account pages, bypass security challenges, store credentials, or trigger financial actions.
+
+
+## Official source ingestion security hardening — 2026-10-02
+
+The current-main implementation branch `fix/official-source-ingestion-security` adds a bounded, opt-in fetcher for reviewed public official sources, with exact HTTPS host/path allowlists, redirect and response-size limits, accepted content types, timeout, SHA-256 provenance, and raw-byte output only. Security hardening rejects IP literals and obvious local hostnames, enforces path segment boundaries, rejects encoded/backslash/dot-segment paths, and validates supplied timestamps as positive integers. Regression tests are mocked and must be verified in exact-head CI. DNS answers are not pinned or checked against private ranges; do not accept untrusted source definitions. This component does not parse content, establish account eligibility, mutate the opportunity registry, or authorize execution.
