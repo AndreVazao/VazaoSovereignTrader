@@ -227,8 +227,8 @@ Never invent test results, workflow IDs, commit SHAs, account facts or platform 
 - [x] Ensure this module cannot authorize execution; official-source allowlisting, automated expiry sweeps and ingestion remain open.
 
 ### Track C — official-source ingestion and evidence
-- [ ] Define allowlisted source adapters and safe URL attribution.
-- [ ] Fetch/cache public official information with timestamps and source hashes where appropriate.
+- [x] Define the initial exact-host allowlist policy boundary and safe URL attribution (metadata-only; no network fetch yet; `PC_ENGINE/opportunity/source_policy.py`).
+- [ ] Implement separately reviewed read-only fetch/cache adapters for public official information with timestamps and source hashes where appropriate.
 - [ ] Treat source text as untrusted data, never executable instructions.
 - [ ] Track source changes and campaign expiry; mark unavailable/stale sources as unknown.
 - [ ] Do not scrape private account pages without explicit scope and approved access.
@@ -309,3 +309,16 @@ As of 2026-10-02, branch `feat/opportunity-registry-schema` contains the first t
 - `tests/test_opportunity_registry.py`: provenance, timestamps, state transitions, expired records, no-execution invariants, persistence and malformed-line tests.
 - `docs/OPPORTUNITY_REGISTRY.md`: schema contract, state semantics, persistence, limitations and safety boundaries.
 - This is not merged yet. CI and PR must be checked against the final exact head. No account ingestion, dashboard integration or execution adapters were added.
+
+
+## 17. Official-source policy boundary — implementation in progress (2026-10-02)
+
+The next increment is deliberately limited to local validation and provenance metadata, not network ingestion:
+- Exact-host HTTPS allowlist supplied explicitly by caller; empty allowlist fails closed.
+- Reject deceptive suffix hosts, embedded credentials, nonstandard ports, IP-literal hosts and fragments.
+- Validate positive integer observation/capture timestamps and lowercase SHA-256 evidence digest.
+- Reject cross-origin final URLs; even another allowlisted host is not trusted as an automatic redirect destination.
+- Generate deterministic evidence fingerprints without persisting page contents.
+- No HTTP requests, browser login, account data, crawling, claims, orders, transfers or REAL authorization.
+
+The fetch/cache adapter, content size/type/time limits, source freshness and expiry sweeps remain future work and must have dedicated tests before any network access is enabled.
