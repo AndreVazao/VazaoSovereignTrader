@@ -219,12 +219,12 @@ Never invent test results, workflow IDs, commit SHAs, account facts or platform 
 - [ ] Inspect open PRs/branches and avoid parallel conflicting implementation work.
 
 ### Track B — opportunity schema and tests (next implementation)
-- [ ] Define typed opportunity record and enum/state transitions.
-- [ ] Validate official source URL, source timestamp, discovery timestamp and expiry.
-- [ ] Define eligibility evidence, cost fields, unknown fields, risk notes, required permissions and action scope.
-- [ ] Add duplicate detection and expiry handling.
-- [ ] Add unit tests for invalid transitions, stale/expired sources, unknown eligibility, fabricated/missing provenance and no-action defaults.
-- [ ] Ensure discovery cannot call execution adapters or authorize REAL.
+- [x] Define typed opportunity record and enum/state transitions (initial implementation on branch `feat/opportunity-registry-schema`).
+- [x] Validate HTTPS source URL, source-capture/discovery timestamps, and expiry constraints.
+- [x] Define eligibility evidence, cost estimates, risk notes, required permissions and no-action safety invariants.
+- [x] Add append-only JSONL registry with latest-state snapshots, malformed-line tolerance and idempotent identical writes.
+- [x] Add unit tests for invalid transitions, expired records, missing provenance/eligibility evidence and no-action defaults.
+- [x] Ensure this module cannot authorize execution; official-source allowlisting, automated expiry sweeps and ingestion remain open.
 
 ### Track C — official-source ingestion and evidence
 - [ ] Define allowlisted source adapters and safe URL attribution.
@@ -300,3 +300,12 @@ A task is not complete merely because code was written. It is complete only when
 ## 15. Copy/paste continuity prompt
 
 Continue working on `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal), with a warm and direct collaborative tone. First read `docs/PROJECT_CONTEXT.md`, `docs/MASTER_ROADMAP_AND_AGREEMENTS.md`, and `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md` from live `main`; then verify current main SHA, open PRs, branch state and CI. Do not assume any status in the docs is current without checking GitHub. Work autonomously on safe engineering tasks using a dedicated branch and PR, never commit normal work directly to main. Next implementation should be a typed opportunity schema/evidence-state model with unit tests, expiry/provenance validation and no execution side effects. Preserve PAPER default, all existing readiness/preflight/Risk Engine/RealModeGuard/reconciliation/operator-approval gates, human handling of MFA/CAPTCHA, least-privilege access and no secrets in logs. Do not enable REAL trading, transfers, native bots, copy-trading subscriptions or financially binding reward actions merely because a target is reached or an opportunity looks promising. No cloud resources, paid services or deployment without explicit authorization. Inspect the full diff; merge only if exact-head required CI is green and there are no blocking defects; verify post-merge workflows; update PROJECT_CONTEXT and this roadmap with exact SHAs, PRs, test results and blockers. The product objective is a dependable PAPER-first research node, evidence-backed platform audit across browser/desktop/Android, legitimate opportunity discovery, transparent mobile-friendly dashboard and eventually a configurable 1→10→100→1,000 capital ladder with explicit approval and reconciliation.
+
+
+## 16. Implementation progress — opportunity registry (branch in progress)
+
+As of 2026-10-02, branch `feat/opportunity-registry-schema` contains the first typed opportunity evidence registry:
+- `PC_ENGINE/opportunity/registry.py`: typed category/status enums, record validation, explicit transition allowlist, expiry checks, positive-estimate requirements, HTTPS source provenance, PAPER-only/execution-disabled invariants and append-only JSONL persistence.
+- `tests/test_opportunity_registry.py`: provenance, timestamps, state transitions, expired records, no-execution invariants, persistence and malformed-line tests.
+- `docs/OPPORTUNITY_REGISTRY.md`: schema contract, state semantics, persistence, limitations and safety boundaries.
+- This is not merged yet. CI and PR must be checked against the final exact head. No account ingestion, dashboard integration or execution adapters were added.
