@@ -69,7 +69,7 @@ class OfficialSourcePolicyTests(unittest.TestCase):
         invalid = (
             {"observed_at_ms": 0},
             {"source_captured_at_ms": -1},
-            {"observed_at_ms": 3_000},
+            {"observed_at_ms": 302_001},
             {"source_captured_at_ms": 301_001, "observed_at_ms": 1_000},
             {"observed_at_ms": True},
         )
