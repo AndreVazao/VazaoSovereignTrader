@@ -40,7 +40,7 @@ class BrowserExecutionAdapter:
             if previous is not None:
                 if previous.state == "VERIFIED":
                     return ExecutionResult(True, "VERIFIED", self.method, external_id=previous.external_id)
-                if previous.state in {"SUBMITTED", "PARTIAL", "PARTIALLY_FILLED", "CANCELLED", "REJECTED"}:
+                if previous.state in {"SUBMITTED", "PARTIAL", "PARTIALLY_FILLED", "CANCELLED", "REJECTED", "FILLED"}:
                     return ExecutionResult(False, "RECOVER_EXISTING_BROWSER_SUBMISSION", self.method, external_id=previous.external_id, reason="durable browser submission already exists")
 
         observation = self.driver.observe(intent)
@@ -76,8 +76,9 @@ class BrowserExecutionAdapter:
             return ExecutionResult(False, "EXCHANGE_OUTCOME_UNVERIFIED", self.method, external_id=external_id, reason=verification.detail)
 
         terminal_outcome = str(exchange_status or "REJECTED").upper().strip()
+        action = str(intent.action or "").upper().strip()
         if terminal_outcome == "FILLED":
-            final_state = "VERIFIED"
+            final_state = "FILLED" if action == "CANCEL" else "VERIFIED"
         elif terminal_outcome == "PARTIALLY_FILLED":
             final_state = "PARTIAL"
         else:
@@ -92,7 +93,6 @@ class BrowserExecutionAdapter:
                 context_fingerprint=observation.context_fingerprint,
             )
 
-        action = str(intent.action or "").upper().strip()
         if action == "CANCEL":
             succeeded = terminal_outcome == "CANCELLED"
         else:
