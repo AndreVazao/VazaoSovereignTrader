@@ -309,3 +309,14 @@ As of 2026-10-02, branch `feat/opportunity-registry-schema` contains the first t
 - `tests/test_opportunity_registry.py`: provenance, timestamps, state transitions, expired records, no-execution invariants, persistence and malformed-line tests.
 - `docs/OPPORTUNITY_REGISTRY.md`: schema contract, state semantics, persistence, limitations and safety boundaries.
 - This is not merged yet. CI and PR must be checked against the final exact head. No account ingestion, dashboard integration or execution adapters were added.
+
+
+## 13. Implementation progress — official-source ingestion foundation (2026-10-02)
+
+- PR #317's typed opportunity registry is merged on main at `bd7cb11c68b312b46995edef16106b207854513f`; post-merge Python and Windows EXE workflows passed.
+- Current feature branch: `feat/official-opportunity-source-ingestion`.
+- The new source-fetch primitive is deliberately opt-in: each caller supplies exact HTTPS host and path allowlists. It enforces redirect checks, timeout, accepted content types and bounded response sizes, and records retrieval time plus SHA-256.
+- Fetch output is raw bytes only. It does not treat public page text as proof of account eligibility or economic value and does not write to the registry or perform actions.
+- Before merge, exact-head Python tests and Windows EXE/installer workflows must pass. Expand tests for redirects and ensure no arbitrary URL, redirect, oversized response or unexpected content type is accepted.
+- Next sequence: (1) validate bounded fetcher; (2) add deterministic content fingerprint/deduplication; (3) add strict, fixture-based parsers for explicitly allowlisted official page formats; (4) integrate source evidence into the registry; (5) only then build the opportunity dashboard shortlist. Account eligibility remains UNKNOWN until authorized account-specific evidence exists.
+- No changes to REAL-mode gates, order submission, transfers, native bot activation, copy-trading subscriptions, reward claims, cloud resources or paid services are included.
