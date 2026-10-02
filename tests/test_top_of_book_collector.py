@@ -70,7 +70,7 @@ class TopOfBookCollectorHealthTests(unittest.TestCase):
             root = Path(tmp)
             output = root / "events.jsonl"
             backup = root / "events.jsonl.1"
-            cap = 8
+            cap = 10
             self.assertTrue(_append_bounded_line(output, backup, "1234\n", cap))
             self.assertTrue(_append_bounded_line(output, backup, "5678\n", cap))
             self.assertTrue(_append_bounded_line(output, backup, "abcd\n", cap))
