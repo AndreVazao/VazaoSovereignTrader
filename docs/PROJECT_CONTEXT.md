@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — PR #316 merged as 43eba2a94dd490e89b997300a422a8b7e62c15b0; PR #317 open on feat/opportunity-registry-schema; exact-head CI pending after latest safety test
+Last updated: 2026-10-02 (UTC) — PR #317 merged as bd7cb11c68b312b46995edef16106b207854513f; post-merge Python and Windows EXE workflows successful
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1152,16 +1152,18 @@ Review points before merge:
 - Keep this section synchronized with live GitHub after merge. Do not treat this branch's snapshot SHA as the future main SHA.
 
 
-## 53. Opportunity registry implementation — 2026-10-02
+## 53. Opportunity registry implementation — verified 2026-10-02 UTC
 
-- PR #316 merged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/316
-- Merge/resulting main SHA: `43eba2a94dd490e89b997300a422a8b7e62c15b0`.
-- Exact-head Python tests for PR #316: run 37013424748 SUCCESS on `bad22836a43cbd87fc68e57f713479e2bb1afe8a`. The first run 37013306941 also succeeded on the prior head `2bf3ed54feb88d0b3db777d802307ed199a819e0`.
-- Post-merge Python run 37013578362 on main SHA `43eba2a94dd490e89b997300a422a8b7e62c15b0`: SUCCESS.
-- Post-merge Windows EXE run 37013578643 was still IN_PROGRESS at the time of this update; recheck before claiming all post-merge workflows are green.
-- Current implementation branch/PR: `feat/opportunity-registry-schema`, PR #317 https://github.com/AndreVazao/VazaoSovereignTrader/pull/317 (not yet merged). Always query the live PR head SHA before merge; this context snapshot is not authoritative for later commits.
-- Added `PC_ENGINE/opportunity/registry.py`: typed opportunity categories/statuses, validated status transitions, source provenance and timestamp checks, expiry handling, positive-net-estimate validation, append-only JSONL persistence, idempotent identical writes, and hard invariants `paper_only=true` / `execution_authorized=false`.
-- Added `tests/test_opportunity_registry.py` for provenance, timestamp/state validation, expiry, no-action invariants, persistence, malformed JSONL rows and rejection of initial states other than DISCOVERED.
-- Added `docs/OPPORTUNITY_REGISTRY.md`; updated the master roadmap's Track B and progress notes.
-- No platform source ingestion, account probing, dashboard integration, transfer execution or REAL behavior is connected to this registry.
-- PR #317 is already open; the latest safety fix requires a fresh exact-head CI run. Next: inspect the final PR diff and verify Python tests and Windows EXE/installer on the latest head; fix any failures before considering merge. Keep source allowlisting, automatic expiry sweeps and official ingestion for later steps.
+- PR #317: https://github.com/AndreVazao/VazaoSovereignTrader/pull/317 — merged by squash.
+- Exact PR head: `e4c67253d089bc37a256569b7d14e2eefc98d135`.
+- Resulting main/merge SHA: `bd7cb11c68b312b46995edef16106b207854513f`.
+- Post-merge Python workflow run 37016998573: SUCCESS on main SHA `bd7cb11c68b312b46995edef16106b207854513f`.
+- Post-merge Windows EXE workflow run 37016998510: SUCCESS on the same main SHA.
+- Added `PC_ENGINE/opportunity/registry.py`: typed opportunity categories/statuses, explicit transition allowlist, source provenance and timestamp checks, expiry handling, positive-net-estimate validation, append-only JSONL persistence, idempotent identical writes, and hard invariants `paper_only=true` / `execution_authorized=false`.
+- New records must start at DISCOVERED; attempts to insert directly into later states are rejected to prevent state-transition bypass.
+- Added `tests/test_opportunity_registry.py` and `docs/OPPORTUNITY_REGISTRY.md`; updated the master roadmap and this context.
+- No platform source ingestion, account probing, dashboard integration, transfer execution, bot activation, reward claiming or REAL behavior is connected to this registry.
+- Next bounded engineering task: implement an official-source opportunity ingestion foundation with an explicit allowlist, provenance, retrieval timestamp, content hash, bounded response sizes/timeouts, deduplication, expiry, and fail-closed parsing. Start with static fixtures/unit tests and public official-source metadata; do not automate authenticated account actions or infer account eligibility from public pages.
+- Before any dashboard wiring, prove the evidence model and source-ingestion behavior through tests. Keep the user-facing opportunity states CONFIRMED / UNKNOWN / BLOCKED / NOT_SUPPORTED explicit and never label an opportunity profitable without net-cost assumptions and evidence.
+- Continue one branch/PR per change; inspect exact-head Python and Windows EXE/installer CI, merge only if all required checks pass, and verify post-merge workflows on the resulting main SHA.
+- Safety unchanged: PAPER default; no silent runtime start; no secrets; no paid/cloud resources; no REAL orders/transfers, bot activation or copy-trading subscription without the existing independent gates and explicit operator approval.
