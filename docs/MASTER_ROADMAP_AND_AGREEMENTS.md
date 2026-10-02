@@ -345,3 +345,8 @@ The current-main implementation branch `fix/official-source-ingestion-security` 
 ## DNS preflight increment — pending review (2026-10-02)
 
 Branch `fix/source-ingestion-dns-preflight` adds pre-connection DNS validation to reject failed/empty resolution and any non-global IP answer, with mocked tests for private and mixed answer sets. This is defense-in-depth only, not DNS pinning: the standard urllib transport may resolve again at connect time. Do not merge until exact-head Python and Windows workflows pass. The next security step is transport-level validated-IP pinning with TLS SNI/hostname verification plus network egress restrictions.
+
+
+## DNS pinned transport increment — pending review (2026-10-02)
+
+Branch `fix/source-ingestion-pinned-transport` replaces the DNS preflight-only transport gap with a validated-IP HTTPS connection. The fetcher pins the TCP dial to the validated public address while retaining the original hostname for TLS SNI/certificate verification, disables ambient HTTP(S) proxy configuration for this path, and rejects proxy tunneling. Regression tests cover the IP dial and TLS hostname invariants. Exact-head Python and Windows workflows are required before merge. Host/network egress controls remain defense-in-depth beyond this application-layer boundary.
