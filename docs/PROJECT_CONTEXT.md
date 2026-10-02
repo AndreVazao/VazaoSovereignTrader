@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — main at 76b745cb9295f4168d6c9c3a2b60fff1c443fea7; PR #308 merged; bounded top-of-book persistence work in progress
+Last updated: 2026-10-02 (UTC) — main at cabd98b20d49eeba924eb6f776bbd2ab775e7f4d; PR #309 merged; exact-head Python and Windows EXE/installer CI passed
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1049,8 +1049,9 @@ Review points before merge:
 
 - PR #308 merged by squash; merge commit/current main at start of next implementation: `76b745cb9295f4168d6c9c3a2b60fff1c443fea7`.
 - PR #308 exact-head Python CI passed: run 36961284224. PR #307 post-merge Python and Windows EXE/installer passed on predecessor main SHA `54caed8d584f09c75aca50a6b836425a7e525610` (runs 36921375392 and 36921375538).
-- Current implementation branch: `feat/bounded-top-of-book-persistence`.
-- Work in progress: ensure the public top-of-book JSONL collector never writes a single event larger than its configured maximum file size; track dropped oversized records explicitly and add rotation/bounds regression tests.
-- The change is observational/PAPER-only. It does not alter exchange execution, order submission, risk controls, REAL authorization, or service auto-start.
-- Exact-head CI, review, PR creation, merge, and post-merge CI remain to be completed for this branch.
+- PR #309 (`feat/bounded-top-of-book-persistence`) merged by squash as `cabd98b20d49eeba924eb6f776bbd2ab775e7f4d`.
+- Exact-head Python tests passed: run 36961681763. Windows EXE and installer build/smoke tests passed: run 36961681739, both on head `aaa9319ea1ecd9461aabe01320cb02097fde390e`.
+- The collector now drops a serialized top-of-book record that exceeds the configured byte cap without modifying existing output, increments `oversized_tickers_ignored`, and keeps normal output/backup rotation bounded. Regression tests cover oversized drops and rotation caps.
+- This is observational/PAPER-only; no exchange execution, order submission, risk controls, REAL authorization, or service auto-start changed.
+- Post-merge CI on resulting main SHA `cabd98b20d49eeba924eb6f776bbd2ab775e7f4d` was queued at handoff; verify Python and Windows EXE/installer workflows to completion.
 - Physical Android/Windows pairing and Android Keystore/OEM validation remain outstanding.
