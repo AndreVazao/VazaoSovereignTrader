@@ -27,8 +27,18 @@ class OfficialSourceDefinition:
         if self.max_bytes < 1 or self.timeout_seconds <= 0 or self.max_redirects < 0:
             raise ValueError("fetch limits must be positive (redirect count may be zero)")
         for host in self.allowed_hosts:
-            if not host or host != host.lower() or "/" in host or ":" in host:
+            if (
+                not host
+                or host != host.lower()
+                or "/" in host
+                or ":" in host
+                or host.endswith(".")
+                or any(char.isspace() for char in host)
+            ):
                 raise ValueError("allowed hosts must be lowercase hostnames without ports")
+        for prefix in self.allowed_path_prefixes:
+            if not prefix.startswith("/") or "?" in prefix or "#" in prefix:
+                raise ValueError("allowed path prefixes must be absolute paths without query or fragment")
 
     def allows_url(self, url: str) -> bool:
         try:
@@ -36,6 +46,7 @@ class OfficialSourceDefinition:
             host = parsed.hostname or ""
             return (
                 parsed.scheme == "https"
+                and parsed.port in (None, 443)
                 and host in self.allowed_hosts
                 and parsed.username is None
                 and parsed.password is None
