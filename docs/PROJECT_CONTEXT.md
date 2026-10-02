@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — main at 364ee150bcfe29e073d6ce8905099fdd6ccfe394; PR #311 merged; post-merge Python and Windows EXE/installer CI passed
+Last updated: 2026-10-02 (UTC) — main at fd34043a974d93f1549751e9668da3d9a808bb6a; PR #313 merged; post-merge CI pending at handoff
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1089,3 +1089,27 @@ Review points before merge:
 3. Build a capability matrix per venue and surface: observe; authenticated state; order preview; PAPER submission/simulation; cancel/replace; fill/balance reconciliation; timeout/unknown-outcome recovery; supported REAL pathway. Mark unimplemented items honestly.
 4. Implement one safe, testable platform capability per branch/PR. Keep Android auth/MFA/CAPTCHA and anti-bot boundaries intact; never store exchange credentials in code/logs.
 5. REAL execution remains disabled unless the existing independent readiness, preflight, risk, RealModeGuard, operator authorization and reconciliation gates are all satisfied. Do not enable it as part of platform-interaction work.
+
+
+## 50. Platform reconnaissance inventory — implementation PR in progress
+
+### Latest verified main / browser execution semantics
+- PR #313: https://github.com/AndreVazao/VazaoSovereignTrader/pull/313 — merged by squash as `fd34043a974d93f1549751e9668da3d9a808bb6a`.
+- Exact PR head: `6e2a29db4c19c32bbb1240bc485c0e374ea65389`; Python run 37008766071 SUCCESS; Windows EXE/installer run 37008766213 SUCCESS.
+- Post-merge Python run 37009849727 and Windows EXE run 37009849783 were still in progress at handoff; verify both against the resulting main SHA before closing this item.
+- Browser terminal outcomes now preserve FILLED/PARTIAL/CANCELLED/REJECTED distinctions and retries do not blindly resubmit after a durable prior submission.
+
+### New capability in branch `feat/platform-reconnaissance-inventory`
+- Added `PlaywrightPaperSurfaceAdapter.inspect_current_page()`, an explicit, read-only inventory of visible page headings, buttons, navigation labels, form count and visible input-type counts.
+- The inventory does not click controls, navigate automatically, read input values, cookies/storage, balances, positions or credentials. It reports only the page origin, bounds labels, and redacts common email/long-number patterns.
+- The report explicitly marks account data as not read and execution authorization as false. It states that balances, assets, permissions, market availability and fee details remain UNKNOWN until independently verified.
+- Added regression tests for inventory output, disconnected state, and excluding URL paths/query strings.
+- This is only a reconnaissance primitive for the currently open page. It does not yet traverse all platform areas, inspect private account data, or wire a full audit into the cockpit. Do not claim those capabilities are complete.
+- Safety: PAPER-only; no order submission, no REAL gate changes, no credentials or cloud resources.
+
+### Next steps
+1. Finish exact-head Python and Windows EXE/installer CI for the reconnaissance PR; inspect the final diff and merge only when all required checks are green.
+2. Verify post-merge workflows on the resulting main SHA.
+3. Continue toward a structured platform audit with explicit evidence states (CONFIRMED / UNKNOWN / BLOCKED / NOT_SUPPORTED) for account balances/assets, permissions, market types, order types, fees, limits, and execution/reconciliation capability. Use official authenticated APIs where available; browser inspection remains read-only and must not infer private account facts from UI labels.
+4. Wire audit results to a user-visible dashboard only after the schema and source-of-truth semantics are tested.
+5. Preserve human handling for MFA/CAPTCHA/anti-bot and any permission grants. Never request broad permissions merely to make a feature appear available. REAL remains behind existing independent gates.
