@@ -93,9 +93,11 @@ class OfficialSourcePolicy:
             raise ValueError("evidence_sha256 must be a lowercase SHA-256 hex digest")
 
         if final_url is not None:
-            canonical_final = self.validate_url(final_url)
-            if _origin(canonical_final) != _origin(canonical_source):
+            # Check origin before allowlist membership so every cross-origin redirect
+            # is explicitly rejected, including destinations not on the allowlist.
+            if _origin(final_url) != _origin(canonical_source):
                 raise ValueError("cross-origin redirects require independent revalidation")
+            canonical_final = self.validate_url(final_url)
         else:
             canonical_final = None
 
