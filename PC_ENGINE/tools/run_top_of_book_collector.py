@@ -48,6 +48,23 @@ def _write_health(
     tmp.replace(path)
 
 
+def _is_valid_top_of_book(event) -> bool:
+    """Reject malformed or economically invalid ticker values without raising."""
+    try:
+        bid = float(event.bid)
+        ask = float(event.ask)
+        receive_wall_ns = int(event.local_receive_wall_ns)
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return False
+    return (
+        math.isfinite(bid)
+        and math.isfinite(ask)
+        and bid > 0
+        and ask > bid
+        and receive_wall_ns > 0
+    )
+
+
 def _append_bounded_line(output: Path, backup: Path, encoded: str, max_bytes: int) -> bool:
     """Append one complete JSONL record without exceeding the configured file cap.
 
@@ -110,13 +127,7 @@ def main() -> None:
     def persist(event) -> None:
         if event.event_type != "ticker":
             return
-        bid, ask = event.bid, event.ask
-        if (
-            bid is None or ask is None
-            or not math.isfinite(float(bid)) or not math.isfinite(float(ask))
-            or float(bid) <= 0 or float(ask) <= float(bid)
-            or int(event.local_receive_wall_ns) <= 0
-        ):
+        if not _is_valid_top_of_book(event):
             with counters_lock:
                 counters["invalid_tickers_ignored"] += 1
             return
