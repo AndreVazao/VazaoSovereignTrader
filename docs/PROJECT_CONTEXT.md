@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — main at fd34043a974d93f1549751e9668da3d9a808bb6a; PR #313 merged; post-merge CI pending at handoff
+Last updated: 2026-10-02 (UTC) — main at 2261776ddaf989bb4b62b71c8362a9d16e0c8e44; PR #313 and #314 merged; PR #314 exact-head CI passed, post-merge CI pending
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1113,3 +1113,27 @@ Review points before merge:
 3. Continue toward a structured platform audit with explicit evidence states (CONFIRMED / UNKNOWN / BLOCKED / NOT_SUPPORTED) for account balances/assets, permissions, market types, order types, fees, limits, and execution/reconciliation capability. Use official authenticated APIs where available; browser inspection remains read-only and must not infer private account facts from UI labels.
 4. Wire audit results to a user-visible dashboard only after the schema and source-of-truth semantics are tested.
 5. Preserve human handling for MFA/CAPTCHA/anti-bot and any permission grants. Never request broad permissions merely to make a feature appear available. REAL remains behind existing independent gates.
+
+
+## 51. Opportunity discovery, native platform tools, and capital ladder
+
+### PR #314 — read-only browser reconnaissance merged
+- PR: https://github.com/AndreVazao/VazaoSovereignTrader/pull/314
+- Merge commit / resulting main SHA: `2261776ddaf989bb4b62b71c8362a9d16e0c8e44`.
+- Exact PR head: `c911f16a6528b70e35c6a58b87babb1701d57707`; Python tests run 37010181701 SUCCESS and Windows EXE run 37010181970 SUCCESS.
+- Post-merge Python run 37011986996 was IN_PROGRESS and Windows EXE run 37011987035 QUEUED at the time this context was edited; verify both on resulting main SHA before claiming post-merge CI passed.
+- `PlaywrightPaperSurfaceAdapter.inspect_current_page()` inventories visible UI structure only. It is not a full site crawler and does not read balances, account assets, credentials, input values, cookies or storage.
+
+### New opportunity/capital design
+- Added `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md` on branch `docs/opportunity-discovery-capital-ladder`.
+- Scope: native exchange bots, copy trading, official promotions/rewards, fee reductions, eligibility, net economics, evidence statuses, and the owner's illustrative 1 -> 10 -> 100 -> 1,000 per-platform capital ladder.
+- Treat reward codes and campaigns as time-limited and eligibility-bound; no assumption of daily guaranteed rewards. Prefer official sources and current in-account verification.
+- Capital ladder is a configurable planning target, not an instruction to transfer/trade automatically. Account for fees/minimums, locked funds, open positions, custody/venue risk, transfer reconciliation and net equity.
+- No duplicate/abusive reward claims, evasion of platform rules, fabricated codes, or use of extra accounts to bypass per-user limits. No real-money action solely because a balance target is reached.
+- All new REAL trading, copy-trading, native bot activation, reward actions with economic obligations, and transfers remain behind explicit operator approval plus the existing readiness, preflight, Risk Engine, RealModeGuard, operator-authentication and reconciliation gates.
+
+### Next steps
+1. Finish post-merge Python and Windows EXE/installer workflows on `2261776ddaf989bb4b62b71c8362a9d16e0c8e44`.
+2. Review and open a docs PR for `docs/opportunity-discovery-and-capital-ladder` content (branch name `docs/opportunity-discovery-capital-ladder`) after validating the complete diff.
+3. Next implementation PR: typed opportunity schema/evidence states and unit tests; do not combine real trading or transfer execution into discovery work.
+4. Continue one implementation PR at a time: official-source discovery, account/region eligibility, net-value calculations, dashboard shortlist, PAPER evaluation, then platform-specific adapters with explicit permission and reconciliation semantics.
