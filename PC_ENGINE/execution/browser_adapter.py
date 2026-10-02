@@ -40,7 +40,7 @@ class BrowserExecutionAdapter:
             if previous is not None:
                 if previous.state == "VERIFIED":
                     return ExecutionResult(True, "VERIFIED", self.method, external_id=previous.external_id)
-                if previous.state in {"SUBMITTED", "PARTIAL", "REJECTED"}:
+                if previous.state in {"SUBMITTED", "PARTIAL", "PARTIALLY_FILLED", "CANCELLED", "REJECTED"}:
                     return ExecutionResult(False, "RECOVER_EXISTING_BROWSER_SUBMISSION", self.method, external_id=previous.external_id, reason="durable browser submission already exists")
 
         observation = self.driver.observe(intent)
@@ -75,7 +75,14 @@ class BrowserExecutionAdapter:
         if verification.status == BrowserSafetyStatus.OUTCOME_UNVERIFIED:
             return ExecutionResult(False, "EXCHANGE_OUTCOME_UNVERIFIED", self.method, external_id=external_id, reason=verification.detail)
 
-        final_state = "VERIFIED" if verification.status == BrowserSafetyStatus.READY else str(exchange_status or "REJECTED").upper()
+        terminal_outcome = str(exchange_status or "REJECTED").upper().strip()
+        if terminal_outcome == "FILLED":
+            final_state = "VERIFIED"
+        elif terminal_outcome == "PARTIALLY_FILLED":
+            final_state = "PARTIAL"
+        else:
+            final_state = terminal_outcome
+
         if self.ledger is not None:
             self.ledger.append(
                 intent=intent,
@@ -84,4 +91,22 @@ class BrowserExecutionAdapter:
                 page_fingerprint=observation.page_fingerprint,
                 context_fingerprint=observation.context_fingerprint,
             )
-        return ExecutionResult(True, verification.detail or "VERIFIED", self.method, external_id=external_id)
+
+        action = str(intent.action or "").upper().strip()
+        succeeded = terminal_outcome in {"FILLED", "PARTIALLY_FILLED"} or (
+            action == "CANCEL" and terminal_outcome == "CANCELLED"
+        )
+        if not succeeded:
+            return ExecutionResult(
+                False,
+                terminal_outcome,
+                self.method,
+                external_id=external_id,
+                reason=f"exchange terminal outcome: {terminal_outcome}",
+            )
+        return ExecutionResult(
+            True,
+            terminal_outcome,
+            self.method,
+            external_id=external_id,
+        )
