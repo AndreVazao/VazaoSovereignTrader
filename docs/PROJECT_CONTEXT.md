@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — PR #316 merged as 43eba2a94dd490e89b997300a422a8b7e62c15b0; opportunity registry implementation in progress on feat/opportunity-registry-schema
+Last updated: 2026-10-02 (UTC) — PR #316 merged as 43eba2a94dd490e89b997300a422a8b7e62c15b0; PR #317 open on feat/opportunity-registry-schema; exact-head CI pending after latest safety test
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1159,9 +1159,9 @@ Review points before merge:
 - Exact-head Python tests for PR #316: run 37013424748 SUCCESS on `bad22836a43cbd87fc68e57f713479e2bb1afe8a`. The first run 37013306941 also succeeded on the prior head `2bf3ed54feb88d0b3db777d802307ed199a819e0`.
 - Post-merge Python run 37013578362 on main SHA `43eba2a94dd490e89b997300a422a8b7e62c15b0`: SUCCESS.
 - Post-merge Windows EXE run 37013578643 was still IN_PROGRESS at the time of this update; recheck before claiming all post-merge workflows are green.
-- Current implementation branch: `feat/opportunity-registry-schema` (not yet merged).
+- Current implementation branch/PR: `feat/opportunity-registry-schema`, PR #317 https://github.com/AndreVazao/VazaoSovereignTrader/pull/317 (not yet merged). Latest branch commit: `73fd762b7784043d0e78ab47da392d71878596c2` (docs update; verify live PR head before merge).
 - Added `PC_ENGINE/opportunity/registry.py`: typed opportunity categories/statuses, validated status transitions, source provenance and timestamp checks, expiry handling, positive-net-estimate validation, append-only JSONL persistence, idempotent identical writes, and hard invariants `paper_only=true` / `execution_authorized=false`.
-- Added `tests/test_opportunity_registry.py` for provenance, timestamp/state validation, expiry, no-action invariants, persistence and malformed JSONL rows.
+- Added `tests/test_opportunity_registry.py` for provenance, timestamp/state validation, expiry, no-action invariants, persistence, malformed JSONL rows and rejection of initial states other than DISCOVERED.
 - Added `docs/OPPORTUNITY_REGISTRY.md`; updated the master roadmap's Track B and progress notes.
 - No platform source ingestion, account probing, dashboard integration, transfer execution or REAL behavior is connected to this registry.
-- Next: inspect exact branch diff; run/verify Python test suite and Windows EXE on the final PR head; fix failures; open PR only after local/static review. Keep source allowlisting, automatic expiry sweeps and official ingestion for later steps.
+- PR #317 is already open; the latest safety fix requires a fresh exact-head CI run. Next: inspect the final PR diff and verify Python tests and Windows EXE/installer on the latest head; fix any failures before considering merge. Keep source allowlisting, automatic expiry sweeps and official ingestion for later steps.
