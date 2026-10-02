@@ -59,9 +59,9 @@ class TopOfBookCollectorHealthTests(unittest.TestCase):
             root = Path(tmp)
             output = root / "events.jsonl"
             backup = root / "events.jsonl.1"
-            output.write_text("existing\\n", encoding="utf-8")
+            output.write_text("existing\n", encoding="utf-8")
             before = output.read_bytes()
-            self.assertFalse(_append_bounded_line(output, backup, "x" * 32 + "\\n", 16))
+            self.assertFalse(_append_bounded_line(output, backup, "x" * 32 + "\n", 16))
             self.assertEqual(output.read_bytes(), before)
             self.assertFalse(backup.exists())
 
@@ -71,11 +71,11 @@ class TopOfBookCollectorHealthTests(unittest.TestCase):
             output = root / "events.jsonl"
             backup = root / "events.jsonl.1"
             cap = 8
-            self.assertTrue(_append_bounded_line(output, backup, "1234\\n", cap))
-            self.assertTrue(_append_bounded_line(output, backup, "5678\\n", cap))
-            self.assertTrue(_append_bounded_line(output, backup, "abcd\\n", cap))
-            self.assertEqual(output.read_text(encoding="utf-8"), "abcd\\n")
-            self.assertEqual(backup.read_text(encoding="utf-8"), "1234\\n5678\\n")
+            self.assertTrue(_append_bounded_line(output, backup, "1234\n", cap))
+            self.assertTrue(_append_bounded_line(output, backup, "5678\n", cap))
+            self.assertTrue(_append_bounded_line(output, backup, "abcd\n", cap))
+            self.assertEqual(output.read_text(encoding="utf-8"), "abcd\n")
+            self.assertEqual(backup.read_text(encoding="utf-8"), "1234\n5678\n")
             self.assertLessEqual(output.stat().st_size, cap)
             self.assertLessEqual(backup.stat().st_size, cap)
 
