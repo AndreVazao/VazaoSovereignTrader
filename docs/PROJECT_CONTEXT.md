@@ -1215,7 +1215,7 @@ Review points before merge:
 
 - Main baseline for this branch: `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`.
 - Prior draft PR #322 was based on an older main and marked unmergeable. The hardened implementation is now on clean branch `fix/official-source-ingestion-security`, based on main SHA `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`, in PR #324: https://github.com/AndreVazao/VazaoSovereignTrader/pull/324. Exact-head CI and mergeability remain to be verified.
-- Security changes: reject IP literals and obvious local/reserved development hostnames; require valid multi-label DNS names; enforce path-segment prefix boundaries; reject percent-encoded/backslash/dot-segment paths; validate caller-supplied `now_ms` as a positive integer and reject booleans.
+- Security changes: reject IP literals and obvious local/reserved development hostnames; require valid multi-label DNS names; enforce path-segment prefix boundaries; reject percent-encoded/backslash/dot-segment paths; reject all cross-origin redirects, even to another allowlisted host; validate caller-supplied `now_ms` as a positive integer and reject booleans.
 - Added mocked tests for malformed/local hosts, path boundary bypasses, encoded traversal, and invalid timestamps. Do not claim tests pass until exact-head GitHub Actions confirms.
 - Residual limitation: this code does not pin DNS answers or check resolved addresses against private ranges. Configure only reviewed public official hosts and consider egress controls before accepting untrusted source definitions.
 - Scope remains read-only and opt-in. No account access, registry writes, parsing, dashboard wiring, orders, transfers, reward claims, bot activation, cloud resources, paid services or REAL-mode changes.
