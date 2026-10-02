@@ -3,9 +3,38 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
-from PC_ENGINE.tools.run_top_of_book_collector import _append_bounded_line, _write_health
+from PC_ENGINE.tools.run_top_of_book_collector import (
+    _append_bounded_line,
+    _is_valid_top_of_book,
+    _write_health,
+)
+
+
+class TopOfBookTickerValidationTests(unittest.TestCase):
+    def test_rejects_non_numeric_bid_without_raising(self) -> None:
+        event = SimpleNamespace(bid="not-a-price", ask="101", local_receive_wall_ns=1)
+        self.assertFalse(_is_valid_top_of_book(event))
+
+    def test_rejects_non_finite_and_invalid_market_values(self) -> None:
+        cases = [
+            (float("nan"), 101, 1),
+            (100, float("inf"), 1),
+            (0, 101, 1),
+            (101, 100, 1),
+            (100, 101, 0),
+        ]
+        for bid, ask, receive_wall_ns in cases:
+            with self.subTest(bid=bid, ask=ask, receive_wall_ns=receive_wall_ns):
+                self.assertFalse(_is_valid_top_of_book(SimpleNamespace(
+                    bid=bid, ask=ask, local_receive_wall_ns=receive_wall_ns
+                )))
+
+    def test_accepts_valid_top_of_book(self) -> None:
+        event = SimpleNamespace(bid="100.5", ask="101", local_receive_wall_ns="123")
+        self.assertTrue(_is_valid_top_of_book(event))
 
 
 class TopOfBookCollectorHealthTests(unittest.TestCase):
