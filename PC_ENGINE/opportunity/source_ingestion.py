@@ -33,6 +33,12 @@ def _valid_allowlisted_host(host: str) -> bool:
     return True
 
 
+def _origin(url: str) -> tuple[str, str, int]:
+    """Return the normalized origin for a URL already accepted by the source policy."""
+    parsed = urlsplit(url)
+    return (parsed.scheme.lower(), parsed.hostname or "", parsed.port or 443)
+
+
 def _path_matches(path: str, prefix: str) -> bool:
     """Match a path prefix on segment boundaries, never /api against /apix."""
     if prefix == "/":
@@ -125,6 +131,10 @@ class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
             raise urllib.error.HTTPError(req.full_url, code, "redirect limit exceeded", headers, fp)
         if not self.definition.allows_url(newurl):
             raise urllib.error.HTTPError(req.full_url, code, "redirect target is not allowlisted", headers, fp)
+        if _origin(req.full_url) != _origin(newurl):
+            raise urllib.error.HTTPError(
+                req.full_url, code, "cross-origin redirects require independent revalidation", headers, fp
+            )
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
