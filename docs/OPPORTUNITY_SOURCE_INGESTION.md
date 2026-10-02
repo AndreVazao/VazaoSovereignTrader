@@ -33,3 +33,8 @@ This module is discovery/evidence only. PAPER remains the default; it does not a
 ## Network-boundary note
 
 The allowlist is a configuration trust boundary, not a general-purpose URL proxy. Only configure reviewed public official hostnames. This module rejects literal IPs and obvious local names, but it does not pin DNS answers or independently prove that a hostname resolves only to public addresses; deployments requiring protection against hostile DNS or rebinding must add network-level egress restrictions and DNS/IP validation before enabling untrusted source definitions.
+
+
+## DNS preflight guard
+
+Before opening a request, the fetcher resolves the approved hostname and rejects resolution failures, empty answers, invalid addresses, and any answer that is not classified as globally routable. Mixed public/private answer sets fail closed. This is defense-in-depth, not complete DNS-rebinding protection: the standard URL transport may perform a second DNS lookup during connection. Do not accept untrusted source definitions or expose this module as a general-purpose URL proxy. A future transport-level change must pin the validated address while preserving TLS hostname verification and SNI, and should be backed by network egress controls.

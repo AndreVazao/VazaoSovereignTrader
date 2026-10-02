@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import re
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -45,6 +46,30 @@ def _path_matches(path: str, prefix: str) -> bool:
         return path.startswith("/")
     normalized = prefix.rstrip("/")
     return path == normalized or path.startswith(normalized + "/")
+
+
+def _validate_public_dns_resolution(host: str, port: int = 443) -> tuple[str, ...]:
+    """Fail closed if DNS fails, returns no addresses, or includes any non-global IP.
+
+    This is a preflight guard only: urllib may resolve the hostname again when it
+    connects. It is not DNS pinning and must not be treated as a complete SSRF boundary.
+    """
+    try:
+        records = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ValueError("source hostname DNS resolution failed") from exc
+    addresses = set()
+    for record in records:
+        try:
+            address = ipaddress.ip_address(record[4][0].split("%", 1)[0])
+        except (IndexError, ValueError, TypeError) as exc:
+            raise ValueError("source hostname returned an invalid IP address") from exc
+        if not address.is_global:
+            raise ValueError("source hostname resolves to a non-public IP address")
+        addresses.add(str(address))
+    if not addresses:
+        raise ValueError("source hostname DNS resolution returned no addresses")
+    return tuple(sorted(addresses))
 
 
 @dataclass(frozen=True)
@@ -157,6 +182,13 @@ class OfficialSourceFetcher:
             raise ValueError("URL is outside the configured HTTPS host/path allowlist")
         if now_ms is not None and (isinstance(now_ms, bool) or not isinstance(now_ms, int) or now_ms <= 0):
             raise ValueError("now_ms must be a positive integer")
+
+        # Reject private/reserved DNS answers before opening any connection.
+        # The standard urllib transport can resolve again; see helper limitation.
+        parsed_host = urlsplit(url).hostname
+        if parsed_host is None:
+            raise ValueError("source URL has no hostname")
+        _validate_public_dns_resolution(parsed_host, 443)
 
         request = urllib.request.Request(
             url,
