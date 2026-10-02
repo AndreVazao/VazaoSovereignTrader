@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import socket
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +26,42 @@ def definition(**overrides) -> OfficialSourceDefinition:
 
 
 class OfficialSourceIngestionTests(unittest.TestCase):
+    def setUp(self):
+        self.dns_patcher = patch(
+            "PC_ENGINE.opportunity.source_ingestion.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        )
+        self.dns_patcher.start()
+        self.addCleanup(self.dns_patcher.stop)
+
+    def test_dns_preflight_rejects_private_address_before_network_call(self):
+        fetcher = OfficialSourceFetcher(definition())
+        private_record = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))]
+        with patch("PC_ENGINE.opportunity.source_ingestion.socket.getaddrinfo", return_value=private_record):
+            with patch("PC_ENGINE.opportunity.source_ingestion.urllib.request.build_opener") as build:
+                with self.assertRaisesRegex(ValueError, "non-public IP"):
+                    fetcher.fetch("https://support.example.com/en/faq/topic")
+                build.assert_not_called()
+
+    def test_dns_preflight_rejects_mixed_public_and_private_answers(self):
+        fetcher = OfficialSourceFetcher(definition())
+        records = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.8", 443)),
+        ]
+        with patch("PC_ENGINE.opportunity.source_ingestion.socket.getaddrinfo", return_value=records):
+            with patch("PC_ENGINE.opportunity.source_ingestion.urllib.request.build_opener") as build:
+                with self.assertRaisesRegex(ValueError, "non-public IP"):
+                    fetcher.fetch("https://support.example.com/en/faq/topic")
+                build.assert_not_called()
+
+    def test_dns_preflight_fails_closed_on_resolution_error(self):
+        fetcher = OfficialSourceFetcher(definition())
+        with patch("PC_ENGINE.opportunity.source_ingestion.socket.getaddrinfo", side_effect=socket.gaierror("no answer")):
+            with patch("PC_ENGINE.opportunity.source_ingestion.urllib.request.build_opener") as build:
+                with self.assertRaisesRegex(ValueError, "DNS resolution failed"):
+                    fetcher.fetch("https://support.example.com/en/faq/topic")
+                build.assert_not_called()
     def test_url_allowlist_requires_https_exact_host_and_approved_path(self):
         item = definition()
         self.assertTrue(item.allows_url("https://support.example.com/en/faq/topic"))
