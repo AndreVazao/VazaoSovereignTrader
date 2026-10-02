@@ -235,6 +235,8 @@ class OpportunityRegistry:
         record.validate(now_ms=now_ms)
         current = {item.opportunity_id: item for item in self.list_records()}
         previous = current.get(record.opportunity_id)
+        if previous is None and record.status != OpportunityStatus.DISCOVERED:
+            raise ValueError("new opportunities must begin as DISCOVERED")
         if previous is not None:
             if record == previous:
                 return previous
