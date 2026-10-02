@@ -332,3 +332,11 @@ Implement a separate read-only public-source fetch/cache adapter only after the 
 ## Official source ingestion security hardening — 2026-10-02
 
 The current-main implementation branch `fix/official-source-ingestion-security` adds a bounded, opt-in fetcher for reviewed public official sources, with exact HTTPS host/path allowlists, redirect and response-size limits, accepted content types, timeout, SHA-256 provenance, and raw-byte output only. Security hardening rejects IP literals and obvious local hostnames, enforces path segment boundaries, rejects encoded/backslash/dot-segment paths and cross-origin redirects, and validates supplied timestamps as positive integers. Regression tests are mocked and must be verified in exact-head CI. DNS answers are not pinned or checked against private ranges; do not accept untrusted source definitions. This component does not parse content, establish account eligibility, mutate the opportunity registry, or authorize execution.
+
+
+## Verification checkpoint — PR #324 merged (2026-10-02)
+
+- PR #324, `fix: harden official source ingestion URL boundaries`, was squash-merged to main as `5e6c32543e217bec8081387b6de20589f92eec1f` after the exact PR-head workflows passed.
+- Python tests run `37057829953`: SUCCESS. Windows EXE/installer run `37057829970`: SUCCESS; both EXE and installer smoke-test steps succeeded.
+- The module remains an explicitly invoked, bounded read-only fetch primitive. No content parsing, registry mutation, dashboard integration, account probing or financial execution was added.
+- Follow-up before broadening ingestion: implement/assess DNS resolution validation and network egress restrictions; only reviewed public official host definitions are permitted until then. Later increments should add cache freshness/expiry, rate limiting, and explicit stale/unavailable/unknown states with deterministic tests before any automated polling.

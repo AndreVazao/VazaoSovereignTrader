@@ -1228,3 +1228,14 @@ Review points before merge:
 - Exact-head GitHub Actions runs on that code/documentation revision: Python tests run `37057690703` (IN_PROGRESS) and Windows EXE/installer run `37057690699` (IN_PROGRESS). These results were not yet final; recheck after this documentation-only commit because the head SHA will change.
 - PR #322 is closed as superseded by #324. Do not merge either draft unless current exact-head checks pass and the diff has no blocking issues.
 - Final security scope includes same-origin-only redirects: cross-origin redirects are rejected even if the target host is also allowlisted. Tests cover this boundary.
+
+
+## Post-merge verification — 2026-10-02
+
+- PR #324 (https://github.com/AndreVazao/VazaoSovereignTrader/pull/324) was squash-merged after exact-head checks completed successfully.
+- Merged commit on main: `5e6c32543e217bec8081387b6de20589f92eec1f`; PR head tested: `b055703256f5ed5c3a0e010c9beb2ce1a6652967`.
+- Exact PR-head CI: Python tests run `37057829953` SUCCESS; Windows EXE/installer run `37057829970` SUCCESS, including EXE smoke test and installer smoke test.
+- Changed files: bounded source-ingestion module, mocked security regression tests, source-ingestion safety contract, and updates to this context and master roadmap.
+- This supersedes the earlier checkpoint in this file that listed the workflows as IN_PROGRESS. No post-merge workflow runs were returned by the PR-triggered workflow lookup; do not infer post-merge CI from that absence.
+- Remaining explicit security limitation: DNS answers are not pinned or checked against private address ranges. Configure only reviewed public official hosts; consider network egress restrictions and DNS/IP validation before any untrusted source definitions are accepted.
+- Safety scope unchanged: discovery-only, read-only, opt-in, PAPER-only; no registry writes, account access, trading, transfers, reward claims, bot activation or REAL-mode authorization.
