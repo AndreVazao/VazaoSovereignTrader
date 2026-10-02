@@ -309,3 +309,15 @@ As of 2026-10-02, branch `feat/opportunity-registry-schema` contains the first t
 - `tests/test_opportunity_registry.py`: provenance, timestamps, state transitions, expired records, no-execution invariants, persistence and malformed-line tests.
 - `docs/OPPORTUNITY_REGISTRY.md`: schema contract, state semantics, persistence, limitations and safety boundaries.
 - This is not merged yet. CI and PR must be checked against the final exact head. No account ingestion, dashboard integration or execution adapters were added.
+
+
+## 17. Official opportunity source fetcher — implementation draft (2026-10-02)
+
+- Clean branch: `feat/official-source-fetcher-v2`, based on main SHA `fb403faf0c9619e039d96e76e899b5c9a9bb2836`.
+- New files: `PC_ENGINE/opportunity/source_ingestion.py`, `tests/test_opportunity_source_ingestion.py`, `docs/OPPORTUNITY_SOURCE_INGESTION.md`.
+- Enforces HTTPS, exact host/path allowlists, no embedded credentials/fragments, standard HTTPS port only, allowlisted redirects with bounded count, explicit timeout, allowed text/JSON/XML content types and bounded declared/streamed response sizes.
+- Snapshot metadata includes requested/final URL, source ID, retrieval timestamp, status, content type, byte length and SHA-256 digest. Fetch returns raw bytes; parsing is deliberately separate.
+- Unit tests use mocked responses and must not make live HTTP requests. Exact-head Python CI and relevant Windows EXE/installer CI must pass before merge.
+- Known limitations: no enabled venue catalog, scheduler, crawler, parsing, durable deduplication, registry integration, account eligibility check or dashboard wiring.
+- Next sequence: verify the fetcher; add deterministic content fingerprint/deduplication; implement fixture-driven parsing for explicitly allowlisted official page formats; integrate evidence snapshots into the opportunity registry; then expose UNKNOWN/CONFIRMED/BLOCKED/NOT_SUPPORTED evidence in the dashboard.
+- Public information never proves account-specific eligibility or profitability. No REAL mode, orders, transfers, bot activation, copy trading, reward claims, cloud provisioning or paid services are enabled.
