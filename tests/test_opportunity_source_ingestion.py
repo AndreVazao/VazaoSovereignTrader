@@ -97,6 +97,17 @@ class OfficialSourceIngestionTests(unittest.TestCase):
                 request, None, 302, "Found", {}, "https://evil.example.com/en/faq/topic"
             )
 
+    def test_redirect_handler_rejects_cross_origin_even_when_target_host_is_allowlisted(self):
+        item = definition(allowed_hosts=("support.example.com", "cdn.example.com"))
+        handler = _AllowlistedRedirectHandler(item)
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            "https://support.example.com/en/faq/topic"
+        )
+        with self.assertRaisesRegex(Exception, "cross-origin redirects require independent revalidation"):
+            handler.redirect_request(
+                request, None, 302, "Found", {}, "https://cdn.example.com/en/faq/topic"
+            )
+
     def test_redirect_handler_enforces_redirect_limit(self):
         item = definition(max_redirects=0)
         handler = _AllowlistedRedirectHandler(item)
