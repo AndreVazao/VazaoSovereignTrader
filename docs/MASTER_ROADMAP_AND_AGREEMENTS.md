@@ -311,9 +311,9 @@ As of 2026-10-02, branch `feat/opportunity-registry-schema` contains the first t
 - This is not merged yet. CI and PR must be checked against the final exact head. No account ingestion, dashboard integration or execution adapters were added.
 
 
-## 17. Official-source policy boundary — implementation in progress (2026-10-02)
+## 17. Official-source policy boundary — merged in PR #321 (2026-10-02)
 
-The next increment is deliberately limited to local validation and provenance metadata, not network ingestion:
+PR #321 merged this increment. It is limited to local validation and provenance metadata, not network ingestion:
 - Exact-host HTTPS allowlist supplied explicitly by caller; empty allowlist fails closed.
 - Reject deceptive suffix hosts, embedded credentials, nonstandard ports, IP-literal hosts and fragments.
 - Validate positive integer observation/capture timestamps and lowercase SHA-256 evidence digest.
@@ -322,3 +322,8 @@ The next increment is deliberately limited to local validation and provenance me
 - No HTTP requests, browser login, account data, crawling, claims, orders, transfers or REAL authorization.
 
 The fetch/cache adapter, content size/type/time limits, source freshness and expiry sweeps remain future work and must have dedicated tests before any network access is enabled.
+
+
+## 18. Next bounded source-ingestion increment
+
+Implement a separate read-only public-source fetch/cache adapter only after the source policy boundary is available on main. Require explicit invocation; no background crawl by default. Apply connect/read timeouts, response-size and content-type limits, bounded redirects with exact-origin revalidation, rate limits, canonical URL/source hashing, cache freshness/expiry, and explicit unavailable/stale/unknown states. Treat all retrieved text as untrusted input. Add deterministic tests with mocked transport; never access private account pages, bypass security challenges, store credentials, or trigger financial actions.
