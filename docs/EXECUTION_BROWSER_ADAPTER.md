@@ -29,3 +29,10 @@ The existing BrowserExecutionAdapter remains a separate, gated execution path
 for future venue-specific integrations. This concrete Playwright adapter is
 intentionally PAPER-only until a venue-specific implementation is independently
 validated and connected to the existing authorization gates.
+
+
+## Read-only platform reconnaissance
+
+`inspect_current_page()` produces a bounded inventory of the current page's visible headings, button labels, navigation labels, form count, and visible input-type counts. It does not click or navigate through controls and does not read input values, cookies, browser storage, balances, positions, or credentials. The reported URL is limited to the origin; common email and long-number patterns in labels are redacted.
+
+This is a first reconnaissance primitive, not a complete platform audit. Account balances, assets, permissions, market availability, fee schedules, and whether a feature can actually be used remain `UNKNOWN` until a separate, authorized, evidence-backed integration verifies them. The method is explicit and is not automatically invoked at startup.
