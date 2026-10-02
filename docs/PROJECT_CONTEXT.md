@@ -1189,16 +1189,10 @@ Review points before merge:
 - Keep this section synchronized with live GitHub after merge. Do not treat this branch's snapshot SHA as the future main SHA.
 
 
-## 53. Opportunity registry implementation — 2026-10-02
+## 53. Opportunity registry implementation — verified 2026-10-02 UTC
 
-- PR #316 merged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/316
-- Merge/resulting main SHA: `43eba2a94dd490e89b997300a422a8b7e62c15b0`.
-- Exact-head Python tests for PR #316: run 37013424748 SUCCESS on `bad22836a43cbd87fc68e57f713479e2bb1afe8a`. The first run 37013306941 also succeeded on the prior head `2bf3ed54feb88d0b3db777d802307ed199a819e0`.
-- Post-merge Python run 37013578362 on main SHA `43eba2a94dd490e89b997300a422a8b7e62c15b0`: SUCCESS.
-- Post-merge Windows EXE run 37013578643 was still IN_PROGRESS at the time of this update; recheck before claiming all post-merge workflows are green.
-- Current implementation branch/PR: `feat/opportunity-registry-schema`, PR #317 https://github.com/AndreVazao/VazaoSovereignTrader/pull/317 (not yet merged). Always query the live PR head SHA before merge; this context snapshot is not authoritative for later commits.
-- Added `PC_ENGINE/opportunity/registry.py`: typed opportunity categories/statuses, validated status transitions, source provenance and timestamp checks, expiry handling, positive-net-estimate validation, append-only JSONL persistence, idempotent identical writes, and hard invariants `paper_only=true` / `execution_authorized=false`.
-- Added `tests/test_opportunity_registry.py` for provenance, timestamp/state validation, expiry, no-action invariants, persistence, malformed JSONL rows and rejection of initial states other than DISCOVERED.
-- Added `docs/OPPORTUNITY_REGISTRY.md`; updated the master roadmap's Track B and progress notes.
-- No platform source ingestion, account probing, dashboard integration, transfer execution or REAL behavior is connected to this registry.
-- PR #317 is already open; the latest safety fix requires a fresh exact-head CI run. Next: inspect the final PR diff and verify Python tests and Windows EXE/installer on the latest head; fix any failures before considering merge. Keep source allowlisting, automatic expiry sweeps and official ingestion for later steps.
+- PR #317 merged as `bd7cb11c68b312b46995edef16106b207854513f`.
+- Post-merge Python run 37016998573 and Windows EXE run 37016998510 both SUCCESS on that exact main SHA.
+- Added typed opportunity categories/statuses, provenance and timestamp checks, expiry handling, positive-net-estimate validation, explicit transitions, append-only JSONL persistence, idempotent identical writes, and PAPER-only/no-execution invariants.
+- New records must begin at DISCOVERED; direct state bypass is rejected.
+- No official-source ingestion, account probing, dashboard wiring or execution actions are connected to this registry.
