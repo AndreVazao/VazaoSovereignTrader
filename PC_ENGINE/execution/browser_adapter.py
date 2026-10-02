@@ -93,9 +93,10 @@ class BrowserExecutionAdapter:
             )
 
         action = str(intent.action or "").upper().strip()
-        succeeded = terminal_outcome in {"FILLED", "PARTIALLY_FILLED"} or (
-            action == "CANCEL" and terminal_outcome == "CANCELLED"
-        )
+        if action == "CANCEL":
+            succeeded = terminal_outcome == "CANCELLED"
+        else:
+            succeeded = terminal_outcome in {"FILLED", "PARTIALLY_FILLED"}
         if not succeeded:
             return ExecutionResult(
                 False,
