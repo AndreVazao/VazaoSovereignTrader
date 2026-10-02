@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from PC_ENGINE.opportunity.source_ingestion import (
     OfficialSourceDefinition,
     OfficialSourceFetcher,
+    _AllowlistedRedirectHandler,
 )
 
 
@@ -33,6 +34,7 @@ class OfficialSourceIngestionTests(unittest.TestCase):
         self.assertFalse(item.allows_url("https://support.example.com/account/private"))
         self.assertFalse(item.allows_url("https://user:pass@support.example.com/en/faq/topic"))
         self.assertFalse(item.allows_url("https://support.example.com/en/faq/topic#fragment"))
+        self.assertFalse(item.allows_url("https://support.example.com:8443/en/faq/topic"))
 
     def test_fetch_rejects_url_before_network_call(self):
         fetcher = OfficialSourceFetcher(definition())
@@ -40,6 +42,28 @@ class OfficialSourceIngestionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "allowlist"):
                 fetcher.fetch("https://support.example.com/account/private")
             build.assert_not_called()
+
+    def test_redirect_handler_rejects_unapproved_host(self):
+        item = definition()
+        handler = _AllowlistedRedirectHandler(item)
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            "https://support.example.com/en/faq/topic"
+        )
+        with self.assertRaisesRegex(Exception, "not allowlisted"):
+            handler.redirect_request(
+                request, None, 302, "Found", {}, "https://evil.example.com/en/faq/topic"
+            )
+
+    def test_redirect_handler_enforces_redirect_limit(self):
+        item = definition(max_redirects=0)
+        handler = _AllowlistedRedirectHandler(item)
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            "https://support.example.com/en/faq/topic"
+        )
+        with self.assertRaisesRegex(Exception, "redirect limit"):
+            handler.redirect_request(
+                request, None, 302, "Found", {}, "https://support.example.com/en/faq/next"
+            )
 
     def test_fetch_records_hash_timestamp_and_bounded_metadata(self):
         body = b'{"campaign":"sample"}'
@@ -109,6 +133,8 @@ class OfficialSourceIngestionTests(unittest.TestCase):
             definition(allowed_hosts=())
         with self.assertRaisesRegex(ValueError, "fetch limits"):
             definition(max_bytes=0)
+        with self.assertRaisesRegex(ValueError, "path prefixes"):
+            definition(allowed_path_prefixes=("",))
 
 
 if __name__ == "__main__":
