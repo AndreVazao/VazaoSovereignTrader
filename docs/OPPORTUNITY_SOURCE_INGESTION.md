@@ -35,6 +35,8 @@ This module is discovery/evidence only. PAPER remains the default; it does not a
 The allowlist is a configuration trust boundary, not a general-purpose URL proxy. Only configure reviewed public official hostnames. This module rejects literal IPs and obvious local names, but it does not pin DNS answers or independently prove that a hostname resolves only to public addresses; deployments requiring protection against hostile DNS or rebinding must add network-level egress restrictions and DNS/IP validation before enabling untrusted source definitions.
 
 
-## DNS preflight guard
+## DNS and transport boundary
 
-Before opening a request, the fetcher resolves the approved hostname and rejects resolution failures, empty answers, invalid addresses, and any answer that is not classified as globally routable. Mixed public/private answer sets fail closed. This is defense-in-depth, not complete DNS-rebinding protection: the standard URL transport may perform a second DNS lookup during connection. Do not accept untrusted source definitions or expose this module as a general-purpose URL proxy. A future transport-level change must pin the validated address while preserving TLS hostname verification and SNI, and should be backed by network egress controls.
+Before opening a request, the fetcher resolves the approved hostname and rejects resolution failures, empty answers, invalid addresses, and any answer that is not classified as globally routable. Mixed public/private answer sets fail closed. The validated address is then pinned for the actual TCP connection, so the standard HTTPS transport cannot silently re-resolve the hostname to a different address between validation and connect time.
+
+TLS still uses the original hostname for SNI and certificate verification. The source opener disables ambient HTTP(S) proxy configuration for this security-sensitive path and rejects proxy tunneling, keeping the validated-IP invariant local to the direct connection. Network-level egress controls remain recommended as defense-in-depth, because application-level pinning cannot constrain unrelated processes or host-level networking.
