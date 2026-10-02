@@ -36,12 +36,55 @@ class OfficialSourceIngestionTests(unittest.TestCase):
         self.assertFalse(item.allows_url("https://support.example.com/en/faq/topic#fragment"))
         self.assertFalse(item.allows_url("https://support.example.com:8443/en/faq/topic"))
 
+    def test_configuration_rejects_ip_literal_and_local_hosts(self):
+        for host in ("127.0.0.1", "192.168.1.1", "::1", "localhost", "api.localhost",
+                     "service.internal", "singlelabel"):
+            with self.subTest(host=host):
+                with self.assertRaisesRegex(ValueError, "public DNS hostnames"):
+                    definition(allowed_hosts=(host,))
+
+    def test_configuration_rejects_malformed_hostnames(self):
+        for host in ("Support.example.com", "support.example.com.", "bad host.example",
+                     "support..example.com", "support.example.com:443"):
+            with self.subTest(host=host):
+                with self.assertRaisesRegex(ValueError, "public DNS hostnames"):
+                    definition(allowed_hosts=(host,))
+
+    def test_path_prefix_matching_respects_segment_boundary(self):
+        item = definition(allowed_path_prefixes=("/api",))
+        self.assertTrue(item.allows_url("https://support.example.com/api"))
+        self.assertTrue(item.allows_url("https://support.example.com/api/v1"))
+        self.assertFalse(item.allows_url("https://support.example.com/apix"))
+        self.assertFalse(item.allows_url("https://support.example.com/api-v2"))
+
+    def test_encoded_path_traversal_and_separators_are_rejected(self):
+        item = definition(allowed_path_prefixes=("/en/faq/",))
+        for path in (
+            "/en/faq/%2e%2e/private",
+            "/en/faq/%2fprivate",
+            "/en/faq/%5cprivate",
+            "/en/faq/../private",
+            "/en/faq/..%2fprivate",
+            "/en/faq/%252e%252e/private",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(item.allows_url("https://support.example.com" + path))
+
     def test_fetch_rejects_url_before_network_call(self):
         fetcher = OfficialSourceFetcher(definition())
         with patch("PC_ENGINE.opportunity.source_ingestion.urllib.request.build_opener") as build:
             with self.assertRaisesRegex(ValueError, "allowlist"):
                 fetcher.fetch("https://support.example.com/account/private")
             build.assert_not_called()
+
+    def test_fetch_rejects_invalid_now_ms_before_network_call(self):
+        fetcher = OfficialSourceFetcher(definition())
+        for value in (-1, 0, True, False, "1234", 1.5):
+            with self.subTest(now_ms=value):
+                with patch("PC_ENGINE.opportunity.source_ingestion.urllib.request.build_opener") as build:
+                    with self.assertRaisesRegex(ValueError, "positive integer"):
+                        fetcher.fetch("https://support.example.com/en/faq/topic", now_ms=value)
+                    build.assert_not_called()
 
     def test_redirect_handler_rejects_unapproved_host(self):
         item = definition()
@@ -135,6 +178,10 @@ class OfficialSourceIngestionTests(unittest.TestCase):
             definition(max_bytes=0)
         with self.assertRaisesRegex(ValueError, "path prefixes"):
             definition(allowed_path_prefixes=("",))
+        with self.assertRaisesRegex(ValueError, "path prefixes"):
+            definition(allowed_path_prefixes=("/api/%2e%2e/",))
+        with self.assertRaisesRegex(ValueError, "path prefixes"):
+            definition(allowed_path_prefixes=("/api/../",))
 
 
 if __name__ == "__main__":
