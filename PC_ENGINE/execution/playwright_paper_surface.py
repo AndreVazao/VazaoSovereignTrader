@@ -157,8 +157,8 @@ class PlaywrightPaperSurfaceAdapter(ExecutionSurfaceAdapter):
     @staticmethod
     def _safe_inventory_label(value: Any) -> str:
         """Bound UI labels and redact common account-identifying patterns."""
-        label = re.sub(r"\\b[^\\s@]+@[^\\s@]+\\.[^\\s@]+\\b", "[redacted-email]", str(value or ""))
-        label = re.sub(r"\\b\\d{4,}\\b", "[redacted-number]", label)
+        label = re.sub(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b", "[redacted-email]", str(value or ""))
+        label = re.sub(r"\b\d{4,}\b", "[redacted-number]", label)
         return " ".join(label.split())[:100]
 
     def inspect_current_page(self) -> dict[str, Any]:
