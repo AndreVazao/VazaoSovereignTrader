@@ -9,6 +9,7 @@ from PC_ENGINE.opportunity.source_ingestion import (
     OfficialSourceDefinition,
     OfficialSourceFetcher,
     _AllowlistedRedirectHandler,
+    _PinnedHTTPSConnection,
 )
 
 
@@ -26,6 +27,23 @@ def definition(**overrides) -> OfficialSourceDefinition:
 
 
 class OfficialSourceIngestionTests(unittest.TestCase):
+    def test_pinned_connection_dials_validated_ip_and_preserves_tls_hostname(self):
+        connection = _PinnedHTTPSConnection("support.example.com", validated_ip="93.184.216.34", timeout=1.5)
+        raw_socket = MagicMock()
+        tls_socket = MagicMock()
+        with patch("PC_ENGINE.opportunity.source_ingestion.socket.create_connection", return_value=raw_socket) as create:
+            with patch.object(connection._context, "wrap_socket", return_value=tls_socket) as wrap:
+                connection.connect()
+        create.assert_called_once_with(("93.184.216.34", 443), 1.5, None)
+        wrap.assert_called_once_with(raw_socket, server_hostname="support.example.com")
+        self.assertIs(connection.sock, tls_socket)
+
+    def test_pinned_connection_does_not_follow_proxy_tunnel(self):
+        connection = _PinnedHTTPSConnection("support.example.com", validated_ip="93.184.216.34")
+        connection.set_tunnel("proxy.example.com")
+        with self.assertRaisesRegex(OSError, "proxy tunneling is not supported"):
+            connection.connect()
+
     def setUp(self):
         self.dns_patcher = patch(
             "PC_ENGINE.opportunity.source_ingestion.socket.getaddrinfo",

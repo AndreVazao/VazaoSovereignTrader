@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import ipaddress
 import re
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -70,6 +72,46 @@ def _validate_public_dns_resolution(host: str, port: int = 443) -> tuple[str, ..
     if not addresses:
         raise ValueError("source hostname DNS resolution returned no addresses")
     return tuple(sorted(addresses))
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS connection that dials a validated IP while preserving hostname SNI."""
+
+    def __init__(self, host: str, *, validated_ip: str, **kwargs) -> None:
+        super().__init__(host, **kwargs)
+        self._validated_ip = validated_ip
+
+    def connect(self) -> None:
+        if self._tunnel_host:
+            raise OSError("proxy tunneling is not supported for pinned source connections")
+        sock = socket.create_connection((self._validated_ip, self.port), self.timeout, self.source_address)
+        try:
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        except BaseException:
+            sock.close()
+            raise
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    """Route HTTPS requests to the IPs validated before opener construction."""
+
+    def __init__(self, validated_ips_by_host: dict[str, tuple[str, ...]]) -> None:
+        super().__init__(context=ssl.create_default_context(), check_hostname=True)
+        self._validated_ips_by_host = validated_ips_by_host
+
+    def https_open(self, req):
+        host = urlsplit(req.full_url).hostname
+        if not host:
+            raise urllib.error.URLError("source URL has no hostname")
+        addresses = self._validated_ips_by_host.get(host)
+        if not addresses:
+            raise urllib.error.URLError("source hostname was not validated")
+        validated_ip = addresses[0]
+
+        def connection_factory(connection_host, **kwargs):
+            return _PinnedHTTPSConnection(connection_host, validated_ip=validated_ip, **kwargs)
+
+        return self.do_open(connection_factory, req, context=self._context)
 
 
 @dataclass(frozen=True)
@@ -183,12 +225,12 @@ class OfficialSourceFetcher:
         if now_ms is not None and (isinstance(now_ms, bool) or not isinstance(now_ms, int) or now_ms <= 0):
             raise ValueError("now_ms must be a positive integer")
 
-        # Reject private/reserved DNS answers before opening any connection.
-        # The standard urllib transport can resolve again; see helper limitation.
+        # Resolve once, validate every returned address, and pin the actual TCP dial
+        # to that validated address. TLS still uses the original hostname for SNI/cert checks.
         parsed_host = urlsplit(url).hostname
         if parsed_host is None:
             raise ValueError("source URL has no hostname")
-        _validate_public_dns_resolution(parsed_host, 443)
+        validated_ips = _validate_public_dns_resolution(parsed_host, 443)
 
         request = urllib.request.Request(
             url,
@@ -198,7 +240,11 @@ class OfficialSourceFetcher:
             },
             method="GET",
         )
-        opener = urllib.request.build_opener(_AllowlistedRedirectHandler(self.definition))
+        opener = urllib.request.build_opener(
+            _AllowlistedRedirectHandler(self.definition),
+            _PinnedHTTPSHandler({parsed_host: validated_ips}),
+            urllib.request.ProxyHandler({}),
+        )
         with opener.open(request, timeout=self.definition.timeout_seconds) as response:
             final_url = response.geturl()
             if not self.definition.allows_url(final_url):
