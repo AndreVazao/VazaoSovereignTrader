@@ -1159,7 +1159,7 @@ Review points before merge:
 - Exact-head Python tests for PR #316: run 37013424748 SUCCESS on `bad22836a43cbd87fc68e57f713479e2bb1afe8a`. The first run 37013306941 also succeeded on the prior head `2bf3ed54feb88d0b3db777d802307ed199a819e0`.
 - Post-merge Python run 37013578362 on main SHA `43eba2a94dd490e89b997300a422a8b7e62c15b0`: SUCCESS.
 - Post-merge Windows EXE run 37013578643 was still IN_PROGRESS at the time of this update; recheck before claiming all post-merge workflows are green.
-- Current implementation branch/PR: `feat/opportunity-registry-schema`, PR #317 https://github.com/AndreVazao/VazaoSovereignTrader/pull/317 (not yet merged). Latest branch commit: `73fd762b7784043d0e78ab47da392d71878596c2` (docs update; verify live PR head before merge).
+- Current implementation branch/PR: `feat/opportunity-registry-schema`, PR #317 https://github.com/AndreVazao/VazaoSovereignTrader/pull/317 (not yet merged). Always query the live PR head SHA before merge; this context snapshot is not authoritative for later commits.
 - Added `PC_ENGINE/opportunity/registry.py`: typed opportunity categories/statuses, validated status transitions, source provenance and timestamp checks, expiry handling, positive-net-estimate validation, append-only JSONL persistence, idempotent identical writes, and hard invariants `paper_only=true` / `execution_authorized=false`.
 - Added `tests/test_opportunity_registry.py` for provenance, timestamp/state validation, expiry, no-action invariants, persistence, malformed JSONL rows and rejection of initial states other than DISCOVERED.
 - Added `docs/OPPORTUNITY_REGISTRY.md`; updated the master roadmap's Track B and progress notes.
