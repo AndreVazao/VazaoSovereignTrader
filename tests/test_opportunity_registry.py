@@ -99,6 +99,17 @@ class OpportunityRegistryTests(unittest.TestCase):
             self.assertEqual(len(registry.list_records()), 1)
             self.assertEqual(registry.list_records()[0].status, OpportunityStatus.ELIGIBILITY_UNKNOWN)
 
+    def test_new_registry_records_must_start_as_discovered(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            registry = OpportunityRegistry(Path(tmp) / "opportunities.jsonl")
+            bypass = make_record(
+                status=OpportunityStatus.CLAIMED_OR_ENABLED_CONFIRMED,
+            )
+            with self.assertRaisesRegex(ValueError, "begin as DISCOVERED"):
+                registry.upsert(bypass, now_ms=2_000)
+
     def test_registry_rejects_invalid_persisted_transition(self) -> None:
         from tempfile import TemporaryDirectory
 
