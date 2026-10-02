@@ -320,3 +320,10 @@ As of 2026-10-02, branch `feat/opportunity-registry-schema` contains the first t
 - Regression tests now cover non-standard ports, invalid path-prefix configuration, unapproved redirect hosts, redirect-count limits, unexpected content types, declared/streamed byte caps, and timestamp/hash capture. Before merge, exact-head Python tests and Windows EXE/installer workflows must pass; CI has not yet been reported as complete.
 - Next sequence: (1) validate bounded fetcher; (2) add deterministic content fingerprint/deduplication; (3) add strict, fixture-based parsers for explicitly allowlisted official page formats; (4) integrate source evidence into the registry; (5) only then build the opportunity dashboard shortlist. Account eligibility remains UNKNOWN until authorized account-specific evidence exists.
 - No changes to REAL-mode gates, order submission, transfers, native bot activation, copy-trading subscriptions, reward claims, cloud resources or paid services are included.
+
+
+## 16. Official source ingestion — security boundary update (2026-10-02)
+
+The opt-in public source fetcher now validates explicit DNS hostnames, rejects IP literals and obvious local/development names, matches approved path prefixes on segment boundaries, rejects encoded/backslash/dot-segment paths, and validates caller-supplied retrieval timestamps as positive integers. Regression tests cover these cases.
+
+This is still a bounded fetch primitive, not a full ingestion pipeline. It does not parse content, infer account eligibility, write to the opportunity registry, or take platform actions. DNS answers are not pinned or checked against private address ranges; source definitions must remain reviewed public official hosts, with network egress controls considered before untrusted configuration is supported. PR #322 remains unmerged until its exact-head required checks pass and its diff is reviewed.
