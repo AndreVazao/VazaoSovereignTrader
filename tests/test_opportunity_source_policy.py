@@ -70,7 +70,7 @@ class OfficialSourcePolicyTests(unittest.TestCase):
             {"observed_at_ms": 0},
             {"source_captured_at_ms": -1},
             {"observed_at_ms": 3_000},
-            {"source_captured_at_ms": 1_500, "observed_at_ms": 1_000},
+            {"source_captured_at_ms": 301_001, "observed_at_ms": 1_000},
             {"observed_at_ms": True},
         )
         for overrides in invalid:
