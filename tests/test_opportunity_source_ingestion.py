@@ -97,6 +97,17 @@ class OfficialSourceIngestionTests(unittest.TestCase):
                 request, None, 302, "Found", {}, "https://evil.example.com/en/faq/topic"
             )
 
+    def test_redirect_handler_allows_same_origin_approved_path(self):
+        item = definition()
+        handler = _AllowlistedRedirectHandler(item)
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            "https://support.example.com/en/faq/topic"
+        )
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://support.example.com/en/faq/next"
+        )
+        self.assertEqual(redirected.full_url, "https://support.example.com/en/faq/next")
+
     def test_redirect_handler_rejects_cross_origin_even_when_target_host_is_allowlisted(self):
         item = definition(allowed_hosts=("support.example.com", "cdn.example.com"))
         handler = _AllowlistedRedirectHandler(item)
