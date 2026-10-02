@@ -9,7 +9,7 @@
 - HTTPS only; explicit lowercase DNS host allowlists are required. IP literals, single-label hosts, and obvious local/reserved development names (`localhost`, `.local`, `.internal`, `.test`, `.invalid`) are rejected.
 - URLs with embedded credentials, fragments, non-standard ports, encoded path characters, backslashes, or dot-segment traversal are rejected.
 - Path-prefix matching respects segment boundaries: `/api` may match `/api` and `/api/v1`, but not `/apix`.
-- Redirect targets are checked against the same allowlist and redirect count is bounded.
+- Redirect targets must match the explicit host/path allowlist, remain on the original origin, and stay within the configured redirect count. Cross-origin redirects are rejected even when the destination host is also allowlisted; they require independent revalidation in a separate operation.
 - Requests use GET, a fixed research User-Agent, an explicit timeout, and an allowlisted text/JSON/XML content type.
 - Declared and streamed response bodies are bounded by `max_bytes`; reads are capped at `max_bytes + 1` to detect overflow.
 - Caller-supplied retrieval timestamps must be positive integers; booleans, strings, floats, zero, and negative values are rejected.
