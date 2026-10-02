@@ -1174,3 +1174,15 @@ Review points before merge:
 - Next steps: verify source fetch tests and add redirect rejection/redirect-count coverage; add a deterministic content fingerprint/deduplication helper only after fetch behavior is validated; integrate snapshots into the opportunity evidence model without inferring eligibility from public pages.
 - Documentation PR #318 was closed without merge; this feature branch carries the corrected handoff and progress documentation so the project context remains synchronized.
 - Safety unchanged: public read-only fetch only, no authenticated endpoints, no account actions, no secrets, no paid/cloud services, PAPER default and no REAL authorization.
+
+
+## 17. Current handoff — 2026-10-02 (live GitHub review)
+
+- Official source policy PR #321 is merged. The known resulting main commit is `fa28b736a5f7eb09fffea8935065f23edbd7e1d2`; the subsequent main documentation commit is `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`. Recheck live main before further work.
+- Active ingestion PR: #322, branch `feat/official-opportunity-source-ingestion`. It must not be merged until exact-head CI and final review pass.
+- Security hardening committed to the PR branch: explicit public DNS hostname validation rejects IP literals and obvious local names; path prefix matching uses segment boundaries; encoded/backslash/dot-segment paths are rejected; caller-supplied retrieval timestamps must be positive integers and booleans are rejected.
+- Regression tests added for IP/local/malformed hosts, `/api` versus `/apix`, encoded traversal/separators, and invalid timestamps. These tests have been committed but have NOT been executed in this session; do not report them as passing until GitHub Actions confirms the exact latest head.
+- Important residual limitation: DNS answers are not pinned/validated against private ranges. Only reviewed public official hosts may be configured; consider network egress restrictions and DNS/IP validation before supporting untrusted source definitions.
+- Last known branch compare before the hardening commits: branch was 9 commits ahead and 3 behind main. Recheck mergeability/conflicts and latest head SHA after the commits.
+- No source parsing, registry mutation, dashboard wiring, account access, orders, transfers, reward claims, cloud resources, paid services or REAL-mode changes were introduced.
+- Next: inspect the final diff, run exact-head Python and Windows workflows, fix failures, then merge only if mergeable and all required checks are green. Verify post-merge workflows and update this handoff again.
