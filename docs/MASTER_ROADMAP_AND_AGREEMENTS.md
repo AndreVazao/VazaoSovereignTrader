@@ -340,3 +340,8 @@ The current-main implementation branch `fix/official-source-ingestion-security` 
 - Python tests run `37057829953`: SUCCESS. Windows EXE/installer run `37057829970`: SUCCESS; both EXE and installer smoke-test steps succeeded.
 - The module remains an explicitly invoked, bounded read-only fetch primitive. No content parsing, registry mutation, dashboard integration, account probing or financial execution was added.
 - Follow-up before broadening ingestion: implement/assess DNS resolution validation and network egress restrictions; only reviewed public official host definitions are permitted until then. Later increments should add cache freshness/expiry, rate limiting, and explicit stale/unavailable/unknown states with deterministic tests before any automated polling.
+
+
+## DNS preflight increment — pending review (2026-10-02)
+
+Branch `fix/source-ingestion-dns-preflight` adds pre-connection DNS validation to reject failed/empty resolution and any non-global IP answer, with mocked tests for private and mixed answer sets. This is defense-in-depth only, not DNS pinning: the standard urllib transport may resolve again at connect time. Do not merge until exact-head Python and Windows workflows pass. The next security step is transport-level validated-IP pinning with TLS SNI/hostname verification plus network egress restrictions.
