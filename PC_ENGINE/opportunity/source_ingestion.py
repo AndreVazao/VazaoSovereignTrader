@@ -90,6 +90,7 @@ class OfficialSourceDefinition:
                 or not parsed.netloc
                 or parsed.fragment
                 or "\\" in path
+                or "%" in path
                 or any(part in (".", "..") for part in decoded_path.split("/"))
                 or re.search(r"%(?:2f|5c|2e)", path, re.IGNORECASE)
             ):
