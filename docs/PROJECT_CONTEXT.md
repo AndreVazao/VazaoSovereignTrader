@@ -1239,3 +1239,11 @@ Review points before merge:
 - This supersedes the earlier checkpoint in this file that listed the workflows as IN_PROGRESS. No post-merge workflow runs were returned by the PR-triggered workflow lookup; do not infer post-merge CI from that absence.
 - Remaining explicit security limitation: DNS answers are not pinned or checked against private address ranges. Configure only reviewed public official hosts; consider network egress restrictions and DNS/IP validation before any untrusted source definitions are accepted.
 - Safety scope unchanged: discovery-only, read-only, opt-in, PAPER-only; no registry writes, account access, trading, transfers, reward claims, bot activation or REAL-mode authorization.
+
+
+## Next security increment — DNS preflight (2026-10-02)
+
+- Branch `fix/source-ingestion-dns-preflight` adds a fail-closed DNS preflight before opening a source request. It rejects resolution errors, empty/invalid answers, and any non-global address in the answer set, including mixed public/private answers.
+- Mocked regression tests cover loopback, mixed public/private results and DNS failures; exact-head CI is required before merge.
+- Important limitation: this is not DNS pinning. urllib may resolve the hostname again when connecting, leaving a time-of-check/time-of-use window. Keep only reviewed public source definitions; a future transport-level pinned-IP connection must preserve TLS hostname verification/SNI and be paired with egress restrictions.
+- No execution behavior changes: read-only discovery only, PAPER-only, execution unauthorized.
