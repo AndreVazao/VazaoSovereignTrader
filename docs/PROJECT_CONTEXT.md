@@ -1209,3 +1209,22 @@ Review points before merge:
 - Added `docs/OPPORTUNITY_REGISTRY.md`; updated the master roadmap's Track B and progress notes.
 - No platform source ingestion, account probing, dashboard integration, transfer execution or REAL behavior is connected to this registry.
 - PR #317 is already open; the latest safety fix requires a fresh exact-head CI run. Next: inspect the final PR diff and verify Python tests and Windows EXE/installer on the latest head; fix any failures before considering merge. Keep source allowlisting, automatic expiry sweeps and official ingestion for later steps.
+
+
+## Current handoff — official source ingestion hardening (2026-10-02)
+
+- Main baseline for this branch: `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`.
+- Prior draft PR #322 was based on an older main and marked unmergeable. The hardened implementation is now on clean branch `fix/official-source-ingestion-security`, based on main SHA `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`, in PR #324: https://github.com/AndreVazao/VazaoSovereignTrader/pull/324. Exact-head CI and mergeability remain to be verified.
+- Security changes: reject IP literals and obvious local/reserved development hostnames; require valid multi-label DNS names; enforce path-segment prefix boundaries; reject percent-encoded/backslash/dot-segment paths; reject all cross-origin redirects, even to another allowlisted host; validate caller-supplied `now_ms` as a positive integer and reject booleans.
+- Added mocked tests for malformed/local hosts, path boundary bypasses, encoded traversal, and invalid timestamps. Do not claim tests pass until exact-head GitHub Actions confirms.
+- Residual limitation: this code does not pin DNS answers or check resolved addresses against private ranges. Configure only reviewed public official hosts and consider egress controls before accepting untrusted source definitions.
+- Scope remains read-only and opt-in. No account access, registry writes, parsing, dashboard wiring, orders, transfers, reward claims, bot activation, cloud resources, paid services or REAL-mode changes.
+
+
+## Verification checkpoint — 2026-10-02
+
+- Latest code and test changes before this documentation checkpoint: `015beb9d512d9f466929a1c9556327354c1d4299` on PR #324.
+- PR #324 is open and was reported mergeable against current main. Branch comparison: 12 commits ahead, 0 behind at that checkpoint.
+- Exact-head GitHub Actions runs on that code/documentation revision: Python tests run `37057690703` (IN_PROGRESS) and Windows EXE/installer run `37057690699` (IN_PROGRESS). These results were not yet final; recheck after this documentation-only commit because the head SHA will change.
+- PR #322 is closed as superseded by #324. Do not merge either draft unless current exact-head checks pass and the diff has no blocking issues.
+- Final security scope includes same-origin-only redirects: cross-origin redirects are rejected even if the target host is also allowlisted. Tests cover this boundary.
