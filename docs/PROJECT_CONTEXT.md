@@ -2,35 +2,42 @@
 
 > **Current handoff:** See the authoritative status section immediately below. Historical handover sections later in this file are retained for context and may be stale.
 
-## CURRENT AUTHORITATIVE HANDOFF — 2026-10-02 (verified live after PR #317)
+## CURRENT AUTHORITATIVE HANDOFF — 2026-10-02 (verified live)
 
-**Treat this section as the current status.** Older sections below are historical handovers and may contain stale branch/SHA references; verify live GitHub before acting.
+**Treat this section as the current status.** Historical handovers later in this file may be stale; verify live GitHub before acting.
 
-- Current main SHA: `bd7cb11c68b312b46995edef16106b207854513f`.
-- PR #316 merged: master roadmap and agreements documentation, resulting SHA `43eba2a94dd490e89b997300a422a8b7e62c15b0`.
-- PR #317 merged: [evidence-backed opportunity registry](https://github.com/AndreVazao/VazaoSovereignTrader/pull/317), resulting main SHA `bd7cb11c68b312b46995edef16106b207854513f`.
-- Post-merge Python tests run [37016998573](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/37016998573): SUCCESS on exact main SHA `bd7cb11c68b312b46995edef16106b207854513f`.
-- Post-merge Windows EXE run [37016998510](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/37016998510): SUCCESS on exact main SHA `bd7cb11c68b312b46995edef16106b207854513f`.
-- No open PRs were returned by the live GitHub open-PR query at this handoff.
+- Current main SHA: `fb403faf0c9619e039d96e76e899b5c9a9bb2836` (PR #319, authoritative handoff refresh).
+- PR #317 merged as `bd7cb11c68b312b46995edef16106b207854513f`; post-merge Python run 37016998573 and Windows EXE run 37016998510 both SUCCESS on that SHA.
+- PR #319 refreshed this authoritative handoff on main. PR #318 is a duplicate documentation attempt and was closed/reopened during the transition; verify live PR state before considering it.
+- PR #320 (`feat/official-opportunity-source-ingestion`) contains the first implementation draft but is based on the previous main and is not mergeable after the handoff docs changed. A clean successor branch `feat/official-source-fetcher-v2` was created from current main SHA `fb403faf0c9619e039d96e76e899b5c9a9bb2836` to carry the implementation without stale documentation conflicts.
+- The clean branch contains `PC_ENGINE/opportunity/source_ingestion.py`, `tests/test_opportunity_source_ingestion.py`, and `docs/OPPORTUNITY_SOURCE_INGESTION.md`. It is being updated with current project context and roadmap before opening a new PR. Exact-head CI has not yet been verified for the clean branch.
 
 ### Opportunity registry now on main
 - `PC_ENGINE/opportunity/registry.py`: typed categories/statuses, HTTPS provenance validation, discovery/source timestamps, expiry checks, finite estimate/cost validation, explicit transition allowlist, append-only JSONL persistence and idempotent identical writes.
 - New records must begin at `DISCOVERED`; direct status bypass is rejected. Records must remain `paper_only=true` and `execution_authorized=false`.
-- `tests/test_opportunity_registry.py` covers provenance, timestamps, eligibility evidence, positive estimate, transitions, expiry, PAPER invariants, persistence, malformed rows and initial-state bypass.
-- `docs/OPPORTUNITY_REGISTRY.md` defines schema, states, persistence and limitations.
-- Scope intentionally does **not** include official-source ingestion, account probing, dashboard integration, orders, transfers, bot activation, copy-trading subscriptions or reward claims.
+- `tests/test_opportunity_registry.py` and `docs/OPPORTUNITY_REGISTRY.md` cover schema, states, persistence and limitations.
+- No source ingestion, account probing, dashboard integration, orders, transfers, bot activation, copy-trading subscriptions or reward claims are connected to this registry.
 
-### Next engineering step
-Create one focused branch/PR for an **official-source allowlist and read-only ingestion boundary** for opportunities. It should accept only explicitly allowlisted HTTPS origins, normalize source metadata and observation timestamps, reject redirects/off-origin URLs unless independently revalidated, store source evidence/provenance, and remain offline/local by default unless a source fetch is explicitly invoked. Do not implement broad crawling, account login, credentials, claim actions or any execution side effect. Add deterministic tests for allowlist rejection, deceptive hostnames, redirects/off-origin targets, malformed timestamps, duplicate evidence and expiry. Inspect current code first and keep this change separate from dashboard integration.
+### Current source-ingestion scope
+- Public, read-only fetch only; caller must supply exact HTTPS host and path allowlists. No default source catalog or scheduled fetch is enabled.
+- Reject off-allowlist URLs, non-standard ports, embedded credentials, fragments, unapproved redirects, excessive redirects, unsupported content types, and declared/streamed response bodies over the configured cap.
+- Capture requested/final URL, source ID, retrieval timestamp, response status/content type/length and SHA-256 digest. Return raw bytes only; parsing, deduplication store, registry integration and dashboard remain later tasks.
+- Tests use deterministic mocks; no public site is contacted by the test suite. Any source-specific configuration must be explicitly reviewed.
+
+### Next steps
+1. Finish the current clean feature branch's context/roadmap updates, inspect full diff, and open a successor PR from the current main.
+2. Verify Python tests on the exact latest PR head; verify Windows EXE/installer workflow if triggered/required. Fix failures before considering merge.
+3. If green and mergeable, squash merge with the exact head SHA, then verify post-merge workflows on the resulting main SHA and refresh this handoff through a new PR.
+4. After fetcher validation, add deterministic content fingerprint/deduplication; then fixture-based parsers for explicit official formats; only later connect evidence snapshots to the opportunity registry and dashboard.
+5. Account/region eligibility remains UNKNOWN until authorized account-specific evidence exists. Public pages do not prove account eligibility or net profitability.
 
 ### Unchanged operating constraints
-PAPER by default; no automatic REAL activation; preserve Readiness, preflight, Risk Engine, RealModeGuard, reconciliation and explicit operator approval. No cloud resources, paid services, deployments, account provisioning or spending without explicit authorization. MFA/CAPTCHA/anti-bot/security challenges remain human-handled. Never commit/log secrets. Always inspect exact PR head, diff and required CI before merge, then verify post-merge workflows and refresh this handoff through a PR.
+PAPER by default; no automatic REAL activation; preserve Readiness, preflight, Risk Engine, RealModeGuard, reconciliation and explicit operator approval. No cloud resources, paid services, deployments, account provisioning or spending without explicit authorization. MFA/CAPTCHA/anti-bot/security challenges remain human-handled. Never commit/log secrets. Always inspect exact PR head, diff and required CI before merge.
 
 ### Copy/paste continuation prompt
-Continue `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal), warm/direct tone. First read the CURRENT AUTHORITATIVE HANDOFF at the top of `docs/PROJECT_CONTEXT.md`, then read `docs/MASTER_ROADMAP_AND_AGREEMENTS.md`, `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md`, and `docs/OPPORTUNITY_REGISTRY.md` from live main. Verify main SHA, open PRs and CI live; do not trust historical handovers below. PR #317 merged at `bd7cb11c68b312b46995edef16106b207854513f`; post-merge Python run 37016998573 and Windows EXE run 37016998510 both succeeded on that SHA. Next build a narrow official-source allowlist/read-only opportunity ingestion boundary with deterministic tests, dedicated branch and PR. Keep PAPER-only, no execution side effects, no secrets, no cloud/spend, no bypass of existing REAL safety gates. Merge only when exact-head required CI is green and review has no blocker; verify post-merge workflows and update context in another PR.
+Continue `AndreVazao/VazaoSovereignTrader` in Portuguese (Portugal), warm/direct tone. Read this CURRENT AUTHORITATIVE HANDOFF, then `docs/MASTER_ROADMAP_AND_AGREEMENTS.md`, `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md` and `docs/OPPORTUNITY_REGISTRY.md` from live main. Verify main SHA, PRs and CI live. PR #317 is merged at `bd7cb11c68b312b46995edef16106b207854513f`; post-merge Python/Windows passed. Continue the clean official-source fetcher branch from current main `fb403faf0c9619e039d96e76e899b5c9a9bb2836`; test exact head, inspect diff, use PR-only workflow, preserve PAPER/no-action safety, and verify post-merge CI before claiming completion.
 
-
-Last updated: 2026-10-02 (UTC) — PR #316 merged as 43eba2a94dd490e89b997300a422a8b7e62c15b0; PR #317 open on feat/opportunity-registry-schema; exact-head CI pending after latest safety test
+Last updated: 2026-10-02 (UTC) — PR #317 merged; official-source fetcher in progress on feat/official-source-fetcher-v2
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
