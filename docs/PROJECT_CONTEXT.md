@@ -1247,3 +1247,11 @@ Review points before merge:
 - Mocked regression tests cover loopback, mixed public/private results and DNS failures; exact-head CI is required before merge.
 - Important limitation: this is not DNS pinning. urllib may resolve the hostname again when connecting, leaving a time-of-check/time-of-use window. Keep only reviewed public source definitions; a future transport-level pinned-IP connection must preserve TLS hostname verification/SNI and be paired with egress restrictions.
 - No execution behavior changes: read-only discovery only, PAPER-only, execution unauthorized.
+
+
+## DNS pinned transport increment — 2026-10-02
+
+- The next security increment is implemented on branch `fix/source-ingestion-pinned-transport`: the validated DNS address is now used for the actual TCP connection, eliminating the earlier urllib DNS re-resolution/TOCTOU gap for this fetch path.
+- TLS keeps the approved hostname as SNI/certificate-verification identity. Ambient HTTP(S) proxy configuration is disabled for this security-sensitive fetch path and proxy tunneling is rejected.
+- Regression tests cover the validated-IP dial and hostname-preserving TLS handshake boundary.
+- Exact-head Python and Windows CI remain mandatory before merge. Host/network egress restrictions remain defense-in-depth.
