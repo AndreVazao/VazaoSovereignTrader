@@ -48,6 +48,24 @@ def _write_health(
     tmp.replace(path)
 
 
+def _append_bounded_line(output: Path, backup: Path, encoded: str, max_bytes: int) -> bool:
+    """Append one complete JSONL record without exceeding the configured file cap.
+
+    Returns False when a single record is larger than the cap. In that case the
+    current file is left untouched and the caller can count/drop the record.
+    """
+    encoded_size = len(encoded.encode("utf-8"))
+    if encoded_size > max_bytes:
+        return False
+    if output.exists() and output.stat().st_size + encoded_size > max_bytes:
+        if backup.exists():
+            backup.unlink()
+        output.replace(backup)
+    with output.open("a", encoding="utf-8") as handle:
+        handle.write(encoded)
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Collect public top-of-book ticker observations for PAPER research only."
@@ -73,6 +91,7 @@ def main() -> None:
     counters = {
         "events_written": 0,
         "invalid_tickers_ignored": 0,
+        "oversized_tickers_ignored": 0,
         "write_errors": 0,
         "collector_errors": 0,
         "reconnects": 0,
@@ -111,12 +130,10 @@ def main() -> None:
         encoded = json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
         with write_lock:
             try:
-                if output.exists() and output.stat().st_size + len(encoded.encode("utf-8")) > max_bytes:
-                    if backup.exists():
-                        backup.unlink()
-                    output.replace(backup)
-                with output.open("a", encoding="utf-8") as handle:
-                    handle.write(encoded)
+                if not _append_bounded_line(output, backup, encoded, max_bytes):
+                    with counters_lock:
+                        counters["oversized_tickers_ignored"] += 1
+                    return
                 with counters_lock:
                     counters["events_written"] += 1
             except OSError:
