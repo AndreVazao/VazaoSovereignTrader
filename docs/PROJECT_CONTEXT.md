@@ -1209,3 +1209,13 @@ Review points before merge:
 - Added `docs/OPPORTUNITY_REGISTRY.md`; updated the master roadmap's Track B and progress notes.
 - No platform source ingestion, account probing, dashboard integration, transfer execution or REAL behavior is connected to this registry.
 - PR #317 is already open; the latest safety fix requires a fresh exact-head CI run. Next: inspect the final PR diff and verify Python tests and Windows EXE/installer on the latest head; fix any failures before considering merge. Keep source allowlisting, automatic expiry sweeps and official ingestion for later steps.
+
+
+## Current handoff — official source ingestion hardening (2026-10-02)
+
+- Main baseline for this branch: `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`.
+- A prior draft PR #322 was found to be based on an older main and marked unmergeable. The hardened implementation is being carried on clean branch `fix/official-source-ingestion-security`, based on the current main, to avoid preserving stale documentation conflicts.
+- Security changes: reject IP literals and obvious local/reserved development hostnames; require valid multi-label DNS names; enforce path-segment prefix boundaries; reject percent-encoded/backslash/dot-segment paths; validate caller-supplied `now_ms` as a positive integer and reject booleans.
+- Added mocked tests for malformed/local hosts, path boundary bypasses, encoded traversal, and invalid timestamps. Do not claim tests pass until exact-head GitHub Actions confirms.
+- Residual limitation: this code does not pin DNS answers or check resolved addresses against private ranges. Configure only reviewed public official hosts and consider egress controls before accepting untrusted source definitions.
+- Scope remains read-only and opt-in. No account access, registry writes, parsing, dashboard wiring, orders, transfers, reward claims, bot activation, cloud resources, paid services or REAL-mode changes.
