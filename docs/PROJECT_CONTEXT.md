@@ -1214,7 +1214,7 @@ Review points before merge:
 ## Current handoff — official source ingestion hardening (2026-10-02)
 
 - Main baseline for this branch: `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`.
-- A prior draft PR #322 was found to be based on an older main and marked unmergeable. The hardened implementation is being carried on clean branch `fix/official-source-ingestion-security`, based on the current main, to avoid preserving stale documentation conflicts.
+- Prior draft PR #322 was based on an older main and marked unmergeable. The hardened implementation is now on clean branch `fix/official-source-ingestion-security`, based on main SHA `a5ae90a8af4f46b4b4ac98ff1e05610547836f4d`, in PR #324: https://github.com/AndreVazao/VazaoSovereignTrader/pull/324. Exact-head CI and mergeability remain to be verified.
 - Security changes: reject IP literals and obvious local/reserved development hostnames; require valid multi-label DNS names; enforce path-segment prefix boundaries; reject percent-encoded/backslash/dot-segment paths; validate caller-supplied `now_ms` as a positive integer and reject booleans.
 - Added mocked tests for malformed/local hosts, path boundary bypasses, encoded traversal, and invalid timestamps. Do not claim tests pass until exact-head GitHub Actions confirms.
 - Residual limitation: this code does not pin DNS answers or check resolved addresses against private ranges. Configure only reviewed public official hosts and consider egress controls before accepting untrusted source definitions.
