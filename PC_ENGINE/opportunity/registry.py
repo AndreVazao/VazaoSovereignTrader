@@ -236,10 +236,12 @@ class OpportunityRegistry:
         current = {item.opportunity_id: item for item in self.list_records()}
         previous = current.get(record.opportunity_id)
         if previous is not None:
+            if record == previous:
+                return previous
             if record.status != previous.status:
                 if record.status not in _ALLOWED_TRANSITIONS[previous.status]:
                     raise ValueError("invalid persisted opportunity status transition")
-            elif record != previous:
+            else:
                 raise ValueError("same-status updates are not allowed; use transition()")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
