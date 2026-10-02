@@ -84,9 +84,10 @@ def test_cancelled_buy_is_not_reported_as_success(tmp_path):
     assert driver.submissions == 1
 
 
-def test_cancel_action_does_not_report_success_if_order_was_filled():
+def test_cancel_action_does_not_report_success_if_order_was_filled(tmp_path):
     driver = Driver("FILLED")
-    adapter = BrowserExecutionAdapter(driver, BrowserExecutionSafety(), proposal_factory)
+    ledger = BrowserExecutionLedger(tmp_path / "browser.jsonl")
+    adapter = BrowserExecutionAdapter(driver, BrowserExecutionSafety(), proposal_factory, ledger=ledger)
     cancel_intent = ExecutionIntent(
         "owner-a", "binance", "acct-a", "CANCEL", "BTCUSDT", 0.01,
         ExecutionMethod.BROWSER, "cancel-filled-1"
@@ -96,6 +97,11 @@ def test_cancel_action_does_not_report_success_if_order_was_filled():
 
     assert result.success is False
     assert result.status == "FILLED"
+    assert ledger.latest("cancel-filled-1").state == "FILLED"
+    retry = adapter.execute(cancel_intent)
+    assert retry.success is False
+    assert retry.status == "RECOVER_EXISTING_BROWSER_SUBMISSION"
+    assert driver.submissions == 1
 
 
 def test_cancel_action_reports_success_only_when_exchange_confirms_cancelled():
