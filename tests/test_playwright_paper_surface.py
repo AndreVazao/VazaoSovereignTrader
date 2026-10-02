@@ -73,3 +73,74 @@ def test_browser_feedback_can_be_persisted_bounded(tmp_path) -> None:
     assert '"paper_only": true' in lines[0]
     assert '"execution_authorized": false' in lines[0]
     adapter.close()
+
+
+
+def test_current_page_inventory_is_read_only_and_redacts_sensitive_labels() -> None:
+    adapter = PlaywrightPaperSurfaceAdapter(
+        PlaywrightPaperConfig(venue_id="demo", url="https://example.invalid")
+    )
+
+    class Page:
+        url = "https://exchange.invalid/trade?account=12345678"
+
+        def evaluate(self, _script):
+            return {
+                "headings": ["BTC/USDT trading", "Account 12345678"],
+                "buttons": ["Buy", "Sell", "user@example.com"],
+                "navigation": ["Spot", "Perpetual Futures"],
+                "forms_count": 2,
+                "visible_input_count": 3,
+                "visible_input_types": {"text": 1, "password": 1, "number": 1},
+            }
+
+    adapter._page = Page()
+    report = adapter.inspect_current_page()
+
+    assert report["state"] == "INSPECTED"
+    assert report["page_origin"] == "https://exchange.invalid"
+    assert report["account_data_read"] is False
+    assert report["input_values_read"] is False
+    assert report["orders_submitted"] is False
+    assert report["execution_authorized"] is False
+    assert "12345678" not in str(report)
+    assert "user@example.com" not in str(report)
+    assert report["buttons"] == ["Buy", "Sell", "[redacted-email]"]
+    assert report["forms_count"] == 2
+    assert report["visible_input_types"]["password"] == 1
+    adapter.close()
+
+
+def test_current_page_inventory_reports_not_connected_without_open_page() -> None:
+    adapter = PlaywrightPaperSurfaceAdapter(
+        PlaywrightPaperConfig(venue_id="demo", url="https://example.invalid")
+    )
+
+    report = adapter.inspect_current_page()
+
+    assert report["state"] == "NOT_CONNECTED"
+    assert report["inspection"] == "CURRENT_PAGE_STRUCTURE_ONLY"
+    assert report["account_data_read"] is False
+    assert report["execution_authorized"] is False
+    adapter.close()
+
+
+def test_current_page_inventory_does_not_expose_page_url_path_or_query() -> None:
+    adapter = PlaywrightPaperSurfaceAdapter(
+        PlaywrightPaperConfig(venue_id="demo", url="https://example.invalid")
+    )
+
+    class Page:
+        url = "https://exchange.invalid/user/private-account/12345678?token=secret"
+
+        def evaluate(self, _script):
+            return {"headings": [], "buttons": [], "navigation": [], "forms_count": 0,
+                    "visible_input_count": 0, "visible_input_types": {}}
+
+    adapter._page = Page()
+    report = adapter.inspect_current_page()
+
+    assert report["page_origin"] == "https://exchange.invalid"
+    assert "private-account" not in str(report)
+    assert "token=secret" not in str(report)
+    adapter.close()
