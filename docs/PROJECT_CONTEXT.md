@@ -1219,3 +1219,12 @@ Review points before merge:
 - Added mocked tests for malformed/local hosts, path boundary bypasses, encoded traversal, and invalid timestamps. Do not claim tests pass until exact-head GitHub Actions confirms.
 - Residual limitation: this code does not pin DNS answers or check resolved addresses against private ranges. Configure only reviewed public official hosts and consider egress controls before accepting untrusted source definitions.
 - Scope remains read-only and opt-in. No account access, registry writes, parsing, dashboard wiring, orders, transfers, reward claims, bot activation, cloud resources, paid services or REAL-mode changes.
+
+
+## Verification checkpoint — 2026-10-02
+
+- Latest code and test changes before this documentation checkpoint: `015beb9d512d9f466929a1c9556327354c1d4299` on PR #324.
+- PR #324 is open and was reported mergeable against current main. Branch comparison: 12 commits ahead, 0 behind at that checkpoint.
+- Exact-head GitHub Actions runs on that code/documentation revision: Python tests run `37057690703` (IN_PROGRESS) and Windows EXE/installer run `37057690699` (IN_PROGRESS). These results were not yet final; recheck after this documentation-only commit because the head SHA will change.
+- PR #322 is closed as superseded by #324. Do not merge either draft unless current exact-head checks pass and the diff has no blocking issues.
+- Final security scope includes same-origin-only redirects: cross-origin redirects are rejected even if the target host is also allowlisted. Tests cover this boundary.
