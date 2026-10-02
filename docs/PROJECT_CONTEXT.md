@@ -1,6 +1,6 @@
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
-Last updated: 2026-10-02 (UTC) — main at 2261776ddaf989bb4b62b71c8362a9d16e0c8e44; PR #313 and #314 merged; PR #314 exact-head CI passed, post-merge CI pending
+Last updated: 2026-10-02 (UTC) — PR #315 merged as 753b6f7a6b0eac3f1e1aa0b8a1e583429321cdad; master roadmap/agreements documentation in progress on docs/master-roadmap-continuity
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Project: Pessoal programação
 Owner's language/tone: Portuguese (Portugal), direct, collaborative; user often says “irmão”.
@@ -1137,3 +1137,16 @@ Review points before merge:
 2. Review and open a docs PR for `docs/opportunity-discovery-and-capital-ladder` content (branch name `docs/opportunity-discovery-capital-ladder`) after validating the complete diff.
 3. Next implementation PR: typed opportunity schema/evidence states and unit tests; do not combine real trading or transfer execution into discovery work.
 4. Continue one implementation PR at a time: official-source discovery, account/region eligibility, net-value calculations, dashboard shortlist, PAPER evaluation, then platform-specific adapters with explicit permission and reconciliation semantics.
+
+
+## 52. Master roadmap and durable agreements — 2026-10-02
+
+- Added on branch `docs/master-roadmap-continuity`: `docs/MASTER_ROADMAP_AND_AGREEMENTS.md`.
+- This document consolidates the north-star objective, user agreements, safety rules, independent evidence dimensions, platform reconnaissance requirements, opportunity discovery, capital ladder, PAPER/REAL promotion policy, dashboard requirements, browser/desktop/Android boundaries, security/recovery expectations, repository workflow, implementation backlog and a copy/paste continuity prompt.
+- Companion document: `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md`, merged by PR #315.
+- Main SHA verified before this documentation branch: `753b6f7a6b0eac3f1e1aa0b8a1e583429321cdad`.
+- PR #315 merge SHA: `753b6f7a6b0eac3f1e1aa0b8a1e583429321cdad`. Exact-head Python workflow run 37012132630 reported SUCCESS. No post-merge workflow run was returned by the queried PR-run endpoint; verify current main CI before asserting all checks are green.
+- PR #314 post-merge workflows were pending at the prior handoff and must be rechecked against current main before reporting complete.
+- Scope remains documentation/continuity only. No trading, transfers, cloud provisioning, paid services, deployment or REAL activation were authorized.
+- Next engineering step after this documentation PR: implement a typed opportunity schema/evidence-state model with provenance/expiry validation and unit tests; discovery must have no execution side effects.
+- Keep this section synchronized with live GitHub after merge. Do not treat this branch's snapshot SHA as the future main SHA.
