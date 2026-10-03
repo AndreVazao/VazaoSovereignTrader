@@ -9,7 +9,6 @@ export const runtime = "nodejs";
 const MAX_BODY_BYTES = 4096;
 const LEASE_SECONDS = 5 * 60;
 const NONCE_TTL_SECONDS = 10 * 60;
-const PATH = "/api/v1/devices/endpoint";
 
 function clients() {
   const url = process.env.SUPABASE_URL;
