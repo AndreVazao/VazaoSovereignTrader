@@ -2,7 +2,8 @@
 create table if not exists public.device_endpoint_request_nonces (
   nonce_sha256 text primary key check (nonce_sha256 ~ '^[a-f0-9]{64}$'),
   user_id uuid not null references auth.users(id) on delete cascade,
-  device_id uuid not null references public.authorized_devices(id) on delete cascade,
+  device_id uuid not null,
+  foreign key (device_id, user_id) references public.authorized_devices(id, user_id) on delete cascade,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null,
   check (expires_at > created_at),
