@@ -22,7 +22,7 @@ function fail(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status, headers: { "Cache-Control": "no-store" } });
 }
 async function principal(req: NextRequest) {
-  const token = req.headers.get("authorization")?.match(/^Bearer\\s+(.+)$/i)?.[1];
+  const token = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token || token.length > 8192) return null;
   const { auth } = clients();
   const { data, error } = await auth.auth.getUser(token);
