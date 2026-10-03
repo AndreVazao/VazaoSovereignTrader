@@ -1,3 +1,16 @@
+# CURRENT AUTHORITATIVE HANDOFF — 2026-10-03 (after PR #329)
+
+- Verified main SHA: `b114e6b75308e57be19cb71b16b6cc300a958bb7`; no open PRs at handoff.
+- PR #329 merged: [docs: document source ingestion and OS egress boundaries](https://github.com/AndreVazao/VazaoSovereignTrader/pull/329), merge SHA `b114e6b75308e57be19cb71b16b6cc300a958bb7`.
+- Exact-head CI on `783b2c9298829deb5cd2c72ae3631a1836f0eaed`: Python run [37133751319](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/37133751319) SUCCESS; Windows EXE/installer run [37133751294](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/37133751294) SUCCESS. Post-merge Python run [37134045918](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/37134045918) SUCCESS on main SHA.
+- Confirmed cloud service source exists at `cloud/shared-learning`, but it is NOT deployed. README identifies missing production prerequisites: Supabase project/migrations, trusted account provisioning, MFA/recovery, proof-of-possession and approval flow validation, rate limiting/abuse monitoring, client integration and end-to-end tests. Do not claim live deployment or real-device validation.
+- Android APK workflow exists at `.github/workflows/android-apk.yml`; source is under `MOBILE_APP`. A successful CI artifact build and physical Android install/USB/Tailscale test still need live verification.
+- User clarified Vercel's intended role: lightweight per-user device registration/discovery for initial pairing and sharing currently valid Tailscale addresses only with that user's authorized devices, plus controlled shared learning. Each user keeps their own Tailscale network. Cloud is not a central trading controller. Prefer Tailscale addresses over public IPs; never expose PC API publicly. Endpoint records must be authenticated, owner-scoped, short-lived, revocable, and must not grant authority by themselves. If discovery/cloud is down, local/private-network operation should continue.
+- Next active work branch: `docs/v1-install-readiness-roadmap` from verified main. Add a practical install-readiness and Vercel/Tailscale coordination plan, keeping cloud disabled until deployment prerequisites and approval are satisfied. One active PR at a time; update this handoff through PR, no direct main commits.
+- No cloud resources/deployment, paid services, or account provisioning without explicit user authorization after reviewing cost/terms. Keep PAPER/read-only defaults, no secrets, no real trading, no bypass of MFA/CAPTCHA/anti-bot, and preserve all risk/readiness/REAL gates.
+
+---
+
 # VAZAO SOVEREIGN TRADER — PROJECT CONTEXT & CONTINUATION PLAN
 
 > **Current handoff:** See the authoritative status section immediately below. Historical handover sections later in this file are retained for context and may be stale.
