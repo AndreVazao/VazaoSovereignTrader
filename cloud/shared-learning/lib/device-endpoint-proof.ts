@@ -26,3 +26,7 @@ export function parseEndpointProof(value: Record<string, unknown>) {
   if (typeof signature !== "string" || signature.length < 80 || signature.length > 2048) throw new Error("endpoint_proof_signature_invalid");
   return { timestamp, nonce, signature };
 }
+
+export function buildEndpointProofMessage(userId: string, deviceId: string, timestamp: number, nonce: string, action: "publish" | "lookup", detail: string): string {
+  return ["v1", "POST", "/api/v1/devices/endpoint", action, userId, deviceId, detail, String(timestamp), nonce].join("\n");
+}
