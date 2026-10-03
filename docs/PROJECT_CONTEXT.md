@@ -1,14 +1,16 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-10-03 (PR #332 in validation)
+# CURRENT AUTHORITATIVE HANDOFF — 2026-10-03 (PR #332 under CI validation)
 
-- PR #331 [private Tailscale address validation](https://github.com/AndreVazao/VazaoSovereignTrader/pull/331) merged to main; merge SHA `44da885c3a839fae5669caa39dba4f35dfb80788`. Its exact-head CI passed.
-- PR #332 [owner-scoped expiring endpoint leases](https://github.com/AndreVazao/VazaoSovereignTrader/pull/332) is OPEN and NOT merged. Branch `feat/owner-scoped-endpoint-leases`; latest head before this context update: `7b10b8ebdc08c4bd65446930c2bf5b62261408e7`; base main: `44da885c3a839fae5669caa39dba4f35dfb80788`. Recheck exact-head CI because each new commit restarts checks.
-- PR #332 adds `POST /api/v1/devices/endpoint` for publish and lookup actions, five-minute owner-scoped leases, strict Tailscale IPv4/IPv6 validation, account/device approval checks, server rate limits and `Cache-Control: no-store`.
-- Endpoint actions now require a signed canonical request using the calling device's registered key, a timestamp within ±120 seconds, a random nonce and a unique database nonce insert to reject replay. Canonical format, client requirements and migrations are documented in `docs/PRIVATE_ENDPOINT_LEASE_API.md`. Unit tests cover Ed25519 signature verification/tampering, nonce hashing, timestamp freshness and malformed proof envelopes.
-- New migrations: `202610030001_private_endpoint_leases.sql` and `202610030002_endpoint_proof_nonces.sql`. These are source only and have NOT been applied to production Supabase.
-- Remaining before merge: all CI on the exact latest PR head must pass. Then review build/test logs and schema assumptions. Before any production/client use, add integration tests for cross-account isolation, revoked/expired devices, nonce replay races, rate limits and concurrent lease refresh; apply migrations only through the approved process; integrate clients and validate on real Windows/Android devices.
-- Security boundary: signed address announcements prove possession of the registered private key for the signed request, not that the address is reachable or belongs to the physical device. The peer connection still needs independent authentication. No public-IP fallback, public PC API exposure, cloud order execution, or change to PAPER/REAL/risk gates.
-- No production deployment, cloud provisioning, database migration application, physical-device test, or real trading was performed.
-- Current main SHA at this handoff: `44da885c3a839fae5669caa39dba4f35dfb80788`.
+- PR #331 [private Tailscale address validation](https://github.com/AndreVazao/VazaoSovereignTrader/pull/331) is merged into main at `44da885c3a839fae5669caa39dba4f35dfb80788`; its exact-head checks passed.
+- PR #332 [owner-scoped expiring endpoint leases](https://github.com/AndreVazao/VazaoSovereignTrader/pull/332) is OPEN and NOT merged. Branch: `feat/owner-scoped-endpoint-leases`. Always read the live PR head SHA and re-check all exact-head CI before merge; recent commits deliberately restart CI.
+- Implementation includes `POST /api/v1/devices/endpoint` for publish and lookup, five-minute owner-scoped leases, strict Tailscale IPv4/IPv6 parsing, account/device approval checks, per-account rate limiting, no-store responses, and signed requests using the approved device's registered private key.
+- Signed proof includes a canonical newline-delimited message, timestamp freshness (±120 seconds), cryptographically random nonce and unique nonce insert for replay rejection. Unit tests cover Ed25519 signature verification and tampering, canonical message format, nonce hashing, timestamp freshness and malformed proof envelopes.
+- Database migrations in the PR: `202610030001_private_endpoint_leases.sql` and `202610030002_endpoint_proof_nonces.sql`. Lease and nonce records have composite foreign keys binding device ID to owner ID. The nonce migration includes a service-role-only purge function for rows older than one day, but no scheduler is configured.
+- `docs/PRIVATE_ENDPOINT_LEASE_API.md` documents request schemas, canonical signature content, security boundaries and operational gates.
+- CI must pass on the exact live PR head for Shared Learning Service, Python tests and Windows EXE/installer before merge. Inspect logs for npm test/build, and Windows build/smoke test. Do not merge on queued/in-progress checks.
+- Before production/client use, add integration tests for cross-account isolation, revocation, lease expiry, nonce replay races, rate limits and concurrent lease refresh; apply migrations only through approved Supabase migration workflow; integrate clients and validate on real Windows/Android devices.
+- Security limitation: device signature proves possession of the registered private key for the signed request, not that the announced address is reachable or belongs to the physical device. The peer connection still requires independent authentication.
+- No production deployment, cloud provisioning, migration application, physical-device test or real trading was performed. No public-IP fallback; no public exposure of the PC API; no cloud order execution; preserve PAPER/read-only and all risk/REAL gates.
+- Current main SHA: `44da885c3a839fae5669caa39dba4f35dfb80788`.
 
 ---
 
