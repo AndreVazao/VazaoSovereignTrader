@@ -14,3 +14,22 @@ create index if not exists device_endpoint_request_nonces_expiry_idx
 alter table public.device_endpoint_request_nonces enable row level security;
 revoke all on public.device_endpoint_request_nonces from public, anon, authenticated;
 grant all on public.device_endpoint_request_nonces to service_role;
+
+-- Invoke from an approved scheduled maintenance job; do not expose to end users.
+create or replace function public.purge_expired_device_endpoint_request_nonces()
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_deleted integer;
+begin
+  delete from public.device_endpoint_request_nonces
+   where expires_at < clock_timestamp() - interval '1 day';
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+revoke all on function public.purge_expired_device_endpoint_request_nonces() from public, anon, authenticated;
+grant execute on function public.purge_expired_device_endpoint_request_nonces() to service_role;
