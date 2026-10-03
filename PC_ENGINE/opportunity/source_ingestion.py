@@ -51,11 +51,7 @@ def _path_matches(path: str, prefix: str) -> bool:
 
 
 def _validate_public_dns_resolution(host: str, port: int = 443) -> tuple[str, ...]:
-    """Fail closed if DNS fails, returns no addresses, or includes any non-global IP.
-
-    This is a preflight guard only: urllib may resolve the hostname again when it
-    connects. It is not DNS pinning and must not be treated as a complete SSRF boundary.
-    """
+    """Fail closed if DNS fails, returns no addresses, or includes any non-global IP."""
     try:
         records = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError as exc:
@@ -93,16 +89,17 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
 
 
 class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
-    """Route HTTPS requests to the IPs validated before opener construction."""
+    """Route HTTPS requests only to addresses validated for the exact request host."""
 
     def __init__(self, validated_ips_by_host: dict[str, tuple[str, ...]]) -> None:
         super().__init__(context=ssl.create_default_context(), check_hostname=True)
         self._validated_ips_by_host = validated_ips_by_host
 
     def https_open(self, req):
-        host = urlsplit(req.full_url).hostname
-        if not host:
-            raise urllib.error.URLError("source URL has no hostname")
+        parsed = urlsplit(req.full_url)
+        host = parsed.hostname
+        if not host or parsed.scheme.lower() != "https" or parsed.port not in (None, 443):
+            raise urllib.error.URLError("source transport requires an approved HTTPS origin")
         addresses = self._validated_ips_by_host.get(host)
         if not addresses:
             raise urllib.error.URLError("source hostname was not validated")
@@ -151,7 +148,6 @@ class OfficialSourceDefinition:
             parsed = urlsplit(url)
             host = parsed.hostname or ""
             path = parsed.path or "/"
-            # Reject ambiguous encodings and path traversal before urllib normalizes anything.
             decoded_path = unquote(path)
             if (
                 parsed.scheme.lower() != "https"
@@ -187,6 +183,8 @@ class OfficialSourceSnapshot:
 
 
 class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Allow only bounded, same-origin redirects that remain inside the source policy."""
+
     def __init__(self, definition: OfficialSourceDefinition) -> None:
         super().__init__()
         self.definition = definition
@@ -196,6 +194,11 @@ class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
         self.redirect_count += 1
         if self.redirect_count > self.definition.max_redirects:
             raise urllib.error.HTTPError(req.full_url, code, "redirect limit exceeded", headers, fp)
+
+        # Validate both ends before allowing urllib to normalize or follow the target.
+        # Same-origin-only redirects mean the original validated/pinned IP remains valid.
+        if not self.definition.allows_url(req.full_url):
+            raise urllib.error.HTTPError(req.full_url, code, "redirect source is not allowlisted", headers, fp)
         if not self.definition.allows_url(newurl):
             raise urllib.error.HTTPError(req.full_url, code, "redirect target is not allowlisted", headers, fp)
         if _origin(req.full_url) != _origin(newurl):
@@ -225,8 +228,6 @@ class OfficialSourceFetcher:
         if now_ms is not None and (isinstance(now_ms, bool) or not isinstance(now_ms, int) or now_ms <= 0):
             raise ValueError("now_ms must be a positive integer")
 
-        # Resolve once, validate every returned address, and pin the actual TCP dial
-        # to that validated address. TLS still uses the original hostname for SNI/cert checks.
         parsed_host = urlsplit(url).hostname
         if parsed_host is None:
             raise ValueError("source URL has no hostname")
