@@ -1,8 +1,11 @@
 -- Short-lived, owner-scoped device endpoint announcements.
 -- Addresses are routing hints only; this table does not authorize network access.
+create unique index if not exists authorized_devices_id_user_id_unique
+  on public.authorized_devices(id, user_id);
 create table if not exists public.device_endpoint_leases (
-  device_id uuid primary key references public.authorized_devices(id) on delete cascade,
+  device_id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
+  foreign key (device_id, user_id) references public.authorized_devices(id, user_id) on delete cascade,
   tailscale_address text not null check (length(tailscale_address) between 2 and 64),
   announced_at timestamptz not null default now(),
   expires_at timestamptz not null,
