@@ -8,6 +8,7 @@ on:
       - "requirements-pc.txt"
       - "scripts/**"
       - "README.md"
+      - "docs/**"
   push:
     branches:
       - main
