@@ -10,6 +10,7 @@ from PC_ENGINE.opportunity.source_ingestion import (
     OfficialSourceFetcher,
     _AllowlistedRedirectHandler,
     _PinnedHTTPSConnection,
+    _PinnedHTTPSHandler,
 )
 
 
@@ -80,6 +81,7 @@ class OfficialSourceIngestionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "DNS resolution failed"):
                     fetcher.fetch("https://support.example.com/en/faq/topic")
                 build.assert_not_called()
+
     def test_url_allowlist_requires_https_exact_host_and_approved_path(self):
         item = definition()
         self.assertTrue(item.allows_url("https://support.example.com/en/faq/topic"))
@@ -174,6 +176,28 @@ class OfficialSourceIngestionTests(unittest.TestCase):
                 request, None, 302, "Found", {}, "https://cdn.example.com/en/faq/topic"
             )
 
+    def test_redirect_handler_rejects_invalid_source_url(self):
+        item = definition()
+        handler = _AllowlistedRedirectHandler(item)
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            "https://support.example.com/account/private"
+        )
+        with self.assertRaisesRegex(Exception, "redirect source is not allowlisted"):
+            handler.redirect_request(
+                request, None, 302, "Found", {}, "https://support.example.com/en/faq/next"
+            )
+
+    def test_redirect_handler_rejects_scheme_relative_and_non_https_targets(self):
+        item = definition()
+        handler = _AllowlistedRedirectHandler(item)
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            "https://support.example.com/en/faq/topic"
+        )
+        for target in ("//support.example.com/en/faq/next", "http://support.example.com/en/faq/next"):
+            with self.subTest(target=target):
+                with self.assertRaises(Exception):
+                    handler.redirect_request(request, None, 302, "Found", {}, target)
+
     def test_redirect_handler_enforces_redirect_limit(self):
         item = definition(max_redirects=0)
         handler = _AllowlistedRedirectHandler(item)
@@ -184,6 +208,14 @@ class OfficialSourceIngestionTests(unittest.TestCase):
             handler.redirect_request(
                 request, None, 302, "Found", {}, "https://support.example.com/en/faq/next"
             )
+
+    def test_pinned_transport_refuses_unvalidated_redirect_host(self):
+        handler = _PinnedHTTPSHandler({"support.example.com": ("93.184.216.34",)})
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            "https://cdn.example.com/en/faq/next"
+        )
+        with self.assertRaisesRegex(Exception, "hostname was not validated"):
+            handler.https_open(request)
 
     def test_fetch_records_hash_timestamp_and_bounded_metadata(self):
         body = b'{"campaign":"sample"}'
