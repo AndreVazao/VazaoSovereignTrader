@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
-import { endpointNonceDigest, parseEndpointProof, verifyEndpointRequest } from "../lib/device-endpoint-proof";
+import { buildEndpointProofMessage, endpointNonceDigest, parseEndpointProof, verifyEndpointRequest } from "../lib/device-endpoint-proof";
 
 test("verifies a signed endpoint request using the registered Ed25519 public key", () => {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -31,4 +31,11 @@ test("rejects stale timestamps and malformed nonce/signature envelopes", () => {
   assert.throws(() => parseEndpointProof({ timestamp: Date.now() - 300_000, nonce: "A".repeat(32), signature: "A".repeat(86) }), /timestamp_invalid/);
   assert.throws(() => parseEndpointProof({ timestamp: Date.now(), nonce: "short", signature: "A".repeat(86) }), /nonce_invalid/);
   assert.throws(() => parseEndpointProof({ timestamp: Date.now(), nonce: "A".repeat(32), signature: "short" }), /signature_invalid/);
+});
+
+test("builds a stable canonical message with newline-delimited signed fields", () => {
+  assert.equal(
+    buildEndpointProofMessage("user-id", "device-id", 123456, "nonce-value", "publish", "100.100.10.20"),
+    "v1\nPOST\n/api/v1/devices/endpoint\npublish\nuser-id\ndevice-id\n100.100.10.20\n123456\nnonce-value"
+  );
 });
