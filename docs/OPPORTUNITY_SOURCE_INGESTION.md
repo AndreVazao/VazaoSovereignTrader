@@ -9,7 +9,8 @@
 - HTTPS only; explicit lowercase DNS host allowlists are required. IP literals, single-label hosts, and obvious local/reserved development names (`localhost`, `.local`, `.internal`, `.test`, `.invalid`) are rejected.
 - URLs with embedded credentials, fragments, non-standard ports, encoded path characters, backslashes, or dot-segment traversal are rejected.
 - Path-prefix matching respects segment boundaries: `/api` may match `/api` and `/api/v1`, but not `/apix`.
-- Redirect targets must match the explicit host/path allowlist, remain on the original origin, and stay within the configured redirect count. Cross-origin redirects are rejected even when the destination host is also allowlisted; they require independent revalidation in a separate operation.
+- Redirect targets must match the explicit host/path allowlist, remain on the original origin, and stay within the configured redirect count. The redirect source is rechecked against policy before following. Scheme-relative targets, non-HTTPS targets, and cross-origin redirects are rejected.
+- The pinned HTTPS handler independently requires HTTPS on port 443 and refuses any hostname without a prevalidated address. A redirect cannot silently cause the transport to connect to a host absent from the validated-IP map.
 - Requests use GET, a fixed research User-Agent, an explicit timeout, and an allowlisted text/JSON/XML content type.
 - Declared and streamed response bodies are bounded by `max_bytes`; reads are capped at `max_bytes + 1` to detect overflow.
 - Caller-supplied retrieval timestamps must be positive integers; booleans, strings, floats, zero, and negative values are rejected.
@@ -29,14 +30,12 @@ Create an `OfficialSourceDefinition` per approved public source, including exact
 
 This module is discovery/evidence only. PAPER remains the default; it does not authorize orders, transfers, bot activation, reward claims, or REAL mode.
 
-
 ## Network-boundary note
 
-The allowlist is a configuration trust boundary, not a general-purpose URL proxy. Only configure reviewed public official hostnames. This module rejects literal IPs and obvious local names, but it does not pin DNS answers or independently prove that a hostname resolves only to public addresses; deployments requiring protection against hostile DNS or rebinding must add network-level egress restrictions and DNS/IP validation before enabling untrusted source definitions.
+The allowlist is a configuration trust boundary, not a general-purpose URL proxy. Only configure reviewed public official hostnames. DNS resolution rejects failures, empty answers, invalid addresses, and any answer that is not classified as globally routable; mixed public/private answer sets fail closed. The validated address is pinned for the actual TCP connection, TLS keeps the approved hostname for SNI and certificate verification, and ambient HTTP(S) proxy configuration is disabled for this fetch path.
 
+Application-level pinning only constrains this fetcher's direct connection. It cannot enforce host firewall policy, control unrelated processes, or replace operating-system/network egress restrictions. Deployments that need a strict egress boundary should apply host/network firewall rules separately and verify them operationally. Do not describe application allowlisting as a host-wide firewall.
 
-## DNS and transport boundary
+## Redirect and egress increment
 
-Before opening a request, the fetcher resolves the approved hostname and rejects resolution failures, empty answers, invalid addresses, and any answer that is not classified as globally routable. Mixed public/private answer sets fail closed. The validated address is then pinned for the actual TCP connection, so the standard HTTPS transport cannot silently re-resolve the hostname to a different address between validation and connect time.
-
-TLS still uses the original hostname for SNI and certificate verification. The source opener disables ambient HTTP(S) proxy configuration for this security-sensitive path and rejects proxy tunneling, keeping the validated-IP invariant local to the direct connection. Network-level egress controls remain recommended as defense-in-depth, because application-level pinning cannot constrain unrelated processes or host-level networking.
+The redirect handler validates both the current and destination URLs, rejects cross-origin changes, and enforces the configured redirect limit. The transport handler independently rejects non-HTTPS/non-443 requests and hosts absent from the validated DNS map. This deliberately fails closed rather than resolving and trusting a new redirect host mid-request. If future requirements need cross-origin redirects, implement a separate design that validates DNS and pins the target before that target is contacted; do not simply relax the origin check.
