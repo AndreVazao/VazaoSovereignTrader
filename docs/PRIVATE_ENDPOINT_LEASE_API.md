@@ -24,7 +24,7 @@ POST
 <nonce>
 ```
 
-The server verifies the signature against the calling device's registered public key, checks the account/device ownership and approval state, then atomically inserts a SHA-256 hash of the nonce into a unique database table. Reusing a nonce is rejected. Nonce rows expire logically after ten minutes; scheduled cleanup is an operational follow-up to control table growth. Device-key signing prevents a stolen user session alone from publishing an address, but it does not prove the announced address is reachable or currently assigned to that device.
+The server verifies the signature against the calling device's registered public key, checks the account/device ownership and approval state, then atomically inserts a SHA-256 hash of the nonce into a unique database table. Reusing a nonce is rejected. Nonce rows expire logically after ten minutes; migration includes a privileged purge function that an approved scheduled maintenance job can invoke to remove rows older than one day. No scheduler has been configured by this PR. Device-key signing prevents a stolen user session alone from publishing an address, but it does not prove the announced address is reachable or currently assigned to that device.
 
 ## Publish or refresh a lease
 
@@ -63,7 +63,7 @@ Both devices must be approved and owned by the authenticated account. Only an un
 ## Database and operational requirements
 
 - `202610030001_private_endpoint_leases.sql` creates owner-scoped leases and extends server-side rate-limit scopes.
-- `202610030002_endpoint_proof_nonces.sql` creates the replay-protection table.
+- `202610030002_endpoint_proof_nonces.sql` creates the replay-protection table and a service-role-only purge function. Both lease and nonce tables use composite device/user foreign keys so database constraints also enforce owner consistency.
 - These migrations are source only and have NOT been applied to any production Supabase project.
 - CI must pass on the exact PR head before merge.
 - Add/verify integration tests for cross-account isolation, revoked devices, expired leases, concurrent refresh, rate-limit behavior and nonce replay under concurrent requests.
