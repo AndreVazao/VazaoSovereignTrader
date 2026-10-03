@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { endpointNonceDigest, parseEndpointProof, verifyEndpointRequest } from "../../../../../lib/device-endpoint-proof";
+import { buildEndpointProofMessage, endpointNonceDigest, parseEndpointProof, verifyEndpointRequest } from "../../../../../lib/device-endpoint-proof";
 import { parseDeviceId } from "../../../../../lib/identity";
 import { parseTailscaleAddress } from "../../../../../lib/tailscale-address";
 
@@ -74,10 +74,6 @@ async function consumeNonce(db: ReturnType<typeof clients>["db"], userId: string
   if (error.code === "23505") return false;
   throw new Error("endpoint_nonce_store_unavailable");
 }
-function signedMessage(userId: string, deviceId: string, timestamp: number, nonce: string, action: string, detail: string) {
-  return ["v1", "POST", PATH, action, userId, deviceId, detail, String(timestamp), nonce].join("\n");
-}
-
 /**
  * Signed endpoint actions:
  * publish: { action, device_id, tailscale_address, timestamp, nonce, signature }
@@ -122,7 +118,7 @@ export async function POST(req: NextRequest) {
     if (peerId && !peer) return fail(404, "approved_peer_not_found");
 
     const detail = value.action === "publish" ? address! : peerId!;
-    const message = signedMessage(user.id, deviceId, proof.timestamp, proof.nonce, value.action, detail);
+    const message = buildEndpointProofMessage(user.id, deviceId, proof.timestamp, proof.nonce, value.action, detail);
     if (!verifyEndpointRequest(own.device_public_key, message, proof.signature)) return fail(401, "device_proof_invalid");
 
     const nonceAccepted = await consumeNonce(db, user.id, deviceId, proof.nonce);
