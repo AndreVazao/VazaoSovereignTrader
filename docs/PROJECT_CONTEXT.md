@@ -1,3 +1,15 @@
+# CURRENT AUTHORITATIVE HANDOFF — 2026-10-03 (PR #331 merged; PR #332 under validation)
+
+- PR #331 [private Tailscale address validation](https://github.com/AndreVazao/VazaoSovereignTrader/pull/331) merged to main; merge SHA: `44da885c3a839fae5669caa39dba4f35dfb80788`. Its exact-head checks `test`, `validate`, and `test` passed on `05330571974d79f6d9b4d341734a03fa929dd97b`.
+- PR #332 [owner-scoped expiring endpoint leases](https://github.com/AndreVazao/VazaoSovereignTrader/pull/332) is OPEN, not merged. Current branch `feat/owner-scoped-endpoint-leases`, head `81cf68e989e42b174264d61885ba3de6a85220c2`, base main `44da885c3a839fae5669caa39dba4f35dfb80788`. Exact-head CI is queued/in progress; verify all checks before considering merge.
+- PR #332 adds `POST /api/v1/devices/endpoint` to publish/refresh a five-minute Tailscale address lease and `GET /api/v1/devices/endpoint?device_id=...&peer_device_id=...` to look up an unexpired peer lease. Both require an authenticated active account and approved device(s) belonging to that same account; rate limits and `Cache-Control: no-store` are used. Strict address parsing from PR #331 is reused.
+- Added migration `cloud/shared-learning/supabase/migrations/202610030001_private_endpoint_leases.sql` and API documentation `docs/PRIVATE_ENDPOINT_LEASE_API.md`. Migration is source only: it has NOT been applied to any production Supabase project.
+- Security limitation to retain explicitly: current lease endpoints authenticate the user session and check account/device ownership/approval, but do not yet require a per-request device-key signature. Do not claim this proves the physical device owns the announced address. Before client integration, define signed, replay-resistant request proof and test cross-account isolation, revocation, expiry, rate limits and concurrent refresh.
+- No deployment, Supabase provisioning/migration, client integration, physical Android/Windows validation, or real trading was performed. Keep cloud coordination optional, PC engine authoritative, local/offline operation intact, and PAPER/read-only defaults.
+- Current main SHA at time of this handoff: `44da885c3a839fae5669caa39dba4f35dfb80788`.
+
+---
+
 # CURRENT AUTHORITATIVE HANDOFF — 2026-10-03 (after PR #329)
 
 - Verified main SHA: `b114e6b75308e57be19cb71b16b6cc300a958bb7`; no open PRs at handoff.
