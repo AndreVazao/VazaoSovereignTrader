@@ -14,7 +14,7 @@ def test_autonomous_flag_cannot_bypass_fresh_consumed_authorization():
         state=SimpleNamespace(status="OFF"),
     )
 
-    with pytest.raises(RuntimeError, match="freshly consumed authorization"):
+    with pytest.raises(RuntimeError, match="freshly consumed human authorization"):
         SovereignEngine.set_mode(
             engine,
             "REAL",
