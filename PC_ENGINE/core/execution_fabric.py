@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 
 class ExecutionMethod(str, Enum):
@@ -53,12 +53,18 @@ class ExecutionAdapter(Protocol):
         ...
 
 
+ExecutionAuthorizer = Callable[[ExecutionIntent], bool]
+
+
 class ExecutionFabric:
     """Owner-isolated execution routing across API, browser and Android.
 
-    Selection is deterministic and fail-closed. This layer does not authorize
-    trading; callers must already have passed RiskEngine/RealModeGuard gates.
-    Human interaction is an explicit fallback, not an anti-bot bypass.
+    Adapter invocation is fail-closed: an explicit authorization callback must
+    approve each intent immediately before the external side-effect boundary.
+    The callback must enforce the application's REAL gate, readiness, risk,
+    venue-health, freshness, and reconciliation contracts. This class does not
+    implement those policies itself. Human interaction is an explicit fallback,
+    not an anti-bot bypass.
     """
 
     DEFAULT_PRIORITY = (
@@ -68,9 +74,16 @@ class ExecutionFabric:
         ExecutionMethod.HUMAN,
     )
 
-    def __init__(self, *, owner_id: str, adapters: dict[ExecutionMethod, ExecutionAdapter] | None = None):
+    def __init__(
+        self,
+        *,
+        owner_id: str,
+        adapters: dict[ExecutionMethod, ExecutionAdapter] | None = None,
+        execution_authorizer: ExecutionAuthorizer | None = None,
+    ):
         self.owner_id = str(owner_id or "").strip().lower()
         self.adapters = dict(adapters or {})
+        self.execution_authorizer = execution_authorizer
         if not self.owner_id:
             raise ValueError("owner_id is required")
 
@@ -118,13 +131,30 @@ class ExecutionFabric:
         adapter = self.adapters.get(intent.method)
         if adapter is None:
             return ExecutionResult(False, "ADAPTER_UNAVAILABLE", intent.method, reason="no adapter")
+        if self.execution_authorizer is None:
+            return ExecutionResult(
+                False, "AUTHORIZATION_REQUIRED", intent.method,
+                reason="no execution authorization callback configured",
+            )
+        try:
+            authorized = self.execution_authorizer(intent) is True
+        except Exception as exc:
+            return ExecutionResult(
+                False, "AUTHORIZATION_ERROR", intent.method,
+                reason=f"execution authorization failed: {type(exc).__name__}",
+            )
+        if not authorized:
+            return ExecutionResult(
+                False, "EXECUTION_BLOCKED", intent.method,
+                reason="execution authorization denied",
+            )
         return adapter.execute(intent)
 
     @staticmethod
     def snapshot(targets: list[ExecutionTarget]) -> dict[str, Any]:
         return {
             "owner_private": True,
-            "execution_authority": "GATED_BY_CALLER",
+            "execution_authority": "REQUIRES_PER_INTENT_AUTHORIZER",
             "targets": [
                 {
                     "owner_id": t.owner_id,
