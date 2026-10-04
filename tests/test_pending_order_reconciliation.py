@@ -234,3 +234,21 @@ def test_ambiguous_fee_keeps_order_pending_and_enters_safe_mode():
     assert "buy-ambiguous-fee" in engine.state.pending_orders
     assert engine.state.open_positions["BTC/USDT"].qty == 0.2
     assert not engine.ledger.trades
+
+
+def test_pending_order_resolves_recorded_exchange_name_when_mapping_key_differs():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "unused", "status": "open", "filled": 0.0},
+        position,
+        {},
+    )
+    recorded_exchange = engine.exchanges["fake"]
+    engine.exchanges = {"configured-venue-key": recorded_exchange}
+
+    resolved = SovereignEngine._exchange_for_pending_order(
+        engine,
+        {"venue_id": "fake", "symbol": "BTC/USDT", "external_id": "order-1"},
+    )
+
+    assert resolved is recorded_exchange
