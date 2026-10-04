@@ -75,3 +75,46 @@ def test_intent_recovers_historical_order_by_client_id_without_assuming_fill():
     recovered = engine.state.pending_orders["exchange-order-7"]
     assert recovered["known_filled_qty"] == 0.0
     assert recovered["client_order_id"] == "vzt-stable-client-id"
+
+
+
+def test_malformed_intent_quantity_is_preserved_and_fails_closed():
+    exchange = RecoveryExchange()
+    intents = {
+        "intent-bad": {
+            "exchange": "fake", "symbol": "BTC/USDT", "side": "buy",
+            "requested_qty": "not-a-number",
+            "client_order_id": "vzt-bad-client-id", "created_ts": 1.0,
+        }
+    }
+    engine = make_engine(exchange, intents)
+
+    engine._recover_unresolved_execution_intents()
+
+    assert "intent-bad" in engine.state.execution_intents
+    assert engine.state.pending_orders == {}
+    assert engine.state.status == "SAFE_MODE"
+    assert exchange.lookups == []
+
+
+def test_historical_order_identity_mismatch_does_not_consume_intent():
+    historical = {
+        "id": "wrong-order", "symbol": "ETH/USDT", "side": "sell",
+        "status": "closed", "amount": 0.25, "filled": 0.25,
+        "clientOrderId": "different-client-id", "average": 101.0,
+    }
+    exchange = RecoveryExchange(historical=historical)
+    intents = {
+        "intent-1": {
+            "exchange": "fake", "symbol": "BTC/USDT", "side": "buy",
+            "requested_qty": 0.25, "reference_price": 100.0,
+            "client_order_id": "vzt-stable-client-id", "created_ts": 1.0,
+        }
+    }
+    engine = make_engine(exchange, intents)
+
+    engine._recover_unresolved_execution_intents()
+
+    assert "intent-1" in engine.state.execution_intents
+    assert engine.state.pending_orders == {}
+    assert engine.state.status == "SAFE_MODE"
