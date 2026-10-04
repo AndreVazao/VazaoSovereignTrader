@@ -121,3 +121,8 @@ This is a fail-closed integration seam, not proof that every production caller s
 The previous commit `1d42053705807d0dc26b32feab3e28268fdcea79` passed the Python suite and Windows EXE/installer builds and smoke tests. New commits that add the execution authorization callback and tests have since been pushed to this branch, so those previous green results do **not** validate the current head. Wait for fresh CI on the latest head before considering merge.
 
 The PR remains draft and unmerged. PAPER remains the default. No live trading, real transfers, production migrations, or paid deployments were performed.
+
+
+## Latest follow-up note (2026-10-04)
+
+`ExecutionFabric.execute()` now requires an explicit per-intent authorization callback; missing, denying, or throwing callbacks prevent adapter invocation. `CapitalTransferExecutionBridge.submit()` likewise requires a per-request transfer authorization callback in addition to the existing feature flag and legacy authorization boolean. Tests were added to prove missing/raising callbacks do not invoke adapters or mutate transfer state. This is a fail-closed seam only: production wiring to the authoritative REAL gate, risk, readiness, venue health, freshness and reconciliation policy is still unverified. Current head: `b9fb89913bfd1c0e1486fea43f35db39025c4fdc`. Fresh Python and Windows CI are running; prior green results do not validate this head. PR #337 remains draft and unmerged.
