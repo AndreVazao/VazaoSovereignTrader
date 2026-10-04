@@ -7,13 +7,14 @@ from pathlib import Path
 from typing import Any
 
 
-STATES = ("PLANNED", "APPROVED", "SUBMITTED", "PENDING", "CONFIRMED", "FAILED", "CANCELLED")
+STATES = ("PLANNED", "APPROVED", "SUBMITTED", "PENDING", "UNKNOWN_OUTCOME", "CONFIRMED", "FAILED", "CANCELLED")
 TERMINAL_STATES = {"CONFIRMED", "FAILED", "CANCELLED"}
 TRANSITIONS = {
     "PLANNED": {"APPROVED", "CANCELLED"},
     "APPROVED": {"SUBMITTED", "CANCELLED"},
-    "SUBMITTED": {"PENDING", "FAILED", "CANCELLED"},
-    "PENDING": {"CONFIRMED", "FAILED"},
+    "SUBMITTED": {"PENDING", "UNKNOWN_OUTCOME", "FAILED", "CANCELLED"},
+    "PENDING": {"CONFIRMED", "UNKNOWN_OUTCOME", "FAILED"},
+    "UNKNOWN_OUTCOME": {"PENDING", "CONFIRMED", "FAILED"},
     "CONFIRMED": set(),
     "FAILED": set(),
     "CANCELLED": set(),
@@ -31,7 +32,7 @@ class CapitalTransferState:
 
 
 class CapitalTransferStateStore:
-    """Owner-private append-only reconciliation state; never executes transfers."""
+    """Owner-private append-only state; never executes transfers."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
