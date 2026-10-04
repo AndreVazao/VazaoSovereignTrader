@@ -82,3 +82,18 @@ This was a targeted source inspection, not a full local test run or independent 
 ## CI status observed during this audit
 
 The GitHub Actions run for commit `620a358391b013282dcae387f1c01057448a378b` (Windows EXE workflow run 37181004491) completed successfully. The `build-exe` and `build-installer` jobs and their smoke tests reported success. This is build/installer evidence only, not a REAL-trading readiness signal.
+
+
+## Remediation progress on the audit branch
+
+The following changes have now been added to this draft PR; CI is still running and these changes are not yet merged:
+
+- Reconciliation with missing or empty observations now returns `reconciled=false` and `enforced=true`, and routing is denied.
+- Added regression tests for missing/empty evidence, a matching accounting result, and accounting mismatch.
+- Added `UNKNOWN_OUTCOME` to the capital-transfer state machine.
+- The transfer bridge now durably records `SUBMITTED` before calling the external adapter. If the process crashes at that boundary, a later attempt sees a possibly submitted transfer and does not blindly submit again.
+- Adapter exceptions become `UNKNOWN_OUTCOME`; retries are blocked for `SUBMITTED`, `PENDING`, `UNKNOWN_OUTCOME`, and `CONFIRMED`.
+- Reconciliation must obtain positive venue verification before marking an ambiguous transfer confirmed and applying accounting. A negative/failed verification leaves the result unresolved.
+- Added regression tests simulating a timeout at submission, proving the adapter is not called twice, and proving accounting is not applied until venue verification succeeds.
+
+Remaining work: CI results for the latest commit, full caller/path audit for REAL order and transfer routes, and broader fail-safe/restart integration tests. No claim of production readiness is made.
