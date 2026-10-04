@@ -228,19 +228,26 @@ O workflow .github/workflows/android-apk.yml cria um APK debug como artefacto qu
 
 ## Prontidão PC + móvel
 
-A camada de aprendizagem PAPER agora cruza dois sinais independentes: assinatura hierárquica do Market State e outcomes agregados por símbolo/regime/ação. O consenso só acrescenta um pequeno bónus descritivo quando ambos confirmam o mesmo contexto.
-
-Para preparar um PC Windows novo:
+Para preparar um PC Windows a partir do código-fonte, abre PowerShell na raiz do repositório e executa, por esta ordem:
 
 ```powershell
-.scriptssetup_windows.ps1
-.scriptsconfigure_windows_secrets.ps1
-# abrir uma nova PowerShell
-.scriptserify_pc_install.ps1
-.scriptsinstall_windows_autostart.ps1
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\setup_windows.ps1
+.\scripts\configure_windows_secrets.ps1
 ```
 
-O cockpit Android usa a mesma API autenticada, testa a ligação, mostra readiness e permite controlar o PC à distância. A ligação remota recomendada é Tailscale; a porta 8765 não deve ser exposta por port-forward.
+Fecha essa janela de PowerShell e abre uma nova para carregar as variáveis de ambiente guardadas. Depois executa:
+
+```powershell
+.\scripts\verify_pc_install.ps1
+.\scripts\verify_public_market_data.ps1
+.\scripts\install_windows_autostart.ps1
+```
+
+A verificação de dados públicos não necessita de chaves de exchange. O token `VST_LOCAL_TOKEN` protege a API local; mantém-no privado e não o coloques no GitHub.
+
+Para quem usa o instalador de um clique, segue `docs/WINDOWS_ONE_CLICK_INSTALL.md`; os scripts acima destinam-se à instalação a partir do código-fonte e não devem ser executados dentro da pasta de instalação empacotada.
+
 
 
 ## Browser Execution
