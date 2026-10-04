@@ -1073,11 +1073,18 @@ class SovereignEngine:
         }
 
     def _exchange_for_pending_order(self, item: dict):
-        """Resolve a pending order to its recorded venue when available."""
+        """Resolve a pending order to its recorded venue without cross-venue fallback."""
         exchanges = getattr(self, "exchanges", {}) or {}
         venue_id = str(item.get("venue_id") or "").strip()
         if venue_id:
             exchange = exchanges.get(venue_id)
+            if exchange is None:
+                named_matches = [
+                    candidate for candidate in exchanges.values()
+                    if str(getattr(candidate, "name", "")).strip() == venue_id
+                ]
+                if len(named_matches) == 1:
+                    exchange = named_matches[0]
             if exchange is None:
                 self._enter_safe_state("critical_runtime_condition")
                 self.log("PENDING_ORDER_VENUE_UNAVAILABLE", {
