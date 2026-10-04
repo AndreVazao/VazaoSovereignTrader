@@ -145,3 +145,8 @@ The authorization-freshness fix preserves the pre-existing exception message (`R
 CI for commit `efbad865218f5a77b671221318a25d9eb9d01dd9` completed successfully: Python tests passed; Windows EXE build and smoke test passed; one-click installer build and smoke test passed. These results validate that commit only.
 
 A further regression assertion now explicitly checks that repeated reconciliation of a confirmed transfer leaves exactly one accounting entry per intent. Fresh CI must run for the newer head before this assertion can be called verified. The PR remains draft/unmerged; production caller wiring, safe-mode/restart scenario coverage, and complete execution-path inventory are still outstanding.
+
+
+## Safe-mode regression coverage (2026-10-04)
+
+Added tests to assert that after a fail-safe transition the execution gate blocks new submissions, a failed recovery check leaves the gate in `SAFEGUARD_PAPER`, and each individual recovery prerequisite (readiness, reconciliation, timing) is mandatory. These are state-machine unit tests; end-to-end engine recovery with real adapter outcomes, pending orders, partial fills, and process restart remains unverified. CI must validate the latest branch head.
