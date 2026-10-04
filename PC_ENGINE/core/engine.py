@@ -635,11 +635,14 @@ class SovereignEngine:
             raise RuntimeError("REAL mode requires guarded operator authorization")
         if mode == "REAL" and not bool(self.config.get("autonomous_execution", {}).get("allow_real", False)):
             raise RuntimeError("REAL mode disabled by configuration")
-        if mode == "REAL" and not autonomous:
+        if mode == "REAL":
+            # The autonomous readiness path also consumes a one-time authorization
+            # before calling set_mode. The flag is not a capability and must never
+            # bypass this freshness check for direct callers.
             guard = getattr(self, "real_mode_guard", None)
             guard_state = getattr(guard, "state", None)
             if guard_state is None or str(getattr(guard_state, "last_reason", "")) != "authorization consumed":
-                raise RuntimeError("REAL mode requires a freshly consumed human authorization")
+                raise RuntimeError("REAL mode requires a freshly consumed authorization")
         if mode == "REAL" and self.state.status == "RUNNING" and not autonomous:
             raise RuntimeError("Stop the engine before switching to REAL")
         if mode == "REAL":
