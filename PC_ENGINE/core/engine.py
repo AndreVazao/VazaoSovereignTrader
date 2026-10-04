@@ -1621,8 +1621,9 @@ class SovereignEngine:
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
-            if result.qty <= 0:
-                return
+            # Do not mutate positions from an unconfirmed partial/pending result.
+            # _reconcile_pending_orders is the single source of truth for fills.
+            return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
@@ -1717,8 +1718,9 @@ class SovereignEngine:
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
-            if result.qty <= 0:
-                return
+            # Do not mutate positions from an unconfirmed partial/pending result.
+            # _reconcile_pending_orders is the single source of truth for fills.
+            return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
