@@ -1,0 +1,84 @@
+# REAL Execution and Capital Transfer Integration Audit
+
+Date: 2026-10-04 (UTC)
+Scope: source-level audit of the current `main` snapshot; no live exchange calls, orders, transfers, credential access, or production changes were performed.
+
+## Executive summary
+
+The repository already contains substantial building blocks for PAPER research, readiness checks, guarded REAL transitions, execution routing, and capital-transfer accounting. These should be integrated and hardened rather than replaced with a second implementation.
+
+This audit is not a certification that REAL trading is safe. The current review found integration boundaries that need explicit tests and/or stricter contracts before any live use.
+
+## Verified existing components
+
+- `PC_ENGINE/core/real_readiness.py`: readiness report includes preflight, sample counts, evidence quality, walk-forward/regime/L2 validation, PAPER reconciliation, watchdog/recovery, pending orders/intents, execution test, credentials, and critical-error checks.
+- `PC_ENGINE/core/real_readiness_service.py`: collects evidence and validation reports; its class docstring explicitly says it never authorizes an order.
+- `PC_ENGINE/core/real_mode_guard.py`: temporary arm window, explicit phrase, one-time consume, and a process-local human-authorization bit. A new instance starts disarmed (covered by tests).
+- `PC_ENGINE/core/execution_gate.py`: fail-closed execution state machine with explicit human authorization, recovery eligibility, and runtime opportunity/risk/exchange/staleness checks.
+- `PC_ENGINE/core/risk.py`: final order-risk validation includes finite/positive values, position limits, total/symbol exposure, and per-trade risk cap.
+- `PC_ENGINE/core/capital_transfer_execution.py`, `capital_transfer_state.py`, `capital_transfer_reconciliation.py`: transfer intent submission, state transitions, and accounting reconciliation exist.
+- API/browser/Android/HUMAN routing abstractions exist in `PC_ENGINE/core/execution_fabric.py`; mobile pairing has a local revocable token registry.
+- Dedicated tests exist for the guard, execution gate, risk authorization, transfer execution/state/accounting, reconciliation, and mobile pairing.
+
+## Findings requiring action
+
+### A-01 — Transfer reconciliation treats missing observations as reconciled (high priority)
+
+In `CapitalTransferReconciliationGate.check(None)`, the result currently reports `reconciled=True` while also reporting `enforced=False` and `OBSERVED_DELTAS_NOT_PROVIDED`. `allows_routing(None)` therefore returns true. Any caller that interprets this boolean as a safety gate can accidentally treat the absence of reconciliation evidence as a pass.
+
+Required follow-up:
+- Make missing observations fail closed for any decision that gates routing or REAL transfer completion.
+- If a non-enforcing informational mode is needed, expose it separately and ensure it cannot be mistaken for an authorization decision.
+- Add tests proving missing, malformed, stale, partial, and mismatched observations do not authorize routing.
+
+### A-02 — REAL authorization has multiple state holders (high priority)
+
+`RealModeGuard` stores armed/human-authorized state in memory; `ExecutionGate` separately stores human authorization and execution state. The unit tests confirm the guard is process-local. Separate state holders can drift unless every transition, restart, fail-safe, and recovery path coordinates them.
+
+Required follow-up:
+- Document and test one authoritative transition path from PAPER → explicit human authorization → readiness/preflight/reconciliation → REAL_ACTIVE.
+- On restart, process uncertainty, stale readiness, or reconciliation failure, default to PAPER/blocked and require fresh evidence.
+- Prove the exact confirmation phrase is checked at the user-facing authorization boundary; do not rely on a boolean parameter alone.
+- Keep readiness eligible-for-review distinct from authorization to execute.
+
+### A-03 — Transfer bridge needs explicit UNKNOWN_OUTCOME handling (high priority)
+
+The capital transfer state list currently includes PLANNED, APPROVED, SUBMITTED, PENDING, CONFIRMED, FAILED, and CANCELLED, but no explicit UNKNOWN_OUTCOME state. The documented capital-ladder policy requires ambiguous outcomes to be reconciled before retrying.
+
+Required follow-up:
+- Add an explicit ambiguous/unknown outcome state and a recovery path that queries authoritative venue/account evidence before any resubmission.
+- Verify adapter exceptions and timeouts after submission cannot cause a duplicate transfer.
+- Preserve idempotency across process restarts and ensure only verified evidence can transition to CONFIRMED.
+
+### A-04 — Execution routing is intentionally not an authorization boundary
+
+`ExecutionFabric.execute()` verifies owner isolation and adapter availability, while its class documentation says callers must already have passed RiskEngine/RealModeGuard gates. This is a valid separation of responsibilities only if every live adapter entry point is reachable exclusively through a single audited orchestrator.
+
+Required follow-up:
+- Trace all callers and live adapter paths; assert that every REAL order requires active execution-gate approval, fresh readiness, risk approval, venue health, and reconciliation.
+- Add negative tests for direct adapter invocation and alternate API/browser/Android paths.
+- Keep UI automation subject to platform permissions and human security challenges.
+
+### A-05 — Need end-to-end fail-safe/recovery proof
+
+The component tests cover individual gates, but the source-level audit has not yet established that every failure path blocks new entries, reconciles open/pending orders, preserves logs, and resumes only after all gates recover.
+
+Required follow-up:
+- Add scenario tests for stale feed, watchdog failure, risk breach, adapter timeout, unknown order result, partial fill, process restart, and reconciliation mismatch.
+- Verify safe mode blocks new entries without blindly abandoning open positions or unresolved financial actions.
+
+## Recommended implementation order
+
+1. Fix and test A-01 first because missing evidence must not pass a financial reconciliation gate.
+2. Add UNKNOWN_OUTCOME and idempotent transfer recovery tests (A-03).
+3. Map every REAL order/transfer call path and centralize authorization checks without weakening any existing gates (A-02/A-04).
+4. Add end-to-end fail-safe and restart/recovery tests (A-05).
+5. Only after those tests pass, review the integration with the lead/lag evidence pipeline and capital ladder. Keep PAPER as default; do not enable live execution or real transfers as part of this work.
+
+## Scope and limitations
+
+This was a targeted source inspection, not a full local test run or independent security assessment. It did not validate exchange-specific live adapters, account permissions, production cloud identity, Android device enrollment end-to-end, or actual profitability. Existing code and tests are evidence of implemented components, not proof that the complete live system is ready.
+
+## CI status observed during this audit
+
+The GitHub Actions run for commit `620a358391b013282dcae387f1c01057448a378b` (Windows EXE workflow run 37181004491) completed successfully. The `build-exe` and `build-installer` jobs and their smoke tests reported success. This is build/installer evidence only, not a REAL-trading readiness signal.
