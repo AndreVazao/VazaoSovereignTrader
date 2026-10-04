@@ -14,13 +14,22 @@ class Adapter:
     def verify_transfer(self, request, external_id): return self.verified
 
 
-def _setup(tmp_path, enabled=True):
+def _setup(tmp_path, enabled=True, transfer_authorizer=lambda request: True):
     intents = CapitalTransferIntentStore(tmp_path / "intents.jsonl")
     states = CapitalTransferStateStore(tmp_path / "states.jsonl")
     accounting = CapitalTransferAccounting(tmp_path / "accounting.jsonl")
     intent = intents.create(owner_id="andre", source_venue="binance", destination_venue="bingx", asset="USDT", network="TRC20", amount_quote=10, estimated_cost_quote=.1, expected_net_edge_bps=5)
     adapter = Adapter()
-    bridge = CapitalTransferExecutionBridge(owner_id="andre", execution_fabric=ExecutionFabric(owner_id="andre"), intent_store=intents, state_store=states, accounting=accounting, adapters={ExecutionMethod.API: adapter}, enabled=enabled)
+    bridge = CapitalTransferExecutionBridge(
+        owner_id="andre",
+        execution_fabric=ExecutionFabric(owner_id="andre"),
+        intent_store=intents,
+        state_store=states,
+        accounting=accounting,
+        adapters={ExecutionMethod.API: adapter},
+        enabled=enabled,
+        transfer_authorizer=transfer_authorizer,
+    )
     return bridge, TransferExecutionRequest(intent, "binance-spot", ExecutionMethod.API), adapter, states, accounting
 
 
@@ -56,6 +65,24 @@ def test_without_real_authorization_does_not_submit_or_mutate(tmp_path):
     assert adapter.calls == 0
 
 
+def test_missing_transfer_authorizer_fails_closed_even_if_boolean_is_true(tmp_path):
+    bridge, request, adapter, states, accounting = _setup(tmp_path, enabled=True, transfer_authorizer=None)
+    assert bridge.submit(request=request, real_authorized=True).state == "PLANNED"
+    assert states.get(request.intent.intent_id, "andre") is None
+    assert accounting.snapshot(owner_id="andre")["entries"] == []
+    assert adapter.calls == 0
+
+
+def test_transfer_authorizer_exception_fails_closed(tmp_path):
+    def broken_authorizer(request):
+        raise RuntimeError("simulated authorization failure")
+    bridge, request, adapter, states, accounting = _setup(tmp_path, enabled=True, transfer_authorizer=broken_authorizer)
+    assert bridge.submit(request=request, real_authorized=True).state == "PLANNED"
+    assert states.get(request.intent.intent_id, "andre") is None
+    assert accounting.snapshot(owner_id="andre")["entries"] == []
+    assert adapter.calls == 0
+
+
 def test_owner_mismatch_never_writes_other_owner_state(tmp_path):
     bridge, request, adapter, states, _ = _setup(tmp_path, enabled=True)
     intent = request.intent.__class__(**{**request.intent.__dict__, "owner_id": "diogo"})
@@ -77,7 +104,6 @@ def test_confirmed_state_recovers_missing_accounting_after_restart(tmp_path):
     assert bridge.reconcile(request=request).state == "CONFIRMED"
     assert accounting.expected_deltas(owner_id="andre") == {"binance": {"USDT": -10.0}, "bingx": {"USDT": 10.0}}
     assert adapter.calls == 1
-
 
 
 def test_unavailable_adapter_keeps_intent_planned(tmp_path):
