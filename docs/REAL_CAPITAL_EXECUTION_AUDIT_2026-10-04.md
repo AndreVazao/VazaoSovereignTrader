@@ -186,3 +186,5 @@ Review found that restart recovery queried only the main exchange even though ea
 Mitigation on the audit branch: recovery now resolves the exact recorded exchange by configured key/name, fetches open orders per venue, and fails closed when that venue is unavailable. Order promotion requires explicit matching client order ID (when recorded), symbol, side, and finite positive amount within tolerance. Recovered pending orders retain the venue identifier so subsequent reconciliation routes back to the same adapter. Added regression tests for multi-venue selection and incomplete order identity.
 
 The latest commits require fresh CI confirmation. Venue adapters must still be contract-tested against their actual normalized payloads before REAL use.
+
+A follow-up check also aligned pending-order venue resolution with this contract: when the stored venue identifier is an adapter name rather than the configured dictionary key, the resolver may select the unique adapter with that exact name. It never falls back to a different main venue when a recorded venue cannot be resolved. A regression test covers key/name mismatch.
