@@ -126,3 +126,10 @@ The PR remains draft and unmerged. PAPER remains the default. No live trading, r
 ## Latest follow-up note (2026-10-04)
 
 `ExecutionFabric.execute()` now requires an explicit per-intent authorization callback; missing, denying, or throwing callbacks prevent adapter invocation. `CapitalTransferExecutionBridge.submit()` likewise requires a per-request transfer authorization callback in addition to the existing feature flag and legacy authorization boolean. Tests were added to prove missing/raising callbacks do not invoke adapters or mutate transfer state. This is a fail-closed seam only: production wiring to the authoritative REAL gate, risk, readiness, venue health, freshness and reconciliation policy is still unverified. Current head: `b9fb89913bfd1c0e1486fea43f35db39025c4fdc`. Fresh Python and Windows CI are running; prior green results do not validate this head. PR #337 remains draft and unmerged.
+
+
+## Authorization freshness follow-up (2026-10-04)
+
+A further review found that `SovereignEngine.set_mode("REAL", autonomous=True)` skipped the freshly-consumed authorization check. The autonomous readiness path consumes a one-time authorization before calling `set_mode`, so this skip was unnecessary and exposed a bypass to direct callers able to pass the flag. The check now applies to every REAL transition, including autonomous transitions. A regression test asserts that `autonomous=True` with an merely armed (not consumed) guard is rejected. This closes the specific freshness bypass; it does not certify the complete REAL path or production adapter wiring.
+
+Latest change commit: `03ae6d2916afd5ab45993e30bb88caf9a3d33e5a`; regression-test commit: `99713c5d4878aa9557efb6fa895bd5a4b54f3a8b`. Fresh CI is running for the regression-test commit. Keep PR #337 in draft until the current head's checks finish and the remaining end-to-end/caller audit is complete.
