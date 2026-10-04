@@ -150,3 +150,12 @@ A further regression assertion now explicitly checks that repeated reconciliatio
 ## Safe-mode regression coverage (2026-10-04)
 
 Added tests to assert that after a fail-safe transition the execution gate blocks new submissions, a failed recovery check leaves the gate in `SAFEGUARD_PAPER`, and each individual recovery prerequisite (readiness, reconciliation, timing) is mandatory. These are state-machine unit tests; end-to-end engine recovery with real adapter outcomes, pending orders, partial fills, and process restart remains unverified. CI must validate the latest branch head.
+
+
+## Partial-fill reconciliation finding — 2026-10-04
+
+A source review of `SovereignEngine._open_position()` and `_close_position()` found that a `PENDING_OR_PARTIAL` result with a positive quantity was recorded as a pending order and then continued through the normal position mutation path. The pending record initialized `known_filled_qty=0`, so later reconciliation could apply the same fill again: a buy could be added twice to exposure, or a sell could reduce a position twice. This is a critical accounting/exposure correctness issue.
+
+Mitigation on the audit branch: both methods now return immediately after persisting any pending/partial order. Position creation/reduction and financial-fill accounting are deferred to `_reconcile_pending_orders()`, which is the single source of truth for confirmed incremental fills. Added regression tests for pending partial buys and sells, asserting that positions remain unchanged until reconciliation.
+
+This change is not yet validated until CI completes for the newest branch head. It does not resolve the separate need for end-to-end testing of process crashes, order status regressions, exchange adapters, and recovery with open positions. PR #337 remains draft and unmerged; PAPER remains the default.
