@@ -133,3 +133,8 @@ The PR remains draft and unmerged. PAPER remains the default. No live trading, r
 A further review found that `SovereignEngine.set_mode("REAL", autonomous=True)` skipped the freshly-consumed authorization check. The autonomous readiness path consumes a one-time authorization before calling `set_mode`, so this skip was unnecessary and exposed a bypass to direct callers able to pass the flag. The check now applies to every REAL transition, including autonomous transitions. A regression test asserts that `autonomous=True` with an merely armed (not consumed) guard is rejected. This closes the specific freshness bypass; it does not certify the complete REAL path or production adapter wiring.
 
 Latest change commit: `03ae6d2916afd5ab45993e30bb88caf9a3d33e5a`; regression-test commit: `99713c5d4878aa9557efb6fa895bd5a4b54f3a8b`. Fresh CI is running for the regression-test commit. Keep PR #337 in draft until the current head's checks finish and the remaining end-to-end/caller audit is complete.
+
+
+### Compatibility note
+
+The authorization-freshness fix preserves the pre-existing exception message (`REAL mode requires a freshly consumed human authorization`) so existing callers/tests that inspect the message are not needlessly broken. The regression test was aligned with that stable message. Latest branch head after this compatibility adjustment: `44ad8a17283c99efb705047b8a826ea1eab40cce`; fresh CI must validate this exact head.
