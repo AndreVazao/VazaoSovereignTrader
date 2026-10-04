@@ -204,3 +204,33 @@ def test_quote_fee_is_accepted_only_with_matching_currency():
     assert engine._extract_cumulative_quote_fee(
         {"fee": {"cost": 0.01, "currency": "usdt"}}, "BTC/USDT"
     ) == 0.01
+
+
+def test_ambiguous_fee_keeps_order_pending_and_enters_safe_mode():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {
+            "id": "buy-ambiguous-fee",
+            "status": "closed",
+            "filled": 0.5,
+            "average": 100.0,
+            "fee": 0.01,
+        },
+        position,
+        {
+            "buy-ambiguous-fee": {
+                "symbol": "BTC/USDT",
+                "side": "buy",
+                "requested_qty": 0.5,
+                "known_filled_qty": 0.0,
+                "known_fill_price": 100.0,
+            }
+        },
+    )
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert "buy-ambiguous-fee" in engine.state.pending_orders
+    assert engine.state.open_positions["BTC/USDT"].qty == 0.2
+    assert not engine.ledger.trades
