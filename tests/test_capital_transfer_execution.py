@@ -47,6 +47,8 @@ def test_submit_then_reconcile_updates_accounting_once(tmp_path):
     assert bridge.reconcile(request=request).state == "CONFIRMED"
     assert bridge.reconcile(request=request).state == "CONFIRMED"
     assert accounting.expected_deltas(owner_id="andre") == {"binance": {"USDT": -10.0}, "bingx": {"USDT": 10.0}}
+    # Reconciliation may run repeatedly after restart; accounting must stay one-entry-per-intent.
+    assert len(accounting.snapshot(owner_id="andre")["entries"]) == 1
     assert adapter.calls == 1
 
 
