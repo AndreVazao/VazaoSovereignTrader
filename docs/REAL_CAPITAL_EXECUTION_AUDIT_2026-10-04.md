@@ -177,3 +177,12 @@ Review found that _extract_cumulative_quote_fee() accepted a numeric/string fee 
 Mitigation on the audit branch: missing fee data remains zero for adapters that omit fees, but any reported non-zero fee without currency evidence is rejected. Fee amounts must be finite and non-negative; positive fee entries must explicitly match the quote currency (case-normalized). Ambiguous or non-quote fees raise a reconciliation error so the caller can preserve the pending order and enter safe mode. Regression tests cover missing currency, non-quote currency, non-finite/negative amounts, and a valid quote-denominated fee.
 
 This is a conservative accounting boundary, not proof that every production adapter normalizes fees correctly. Adapter-specific payloads still require contract tests before REAL use.
+
+
+## Execution-intent recovery venue isolation — 2026-10-04
+
+Review found that restart recovery queried only the main exchange even though each persisted execution intent records its originating exchange. In a multi-venue setup this could leave a legitimate order unresolved or risk matching an order on the wrong venue.
+
+Mitigation on the audit branch: recovery now resolves the exact recorded exchange by configured key/name, fetches open orders per venue, and fails closed when that venue is unavailable. Order promotion requires explicit matching client order ID (when recorded), symbol, side, and finite positive amount within tolerance. Recovered pending orders retain the venue identifier so subsequent reconciliation routes back to the same adapter. Added regression tests for multi-venue selection and incomplete order identity.
+
+The latest commits require fresh CI confirmation. Venue adapters must still be contract-tested against their actual normalized payloads before REAL use.
