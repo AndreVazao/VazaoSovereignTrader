@@ -97,3 +97,27 @@ The following changes have now been added to this draft PR; CI is still running 
 - Added regression tests simulating a timeout at submission, proving the adapter is not called twice, and proving accounting is not applied until venue verification succeeds.
 
 Remaining work: CI results for the latest commit, full caller/path audit for REAL order and transfer routes, and broader fail-safe/restart integration tests. No claim of production readiness is made.
+
+
+## Follow-up review — execution authorization boundary (2026-10-04)
+
+### New finding and mitigation
+
+A focused review confirmed that `ExecutionFabric.execute()` previously invoked an adapter after checking only owner identity and adapter availability. The docstring delegated authorization to callers, but the fabric did not enforce that an authorization decision had actually been supplied. This left direct or incorrectly wired callers able to cross the adapter boundary.
+
+The audit branch now changes this contract:
+
+- `ExecutionFabric` accepts an explicit per-intent `execution_authorizer` callback.
+- Missing callback denies execution with `AUTHORIZATION_REQUIRED`.
+- A callback that raises denies execution with `AUTHORIZATION_ERROR`.
+- A callback that does not return the literal boolean `True` denies execution.
+- Adapter invocation happens only after that check succeeds.
+- Tests cover missing authorization and authorization exceptions, asserting the adapter receives zero calls; the positive test injects an explicit approving callback.
+
+This is a fail-closed integration seam, not proof that every production caller supplies a correct policy callback. The callback must bind to the authoritative REAL execution gate and enforce current readiness, risk, venue health, freshness, and reconciliation. The remaining caller/adaptor inventory and end-to-end proof are still required. The capital-transfer bridge also still needs a dedicated review of how its adapter boundary is wired; this change must not be interpreted as completing that separate path audit.
+
+### CI and branch status
+
+The previous commit `1d42053705807d0dc26b32feab3e28268fdcea79` passed the Python suite and Windows EXE/installer builds and smoke tests. New commits that add the execution authorization callback and tests have since been pushed to this branch, so those previous green results do **not** validate the current head. Wait for fresh CI on the latest head before considering merge.
+
+The PR remains draft and unmerged. PAPER remains the default. No live trading, real transfers, production migrations, or paid deployments were performed.
