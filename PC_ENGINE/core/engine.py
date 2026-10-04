@@ -805,23 +805,18 @@ class SovereignEngine:
         return payload
 
     def _recover_unresolved_execution_intents(self) -> None:
-        """Find only unambiguously matching open orders after a crash.
+        """Recover unresolved intents only from the exact recorded venue and identity.
 
-        This never assumes a fill. If no unique open-order match exists, the
-        intent remains unresolved and startup stays in SAFE_MODE.
+        Recovery never assumes a fill. Missing venue identity or incomplete/mismatched
+        order identity leaves the intent unresolved and keeps the engine fail-closed.
         """
         if not self.state.execution_intents or self.paper:
             return
-        exchange = self._main_exchange()
-        if exchange is None:
-            return
-        try:
-            open_orders = exchange.fetch_open_orders()
-        except Exception as exc:
-            self.log("EXECUTION_INTENT_RECOVERY_BLOCKED", {"error": str(exc)})
-            return
+        configured_exchanges = getattr(self, "exchanges", {}) or {}
+        open_orders_by_exchange: dict[int, list] = {}
+
         for intent_id, intent in list(self.state.execution_intents.items()):
-            symbol = str(intent.get("symbol", ""))
+            symbol = str(intent.get("symbol", "")).strip()
             side = str(intent.get("side", "")).lower()
             try:
                 requested = float(intent.get("requested_qty") or 0.0)
@@ -834,24 +829,61 @@ class SovereignEngine:
                     "requested_qty": intent.get("requested_qty"),
                 })
                 continue
+
+            recorded_exchange = str(intent.get("exchange") or "").strip()
+            exchange = next((
+                candidate for key, candidate in configured_exchanges.items()
+                if str(key) == recorded_exchange
+                or str(getattr(candidate, "name", "")) == recorded_exchange
+            ), None)
+            if exchange is None:
+                main_exchange = self._main_exchange()
+                if main_exchange is not None and str(getattr(main_exchange, "name", "")) == recorded_exchange:
+                    exchange = main_exchange
+            if exchange is None:
+                self._enter_safe_state("critical_runtime_condition")
+                self.log("EXECUTION_INTENT_VENUE_UNAVAILABLE", {
+                    "intent_id": intent_id, "recorded_exchange": recorded_exchange,
+                    "symbol": symbol,
+                })
+                continue
+
+            cache_key = id(exchange)
+            if cache_key not in open_orders_by_exchange:
+                try:
+                    open_orders_by_exchange[cache_key] = exchange.fetch_open_orders()
+                except Exception as exc:
+                    self._enter_safe_state("critical_runtime_condition")
+                    self.log("EXECUTION_INTENT_RECOVERY_BLOCKED", {
+                        "intent_id": intent_id, "exchange": recorded_exchange, "error": str(exc),
+                    })
+                    continue
+            open_orders = open_orders_by_exchange[cache_key]
             client_order_id = str(intent.get("client_order_id") or "").strip()
             matches = []
+
+            def identity_matches(order: dict, *, require_client_id: bool) -> bool:
+                order_id = order.get("id")
+                order_symbol = str(order.get("symbol") or "").strip()
+                order_side = str(order.get("side") or "").lower()
+                order_client_id = str(order.get("clientOrderId") or order.get("client_order_id") or "").strip()
+                amount_raw = order.get("amount") if order.get("amount") is not None else order.get("origQty")
+                try:
+                    amount = float(amount_raw)
+                except (TypeError, ValueError, OverflowError):
+                    return False
+                return bool(
+                    order_id
+                    and order_symbol == symbol
+                    and order_side == side
+                    and math.isfinite(amount)
+                    and amount > 0
+                    and abs(amount - requested) <= max(1e-12, requested * 1e-9)
+                    and (not require_client_id or (client_order_id and order_client_id == client_order_id))
+                )
+
             if client_order_id:
-                for order in open_orders:
-                    exchange_client_id = str(order.get("clientOrderId") or order.get("client_order_id") or "").strip()
-                    order_symbol = str(order.get("symbol") or "").strip()
-                    order_side = str(order.get("side") or "").lower()
-                    amount_raw = order.get("amount") if order.get("amount") is not None else order.get("origQty")
-                    try:
-                        amount = float(amount_raw) if amount_raw is not None else requested
-                    except (TypeError, ValueError, OverflowError):
-                        continue
-                    if (exchange_client_id == client_order_id and order.get("id")
-                            and (not order_symbol or order_symbol == symbol)
-                            and (not order_side or order_side == side)
-                            and math.isfinite(amount) and amount > 0
-                            and abs(amount - requested) <= max(1e-12, requested * 1e-9)):
-                        matches.append(order)
+                matches = [order for order in open_orders if identity_matches(order, require_client_id=True)]
                 if len(matches) != 1:
                     try:
                         historical = exchange.fetch_order_by_client_order_id(client_order_id, symbol)
@@ -865,76 +897,45 @@ class SovereignEngine:
                             "intent_id": intent_id, "client_order_id": client_order_id, "error": str(exc)
                         })
                         historical = None
-                    historical_matches_intent = False
                     if isinstance(historical, dict) and historical.get("id"):
-                        historical_client_id = str(historical.get("clientOrderId") or historical.get("client_order_id") or "").strip()
-                        historical_symbol = str(historical.get("symbol") or "").strip()
-                        historical_side = str(historical.get("side") or "").lower()
-                        historical_amount_raw = historical.get("amount") if historical.get("amount") is not None else historical.get("origQty")
-                        try:
-                            historical_amount = float(historical_amount_raw) if historical_amount_raw is not None else requested
-                        except (TypeError, ValueError, OverflowError):
-                            historical_amount = float("nan")
-                        historical_matches_intent = (
-                            (not historical_client_id or historical_client_id == client_order_id)
-                            and (not historical_symbol or historical_symbol == symbol)
-                            and (not historical_side or historical_side == side)
-                            and math.isfinite(historical_amount)
-                            and historical_amount > 0
-                            and abs(historical_amount - requested) <= max(1e-12, requested * 1e-9)
-                        )
-                    if historical_matches_intent:
-                        self.state.pending_orders[str(historical["id"])] = {
-                            "exchange": exchange.name,
-                            "symbol": symbol,
-                            "side": side,
-                            "requested_qty": requested,
-                            "known_filled_qty": 0.0,
-                            "known_fill_price": float(intent.get("reference_price") or 0.0),
-                            "known_fee": 0.0,
-                            "known_quote_notional": 0.0,
-                            "created_ts": float(intent.get("created_ts") or time.time()),
-                            "recovered_from_intent": intent_id,
-                            "client_order_id": client_order_id,
-                            "stop_pct": float(intent.get("stop_pct") or 0.0),
-                            "take_profit_pct": float(intent.get("take_profit_pct") or 0.0),
-                            "reason": str(intent.get("reason") or "recovered_execution_intent"),
-                        }
-                        self.state.execution_intents.pop(intent_id, None)
-                        self.log("EXECUTION_INTENT_RECOVERED_HISTORICAL_ORDER", {
-                            "intent_id": intent_id, "order_id": str(historical["id"]), "symbol": symbol, "side": side
-                        })
-                    elif isinstance(historical, dict) and historical.get("id"):
+                        if identity_matches(historical, require_client_id=True):
+                            order = historical
+                            matches = [order]
+                        else:
+                            self._enter_safe_state("critical_runtime_condition")
+                            self.log("EXECUTION_INTENT_HISTORICAL_IDENTITY_MISMATCH", {
+                                "intent_id": intent_id,
+                                "returned_order_id": str(historical.get("id")),
+                                "expected_client_order_id": client_order_id,
+                                "returned_client_order_id": str(historical.get("clientOrderId") or historical.get("client_order_id") or ""),
+                                "expected_symbol": symbol,
+                                "returned_symbol": str(historical.get("symbol") or ""),
+                                "expected_side": side,
+                                "returned_side": str(historical.get("side") or ""),
+                            })
+                            continue
+                    else:
                         self._enter_safe_state("critical_runtime_condition")
-                        self.log("EXECUTION_INTENT_HISTORICAL_IDENTITY_MISMATCH", {
-                            "intent_id": intent_id,
-                            "returned_order_id": str(historical.get("id")),
-                            "expected_client_order_id": client_order_id,
-                            "returned_client_order_id": str(historical.get("clientOrderId") or historical.get("client_order_id") or ""),
-                            "expected_symbol": symbol,
-                            "returned_symbol": str(historical.get("symbol") or ""),
-                            "expected_side": side,
-                            "returned_side": str(historical.get("side") or ""),
+                        self.log("EXECUTION_INTENT_ORDER_UNRESOLVED", {
+                            "intent_id": intent_id, "client_order_id": client_order_id,
+                            "exchange": recorded_exchange, "match_count": len(matches),
                         })
-                    continue
+                        continue
             else:
-                for order in open_orders:
-                    if str(order.get("symbol", "")) != symbol:
-                        continue
-                    if str(order.get("side", "")).lower() != side:
-                        continue
-                    amount = float(order.get("amount") or order.get("origQty") or 0.0)
-                    if amount <= 0 or abs(amount - requested) > max(1e-12, requested * 1e-9):
-                        continue
-                    if order.get("id"):
-                        matches.append(order)
+                matches = [order for order in open_orders if identity_matches(order, require_client_id=False)]
                 if len(matches) != 1:
+                    self._enter_safe_state("critical_runtime_condition")
+                    self.log("EXECUTION_INTENT_ORDER_UNRESOLVED", {
+                        "intent_id": intent_id, "exchange": recorded_exchange,
+                        "match_count": len(matches), "reason": "no_unique_identity_match",
+                    })
                     continue
+
             order = matches[0]
             order_id = str(order["id"])
-            # The recovered order has not had any fill applied locally yet.
             self.state.pending_orders[order_id] = {
                 "exchange": exchange.name,
+                "venue_id": recorded_exchange,
                 "symbol": symbol,
                 "side": side,
                 "requested_qty": requested,
@@ -950,7 +951,10 @@ class SovereignEngine:
                 "reason": str(intent.get("reason") or "recovered_execution_intent"),
             }
             self.state.execution_intents.pop(intent_id, None)
-            self.log("EXECUTION_INTENT_RECOVERED_OPEN_ORDER", {"intent_id": intent_id, "order_id": order_id, "symbol": symbol, "side": side})
+            self.log("EXECUTION_INTENT_RECOVERED_ORDER", {
+                "intent_id": intent_id, "order_id": order_id, "exchange": recorded_exchange,
+                "symbol": symbol, "side": side,
+            })
         self._persist_recovery()
 
     def _extract_cumulative_quote_fee(self, raw: dict, symbol: str) -> float:
