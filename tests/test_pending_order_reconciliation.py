@@ -148,3 +148,23 @@ def test_reconcile_open_order_keeps_safe_mode_and_pending_order():
     engine._reconcile_pending_orders()
     assert engine.state.status == "SAFE_MODE"
     assert "buy-open" in engine.state.pending_orders
+
+
+def test_terminal_order_missing_filled_quantity_is_not_discarded():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "buy-no-filled", "status": "closed", "average": 100.0},
+        position,
+        {"buy-no-filled": {
+            "symbol": "BTC/USDT",
+            "side": "buy",
+            "requested_qty": 0.5,
+            "known_filled_qty": 0.0,
+        }},
+    )
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert "buy-no-filled" in engine.state.pending_orders
+    assert engine.state.open_positions["BTC/USDT"].qty == 0.2
