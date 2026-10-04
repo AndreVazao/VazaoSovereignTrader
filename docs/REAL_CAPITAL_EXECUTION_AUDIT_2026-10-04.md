@@ -168,3 +168,12 @@ A second reconciliation boundary was found in `SovereignEngine._reconcile_pendin
 Mitigation on the audit branch: reconciliation now requires the `filled` field to be present, non-null, numeric, and finite. Missing or invalid values trigger safe mode and retain the pending order for later/manual reconciliation. Added a regression test for a terminal order response that omits `filled`.
 
 CI for the newest commits is pending verification. This check is deliberately conservative: when venue evidence is incomplete, preserve the unresolved state rather than infer zero fills.
+
+
+## Ambiguous cumulative fee denomination — 2026-10-04
+
+Review found that _extract_cumulative_quote_fee() accepted a numeric/string fee without currency metadata, clamped negative values to zero, and could allow non-finite values to flow into accounting. Fee values from a venue cannot safely be booked as quote-currency costs unless their denomination is known.
+
+Mitigation on the audit branch: missing fee data remains zero for adapters that omit fees, but any reported non-zero fee without currency evidence is rejected. Fee amounts must be finite and non-negative; positive fee entries must explicitly match the quote currency (case-normalized). Ambiguous or non-quote fees raise a reconciliation error so the caller can preserve the pending order and enter safe mode. Regression tests cover missing currency, non-quote currency, non-finite/negative amounts, and a valid quote-denominated fee.
+
+This is a conservative accounting boundary, not proof that every production adapter normalizes fees correctly. Adapter-specific payloads still require contract tests before REAL use.
