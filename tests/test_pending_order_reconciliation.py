@@ -84,7 +84,7 @@ def make_engine(order, position, pending):
 def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
     position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
     engine = make_engine(
-        {"id": "buy-1", "status": "closed", "filled": 0.5, "average": 102.0, "fee": 0.01},
+        {"id": "buy-1", "status": "closed", "filled": 0.5, "average": 102.0, "fee": {"cost": 0.01, "currency": "USDT"}},
         position,
         {"buy-1": {
             "symbol": "BTC/USDT",
@@ -106,7 +106,7 @@ def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
 def test_reconcile_pending_sell_reduces_position_by_unseen_fill_delta():
     position = Position("fake", "BTC/USDT", 100.0, 0.8, 90.0, 120.0, 1.0, entry_fee=0.08)
     engine = make_engine(
-        {"id": "sell-1", "status": "closed", "filled": 0.5, "average": 110.0, "fee": 0.02},
+        {"id": "sell-1", "status": "closed", "filled": 0.5, "average": 110.0, "fee": {"cost": 0.02, "currency": "USDT"}},
         position,
         {"sell-1": {
             "symbol": "BTC/USDT",
@@ -168,3 +168,39 @@ def test_terminal_order_missing_filled_quantity_is_not_discarded():
     assert engine.state.status == "SAFE_MODE"
     assert "buy-no-filled" in engine.state.pending_orders
     assert engine.state.open_positions["BTC/USDT"].qty == 0.2
+
+
+
+def test_nonzero_fee_without_currency_fails_closed():
+    engine = object.__new__(SovereignEngine)
+    import pytest
+
+    with pytest.raises(ValueError, match="currency is unknown"):
+        engine._extract_cumulative_quote_fee({"fee": 0.01}, "BTC/USDT")
+
+
+def test_fee_in_non_quote_currency_fails_closed():
+    engine = object.__new__(SovereignEngine)
+    import pytest
+
+    with pytest.raises(ValueError, match="not quote-denominated"):
+        engine._extract_cumulative_quote_fee(
+            {"fee": {"cost": 0.01, "currency": "BNB"}}, "BTC/USDT"
+        )
+
+
+def test_nonfinite_or_negative_fee_fails_closed():
+    engine = object.__new__(SovereignEngine)
+    import pytest
+
+    for fee in (float("nan"), float("inf"), -0.01):
+        with pytest.raises(ValueError):
+            engine._extract_cumulative_quote_fee({"fee": fee}, "BTC/USDT")
+
+
+def test_quote_fee_is_accepted_only_with_matching_currency():
+    engine = object.__new__(SovereignEngine)
+
+    assert engine._extract_cumulative_quote_fee(
+        {"fee": {"cost": 0.01, "currency": "usdt"}}, "BTC/USDT"
+    ) == 0.01
