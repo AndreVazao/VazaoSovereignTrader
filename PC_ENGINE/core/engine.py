@@ -1084,7 +1084,26 @@ class SovereignEngine:
                     })
                     continue
 
-                final_filled = float(raw.get("filled") or 0.0)
+                # A terminal status does not prove zero fills when the venue
+                # omits the cumulative filled quantity. Never discard such an
+                # order or advance accounting on an absent/invalid fill field.
+                if "filled" not in raw or raw.get("filled") is None:
+                    self._enter_safe_state("critical_runtime_condition")
+                    self.log("PENDING_ORDER_FILL_QUANTITY_MISSING", {
+                        "order_id": order_id, "symbol": symbol, "status": status,
+                    })
+                    continue
+                try:
+                    final_filled = float(raw["filled"])
+                except (TypeError, ValueError, OverflowError):
+                    final_filled = float("nan")
+                if not math.isfinite(final_filled):
+                    self._enter_safe_state("critical_runtime_condition")
+                    self.log("PENDING_ORDER_FILL_QUANTITY_INVALID", {
+                        "order_id": order_id, "symbol": symbol,
+                        "reported_filled_qty": raw.get("filled"),
+                    })
+                    continue
                 known_filled = float(item.get("known_filled_qty") or 0.0)
                 requested_qty = float(item.get("requested_qty") or 0.0)
                 side = expected_side
