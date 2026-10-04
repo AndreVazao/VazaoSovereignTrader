@@ -954,37 +954,63 @@ class SovereignEngine:
         self._persist_recovery()
 
     def _extract_cumulative_quote_fee(self, raw: dict, symbol: str) -> float:
-        """Return cumulative fee only when safely quote-denominated."""
+        """Return a finite, non-negative fee only when quote denomination is proven.
+
+        Missing fee data is treated as zero for adapters that omit fees. A reported
+        non-zero fee without currency evidence is ambiguous and must not be booked
+        as quote currency.
+        """
         fee_entries = raw.get("fees")
         if isinstance(fee_entries, list) and fee_entries:
             entries = fee_entries
         else:
             single = raw.get("fee")
             entries = [single] if isinstance(single, dict) else []
+        quote = str(symbol).split("/", 1)[1].strip().upper() if "/" in symbol else ""
         if not entries:
             single = raw.get("fee")
             if single is None:
                 return 0.0
             if isinstance(single, (int, float, str)):
-                return max(0.0, float(single))
-            return 0.0
-        quote = str(symbol).split("/", 1)[1] if "/" in symbol else ""
+                try:
+                    amount = float(single)
+                except (TypeError, ValueError, OverflowError) as exc:
+                    raise ValueError("invalid fee amount") from exc
+                if not math.isfinite(amount) or amount < 0:
+                    raise ValueError("fee amount must be finite and non-negative")
+                if amount > 0:
+                    raise ValueError("fee currency is unknown; refusing quote-denominated accounting")
+                return 0.0
+            raise ValueError("unsupported fee representation")
+
         total = 0.0
-        currencies = set()
+        saw_amount = False
         for entry in entries:
             if not isinstance(entry, dict):
-                continue
-            currency = str(entry.get("currency") or "").strip()
-            if currency:
-                currencies.add(currency)
+                raise ValueError("invalid fee entry")
             cost = entry.get("cost")
             if cost is None:
                 cost = entry.get("amount")
-            if cost is not None:
-                total += float(cost)
-        if currencies and quote and any(currency != quote for currency in currencies):
-            raise ValueError(f"non-quote fee currency for {symbol}: {sorted(currencies)}")
-        return max(0.0, total)
+            if cost is None:
+                continue
+            try:
+                amount = float(cost)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("invalid fee amount") from exc
+            if not math.isfinite(amount) or amount < 0:
+                raise ValueError("fee amount must be finite and non-negative")
+            saw_amount = True
+            currency = str(entry.get("currency") or "").strip().upper()
+            if amount > 0 and (not currency or not quote or currency != quote):
+                raise ValueError(
+                    f"fee currency is missing or not quote-denominated for {symbol}: {currency or 'UNKNOWN'}"
+                )
+            total += amount
+        if not saw_amount:
+            return 0.0
+        if not math.isfinite(total):
+            raise ValueError("cumulative fee is not finite")
+        return total
 
     def _validate_order_financial_invariant(self, raw: dict, symbol: str, filled_qty: float, average_price: float) -> dict:
         cfg = getattr(self, "config", {}).get("reconciliation", {})
