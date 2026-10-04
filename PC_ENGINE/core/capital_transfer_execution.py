@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from PC_ENGINE.core.capital_transfer_accounting import CapitalTransferAccounting
 from PC_ENGINE.core.capital_transfer_intent import CapitalTransferIntent, CapitalTransferIntentStore
@@ -23,15 +23,32 @@ class TransferVenueAdapter(Protocol):
     def verify_transfer(self, request: TransferExecutionRequest, external_id: str | None) -> bool: ...
 
 
-class CapitalTransferExecutionBridge:
-    """Crash-conscious bridge; ambiguous outcomes are never resubmitted automatically."""
+TransferAuthorizer = Callable[[TransferExecutionRequest], bool]
 
-    def __init__(self, *, owner_id: str, execution_fabric: ExecutionFabric, intent_store: CapitalTransferIntentStore,
-                 state_store: CapitalTransferStateStore, adapters: dict[ExecutionMethod, TransferVenueAdapter],
-                 accounting: CapitalTransferAccounting | None = None, enabled: bool = False):
+
+class CapitalTransferExecutionBridge:
+    """Crash-conscious bridge; ambiguous outcomes are never resubmitted automatically.
+
+    A caller-supplied boolean is not sufficient authority to submit a transfer.
+    Every new submission also requires an explicit per-request authorizer callback.
+    """
+
+    def __init__(
+        self,
+        *,
+        owner_id: str,
+        execution_fabric: ExecutionFabric,
+        intent_store: CapitalTransferIntentStore,
+        state_store: CapitalTransferStateStore,
+        adapters: dict[ExecutionMethod, TransferVenueAdapter],
+        accounting: CapitalTransferAccounting | None = None,
+        enabled: bool = False,
+        transfer_authorizer: TransferAuthorizer | None = None,
+    ):
         self.owner_id, self.execution_fabric, self.intent_store = owner_id, execution_fabric, intent_store
         self.state_store, self.adapters, self.accounting = state_store, dict(adapters), accounting
         self.enabled = enabled
+        self.transfer_authorizer = transfer_authorizer
 
     def submit(self, *, request: TransferExecutionRequest, real_authorized: bool = False) -> CapitalTransferState:
         intent = request.intent
@@ -42,6 +59,14 @@ class CapitalTransferExecutionBridge:
         if current and current.state in {"SUBMITTED", "PENDING", "UNKNOWN_OUTCOME", "CONFIRMED"}:
             return current
         if not self.enabled or not real_authorized:
+            return current or CapitalTransferState(intent.intent_id, self.owner_id, "PLANNED", intent.created_at_ms)
+        if self.transfer_authorizer is None:
+            return current or CapitalTransferState(intent.intent_id, self.owner_id, "PLANNED", intent.created_at_ms)
+        try:
+            authorized = self.transfer_authorizer(request) is True
+        except Exception:
+            authorized = False
+        if not authorized:
             return current or CapitalTransferState(intent.intent_id, self.owner_id, "PLANNED", intent.created_at_ms)
         adapter = self.adapters.get(request.method)
         if adapter is None:
@@ -148,7 +173,7 @@ class CapitalTransferExecutionBridge:
     def snapshot(*, enabled: bool) -> dict[str, Any]:
         return {
             "owner_private": True,
-            "execution_authority": "APPROVED_INTENT_ONLY",
+            "execution_authority": "REQUIRES_PER_REQUEST_TRANSFER_AUTHORIZER",
             "enabled": bool(enabled),
             "confirmation_requires_venue_verification": True,
             "ambiguous_outcomes_require_reconciliation": True,
