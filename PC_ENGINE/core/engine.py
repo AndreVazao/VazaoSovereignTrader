@@ -823,15 +823,34 @@ class SovereignEngine:
         for intent_id, intent in list(self.state.execution_intents.items()):
             symbol = str(intent.get("symbol", ""))
             side = str(intent.get("side", "")).lower()
-            requested = float(intent.get("requested_qty") or 0.0)
-            if not symbol or side not in {"buy", "sell"} or requested <= 0:
+            try:
+                requested = float(intent.get("requested_qty") or 0.0)
+            except (TypeError, ValueError, OverflowError):
+                requested = float("nan")
+            if not symbol or side not in {"buy", "sell"} or not math.isfinite(requested) or requested <= 0:
+                self._enter_safe_state("critical_runtime_condition")
+                self.log("EXECUTION_INTENT_INVALID", {
+                    "intent_id": intent_id, "symbol": symbol, "side": side,
+                    "requested_qty": intent.get("requested_qty"),
+                })
                 continue
             client_order_id = str(intent.get("client_order_id") or "").strip()
             matches = []
             if client_order_id:
                 for order in open_orders:
                     exchange_client_id = str(order.get("clientOrderId") or order.get("client_order_id") or "").strip()
-                    if exchange_client_id == client_order_id and order.get("id"):
+                    order_symbol = str(order.get("symbol") or "").strip()
+                    order_side = str(order.get("side") or "").lower()
+                    amount_raw = order.get("amount") if order.get("amount") is not None else order.get("origQty")
+                    try:
+                        amount = float(amount_raw) if amount_raw is not None else requested
+                    except (TypeError, ValueError, OverflowError):
+                        continue
+                    if (exchange_client_id == client_order_id and order.get("id")
+                            and (not order_symbol or order_symbol == symbol)
+                            and (not order_side or order_side == side)
+                            and math.isfinite(amount) and amount > 0
+                            and abs(amount - requested) <= max(1e-12, requested * 1e-9)):
                         matches.append(order)
                 if len(matches) != 1:
                     try:
@@ -846,7 +865,25 @@ class SovereignEngine:
                             "intent_id": intent_id, "client_order_id": client_order_id, "error": str(exc)
                         })
                         historical = None
-                    if historical and historical.get("id"):
+                    historical_matches_intent = False
+                    if isinstance(historical, dict) and historical.get("id"):
+                        historical_client_id = str(historical.get("clientOrderId") or historical.get("client_order_id") or "").strip()
+                        historical_symbol = str(historical.get("symbol") or "").strip()
+                        historical_side = str(historical.get("side") or "").lower()
+                        historical_amount_raw = historical.get("amount") if historical.get("amount") is not None else historical.get("origQty")
+                        try:
+                            historical_amount = float(historical_amount_raw) if historical_amount_raw is not None else requested
+                        except (TypeError, ValueError, OverflowError):
+                            historical_amount = float("nan")
+                        historical_matches_intent = (
+                            (not historical_client_id or historical_client_id == client_order_id)
+                            and (not historical_symbol or historical_symbol == symbol)
+                            and (not historical_side or historical_side == side)
+                            and math.isfinite(historical_amount)
+                            and historical_amount > 0
+                            and abs(historical_amount - requested) <= max(1e-12, requested * 1e-9)
+                        )
+                    if historical_matches_intent:
                         self.state.pending_orders[str(historical["id"])] = {
                             "exchange": exchange.name,
                             "symbol": symbol,
