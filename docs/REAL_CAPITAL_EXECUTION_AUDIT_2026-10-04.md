@@ -159,3 +159,12 @@ A source review of `SovereignEngine._open_position()` and `_close_position()` fo
 Mitigation on the audit branch: both methods now return immediately after persisting any pending/partial order. Position creation/reduction and financial-fill accounting are deferred to `_reconcile_pending_orders()`, which is the single source of truth for confirmed incremental fills. Added regression tests for pending partial buys and sells, asserting that positions remain unchanged until reconciliation.
 
 This change is not yet validated until CI completes for the newest branch head. It does not resolve the separate need for end-to-end testing of process crashes, order status regressions, exchange adapters, and recovery with open positions. PR #337 remains draft and unmerged; PAPER remains the default.
+
+
+## Missing cumulative fill evidence — 2026-10-04
+
+A second reconciliation boundary was found in `SovereignEngine._reconcile_pending_orders()`: `raw.get("filled") or 0.0` treated an absent or null cumulative fill field as zero. If a venue returned a terminal status (for example, `closed`) without the `filled` quantity, the order could be removed from pending state without proving whether any quantity had executed.
+
+Mitigation on the audit branch: reconciliation now requires the `filled` field to be present, non-null, numeric, and finite. Missing or invalid values trigger safe mode and retain the pending order for later/manual reconciliation. Added a regression test for a terminal order response that omits `filled`.
+
+CI for the newest commits is pending verification. This check is deliberately conservative: when venue evidence is incomplete, preserve the unresolved state rather than infer zero fills.
