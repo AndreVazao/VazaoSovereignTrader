@@ -904,6 +904,18 @@ class SovereignEngine:
                         self.log("EXECUTION_INTENT_RECOVERED_HISTORICAL_ORDER", {
                             "intent_id": intent_id, "order_id": str(historical["id"]), "symbol": symbol, "side": side
                         })
+                    elif isinstance(historical, dict) and historical.get("id"):
+                        self._enter_safe_state("critical_runtime_condition")
+                        self.log("EXECUTION_INTENT_HISTORICAL_IDENTITY_MISMATCH", {
+                            "intent_id": intent_id,
+                            "returned_order_id": str(historical.get("id")),
+                            "expected_client_order_id": client_order_id,
+                            "returned_client_order_id": str(historical.get("clientOrderId") or historical.get("client_order_id") or ""),
+                            "expected_symbol": symbol,
+                            "returned_symbol": str(historical.get("symbol") or ""),
+                            "expected_side": side,
+                            "returned_side": str(historical.get("side") or ""),
+                        })
                     continue
             else:
                 for order in open_orders:
