@@ -138,3 +138,10 @@ Latest change commit: `03ae6d2916afd5ab45993e30bb88caf9a3d33e5a`; regression-tes
 ### Compatibility note
 
 The authorization-freshness fix preserves the pre-existing exception message (`REAL mode requires a freshly consumed human authorization`) so existing callers/tests that inspect the message are not needlessly broken. The regression test was aligned with that stable message. Latest branch head after this compatibility adjustment: `44ad8a17283c99efb705047b8a826ea1eab40cce`; fresh CI must validate this exact head.
+
+
+## Validation update — 2026-10-04
+
+CI for commit `efbad865218f5a77b671221318a25d9eb9d01dd9` completed successfully: Python tests passed; Windows EXE build and smoke test passed; one-click installer build and smoke test passed. These results validate that commit only.
+
+A further regression assertion now explicitly checks that repeated reconciliation of a confirmed transfer leaves exactly one accounting entry per intent. Fresh CI must run for the newer head before this assertion can be called verified. The PR remains draft/unmerged; production caller wiring, safe-mode/restart scenario coverage, and complete execution-path inventory are still outstanding.
