@@ -3,7 +3,8 @@ $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repo "PC_ENGINE\.venv\Scripts\python.exe"
 $config = Join-Path $repo "PC_ENGINE\config\config.local.json"
-$report = Join-Path $repo "PC_ENGINE\data\radar\market_data_bootstrap.json"
+$dataDir = Join-Path $repo "PC_ENGINE\data\radar"
+$report = Join-Path $dataDir "market_data_bootstrap.json"
 
 if (-not (Test-Path $python)) {
     throw "Virtual environment missing. Run scripts\setup_windows.ps1 first."
@@ -13,7 +14,7 @@ if (-not (Test-Path $config)) {
 }
 
 Write-Host "Checking public market-data connectivity and OHLCV quality..." -ForegroundColor Cyan
-& $python (Join-Path $repo "PC_ENGINE\tools\run_market_data_bootstrap.py") --config $config
+& $python (Join-Path $repo "PC_ENGINE\tools\run_market_data_bootstrap.py") --config $config --data-dir $dataDir
 if ($LASTEXITCODE -ne 0) {
     throw "Public market-data bootstrap failed or is degraded. Check network/exchange availability and $report."
 }
@@ -26,6 +27,9 @@ try {
     $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
 } catch {
     throw "Bootstrap report is not valid JSON: $report"
+}
+if ($result.status -ne "READY") {
+    throw "Bootstrap report is not READY. Inspect venue/symbol errors in $report."
 }
 
 Write-Host ""
