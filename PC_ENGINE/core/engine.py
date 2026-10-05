@@ -448,7 +448,8 @@ class SovereignEngine:
                 financial["position_baseline_qty"] = dict(position_baseline)
                 financial["initialized_at"] = time.time()
             baseline = financial.get("baseline_total")
-            if baseline is None:                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote}
+            if baseline is None:
+                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote}
                 financial["baseline_total"] = baseline
                 financial["quote_flow"] = quote_flow
                 financial["initialized_at"] = time.time()
