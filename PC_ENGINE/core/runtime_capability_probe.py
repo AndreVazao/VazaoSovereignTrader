@@ -50,7 +50,7 @@ def run_read_only_probe(
             risk_level="high" if env == "REAL" else "medium",
         )
 
-    if result is None:
+    if result is None or result == {} or result == []:
         return RuntimeProbeResult(
             venue=venue,
             capability=capability,
