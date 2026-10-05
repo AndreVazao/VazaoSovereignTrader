@@ -47,8 +47,8 @@ class FakeLiveExchange(FakeExchange):
 def test_live_order_must_not_be_treated_as_filled_when_exchange_reports_open():
     rules = ExchangeRulesEngine()
     broker = PaperBroker(reject_probability=0.0)
-    manager = OrderManager(rules, broker)
-    result = manager.buy(FakeLiveExchange(), "BTC/USDT", 0.01, 50000.0, paper=False)
+    manager = OrderManager(rules, broker, execution_authorizer=lambda *args: True)
+    result = manager.buy(FakeLiveExchange(), "BTC/USDT", 0.01, 50000.0, paper=False, client_order_id="test-open-order")
 
     assert not result.ok
     assert result.status == "PENDING_OR_PARTIAL"
