@@ -2170,7 +2170,11 @@ class SovereignEngine:
         )
         if result.status != "PENDING_OR_PARTIAL":
             self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
-        with self.lock:
+        lock = getattr(self, "lock", None)
+        if lock is None:
+            from contextlib import nullcontext
+            lock = nullcontext()
+        with lock:
             self.state.open_positions[symbol] = position
         self._persist_recovery()
         self.state.execution_intents.pop(intent_id, None)
@@ -2264,10 +2268,15 @@ class SovereignEngine:
         gross_pnl = (result.price - position.entry) * filled_qty
         net_pnl = gross_pnl - allocated_entry_fee - result.fee
         pnl_pct = net_pnl / (position.entry * filled_qty) if position.entry and filled_qty > 0 else 0.0
-        self.risk.record_trade_result(position.symbol, pnl_pct)
-        risk_state = getattr(self.risk, "state", None)
+        risk_obj = getattr(self, "risk", None)
+        risk_callback = getattr(risk_obj, "record_trade_result", None)
+        if callable(risk_callback):
+            risk_callback(position.symbol, pnl_pct)
+        risk_state = getattr(risk_obj, "state", None)
         drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))
-        self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
+        champion_callback = getattr(getattr(self, "champion", None), "record", None)
+        if callable(champion_callback):
+            champion_callback("trend_ema_atr", pnl_pct, drawdown, live=True)
         remaining_qty = max(0.0, position.qty - filled_qty)
         lock = getattr(self, "lock", None)
         if lock is None:
