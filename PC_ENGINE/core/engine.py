@@ -1195,7 +1195,8 @@ class SovereignEngine:
         else:
             pending[order_id] = item2
         order_manager = getattr(self, "order_manager", None)
-        order_guards = order_manager.export_order_guards() if order_manager is not None else {}
+        export_guards = getattr(order_manager, "export_order_guards", None) if order_manager is not None else None
+        order_guards = export_guards() if callable(export_guards) else {}
         target = {"positions": {k: asdict(v) for k, v in sorted(positions.items())}, "pending_orders": dict(sorted(pending.items())), "order_guards": order_guards, "execution_intents": dict(self.state.execution_intents), "financial_account": financial, "risk_state": risk_state}
         recovery_prepare = getattr(getattr(self, "recovery", None), "prepare_reconciliation", None)
         if callable(recovery_prepare):
@@ -1436,7 +1437,9 @@ class SovereignEngine:
                         else:
                             self.ledger.trade(record)
                     recovery_obj.clear_reconciliation()
-                    committed = recovery_obj.load_state()
+                    committed = dict(journal.get("target_state") or {})
+                    if not committed:
+                        raise RuntimeError("reconciliation journal missing target_state")
                     self.state.pending_orders = dict(committed.get("pending_orders", {}))
                     self.state.financial_account = dict(committed.get("financial_account", {}))
                     self.state.open_positions = {
