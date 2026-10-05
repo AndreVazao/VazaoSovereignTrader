@@ -19,10 +19,13 @@ class CcxtExchangeClient(ExchangeClient):
         if key and private:
             params.update({"apiKey": key, "secret": private})
         self.client = exchange_cls(params)
-        try:
-            self.client.load_markets()
-        except Exception:
-            pass
+        # PAPER startup must remain deterministic and offline. Market metadata is loaded lazily
+        # by real/data paths; never block the local control server on exchange discovery.
+        if not self.paper:
+            try:
+                self.client.load_markets()
+            except Exception:
+                pass
 
     def fetch_balance(self) -> Dict[str, Any]:
         if self.paper:
