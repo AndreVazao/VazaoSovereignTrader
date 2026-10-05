@@ -1417,12 +1417,8 @@ class SovereignEngine:
                         self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
-                        self.ledger.trade({
-                            "exchange": position.exchange, "symbol": symbol, "side": "close", "qty": delta,
-                            "entry": position.entry, "exit": fill_price,
-                            "fees": allocated_entry_fee + fee_delta, "pnl_pct": pnl_pct,
-                            "reason": "reconciled_pending_order",
-                        })
+                        # Durable ledger append is part of the reconciliation journal
+                        # commit below, keyed exactly once by cumulative fill state.
                         if position.qty <= 1e-12:
                             self.state.open_positions.pop(symbol, None)
                     else:
