@@ -1420,10 +1420,8 @@ class SovereignEngine:
                         gross_pnl = (fill_price - position.entry) * delta
                         net_pnl = gross_pnl - allocated_entry_fee - fee_delta
                         pnl_pct = net_pnl / (position.entry * delta) if position.entry > 0 and delta > 0 else 0.0
-                        self.risk.record_trade_result(symbol, pnl_pct)
-                        risk_state = getattr(self.risk, "state", None)
-                        drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))
-                        self.champion.record("trend_ema_atr", pnl_pct, drawdown, live=True)
+                        # Risk/learning side effects are restored from the committed
+                        # reconciliation snapshot below; do not mutate them before commit.
                         position.qty -= delta
                         position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
                         # Durable ledger append is part of the reconciliation journal
