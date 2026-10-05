@@ -1500,35 +1500,21 @@ class SovereignEngine:
                         legacy_persist()
 
                 # Some minimal historical test doubles do not expose the durable
-                # risk-state API. Keep their observable trade callback behavior
-                # without replaying risk PnL in the production RiskEngine.
+                # risk-state API. Preserve their historical callback contract without
+                # replaying production RiskEngine PnL.
                 risk_obj = getattr(self, "risk", None)
                 if delta > 1e-12 and side == "sell" and risk_obj is not None and not hasattr(risk_obj, "snapshot_state"):
-                    # Compatibility-only risk/champion callbacks for minimal test
-                    # doubles. Production RiskEngine has snapshot_state(), so its
-                    # durable risk state is restored from the committed journal
-                    # instead of replaying PnL callbacks.
-                    callback_entries = (
-                        getattr(self, "_legacy_reconciliation_ledger", None)
-                        if not durable_prepare
-                        else journal.get("ledger_records", [])
-                    ) or []
-                    # Compatibility callbacks must describe the incremental fill,
-                    # not the full cumulative order. Prefer the pre-commit
-                    # reconstruction so minimal RiskStub fixtures receive exactly
-                    # one result even when the durable ledger is intentionally
-                    # metadata-only or unavailable.
-                    if compatibility_callback_entry is not None:
-                        callback_entries = [compatibility_callback_entry]
-                    for ledger_entry in callback_entries:
-                        record = dict(ledger_entry.get("record") or {})
+                    pnl_record = compatibility_callback_entry
+                    if pnl_record is not None:
+                        record = dict(pnl_record.get("record") or {})
+                        pnl_pct = float(record.get("pnl_pct") or 0.0)
                         risk_callback = getattr(risk_obj, "record_trade_result", None)
                         if callable(risk_callback):
-                            risk_callback(symbol, float(record.get("pnl_pct") or 0.0))
+                            risk_callback(symbol, pnl_pct)
                         champion_callback = getattr(getattr(self, "champion", None), "record", None)
                         if callable(champion_callback):
                             drawdown = float(getattr(getattr(risk_obj, "state", None), "drawdown_pct", 0.0))
-                            champion_callback("trend_ema_atr", float(record.get("pnl_pct") or 0.0), drawdown, live=True)
+                            champion_callback("trend_ema_atr", pnl_pct, drawdown, live=True)
 
                 self.log("PENDING_ORDER_RECONCILED", {
                     "order_id": order_id, "symbol": symbol, "side": side, "status": status,
@@ -2257,8 +2243,9 @@ class SovereignEngine:
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
-            if result.qty <= 0:
-                return
+            # A pending/partial sell is never applied to the live position here.
+            # Reconciliation is the single source of truth for observed fills.
+            return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
