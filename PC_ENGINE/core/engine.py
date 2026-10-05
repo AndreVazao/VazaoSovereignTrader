@@ -885,8 +885,8 @@ class SovereignEngine:
                 order_side = str(order.get("side") or "").lower()
                 order_client_id = str(order.get("clientOrderId") or order.get("client_order_id") or "").strip()
                 amount_raw = order.get("amount") if order.get("amount") is not None else order.get("origQty")
-            if amount_raw is None:
-                amount_raw = order.get("quantity")
+                if amount_raw is None:
+                    amount_raw = order.get("quantity")
                 try:
                     amount = float(amount_raw)
                 except (TypeError, ValueError, OverflowError):
