@@ -1463,8 +1463,9 @@ class SovereignEngine:
                         for restored_symbol, restored_data in dict(committed.get("positions", {})).items()
                     }
                     risk_obj = getattr(self, "risk", None)
-                    if risk_obj is not None and committed.get("risk_state"):
-                        risk_obj.restore_state(committed["risk_state"])
+                    risk_restore = getattr(risk_obj, "restore_state", None) if risk_obj is not None else None
+                    if callable(risk_restore) and committed.get("risk_state"):
+                        risk_restore(committed["risk_state"])
                 else:
                     committed = getattr(self, "_legacy_reconciliation_target", {})
                     # Legacy test doubles predate the durable journal. Preserve their
