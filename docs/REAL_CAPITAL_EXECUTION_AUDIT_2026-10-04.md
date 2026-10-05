@@ -188,3 +188,15 @@ Mitigation on the audit branch: recovery now resolves the exact recorded exchang
 The latest commits require fresh CI confirmation. Venue adapters must still be contract-tested against their actual normalized payloads before REAL use.
 
 A follow-up check also aligned pending-order venue resolution with this contract: when the stored venue identifier is an adapter name rather than the configured dictionary key, the resolver may select the unique adapter with that exact name. It never falls back to a different main venue when a recorded venue cannot be resolved. A regression test covers key/name mismatch.
+
+
+## CI failure update — 2026-10-05
+
+Fresh CI was checked for head `23b4e479a47de0d8c7aa37c8aea9d4052f4c59b6`. Windows EXE/installer passed (run `37223364514`), but Python tests failed (run `37223364512`): **836 passed, 2 failed, 44 subtests passed**.
+
+The two failures are actionable and block any claim of a green head:
+
+1. `tests/test_closed_order_recovery.py::test_execution_intent_recovers_historical_closed_order_by_exact_client_id` — the historical closed order was returned with complete identity/fill evidence, but the recovery path preserved the execution intent instead of promoting the order to pending reconciliation. This is a regression/contract mismatch in the recovery logic and must be resolved without assuming fills outside the reconciliation source of truth.
+2. `tests/test_recovery_pending_orders.py::test_recovery_execution_intent_blocks_engine_start` — the test fixture's minimal engine reached `_persist_recovery()` without a `recovery` attribute, producing `AttributeError`. The production initialization path may already provide this dependency, but the startup/recovery contract must be made explicit and the test must exercise the real fail-safe behavior rather than fail on an incomplete fixture.
+
+No rerun or merge was performed. The PR remains draft. The current head is **not green** and is not a REAL-readiness signal. Next work must fix both failures, add regression coverage, then re-run CI against the new exact head.
