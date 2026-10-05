@@ -1736,8 +1736,8 @@ class SovereignEngine:
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
-            if result.qty <= 0:
-                return
+            # Pending/partial fills remain outside live positions until reconciliation.
+            return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
@@ -2156,8 +2156,8 @@ class SovereignEngine:
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
-            if result.qty <= 0:
-                return
+            # Pending/partial fills remain outside live positions until reconciliation.
+            return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
