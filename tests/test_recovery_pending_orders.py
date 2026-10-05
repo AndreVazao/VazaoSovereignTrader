@@ -109,7 +109,7 @@ def test_reconciliation_journal_recovers_target_and_ledger_exactly_once(tmp_path
     recovery = RecoveryManager(state_path)
 
     recovery.save_positions(
-        {"BTC/USDT": type("Position", (), {})()},
+        {},
         {"order-1": {"symbol": "BTC/USDT", "side": "sell", "known_filled_qty": 0.0}},
     )
     target = {
