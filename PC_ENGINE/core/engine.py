@@ -1368,6 +1368,10 @@ class SovereignEngine:
                         })
                         continue
 
+                    reconciliation_transaction = self._prepare_reconciliation_transaction(
+                        order_id, item, side, delta, delta_notional, fee_delta, final_filled,
+                        cumulative_fee, cumulative_notional, fill_price, terminal,
+                    )
                     if side == "buy":
                         if position is None:
                             stop_pct = float(item.get("stop_pct") or 0.0)
@@ -1423,12 +1427,7 @@ class SovereignEngine:
                         })
                         continue
 
-                reconciliation_transaction = self._prepare_reconciliation_transaction(
-                    order_id, item, side, delta, delta_notional, fee_delta, final_filled,
-                    cumulative_fee, cumulative_notional, fill_price, terminal,
-                )
-                if delta > 1e-12 and side in {"buy", "sell"}:
-                    self._record_financial_fill(side, symbol, delta, delta_notional, fee_delta)
+                self._record_financial_fill(side, symbol, delta, delta_notional, fee_delta)
 
                 item["known_filled_qty"] = final_filled
                 item["known_fee"] = cumulative_fee
