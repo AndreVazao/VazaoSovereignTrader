@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -98,7 +99,20 @@ class RecoveryManager:
     def _write_json_atomic(self, path: Path, payload: dict) -> None:
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        with tmp_path.open("r+", encoding="utf-8") as handle:
+            handle.flush()
+            os.fsync(handle.fileno())
         tmp_path.replace(path)
+        try:
+            directory_fd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except OSError:
+            # Directory fsync is unavailable on some platforms; atomic rename
+            # and file fsync remain mandatory.
+            pass
 
     def prepare_reconciliation(self, target_state: dict, ledger_records: list[dict] | None = None) -> str:
         """Durably prepare a reconciliation transaction before live state mutation."""
