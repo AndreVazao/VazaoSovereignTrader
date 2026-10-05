@@ -11,7 +11,8 @@ from typing import Dict
 from PC_ENGINE.core.config import DATA_DIR
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 2
+JOURNAL_SCHEMA_VERSION = 1
 
 
 def _canonical_payload(payload: dict) -> bytes:
@@ -125,7 +126,7 @@ class RecoveryManager:
         payload["ts"] = int(time.time())
         payload["integrity_sha256"] = _digest(payload)
         transaction = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": JOURNAL_SCHEMA_VERSION,
             "transaction_id": uuid.uuid4().hex,
             "target_state": payload,
             "ledger_records": list(ledger_records or []),
@@ -145,7 +146,7 @@ class RecoveryManager:
             target = payload.get("target_state")
             if not isinstance(target, dict) or target.get("integrity_sha256") != _digest(target):
                 raise ValueError("reconciliation target integrity mismatch")
-            if int(payload.get("schema_version", 0)) > SCHEMA_VERSION:
+            if int(payload.get("schema_version", 0)) > JOURNAL_SCHEMA_VERSION:
                 raise ValueError("unsupported reconciliation journal schema")
             if not isinstance(payload.get("ledger_records", []), list):
                 raise ValueError("reconciliation ledger_records must be a list")
