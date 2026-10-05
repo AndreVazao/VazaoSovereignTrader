@@ -897,8 +897,10 @@ class SovereignEngine:
             if cache_key not in open_orders_by_exchange:
                 try:
                     open_orders_by_exchange[cache_key] = exchange.fetch_open_orders()
-                except Exception as exc:                    self._enter_safe_state("critical_runtime_condition")
-                    self.log("EXECUTION_INTENT_RECOVERY_BLOCKED", {                        "intent_id": intent_id, "exchange": recorded_exchange, "error": str(exc),
+                except Exception as exc:
+                    self._enter_safe_state("critical_runtime_condition")
+                    self.log("EXECUTION_INTENT_RECOVERY_BLOCKED", {
+                        "intent_id": intent_id, "exchange": recorded_exchange, "error": str(exc),
                     })
                     continue
             open_orders = open_orders_by_exchange[cache_key]
