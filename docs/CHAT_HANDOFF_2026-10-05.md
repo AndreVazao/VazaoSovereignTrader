@@ -8,22 +8,24 @@ Build the VazaoSovereignTrader as a multi-venue, auditable, fail-closed trading 
 - Main: main
 - Active audit branch: audit/real-capital-execution-boundaries
 - PR: #337 — draft, open, unmerged
-- Latest source head before this handoff: 23b4e479a47de0d8c7aa37c8aea9d4052f4c59b6
-- Documentation update added after CI review: a2a06b099b679460a96257ce6b9bf90d1cb20f3b
+- Latest validated source head: `7ce2ad167c1c57e9046fb123293ee9312b958db9`
+- Documentation commits may advance the branch after that source head; always use CI against the exact source commit when claiming validation.
 
-## Immediate CI truth
-For head 23b4e479a47de0d8c7aa37c8aea9d4052f4c59b6:
-- Python tests run 37223364512: FAILURE — 836 passed, 2 failed, 44 subtests passed.
-- Windows EXE run 37223364514: SUCCESS — build-exe and build-installer passed.
-- Therefore the current head is NOT green and must not be described as validated/merge-ready.
+## CI truth — exact latest source head
+- Python tests run 37293839033: **SUCCESS** — test job completed successfully.
+- Windows EXE run 37293838997: **SUCCESS** — build-exe + EXE smoke test + build-installer + installer smoke test all completed successfully.
+- This validates source commit `7ce2ad167c1c57e9046fb123293ee9312b958db9`. It does **not** certify REAL-trading readiness.
 
-Failures:
-1. tests/test_closed_order_recovery.py::test_execution_intent_recovers_historical_closed_order_by_exact_client_id
-   - Complete historical closed-order evidence was returned, but recovery kept the execution intent instead of promoting the order to pending reconciliation.
-   - Fix must preserve the rule that reconciliation, not recovery heuristics, is the source of truth for applying fills.
-2. tests/test_recovery_pending_orders.py::test_recovery_execution_intent_blocks_engine_start
-   - Minimal startup fixture reached _persist_recovery() without a recovery attribute.
-   - Make the recovery/startup contract explicit; do not weaken production fail-safe behavior merely to satisfy the fixture.
+## Durable reconciliation now validated
+- RecoveryManager has a separate durable reconciliation journal schema; runtime state schema remains stable.
+- Reconciliation prepares a complete target state before live in-memory mutation.
+- Snapshot persistence is atomic/durable; ledger records carry deterministic reconciliation keys and use idempotent commit semantics.
+- Startup recovery detects an unfinished reconciliation journal, commits the intended target, finishes ledger side effects idempotently, and clears the journal.
+- Partial fills remain pending until reconciliation; terminal orders require valid cumulative fill evidence.
+- Historical closed-order recovery never applies fills directly; it routes through pending reconciliation.
+- Venue identity remains bound to the persisted execution intent; no silent fallback to another venue.
+- Minimal compatibility fixtures are tolerated without weakening production fail-closed behavior.
+- PAPER exchange startup no longer blocks on market discovery; live market loading remains isolated to non-PAPER paths.
 
 ## Already implemented in PR #337
 - Missing/empty capital-transfer reconciliation evidence fails closed.
@@ -45,6 +47,8 @@ Failures:
 
 ## Key files
 - PC_ENGINE/core/engine.py
+- PC_ENGINE/core/recovery.py
+- PC_ENGINE/storage/ledger.py
 - PC_ENGINE/core/execution_fabric.py
 - PC_ENGINE/core/execution_gate.py
 - PC_ENGINE/core/real_mode_guard.py
@@ -64,14 +68,12 @@ Failures:
 - docs/MASTER_ROADMAP_AND_AGREEMENTS.md
 
 ## Next execution order
-1. Inspect/fix both failing recovery tests.
-2. Re-run Python tests and Windows workflow for the new exact head.
-3. Audit exactly-once semantics across crash windows: external submission, pending persistence, position mutation, ledger write, and recovery persistence.
-4. Audit _recover_unresolved_execution_intents() and _reconcile_pending_orders() together for terminal/historical orders, partial fills, cumulative fill deltas, fees, venue identity, and restart behavior.
-5. Add adapter contract tests for normalized symbol/side/amount/clientOrderId/status/filled/fee denomination and venue identity.
-6. Perform end-to-end safe-mode/recovery tests for stale feed, watchdog, risk breach, adapter timeout, unknown order result, partial fill, process restart, and reconciliation mismatch.
-7. Audit the complete REAL path: human authorization -> readiness freshness -> preflight -> reconciliation -> risk -> venue health/freshness -> execution gate -> adapter -> persistence -> recovery.
-8. Only after evidence is clean consider PR review/merge. Keep PR draft until then.
+1. Audit the complete REAL caller/path inventory: human authorization -> readiness freshness -> preflight -> reconciliation -> risk -> venue health/freshness -> execution gate -> adapter -> persistence -> recovery.
+2. Add/finish adapter contract tests for normalized symbol/side/amount/clientOrderId/status/filled/fee denomination and venue identity.
+3. Expand end-to-end safe-mode/recovery tests for stale feed, watchdog, risk breach, adapter timeout, unknown order result, partial fill, process restart, and reconciliation mismatch.
+4. Review durable reconciliation for strict filesystem durability (including journal-clear directory fsync) and single-writer/idempotency concurrency assumptions.
+5. Only after evidence is clean consider PR review/merge. Keep PR draft until then.
+6. After REAL audit is structurally clean, return to research roadmap: AMD contextual feature first, then isolated Vibe-Trading sandbox, optional prediction-market observer.
 
 ## Product architecture reminders
 - PC is the local control centre.
