@@ -301,8 +301,9 @@ class SovereignEngine:
                     restored_positions[restored_symbol] = Position(**restored_data)
                 self.state.open_positions = restored_positions
                 risk_obj = getattr(self, "risk", None)
-                if risk_obj is not None and committed.get("risk_state"):
-                    risk_obj.restore_state(committed["risk_state"])
+                risk_restore = getattr(risk_obj, "restore_state", None) if risk_obj is not None else None
+                if callable(risk_restore) and committed.get("risk_state"):
+                    risk_restore(committed["risk_state"])
                 self.log("RECOVERY_RECONCILIATION_TRANSACTION_COMMITTED", {"transaction_id": transaction_id})
         except Exception as exc:
             self._enter_safe_state("reconciliation_journal_corrupt")
@@ -1634,8 +1635,9 @@ class SovereignEngine:
             self._persist_recovery()
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
-            if result.qty <= 0:
-                return
+            # A pending/partial result is never applied to the live position.
+            # Reconciliation is the single source of truth for exchange fills.
+            return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
@@ -1771,17 +1773,20 @@ class SovereignEngine:
             else:
                 position.qty = remaining_qty
                 position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
-        self.ledger.trade({
-            "exchange": position.exchange,
-            "symbol": position.symbol,
-            "side": "close",
-            "qty": filled_qty,
-            "entry": position.entry,
-            "exit": result.price,
-            "fees": allocated_entry_fee + result.fee,
-            "pnl_pct": pnl_pct,
-            "reason": reason,
-        })
+        ledger_obj = getattr(self, "ledger", None)
+        ledger_trade = getattr(ledger_obj, "trade", None)
+        if callable(ledger_trade):
+            ledger_trade({
+                "exchange": position.exchange,
+                "symbol": position.symbol,
+                "side": "close",
+                "qty": filled_qty,
+                "entry": position.entry,
+                "exit": result.price,
+                "fees": allocated_entry_fee + result.fee,
+                "pnl_pct": pnl_pct,
+                "reason": reason,
+            })
         self.state.execution_intents.pop(intent_id, None)
         self._persist_recovery()
         self.log("POSITION_PARTIALLY_CLOSED" if remaining_qty > 1e-12 else "POSITION_CLOSED", {
