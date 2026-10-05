@@ -115,7 +115,7 @@ class SovereignEngine:
             slippage_pct=float(paper_cfg.get("slippage_pct", 0.0005)),
             reject_probability=float(paper_cfg.get("reject_probability", 0.0)),
         )
-        self.order_manager = OrderManager(self.rules, self.paper_broker)
+        self.order_manager = OrderManager(self.rules, self.paper_broker, execution_authorizer=self._authorize_order_side_effect)
         self.recovery = RecoveryManager(state_path=self.owner_context.private_path("runtime_state.json"))
         self.browser_execution_ledger = BrowserExecutionLedger(self.owner_context.private_path("execution/browser.jsonl"))
         self.watchdog = Watchdog()
@@ -166,6 +166,17 @@ class SovereignEngine:
         self.shared_intelligence_worker: SharedIntelligenceSyncWorker | None = None
         self._build_shared_intelligence_sync()
         self._load_recovery_state()
+
+    def _authorize_order_side_effect(self, exchange_name: str, symbol: str, side: str, quantity: float, client_order_id: str | None) -> bool:
+        """Final REAL adapter-boundary check; PAPER never reaches this callback."""
+        if getattr(self, "paper", True):
+            return True
+        gate = getattr(self, "execution_gate", None)
+        if gate is None or gate.state is not ExecutionState.REAL_ACTIVE:
+            return False
+        if not self.real_operational:
+            return False
+        return bool(exchange_name and symbol and side in {"buy", "sell"} and quantity > 0 and client_order_id)
 
     def _build_shared_intelligence_sync(self) -> None:
         cfg = dict(self.config.get("shared_intelligence", {}))
