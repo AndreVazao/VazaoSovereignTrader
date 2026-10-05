@@ -39,7 +39,8 @@ def test_empty_response_is_not_verified():
         probe=lambda: [],
         environment="PAPER",
     )
-    assert result.verified
+    assert not result.verified
+    assert result.evidence == "runtime_probe:empty_response"
 
 
 def test_real_write_capability_is_blocked_from_read_only_probe():
