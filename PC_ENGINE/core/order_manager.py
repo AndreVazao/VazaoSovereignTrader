@@ -6,6 +6,7 @@ from typing import Callable
 
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.paper_broker import PaperBroker
+from PC_ENGINE.exchanges.adapter_contract import AdapterContractError, normalize_order_response
 
 
 @dataclass
@@ -90,21 +91,28 @@ class OrderManager:
                     raw = exchange.market_buy(symbol, normalized_qty) if side == "buy" else exchange.market_sell(symbol, normalized_qty)
             else:
                 raw = exchange.market_buy(symbol, normalized_qty) if side == "buy" else exchange.market_sell(symbol, normalized_qty)
-            filled_raw = raw.get("filled")
-            amount_raw = raw.get("amount")
-            filled_qty = float(filled_raw if filled_raw is not None else (amount_raw if raw.get("status") == "closed" else 0.0))
-            fill_price = float(raw.get("average") or raw.get("price") or price)
-            fee = self._extract_fee(raw, symbol, fill_price)
-            status = str(raw.get("status") or "").lower()
-            if status in {"closed", "filled"}:
-                normalized_status = "FILLED"
-            elif status in {"open", "new", "partially_filled", "partially-filled"} or filled_qty < normalized_qty:
-                normalized_status = "PENDING_OR_PARTIAL"
-            else:
-                normalized_status = "UNKNOWN"
-            ok = filled_qty > 0 and normalized_status in {"FILLED", "PENDING_OR_PARTIAL"}
-            reason = "exchange fill confirmed" if normalized_status == "FILLED" else "exchange order submitted without full fill confirmation"
-            return OrderResult(ok, side, symbol, filled_qty, fill_price, fee, str(raw.get("id", "")), reason, normalized_qty, normalized_status)
+            try:
+                normalized = normalize_order_response(
+                    raw,
+                    symbol=symbol,
+                    side=side,
+                    requested_qty=normalized_qty,
+                    fallback_price=price,
+                )
+            except AdapterContractError as exc:
+                self.last_client_order.pop(fingerprint, None)
+                return OrderResult(
+                    False, side, symbol, normalized_qty, price, 0.0, "",
+                    f"adapter contract rejected response: {exc}",
+                    normalized_qty, "SAFE_MODE",
+                )
+            ok = normalized.filled_qty > 0
+            reason = "exchange fill confirmed" if normalized.status == "FILLED" else "exchange order submitted without full fill confirmation"
+            return OrderResult(
+                ok, side, symbol, normalized.filled_qty, normalized.average_price,
+                normalized.fee, normalized.venue_order_id, reason,
+                normalized_qty, normalized.status,
+            )
         except Exception as exc:
             self.last_client_order.pop(fingerprint, None)
             return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", f"exchange error: {exc}", normalized_qty, "ERROR")
