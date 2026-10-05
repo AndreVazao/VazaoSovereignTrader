@@ -41,3 +41,45 @@ def test_submission_is_fail_closed():
     gate.activate_real()
     assert not gate.can_submit(opportunity_ok=True, risk_ok=False, exchange_ok=True, stale_ok=True).allowed
     assert gate.can_submit(opportunity_ok=True, risk_ok=True, exchange_ok=True, stale_ok=True).allowed
+
+
+def test_fail_safe_blocks_new_submissions_until_recovery_gates_pass():
+    gate = ExecutionGate()
+    gate.human_authorize()
+    gate.activate_real()
+    gate.fail_safe("stale market data")
+
+    blocked = gate.can_submit(
+        opportunity_ok=True, risk_ok=True, exchange_ok=True, stale_ok=True
+    )
+    assert not blocked.allowed
+    assert blocked.state == ExecutionState.SAFEGUARD_PAPER
+
+    recovery = gate.evaluate_recovery(
+        readiness_ok=True, reconciliation_ok=False, timing_ok=True
+    )
+    assert not recovery.allowed
+    assert recovery.state == ExecutionState.SAFEGUARD_PAPER
+    assert not gate.can_submit(
+        opportunity_ok=True, risk_ok=True, exchange_ok=True, stale_ok=True
+    ).allowed
+
+
+def test_recovery_rejects_each_missing_gate():
+    for readiness_ok, reconciliation_ok, timing_ok in (
+        (False, True, True),
+        (True, False, True),
+        (True, True, False),
+    ):
+        gate = ExecutionGate()
+        gate.human_authorize()
+        gate.activate_real()
+        gate.fail_safe("injected fault")
+
+        decision = gate.evaluate_recovery(
+            readiness_ok=readiness_ok,
+            reconciliation_ok=reconciliation_ok,
+            timing_ok=timing_ok,
+        )
+        assert not decision.allowed
+        assert decision.state == ExecutionState.SAFEGUARD_PAPER

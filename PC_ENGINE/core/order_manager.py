@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.paper_broker import PaperBroker
@@ -22,10 +23,11 @@ class OrderResult:
 
 
 class OrderManager:
-    def __init__(self, rules: ExchangeRulesEngine, paper_broker: PaperBroker, duplicate_window_seconds: float = 5.0):
+    def __init__(self, rules: ExchangeRulesEngine, paper_broker: PaperBroker, duplicate_window_seconds: float = 5.0, execution_authorizer: Callable[[str, str, str, float, str | None], bool] | None = None):
         self.rules = rules
         self.paper_broker = paper_broker
         self.duplicate_window_seconds = float(duplicate_window_seconds)
+        self.execution_authorizer = execution_authorizer
         self.last_client_order: dict[str, float] = {}
 
     def restore_order_guards(self, guards: dict[str, float]) -> None:
@@ -66,6 +68,19 @@ class OrderManager:
                         normalized_qty, "REJECTED",
                     )
                 return OrderResult(True, side, symbol, normalized_qty, fill.fill_price, fill.fee, f"paper-{side}", "paper fill", normalized_qty, "FILLED")
+
+            authorizer = self.execution_authorizer
+            if authorizer is None:
+                self.last_client_order.pop(fingerprint, None)
+                return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", "real execution authorization required", normalized_qty, "REJECTED")
+            try:
+                authorized = authorizer(exchange.name, symbol, side, normalized_qty, client_order_id) is True
+            except Exception as exc:
+                self.last_client_order.pop(fingerprint, None)
+                return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", f"real execution authorization failed: {type(exc).__name__}", normalized_qty, "REJECTED")
+            if not authorized:
+                self.last_client_order.pop(fingerprint, None)
+                return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", "real execution authorization denied", normalized_qty, "REJECTED")
 
             if client_order_id:
                 method = getattr(exchange, "market_buy_with_client_order_id" if side == "buy" else "market_sell_with_client_order_id", None)

@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from PC_ENGINE.core.real_readiness import RealReadinessGate
+from PC_ENGINE.core.venue_capabilities import VenueCapabilityRegistry, build_real_execution_requirements
 from PC_ENGINE.core.paper_review import PaperReview
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
@@ -22,6 +23,8 @@ class RealReadinessService:
         readiness = config.get("real_readiness", {})
         self.data_dir = Path(readiness.get("data_dir", "PC_ENGINE/data/radar"))
         self.gate = RealReadinessGate()
+        self.require_verified_venue_capabilities = bool(readiness.get("require_verified_venue_capabilities", False))
+        self.venue_capabilities = VenueCapabilityRegistry(readiness.get("venue_capabilities", {}))
         self.min_state_samples = max(1, int(readiness.get("min_state_samples", 1000)))
         self.min_outcome_samples = max(1, int(readiness.get("min_outcome_samples", 1000)))
         self.min_eligible_outcomes = max(1, int(readiness.get("min_eligible_outcomes", 1)))
@@ -336,6 +339,24 @@ class RealReadinessService:
             )
         except (OSError, ValueError, TypeError, KeyError) as exc:
             evidence_quality_detail = f"evidence ledger invalid: {exc}"
+        target_is_real = str(target_mode or engine.mode).upper() == "REAL"
+        enabled_venues = [
+            str(name) for name, cfg in engine.config.get("exchanges", {}).items()
+            if isinstance(cfg, dict) and bool(cfg.get("enabled", False))
+        ]
+        capabilities_ok = True
+        capabilities_blockers: list[str] = []
+        if target_is_real and self.require_verified_venue_capabilities:
+            capabilities_ok, capabilities_blockers = self.venue_capabilities.verify_required(
+                enabled_venues,
+                build_real_execution_requirements(),
+                "REAL",
+            )
+        capabilities_detail = (
+            "verified REAL venue capabilities"
+            if capabilities_ok
+            else "unverified REAL venue capabilities: " + ",".join(capabilities_blockers)
+        )
         report = self.gate.evaluate(
             mode=str(target_mode or engine.mode).upper(),
             preflight_ok=preflight_ok,
@@ -359,6 +380,8 @@ class RealReadinessService:
             l2_oos_detail=f"stable_rows={l2_stable}",
             reconciliation_ok=reconciliation_ok,
             reconciliation_detail=f"unreconciled_ratio={reconciliation.get('unreconciled_ratio', 'missing')}",
+            capabilities_ok=capabilities_ok,
+            capabilities_detail=capabilities_detail,
             account_reconciliation=engine.state.account_reconciliation or None,
             min_state_samples=self.min_state_samples,
             min_outcome_samples=self.min_outcome_samples,
@@ -369,6 +392,7 @@ class RealReadinessService:
         timing_payload = self._read_json(self.websocket_timing_report_path)
         timing_fresh, timing_fresh_detail = self._validation_fresh(self.websocket_timing_report_path, now_ms)
         timing_eligible = bool(timing_payload.get("eligible_for_economic_interpretation", False))
+        payload["venue_capabilities"] = {"required": self.require_verified_venue_capabilities, "enabled_venues": enabled_venues, "requirements": list(build_real_execution_requirements()), "blockers": capabilities_blockers, "snapshot": self.venue_capabilities.snapshot()}
         payload["websocket_timing"] = {
             "required": self.require_websocket_timing_validation,
             "eligible_for_economic_interpretation": timing_eligible,
@@ -376,7 +400,6 @@ class RealReadinessService:
             "fresh_detail": timing_fresh_detail,
             "path": str(self.websocket_timing_report_path),
         }
-        target_is_real = str(target_mode or engine.mode).upper() == "REAL"
         if target_is_real and self.require_websocket_timing_validation and (not timing_eligible or not timing_fresh):
             payload["ready"] = False
             payload["status"] = "LOCKED"

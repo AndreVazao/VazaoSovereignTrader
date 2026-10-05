@@ -16,14 +16,24 @@ class CapitalTransferReconciliationGate:
             raise ValueError("owner_id is required")
 
     def check(self, observed_deltas: dict[str, dict[str, float]] | None) -> dict[str, Any]:
+        # Missing evidence must never be represented as a successful reconciliation.
         if observed_deltas is None:
             return {
                 "owner_private": True,
-                "reconciled": True,
-                "enforced": False,
+                "reconciled": False,
+                "enforced": True,
                 "reason": "OBSERVED_DELTAS_NOT_PROVIDED",
-                "mismatch_count": 0,
-                "mismatches": [],
+                "mismatch_count": 1,
+                "mismatches": [{"reason": "observed_deltas_missing"}],
+            }
+        if not isinstance(observed_deltas, dict) or not observed_deltas:
+            return {
+                "owner_private": True,
+                "reconciled": False,
+                "enforced": True,
+                "reason": "OBSERVED_DELTAS_EMPTY_OR_INVALID",
+                "mismatch_count": 1,
+                "mismatches": [{"reason": "observed_deltas_empty_or_invalid"}],
             }
         result = self.accounting.reconcile_deltas(
             owner_id=self.owner_id,

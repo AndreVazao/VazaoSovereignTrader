@@ -30,6 +30,24 @@ class Ledger:
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
+    def trade_idempotent(self, record: Dict[str, Any], idempotency_key: str) -> bool:
+        """Append a trade once for a durable reconciliation key."""
+        key = str(idempotency_key or "").strip()
+        if not key:
+            raise ValueError("idempotency_key is required")
+        if self.path.exists():
+            for line in self.path.read_text(encoding="utf-8").splitlines():
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                if str(row.get("reconciliation_key") or "").strip() == key:
+                    return False
+        row = {"ts": int(time.time()), "reconciliation_key": key, **record}
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return True
+
     def read_trades(self, limit: int | None = None) -> List[Dict[str, Any]]:
         if not self.path.exists():
             return []

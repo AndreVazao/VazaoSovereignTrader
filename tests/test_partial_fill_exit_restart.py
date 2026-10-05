@@ -183,7 +183,7 @@ def test_partial_exit_crash_restart_then_terminal_fill_is_idempotent(tmp_path, m
     assert second.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
 
 
-def test_terminal_reconcile_crash_after_marker_persist_recovers_without_duplicate_fill(tmp_path, monkeypatch):
+def test_reconciliation_crash_after_prepare_recovers_without_duplicate_fill(tmp_path, monkeypatch):
     monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
     config = _config()
 
@@ -205,36 +205,27 @@ def test_terminal_reconcile_crash_after_marker_persist_recovers_without_duplicat
     }
     monkeypatch.setattr(first, "_exchange_for_pending_order", _exchange_for(terminal_raw))
 
-    real_persist = first._persist_recovery
-    persist_calls = {"count": 0}
+    real_commit = first.recovery.commit_reconciliation
+    def crash_before_commit(transaction_id):
+        raise RuntimeError("simulated crash after durable journal prepare")
 
-    def crash_after_marker_persist():
-        persist_calls["count"] += 1
-        real_persist()
-        if persist_calls["count"] == 1:
-            raise RuntimeError("simulated process crash after durable fill marker")
-
-    monkeypatch.setattr(first, "_persist_recovery", crash_after_marker_persist)
+    monkeypatch.setattr(first.recovery, "commit_reconciliation", crash_before_commit)
     first._reconcile_pending_orders()
 
-    assert first.state.open_positions == {}
-    assert first.state.pending_orders["exit-crash-1"]["known_filled_qty"] == pytest.approx(1.0)
-    expected_pnl_pct = (103.0 - 100.0 - 0.10 - 0.102) / 100.0
-    assert first.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+    assert first.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    assert first.state.pending_orders["exit-crash-1"]["known_filled_qty"] == pytest.approx(0.0)
+    assert first.recovery.load_reconciliation_journal() is not None
 
+    monkeypatch.setattr(first.recovery, "commit_reconciliation", real_commit)
     recovered = SovereignEngine(config)
-    assert recovered.state.open_positions == {}
-    assert recovered.state.pending_orders["exit-crash-1"]["known_filled_qty"] == pytest.approx(1.0)
-    assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
-
-    monkeypatch.setattr(recovered, "_exchange_for_pending_order", _exchange_for(terminal_raw))
-    recovered._reconcile_pending_orders()
 
     assert recovered.state.open_positions == {}
     assert recovered.state.pending_orders == {}
+    expected_pnl_pct = (103.0 - 100.0 - 0.10 - 0.102) / 100.0
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
-    assert recovered.risk.state.pnl_week_pct == pytest.approx(expected_pnl_pct)
+    assert recovered.recovery.load_reconciliation_journal() is None
 
+    monkeypatch.setattr(recovered, "_exchange_for_pending_order", _exchange_for(terminal_raw))
     recovered._reconcile_pending_orders()
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
 
@@ -529,7 +520,7 @@ def test_pending_reconciliation_impossible_financial_relationships_fail_closed(
         assert engine.risk.state.pnl_today_pct == pytest.approx(0.0)
 
 
-def test_crash_after_financial_application_before_marker_persist_is_recoverable_without_duplicate_fill(tmp_path, monkeypatch):
+def test_reconciliation_crash_after_snapshot_before_ledger_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
     config = _config()
 
@@ -551,34 +542,30 @@ def test_crash_after_financial_application_before_marker_persist_is_recoverable_
     }
     monkeypatch.setattr(first, "_exchange_for_pending_order", _exchange_for(terminal_raw))
 
-    real_persist = first._persist_recovery
-    persist_calls = {"count": 0}
+    real_trade = first.ledger.trade_idempotent
+    calls = {"count": 0}
+    def crash_after_ledger(record, key):
+        calls["count"] += 1
+        result = real_trade(record, key)
+        if calls["count"] == 1:
+            raise RuntimeError("simulated crash after ledger append before journal clear")
+        return result
 
-    def crash_before_marker_persist():
-        persist_calls["count"] += 1
-        if persist_calls["count"] == 1:
-            raise RuntimeError("simulated persistence failure before applied-fill marker")
-        real_persist()
-
-    monkeypatch.setattr(first, "_persist_recovery", crash_before_marker_persist)
+    monkeypatch.setattr(first.ledger, "trade_idempotent", crash_after_ledger)
     first._reconcile_pending_orders()
 
-    assert first.state.open_positions == {}
-    assert first.state.pending_orders["exit-financial-crash-1"]["known_filled_qty"] == pytest.approx(1.0)
-    expected_pnl_pct = (103.0 - 100.0 - 0.10 - 0.102) / 100.0
-    assert first.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+    assert first.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
+    assert first.state.pending_orders["exit-financial-crash-1"]["known_filled_qty"] == pytest.approx(0.0)
+    assert first.recovery.load_reconciliation_journal() is not None
 
     recovered = SovereignEngine(config)
-    assert recovered.state.open_positions["BTC/USDT"].qty == pytest.approx(1.0)
-    assert recovered.state.pending_orders["exit-financial-crash-1"]["known_filled_qty"] == pytest.approx(0.0)
-    assert recovered.risk.state.pnl_today_pct == pytest.approx(0.0)
-
-    monkeypatch.setattr(recovered, "_exchange_for_pending_order", _exchange_for(terminal_raw))
-    recovered._reconcile_pending_orders()
-
     assert recovered.state.open_positions == {}
     assert recovered.state.pending_orders == {}
+    expected_pnl_pct = (103.0 - 100.0 - 0.10 - 0.102) / 100.0
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
+    assert recovered.recovery.load_reconciliation_journal() is None
+
+    monkeypatch.setattr(recovered, "_exchange_for_pending_order", _exchange_for(terminal_raw))
     recovered._reconcile_pending_orders()
     assert recovered.risk.state.pnl_today_pct == pytest.approx(expected_pnl_pct)
 

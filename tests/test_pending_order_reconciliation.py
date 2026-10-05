@@ -84,7 +84,7 @@ def make_engine(order, position, pending):
 def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
     position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
     engine = make_engine(
-        {"id": "buy-1", "status": "closed", "filled": 0.5, "average": 102.0, "fee": 0.01},
+        {"id": "buy-1", "status": "closed", "filled": 0.5, "average": 102.0, "fee": {"cost": 0.01, "currency": "USDT"}},
         position,
         {"buy-1": {
             "symbol": "BTC/USDT",
@@ -106,7 +106,7 @@ def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
 def test_reconcile_pending_sell_reduces_position_by_unseen_fill_delta():
     position = Position("fake", "BTC/USDT", 100.0, 0.8, 90.0, 120.0, 1.0, entry_fee=0.08)
     engine = make_engine(
-        {"id": "sell-1", "status": "closed", "filled": 0.5, "average": 110.0, "fee": 0.02},
+        {"id": "sell-1", "status": "closed", "filled": 0.5, "average": 110.0, "fee": {"cost": 0.02, "currency": "USDT"}},
         position,
         {"sell-1": {
             "symbol": "BTC/USDT",
@@ -148,3 +148,107 @@ def test_reconcile_open_order_keeps_safe_mode_and_pending_order():
     engine._reconcile_pending_orders()
     assert engine.state.status == "SAFE_MODE"
     assert "buy-open" in engine.state.pending_orders
+
+
+def test_terminal_order_missing_filled_quantity_is_not_discarded():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "buy-no-filled", "status": "closed", "average": 100.0},
+        position,
+        {"buy-no-filled": {
+            "symbol": "BTC/USDT",
+            "side": "buy",
+            "requested_qty": 0.5,
+            "known_filled_qty": 0.0,
+        }},
+    )
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert "buy-no-filled" in engine.state.pending_orders
+    assert engine.state.open_positions["BTC/USDT"].qty == 0.2
+
+
+
+def test_nonzero_fee_without_currency_fails_closed():
+    engine = object.__new__(SovereignEngine)
+    import pytest
+
+    with pytest.raises(ValueError, match="currency is unknown"):
+        engine._extract_cumulative_quote_fee({"fee": 0.01}, "BTC/USDT")
+
+
+def test_fee_in_non_quote_currency_fails_closed():
+    engine = object.__new__(SovereignEngine)
+    import pytest
+
+    with pytest.raises(ValueError, match="not quote-denominated"):
+        engine._extract_cumulative_quote_fee(
+            {"fee": {"cost": 0.01, "currency": "BNB"}}, "BTC/USDT"
+        )
+
+
+def test_nonfinite_or_negative_fee_fails_closed():
+    engine = object.__new__(SovereignEngine)
+    import pytest
+
+    for fee in (float("nan"), float("inf"), -0.01):
+        with pytest.raises(ValueError):
+            engine._extract_cumulative_quote_fee({"fee": fee}, "BTC/USDT")
+
+
+def test_quote_fee_is_accepted_only_with_matching_currency():
+    engine = object.__new__(SovereignEngine)
+
+    assert engine._extract_cumulative_quote_fee(
+        {"fee": {"cost": 0.01, "currency": "usdt"}}, "BTC/USDT"
+    ) == 0.01
+
+
+def test_ambiguous_fee_keeps_order_pending_and_enters_safe_mode():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {
+            "id": "buy-ambiguous-fee",
+            "status": "closed",
+            "filled": 0.5,
+            "average": 100.0,
+            "fee": 0.01,
+        },
+        position,
+        {
+            "buy-ambiguous-fee": {
+                "symbol": "BTC/USDT",
+                "side": "buy",
+                "requested_qty": 0.5,
+                "known_filled_qty": 0.0,
+                "known_fill_price": 100.0,
+            }
+        },
+    )
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert "buy-ambiguous-fee" in engine.state.pending_orders
+    assert engine.state.open_positions["BTC/USDT"].qty == 0.2
+    assert not engine.ledger.trades
+
+
+def test_pending_order_resolves_recorded_exchange_name_when_mapping_key_differs():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "unused", "status": "open", "filled": 0.0},
+        position,
+        {},
+    )
+    recorded_exchange = engine.exchanges["fake"]
+    engine.exchanges = {"configured-venue-key": recorded_exchange}
+
+    resolved = SovereignEngine._exchange_for_pending_order(
+        engine,
+        {"venue_id": "fake", "symbol": "BTC/USDT", "external_id": "order-1"},
+    )
+
+    assert resolved is recorded_exchange
