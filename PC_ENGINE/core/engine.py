@@ -1347,9 +1347,11 @@ class SovereignEngine:
                     **financial,
                     "checked_at": time.time(),
                 }
-                if not financial.get("ok", False):                    self._enter_safe_state("critical_runtime_condition")
+                if not financial.get("ok", False):
+                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_FINANCIAL_INVARIANT_BLOCKED", self.state.financial_reconciliation)
-                    continue                cumulative_notional = float(
+                    continue
+                cumulative_notional = float(
                     financial.get("reported_cost")
                     if financial.get("reported_cost") is not None
                     else financial.get("expected_cost") or 0.0
