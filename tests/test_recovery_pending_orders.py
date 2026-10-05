@@ -99,3 +99,76 @@ def test_unresolved_intent_does_not_guess_when_open_orders_are_ambiguous():
 
     assert "intent-1" in engine.state.execution_intents
     assert engine.state.pending_orders == {}
+
+
+def test_reconciliation_journal_recovers_target_and_ledger_exactly_once(tmp_path):
+    from PC_ENGINE.storage.ledger import Ledger
+
+    state_path = tmp_path / "runtime_state.json"
+    ledger = Ledger(tmp_path / "trades.jsonl", tmp_path / "events.jsonl")
+    recovery = RecoveryManager(state_path)
+
+    recovery.save_positions(
+        {"BTC/USDT": type("Position", (), {})()},
+        {"order-1": {"symbol": "BTC/USDT", "side": "sell", "known_filled_qty": 0.0}},
+    )
+    target = {
+        "positions": {},
+        "pending_orders": {},
+        "order_guards": {},
+        "execution_intents": {},
+        "financial_account": {"quote_flow": 9.9},
+        "risk_state": {"pnl_today_pct": 0.01},
+    }
+    tx = recovery.prepare_reconciliation(
+        target,
+        [{"reconciliation_key": "pending:order-1:0.1:0.01:10", "record": {"symbol": "BTC/USDT", "side": "close", "qty": 0.1}}],
+    )
+
+    # Simulate a crash after journal preparation: a fresh process can commit
+    # the durable target and then safely replay the ledger side effect.
+    fresh = RecoveryManager(state_path)
+    journal = fresh.load_reconciliation_journal()
+    assert journal["transaction_id"] == tx
+    fresh.commit_reconciliation(tx)
+    entry = journal["ledger_records"][0]
+    assert ledger.trade_idempotent(entry["record"], entry["reconciliation_key"]) is True
+    assert ledger.trade_idempotent(entry["record"], entry["reconciliation_key"]) is False
+    fresh.clear_reconciliation()
+
+    assert fresh.load_pending_orders() == {}
+    assert fresh.load_financial_account()["quote_flow"] == 9.9
+    assert len(ledger.read_trades()) == 1
+    assert not fresh.reconciliation_journal_path.exists()
+
+
+def test_reconciliation_journal_survives_state_commit_until_ledger_completion(tmp_path):
+    from PC_ENGINE.storage.ledger import Ledger
+
+    state_path = tmp_path / "runtime_state.json"
+    ledger = Ledger(tmp_path / "trades.jsonl", tmp_path / "events.jsonl")
+    recovery = RecoveryManager(state_path)
+    recovery.save_positions({}, {}, {}, {}, {}, {})
+
+    target = {
+        "positions": {},
+        "pending_orders": {},
+        "order_guards": {},
+        "execution_intents": {},
+        "financial_account": {"quote_flow": 5.0},
+        "risk_state": {},
+    }
+    tx = recovery.prepare_reconciliation(
+        target,
+        [{"reconciliation_key": "tx-2", "record": {"symbol": "ETH/USDT", "side": "close", "qty": 0.2}}],
+    )
+    recovery.commit_reconciliation(tx)
+
+    # The journal deliberately remains after the state commit, modelling a
+    # crash before journal cleanup. Recovery must be able to finish safely.
+    journal = recovery.load_reconciliation_journal()
+    entry = journal["ledger_records"][0]
+    assert ledger.trade_idempotent(entry["record"], entry["reconciliation_key"]) is True
+    assert ledger.trade_idempotent(entry["record"], entry["reconciliation_key"]) is False
+    recovery.clear_reconciliation()
+    assert recovery.load_financial_account()["quote_flow"] == 5.0
