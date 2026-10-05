@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.paper_broker import PaperBroker
