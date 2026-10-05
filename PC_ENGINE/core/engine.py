@@ -281,6 +281,22 @@ class SovereignEngine:
         return exchange.fetch_ohlcv(symbol, timeframe, limit)
 
     def _load_recovery_state(self) -> None:
+        try:
+            journal = self.recovery.load_reconciliation_journal()
+            if journal is not None:
+                transaction_id = str(journal.get("transaction_id") or "")
+                if not transaction_id:
+                    raise RuntimeError("reconciliation journal missing transaction_id")
+                self.recovery.commit_reconciliation(transaction_id)
+                for ledger_entry in journal.get("ledger_records", []):
+                    self.ledger.trade_idempotent(dict(ledger_entry.get("record") or {}), str(ledger_entry.get("reconciliation_key") or ""))
+                self.recovery.clear_reconciliation()
+                self.log("RECOVERY_RECONCILIATION_TRANSACTION_COMMITTED", {"transaction_id": transaction_id})
+        except Exception as exc:
+            self._enter_safe_state("reconciliation_journal_corrupt")
+            self.state.operational["reconciliation_journal_error"] = f"{type(exc).__name__}: {exc}"
+            self.log("RECOVERY_RECONCILIATION_JOURNAL_BLOCK_START", {"error": str(exc)})
+            return
         raw_state = self.recovery.load_state()
         recovery_error = str(raw_state.get("recovery_error", "")).strip()
         if recovery_error:
@@ -1114,6 +1130,60 @@ class SovereignEngine:
             return exchange
         return self._main_exchange()
 
+    def _prepare_reconciliation_transaction(self, order_id: str, item: dict, side: str, delta: float, delta_notional: float, fee_delta: float, final_filled: float, cumulative_fee: float, cumulative_notional: float, fill_price: float, terminal: bool) -> str:
+        import copy
+        positions = copy.deepcopy(self.state.open_positions)
+        pending = copy.deepcopy(self.state.pending_orders)
+        financial = copy.deepcopy(self.state.financial_account)
+        risk_state = self.risk.snapshot_state()
+        ledger_records = []
+        symbol = str(item["symbol"])
+        position = positions.get(symbol)
+        if delta > 1e-12 and side == "buy":
+            if position is None:
+                stop_pct = float(item.get("stop_pct") or 0.0)
+                tp_pct = float(item.get("take_profit_pct") or 0.0)
+                if stop_pct <= 0 or tp_pct <= 0:
+                    raise ValueError("missing_buy_recovery_risk_metadata")
+                positions[symbol] = Position(str(item.get("exchange") or ""), symbol, fill_price, delta, fill_price * (1 - stop_pct), fill_price * (1 + tp_pct), float(item.get("created_ts") or time.time()), fee_delta)
+            else:
+                old_qty = position.qty
+                position.qty = old_qty + delta
+                position.entry = ((position.entry * old_qty) + (fill_price * delta)) / position.qty
+                position.entry_fee += fee_delta
+        elif delta > 1e-12 and side == "sell":
+            if position is None or delta > position.qty + 1e-12:
+                raise ValueError("reconciliation_sell_exceeds_position")
+            allocated = position.entry_fee * (delta / position.qty) if position.qty > 0 else 0.0
+            pnl_pct = ((fill_price - position.entry) * delta - allocated - fee_delta) / (position.entry * delta) if position.entry > 0 and delta > 0 else 0.0
+            risk_state["pnl_today_pct"] = float(risk_state.get("pnl_today_pct", 0.0)) + pnl_pct
+            risk_state["pnl_week_pct"] = float(risk_state.get("pnl_week_pct", 0.0)) + pnl_pct
+            streaks = dict(risk_state.get("symbol_loss_streak", {}))
+            streaks[symbol] = int(streaks.get(symbol, 0)) + 1 if pnl_pct < 0 else 0
+            risk_state["symbol_loss_streak"] = streaks
+            entry = position.entry
+            position.qty -= delta
+            position.entry_fee = max(0.0, position.entry_fee - allocated)
+            if position.qty <= 1e-12:
+                positions.pop(symbol, None)
+            ledger_records.append({"reconciliation_key": f"pending:{order_id}:{final_filled:.12g}:{cumulative_fee:.12g}:{cumulative_notional:.12g}", "record": {"exchange": str(item.get("exchange") or ""), "symbol": symbol, "side": "close", "qty": delta, "entry": entry, "exit": fill_price, "fees": allocated + fee_delta, "pnl_pct": pnl_pct, "reason": "reconciled_pending_order"}})
+        elif delta > 1e-12:
+            raise ValueError("unknown_reconciliation_side")
+        if delta > 1e-12 and not getattr(self, "paper", False):
+            base = symbol.split("/", 1)[0]
+            flows = financial.setdefault("base_flow", {})
+            flows[base] = float(flows.get(base, 0.0) or 0.0) + (delta if side == "buy" else -delta)
+            quote = float(financial.get("quote_flow", 0.0) or 0.0)
+            financial["quote_flow"] = quote - delta_notional - fee_delta if side == "buy" else quote + delta_notional - fee_delta
+        item2 = dict(item)
+        item2.update({"known_filled_qty": final_filled, "known_fee": cumulative_fee, "known_quote_notional": cumulative_notional, "known_fill_price": fill_price})
+        if terminal:
+            pending.pop(order_id, None)
+        else:
+            pending[order_id] = item2
+        target = {"positions": {k: asdict(v) for k, v in sorted(positions.items())}, "pending_orders": dict(sorted(pending.items())), "order_guards": self.order_manager.export_order_guards(), "execution_intents": dict(self.state.execution_intents), "financial_account": financial, "risk_state": risk_state}
+        return self.recovery.prepare_reconciliation(target, ledger_records)
+
     def _reconcile_pending_orders(self) -> None:
         """Reconcile exchange fills idempotently, including partial fills and fees."""
         for order_id, item in list(self.state.pending_orders.items()):
@@ -1279,6 +1349,12 @@ class SovereignEngine:
                     continue
                 delta_notional = max(0.0, cumulative_notional - known_notional)
 
+                reconciliation_transaction = self._prepare_reconciliation_transaction(
+                    order_id, item, side, delta, delta_notional, fee_delta, final_filled,
+                    cumulative_fee, cumulative_notional,
+                    float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0),
+                    terminal,
+                )
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
                     if delta_notional <= 0:
@@ -1371,13 +1447,13 @@ class SovereignEngine:
                     "final_filled_qty": final_filled, "delta_qty": delta,
                     "known_fee": known_fee, "final_fee": cumulative_fee, "fee_delta": fee_delta,
                 })
-                # Persist the applied-fill marker atomically with the position.
-                # If the process dies here, the next run sees the same pending
-                # order but delta=0 and cannot apply the fill/fee a second time.
-                self._persist_recovery()
-                if terminal:
-                    self.state.pending_orders.pop(order_id, None)
-                    self._persist_recovery()
+                journal = self.recovery.load_reconciliation_journal()
+                if journal is None or str(journal.get("transaction_id")) != str(reconciliation_transaction):
+                    raise RuntimeError("reconciliation journal disappeared before commit")
+                self.recovery.commit_reconciliation(reconciliation_transaction)
+                for ledger_entry in journal.get("ledger_records", []):
+                    self.ledger.trade_idempotent(dict(ledger_entry.get("record") or {}), str(ledger_entry.get("reconciliation_key") or ""))
+                self.recovery.clear_reconciliation()
             except Exception as exc:
                 self._enter_safe_state("critical_runtime_condition")
                 self.log("PENDING_ORDER_RECONCILE_ERROR", {
