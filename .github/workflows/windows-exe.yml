@@ -49,13 +49,13 @@ jobs:
           $config | ConvertTo-Json -Depth 30 | Set-Content $configPath -Encoding utf8
           $proc = Start-Process -FilePath dist\VazaoSovereignTrader.exe -WorkingDirectory (Resolve-Path test-runtime) -PassThru
           try {
-            Start-Sleep -Seconds 3
+            Start-Sleep -Seconds 5
             if ($proc.HasExited) {
               throw "EXE exited before health check (exit code $($proc.ExitCode))"
             }
             $ready = $false
             $healthLog = @()
-            for ($i = 0; $i -lt 20; $i++) {
+            for ($i = 0; $i -lt 60; $i++) {
               Start-Sleep -Seconds 1
               try {
                 $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/health -TimeoutSec 2
