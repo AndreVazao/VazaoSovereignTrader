@@ -447,8 +447,8 @@ class SovereignEngine:
                 position_baseline = {asset: float(qty) for asset, qty in expected_by_asset.items()}
                 financial["position_baseline_qty"] = dict(position_baseline)
                 financial["initialized_at"] = time.time()
-            baseline = financial.get("baseline_total")            if baseline is None:
-                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote}
+            baseline = financial.get("baseline_total")
+            if baseline is None:                baseline = {str(k): float(v or 0.0) for k, v in total.items() if str(k) == quote}
                 financial["baseline_total"] = baseline
                 financial["quote_flow"] = quote_flow
                 financial["initialized_at"] = time.time()
@@ -897,8 +897,7 @@ class SovereignEngine:
                 try:
                     open_orders_by_exchange[cache_key] = exchange.fetch_open_orders()
                 except Exception as exc:                    self._enter_safe_state("critical_runtime_condition")
-                    self.log("EXECUTION_INTENT_RECOVERY_BLOCKED", {
-                        "intent_id": intent_id, "exchange": recorded_exchange, "error": str(exc),
+                    self.log("EXECUTION_INTENT_RECOVERY_BLOCKED", {                        "intent_id": intent_id, "exchange": recorded_exchange, "error": str(exc),
                     })
                     continue
             open_orders = open_orders_by_exchange[cache_key]
@@ -1347,8 +1346,7 @@ class SovereignEngine:
                 }
                 if not financial.get("ok", False):                    self._enter_safe_state("critical_runtime_condition")
                     self.log("PENDING_ORDER_FINANCIAL_INVARIANT_BLOCKED", self.state.financial_reconciliation)
-                    continue
-                cumulative_notional = float(
+                    continue                cumulative_notional = float(
                     financial.get("reported_cost")
                     if financial.get("reported_cost") is not None
                     else financial.get("expected_cost") or 0.0
@@ -1798,9 +1796,3 @@ class SovereignEngine:
             return False
         quality_cfg = self.config.get("market_data_quality", {})
         max_age_seconds = max(0.1, float(quality_cfg.get("max_ticker_age_seconds", 10.0)))
-        current_ms = float(now_ms if now_ms is not None else time.time() * 1000.0)
-        age_ms = current_ms - timestamp
-        return -2000.0 <= age_ms <= max_age_seconds * 1000.0
-
-    def _open_position(
-        self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float,
