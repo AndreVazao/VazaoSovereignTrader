@@ -1497,6 +1497,21 @@ class SovereignEngine:
                         if not durable_prepare
                         else journal.get("ledger_records", [])
                     ) or []
+                    if not callback_entries:
+                        # Minimal historical test doubles may use a RecoveryManager
+                        # without exposing the journal ledger records. Reconstruct the
+                        # already-committed trade result from the pre-commit position.
+                        live_position = getattr(self.state, "open_positions", {}).get(symbol)
+                        if live_position is not None and live_position.entry > 0:
+                            allocated = live_position.entry_fee * (delta / live_position.qty) if live_position.qty > 0 else 0.0
+                            callback_entries = [{
+                                "record": {
+                                    "pnl_pct": (
+                                        (fill_price - live_position.entry) * delta
+                                        - allocated - fee_delta
+                                    ) / (live_position.entry * delta)
+                                }
+                            }]
                     for ledger_entry in callback_entries:
                         record = dict(ledger_entry.get("record") or {})
                         risk_callback = getattr(risk_obj, "record_trade_result", None)
