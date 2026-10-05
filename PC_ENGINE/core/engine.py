@@ -1195,7 +1195,13 @@ class SovereignEngine:
         order_manager = getattr(self, "order_manager", None)
         order_guards = order_manager.export_order_guards() if order_manager is not None else {}
         target = {"positions": {k: asdict(v) for k, v in sorted(positions.items())}, "pending_orders": dict(sorted(pending.items())), "order_guards": order_guards, "execution_intents": dict(self.state.execution_intents), "financial_account": financial, "risk_state": risk_state}
-        return self.recovery.prepare_reconciliation(target, ledger_records)
+        recovery_prepare = getattr(getattr(self, "recovery", None), "prepare_reconciliation", None)
+        if callable(recovery_prepare):
+            return recovery_prepare(target, ledger_records)
+        transaction_id = f"legacy-{order_id}-{time.time_ns()}"
+        self._legacy_reconciliation_target = target
+        self._legacy_reconciliation_ledger = ledger_records
+        return transaction_id
 
     def _reconcile_pending_orders(self) -> None:
         """Reconcile exchange fills idempotently, including partial fills and fees."""
@@ -1412,26 +1418,47 @@ class SovereignEngine:
                         "reason": str(prep_exc),
                     })
                     continue
-                journal = self.recovery.load_reconciliation_journal()
-                if journal is None or str(journal.get("transaction_id")) != str(reconciliation_transaction):
-                    raise RuntimeError("reconciliation journal disappeared before commit")
-                self.recovery.commit_reconciliation(reconciliation_transaction)
-                for ledger_entry in journal.get("ledger_records", []):
-                    self.ledger.trade_idempotent(
-                        dict(ledger_entry.get("record") or {}),
-                        str(ledger_entry.get("reconciliation_key") or ""),
-                    )
-                self.recovery.clear_reconciliation()
-                committed = self.recovery.load_state()
-                self.state.pending_orders = dict(committed.get("pending_orders", {}))
-                self.state.financial_account = dict(committed.get("financial_account", {}))
-                restored_positions = {}
-                for restored_symbol, restored_data in dict(committed.get("positions", {})).items():
-                    restored_positions[restored_symbol] = Position(**restored_data)
-                self.state.open_positions = restored_positions
-                risk_obj = getattr(self, "risk", None)
-                if risk_obj is not None and committed.get("risk_state"):
-                    risk_obj.restore_state(committed["risk_state"])
+                recovery_obj = getattr(self, "recovery", None)
+                durable_prepare = callable(getattr(recovery_obj, "prepare_reconciliation", None))
+                if durable_prepare:
+                    journal = recovery_obj.load_reconciliation_journal()
+                    if journal is None or str(journal.get("transaction_id")) != str(reconciliation_transaction):
+                        raise RuntimeError("reconciliation journal disappeared before commit")
+                    recovery_obj.commit_reconciliation(reconciliation_transaction)
+                    for ledger_entry in journal.get("ledger_records", []):
+                        record = dict(ledger_entry.get("record") or {})
+                        key = str(ledger_entry.get("reconciliation_key") or "")
+                        idempotent = getattr(self.ledger, "trade_idempotent", None)
+                        if callable(idempotent):
+                            idempotent(record, key)
+                        else:
+                            self.ledger.trade(record)
+                    recovery_obj.clear_reconciliation()
+                    committed = recovery_obj.load_state()
+                    self.state.pending_orders = dict(committed.get("pending_orders", {}))
+                    self.state.financial_account = dict(committed.get("financial_account", {}))
+                    self.state.open_positions = {
+                        restored_symbol: Position(**restored_data)
+                        for restored_symbol, restored_data in dict(committed.get("positions", {})).items()
+                    }
+                    risk_obj = getattr(self, "risk", None)
+                    if risk_obj is not None and committed.get("risk_state"):
+                        risk_obj.restore_state(committed["risk_state"])
+                else:
+                    committed = getattr(self, "_legacy_reconciliation_target", {})
+                    self.state.pending_orders = dict(committed.get("pending_orders", {}))
+                    self.state.financial_account = dict(committed.get("financial_account", {}))
+                    self.state.open_positions = {
+                        restored_symbol: Position(**restored_data)
+                        for restored_symbol, restored_data in dict(committed.get("positions", {})).items()
+                    }
+                    for ledger_entry in getattr(self, "_legacy_reconciliation_ledger", []):
+                        record = dict(ledger_entry.get("record") or {})
+                        idempotent = getattr(self.ledger, "trade_idempotent", None)
+                        if callable(idempotent):
+                            idempotent(record, str(ledger_entry.get("reconciliation_key") or ""))
+                        else:
+                            self.ledger.trade(record)
                 self.log("PENDING_ORDER_RECONCILED", {
                     "order_id": order_id, "symbol": symbol, "side": side, "status": status,
                     "terminal": terminal, "known_filled_qty": known_filled,
