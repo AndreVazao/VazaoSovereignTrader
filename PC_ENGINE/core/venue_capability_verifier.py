@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
+
+from PC_ENGINE.core.venue_capabilities import CAPABILITY_NAMES
 
 
 @dataclass(frozen=True)
@@ -32,7 +34,8 @@ def verify_adapter_contract(adapter: Any, environment: str) -> list[CapabilityVe
     venue = str(getattr(adapter, "name", adapter.__class__.__name__))
     results: list[CapabilityVerification] = []
 
-    for capability, methods in _METHOD_CAPABILITIES.items():
+    for capability in CAPABILITY_NAMES:
+        methods = _METHOD_CAPABILITIES.get(capability, ())
         present = [name for name in methods if callable(getattr(adapter, name, None))]
         declared = len(present) == len(methods)
 
