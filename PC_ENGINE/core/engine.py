@@ -1513,12 +1513,13 @@ class SovereignEngine:
                         if not durable_prepare
                         else journal.get("ledger_records", [])
                     ) or []
-                    if not callback_entries:
-                        # Minimal historical test doubles may use a RecoveryManager
-                        # without exposing the journal ledger records. Reconstruct the
-                        # already-committed trade result from the pre-commit position.
-                        if compatibility_callback_entry is not None:
-                            callback_entries = [compatibility_callback_entry]
+                    # Compatibility callbacks must describe the incremental fill,
+                    # not the full cumulative order. Prefer the pre-commit
+                    # reconstruction so minimal RiskStub fixtures receive exactly
+                    # one result even when the durable ledger is intentionally
+                    # metadata-only or unavailable.
+                    if compatibility_callback_entry is not None:
+                        callback_entries = [compatibility_callback_entry]
                     for ledger_entry in callback_entries:
                         record = dict(ledger_entry.get("record") or {})
                         risk_callback = getattr(risk_obj, "record_trade_result", None)
