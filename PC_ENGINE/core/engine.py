@@ -291,6 +291,16 @@ class SovereignEngine:
                 for ledger_entry in journal.get("ledger_records", []):
                     self.ledger.trade_idempotent(dict(ledger_entry.get("record") or {}), str(ledger_entry.get("reconciliation_key") or ""))
                 self.recovery.clear_reconciliation()
+                committed = self.recovery.load_state()
+                self.state.pending_orders = dict(committed.get("pending_orders", {}))
+                self.state.financial_account = dict(committed.get("financial_account", {}))
+                restored_positions = {}
+                for restored_symbol, restored_data in dict(committed.get("positions", {})).items():
+                    restored_positions[restored_symbol] = Position(**restored_data)
+                self.state.open_positions = restored_positions
+                risk_obj = getattr(self, "risk", None)
+                if risk_obj is not None and committed.get("risk_state"):
+                    risk_obj.restore_state(committed["risk_state"])
                 self.log("RECOVERY_RECONCILIATION_TRANSACTION_COMMITTED", {"transaction_id": transaction_id})
         except Exception as exc:
             self._enter_safe_state("reconciliation_journal_corrupt")
