@@ -560,6 +560,23 @@ class SovereignEngine:
             self.log("PREFLIGHT_BLOCKED_START", preflight)
             return
         if self.state.execution_intents:
+            # Recovery is a mandatory dependency for unresolved execution intents.
+            # A partially constructed engine/test fixture must fail closed explicitly,
+            # rather than reaching _persist_recovery() and failing with AttributeError.
+            recovery = getattr(self, "recovery", None)
+            if not isinstance(recovery, RecoveryManager):
+                self._enter_safe_state("recovery_dependency_missing", {
+                    "dependency": "RecoveryManager",
+                    "intent_ids": list(self.state.execution_intents),
+                })
+                self.log("RECOVERY_DEPENDENCY_MISSING_BLOCK_START", {
+                    "dependency": "RecoveryManager",
+                    "intent_ids": list(self.state.execution_intents),
+                })
+                self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS_BLOCK_START", {
+                    "intent_ids": list(self.state.execution_intents),
+                })
+                return
             self._recover_unresolved_execution_intents()
             if self.state.execution_intents:
                 self._enter_safe_state("unresolved_execution_intents", {"intent_ids": list(self.state.execution_intents)})
@@ -868,6 +885,8 @@ class SovereignEngine:
                 order_side = str(order.get("side") or "").lower()
                 order_client_id = str(order.get("clientOrderId") or order.get("client_order_id") or "").strip()
                 amount_raw = order.get("amount") if order.get("amount") is not None else order.get("origQty")
+            if amount_raw is None:
+                amount_raw = order.get("quantity")
                 try:
                     amount = float(amount_raw)
                 except (TypeError, ValueError, OverflowError):
