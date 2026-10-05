@@ -1776,7 +1776,7 @@ class SovereignEngine:
             "pnl_pct": pnl_pct,
             "fee": allocated_entry_fee + result.fee,
             "reason": reason,
-        }
+        })
 
     def _maybe_autonomous_real_promotion(self) -> bool:
         """Promote PAPER to REAL only when the full readiness contract is satisfied."""
