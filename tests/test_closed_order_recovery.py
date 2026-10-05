@@ -18,6 +18,7 @@ def test_execution_intent_recovers_historical_closed_order_by_exact_client_id():
                 "symbol": "BTC/USDT",
                 "side": "buy",
                 "status": "closed",
+                "amount": 0.1,
                 "filled": 0.1,
                 "average": 100.0,
                 "clientOrderId": client_order_id,
