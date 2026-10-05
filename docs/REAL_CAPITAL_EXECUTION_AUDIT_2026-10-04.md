@@ -200,3 +200,18 @@ The two failures are actionable and block any claim of a green head:
 2. `tests/test_recovery_pending_orders.py::test_recovery_execution_intent_blocks_engine_start` — the test fixture's minimal engine reached `_persist_recovery()` without a `recovery` attribute, producing `AttributeError`. The production initialization path may already provide this dependency, but the startup/recovery contract must be made explicit and the test must exercise the real fail-safe behavior rather than fail on an incomplete fixture.
 
 No rerun or merge was performed. The PR remains draft. The current head is **not green** and is not a REAL-readiness signal. Next work must fix both failures, add regression coverage, then re-run CI against the new exact head.
+
+
+## Durable reconciliation transaction — validation update (2026-10-05)
+
+The audit branch now includes a durable reconciliation journal and idempotent ledger path for pending-order fill application. The intended transaction is: prepare durable target state -> atomically persist the snapshot -> idempotently commit ledger records -> clear the journal. Recovery resolves an interrupted transaction before normal engine operation. Crash-boundary tests cover failure after journal preparation and failure after snapshot/ledger boundary, with repeated reconciliation verified not to duplicate accounting.
+
+Compatibility guards were also hardened for minimal test doubles without weakening the production contract. PAPER startup was kept offline from exchange market discovery, and the Windows EXE smoke path now validates startup/health successfully.
+
+Exact latest head validated: `7ce2ad167c1c57e9046fb123293ee9312b958db9`.
+
+CI evidence for that exact commit:
+- Python tests: workflow run `37293839033` — SUCCESS; test job completed successfully.
+- Windows EXE: workflow run `37293838997` — SUCCESS; build-exe, EXE smoke test, installer build, and installer smoke test all completed successfully.
+
+This is strong regression/build evidence, not a declaration of REAL-trading readiness. PR #337 remains draft/unmerged; PAPER remains the default. Remaining audit work is the complete REAL caller/path inventory, adapter contract validation, and end-to-end fail-safe/restart evidence.
