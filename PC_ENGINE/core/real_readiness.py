@@ -38,6 +38,8 @@ class RealReadinessGate:
         credentials_detail: str = "not required", l2_oos_ok: bool = True,
         l2_oos_detail: str = "not required", reconciliation_ok: bool = True,
         reconciliation_detail: str = "not required",
+        capabilities_ok: bool = True,
+        capabilities_detail: str = "not required",
         account_reconciliation: dict | None = None,
         pending_orders_ok: bool = True,
         execution_intents_ok: bool = True,
@@ -91,6 +93,7 @@ class RealReadinessGate:
             GateCheck("REGIME_VALIDATION", bool(regime_validation_ok), "regime validation"),
             GateCheck("L2_OOS", bool(l2_oos_ok), l2_oos_detail),
             GateCheck("PAPER_RECONCILIATION", bool(reconciliation_ok), reconciliation_detail),
+            GateCheck("VENUE_CAPABILITIES", bool(capabilities_ok), capabilities_detail),
             GateCheck("WATCHDOG", bool(watchdog_ok), "watchdog healthy"),
             GateCheck("RECOVERY", bool(recovery_ok), "recovery healthy"),
             GateCheck(
