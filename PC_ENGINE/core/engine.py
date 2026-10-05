@@ -1192,7 +1192,9 @@ class SovereignEngine:
             pending.pop(order_id, None)
         else:
             pending[order_id] = item2
-        target = {"positions": {k: asdict(v) for k, v in sorted(positions.items())}, "pending_orders": dict(sorted(pending.items())), "order_guards": self.order_manager.export_order_guards(), "execution_intents": dict(self.state.execution_intents), "financial_account": financial, "risk_state": risk_state}
+        order_manager = getattr(self, "order_manager", None)
+        order_guards = order_manager.export_order_guards() if order_manager is not None else {}
+        target = {"positions": {k: asdict(v) for k, v in sorted(positions.items())}, "pending_orders": dict(sorted(pending.items())), "order_guards": order_guards, "execution_intents": dict(self.state.execution_intents), "financial_account": financial, "risk_state": risk_state}
         return self.recovery.prepare_reconciliation(target, ledger_records)
 
     def _reconcile_pending_orders(self) -> None:
@@ -1378,84 +1380,64 @@ class SovereignEngine:
                         })
                         continue
 
+                if delta > 1e-12 and delta_notional <= 0:
+                    self._enter_safe_state("critical_runtime_condition")
+                    self.log("PENDING_ORDER_MISSING_INCREMENTAL_NOTIONAL", {
+                        "order_id": order_id, "symbol": symbol, "delta_qty": delta
+                    })
+                    continue
+                if delta > 1e-12:
+                    fill_price = delta_notional / delta
+                    if fill_price <= 0:
+                        self._enter_safe_state("critical_runtime_condition")
+                        self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                            "order_id": order_id, "symbol": symbol, "side": side,
+                            "known_filled_qty": known_filled, "final_filled_qty": final_filled,
+                            "delta_qty": delta,
+                        })
+                        continue
+                else:
+                    fill_price = float(
+                        raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0
+                    )
+                try:
                     reconciliation_transaction = self._prepare_reconciliation_transaction(
                         order_id, item, side, delta, delta_notional, fee_delta, final_filled,
                         cumulative_fee, cumulative_notional, fill_price, terminal,
                     )
-                    if side == "buy":
-                        if position is None:
-                            stop_pct = float(item.get("stop_pct") or 0.0)
-                            tp_pct = float(item.get("take_profit_pct") or 0.0)
-                            if stop_pct <= 0 or tp_pct <= 0:
-                                self._enter_safe_state("critical_runtime_condition")
-                                self.log("MANUAL_RECONCILIATION_REQUIRED", {
-                                    "order_id": order_id, "symbol": symbol,
-                                    "reason": "missing_buy_recovery_risk_metadata",
-                                })
-                                continue
-                            position = Position(
-                                exchange=exchange.name, symbol=symbol, entry=fill_price, qty=delta,
-                                stop=fill_price * (1 - stop_pct), take_profit=fill_price * (1 + tp_pct),
-                                opened_ts=float(item.get("created_ts") or time.time()), entry_fee=fee_delta,
-                            )
-                            self.state.open_positions[symbol] = position
-                            self.log("POSITION_RECOVERED_FROM_PENDING_BUY", {
-                                "order_id": order_id, "symbol": symbol, "qty": delta, "entry": fill_price,
-                            })
-                        else:
-                            old_qty = position.qty
-                            old_cost = position.entry * old_qty
-                            position.qty = old_qty + delta
-                            position.entry = (old_cost + fill_price * delta) / position.qty
-                            position.entry_fee += fee_delta
-                    elif side == "sell":
-                        if position is None or delta > position.qty + 1e-12:
-                            self._enter_safe_state("critical_runtime_condition")
-                            self.log("MANUAL_RECONCILIATION_REQUIRED", {
-                                "order_id": order_id, "symbol": symbol, "side": side,
-                                "position_qty": position.qty if position else 0.0, "delta_qty": delta,
-                            })
-                            continue
-                        allocated_entry_fee = position.entry_fee * (delta / position.qty) if position.qty > 0 else 0.0
-                        gross_pnl = (fill_price - position.entry) * delta
-                        net_pnl = gross_pnl - allocated_entry_fee - fee_delta
-                        pnl_pct = net_pnl / (position.entry * delta) if position.entry > 0 and delta > 0 else 0.0
-                        # Risk/learning side effects are restored from the committed
-                        # reconciliation snapshot below; do not mutate them before commit.
-                        position.qty -= delta
-                        position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
-                        # Durable ledger append is part of the reconciliation journal
-                        # commit below, keyed exactly once by cumulative fill state.
-                        if position.qty <= 1e-12:
-                            self.state.open_positions.pop(symbol, None)
-                    else:
-                        self._enter_safe_state("critical_runtime_condition")
-                        self.log("MANUAL_RECONCILIATION_REQUIRED", {
-                            "order_id": order_id, "symbol": symbol, "reason": "unknown_side"
-                        })
-                        continue
-
-                self._record_financial_fill(side, symbol, delta, delta_notional, fee_delta)
-
-                item["known_filled_qty"] = final_filled
-                item["known_fee"] = cumulative_fee
-                item["known_quote_notional"] = cumulative_notional
-                item["known_fill_price"] = float(
-                    raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0
-                )
+                except ValueError as prep_exc:
+                    self._enter_safe_state("critical_runtime_condition")
+                    self.log("MANUAL_RECONCILIATION_REQUIRED", {
+                        "order_id": order_id, "symbol": symbol, "side": side,
+                        "reason": str(prep_exc),
+                    })
+                    continue
+                journal = self.recovery.load_reconciliation_journal()
+                if journal is None or str(journal.get("transaction_id")) != str(reconciliation_transaction):
+                    raise RuntimeError("reconciliation journal disappeared before commit")
+                self.recovery.commit_reconciliation(reconciliation_transaction)
+                for ledger_entry in journal.get("ledger_records", []):
+                    self.ledger.trade_idempotent(
+                        dict(ledger_entry.get("record") or {}),
+                        str(ledger_entry.get("reconciliation_key") or ""),
+                    )
+                self.recovery.clear_reconciliation()
+                committed = self.recovery.load_state()
+                self.state.pending_orders = dict(committed.get("pending_orders", {}))
+                self.state.financial_account = dict(committed.get("financial_account", {}))
+                restored_positions = {}
+                for restored_symbol, restored_data in dict(committed.get("positions", {})).items():
+                    restored_positions[restored_symbol] = Position(**restored_data)
+                self.state.open_positions = restored_positions
+                risk_obj = getattr(self, "risk", None)
+                if risk_obj is not None and committed.get("risk_state"):
+                    risk_obj.restore_state(committed["risk_state"])
                 self.log("PENDING_ORDER_RECONCILED", {
                     "order_id": order_id, "symbol": symbol, "side": side, "status": status,
                     "terminal": terminal, "known_filled_qty": known_filled,
                     "final_filled_qty": final_filled, "delta_qty": delta,
                     "known_fee": known_fee, "final_fee": cumulative_fee, "fee_delta": fee_delta,
                 })
-                journal = self.recovery.load_reconciliation_journal()
-                if journal is None or str(journal.get("transaction_id")) != str(reconciliation_transaction):
-                    raise RuntimeError("reconciliation journal disappeared before commit")
-                self.recovery.commit_reconciliation(reconciliation_transaction)
-                for ledger_entry in journal.get("ledger_records", []):
-                    self.ledger.trade_idempotent(dict(ledger_entry.get("record") or {}), str(ledger_entry.get("reconciliation_key") or ""))
-                self.recovery.clear_reconciliation()
             except Exception as exc:
                 self._enter_safe_state("critical_runtime_condition")
                 self.log("PENDING_ORDER_RECONCILE_ERROR", {
