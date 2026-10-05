@@ -291,7 +291,9 @@ class SovereignEngine:
                 for ledger_entry in journal.get("ledger_records", []):
                     self.ledger.trade_idempotent(dict(ledger_entry.get("record") or {}), str(ledger_entry.get("reconciliation_key") or ""))
                 self.recovery.clear_reconciliation()
-                committed = self.recovery.load_state()
+                committed = dict(journal.get("target_state") or {})
+                if not committed:
+                    raise RuntimeError("reconciliation journal missing target_state")
                 self.state.pending_orders = dict(committed.get("pending_orders", {}))
                 self.state.financial_account = dict(committed.get("financial_account", {}))
                 restored_positions = {}
@@ -1433,18 +1435,14 @@ class SovereignEngine:
                             idempotent(record, key)
                         else:
                             self.ledger.trade(record)
-                    # The journal target is the exact snapshot just committed.
-                    # Reloading the file here can select a fallback snapshot on some
-                    # filesystems; using the validated target makes the in-process
-                    # state transition deterministic.
-                    committed = dict(journal.get("target_state") or {})
+                    recovery_obj.clear_reconciliation()
+                    committed = recovery_obj.load_state()
                     self.state.pending_orders = dict(committed.get("pending_orders", {}))
                     self.state.financial_account = dict(committed.get("financial_account", {}))
                     self.state.open_positions = {
                         restored_symbol: Position(**restored_data)
                         for restored_symbol, restored_data in dict(committed.get("positions", {})).items()
                     }
-                    recovery_obj.clear_reconciliation()
                     risk_obj = getattr(self, "risk", None)
                     if risk_obj is not None and committed.get("risk_state"):
                         risk_obj.restore_state(committed["risk_state"])
@@ -2002,3 +2000,22 @@ class SovereignEngine:
                 position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
         self.ledger.trade({
             "exchange": position.exchange,
+            "symbol": position.symbol,
+            "side": "close",
+            "qty": filled_qty,
+            "entry": position.entry,
+            "exit": result.price,
+            "fees": allocated_entry_fee + result.fee,
+            "pnl_pct": pnl_pct,
+            "reason": reason,
+        })
+        self.state.execution_intents.pop(intent_id, None)
+        self._persist_recovery()
+        self.log("POSITION_PARTIALLY_CLOSED" if remaining_qty > 1e-12 else "POSITION_CLOSED", {
+            "symbol": position.symbol,
+            "filled_qty": filled_qty,
+            "remaining_qty": remaining_qty,
+            "pnl_pct": pnl_pct,
+            "fee": allocated_entry_fee + result.fee,
+            "reason": reason,
+        })
