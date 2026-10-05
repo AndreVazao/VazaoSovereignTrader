@@ -1854,3 +1854,206 @@ class SovereignEngine:
                 activation = gate.activate_real()
                 if not activation.allowed:
                     self._enter_real_fail_safe("execution_gate_activation_blocked", {"reason": activation.reason})
+                    return False
+            elif gate.state != ExecutionState.REAL_ACTIVE:
+                activation = gate.activate_real()
+                if not activation.allowed:
+                    self._enter_real_fail_safe("execution_gate_activation_blocked", {"reason": activation.reason})
+                    return False
+            self.real_operational = True
+            self.state.status = "RUNNING"
+            self.log("AUTONOMOUS_REAL_PROMOTION", {
+                "reason": "real readiness gate satisfied",
+                "readiness_status": report.get("status"),
+            })
+            return True
+        except Exception as exc:
+            self._enter_real_fail_safe("autonomous_real_promotion_error", {"error": str(exc)})
+            return False
+
+    def cycle(self) -> None:
+        exchange = self._main_exchange()
+        if exchange is None:
+            self.log("NO_EXCHANGE_ENABLED")
+            return
+        self.refresh_human_bridge_operational_state()
+        if not self._watchdog_gate(exchange):
+            return
+        if self.mode == "PAPER" and self._maybe_autonomous_real_promotion():
+            exchange = self._main_exchange()
+            if exchange is None:
+                return
+        if self.mode == "REAL" and not self.state.account_reconciliation.get("ok", False):
+            self.reconcile_account_state()
+            return
+        if self.state.pending_orders:
+            self._reconcile_pending_orders()
+            return
+        if self.state.status == "SAFE_MODE":
+            self.log("SAFE_MODE_HOLD")
+            return
+
+        balance = exchange.free_quote_balance(self.config["engine"].get("quote_currency", "USDT"))
+        if self.paper:
+            balance = float(self.config["engine"].get("paper_starting_balance", 1000.0)) + self.risk.state.pnl_today_pct * float(self.config["engine"].get("paper_starting_balance", 1000.0))
+        equity = balance
+        with self.lock:
+            self.state.balance = balance
+            self.state.equity = equity
+        self.risk.update_equity(equity, float(self.config["engine"].get("paper_starting_balance", equity)))
+        global_ok, global_reason = self.risk.can_trade_global()
+        if not global_ok:
+            self.state.status = "KILL_SWITCH"
+            self._persist_recovery()
+            self.log("GLOBAL_RISK_BLOCK", {"reason": global_reason})
+            return
+
+        scores: dict[str, float] = {}
+        signals = {}
+        spreads: dict[str, float] = {}
+        for symbol in self.config["symbols"]:
+            try:
+                ohlcv = exchange.fetch_ohlcv(symbol, self.config["strategy"]["timeframe"], int(self.config["strategy"]["candles_limit"]))
+                spread_pct = exchange.fetch_spread_pct(symbol)
+                spreads[symbol] = spread_pct
+                signal = self.strategy.analyse(symbol, ohlcv, spread_pct)
+                signals[symbol] = signal
+                market_state = self.market_states.snapshot(symbol) if self.paper else None
+                opportunity = self.opportunity.score(
+                    symbol=symbol,
+                    strategy_score=float(signal.strength),
+                    action=str(signal.action),
+                    spread_pct=spread_pct,
+                    state=market_state,
+                )
+                score = opportunity.score * 100.0
+                opinion = self.ai_council.analyse(symbol, {"signal": asdict(signal), "opportunity": asdict(opportunity)})
+                max_delta = float(self.config.get("ai_council", {}).get("max_score_delta", 5.0))
+                score += max(-max_delta, min(max_delta, opinion.score_delta))
+                scores[symbol] = max(0.0, score)
+                self.state.regimes[symbol] = signal.regime
+                with self.lock:
+                    self.state.opportunities[symbol] = asdict(opportunity)
+                if self.config.get("research", {}).get("enabled", True) and self.config.get("research", {}).get("autonomous_observation_enabled", True):
+                    self.autonomous_research.observe(symbol, score, signal.regime, asdict(opportunity))
+            except Exception as exc:
+                scores[symbol] = 0.0
+                self.log("SYMBOL_ANALYSIS_ERROR", {"symbol": symbol, "error": str(exc)})
+
+        allocations = self.allocator.allocate(equity, scores)
+        with self.lock:
+            self.state.asset_scores = scores
+            self.state.drawdown_pct = self.risk.state.drawdown_pct
+            self.state.pnl_today_pct = self.risk.state.pnl_today_pct
+            self.state.pnl_week_pct = self.risk.state.pnl_week_pct
+            self.state.champion_challenger = self.champion.recommendation()
+            self.state.research = {
+                **self.autonomous_research.snapshot(),
+                "inbox": self.research_worker.inbox.snapshot(),
+            }
+
+        for symbol, position in list(self.state.open_positions.items()):
+            ticker = exchange.fetch_ticker(symbol)
+            price = float(ticker.get("last") or 0.0)
+            signal = signals.get(symbol)
+            if price <= position.stop or price >= position.take_profit or (signal and signal.action == "SELL"):
+                self._close_position(
+                    exchange, position, price, signal.reason if signal else "stop/take-profit",
+                    spreads.get(symbol, 0.0),
+                    execution_checks={
+                        "opportunity_ok": bool(price <= position.stop or price >= position.take_profit or (signal and signal.action == "SELL")),
+                        "risk_ok": True,
+                        "exchange_ok": bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
+                        "stale_ok": self._ticker_is_fresh(ticker),
+                    },
+                )
+
+        for decision in allocations:
+            symbol = decision.symbol
+            if symbol in self.state.open_positions:
+                continue
+            if len(self.state.open_positions) >= int(self.config["engine"]["max_open_positions"]):
+                break
+            symbol_ok, reason = self.risk.can_trade_symbol(symbol)
+            if not symbol_ok:
+                self.log("SYMBOL_RISK_BLOCK", {"symbol": symbol, "reason": reason})
+                continue
+            signal = signals.get(symbol)
+            if not signal or signal.action != "BUY":
+                continue
+            ticker = exchange.fetch_ticker(symbol)
+            price = float(ticker.get("last") or 0.0)
+            if price <= 0:
+                continue
+            adaptive_cfg = self.config.get("risk", {}).get("adaptive_risk", {})
+            adaptive_horizon = int(adaptive_cfg.get("horizon_seconds", 5))
+            adaptive_notional, adaptive_snapshot = self.risk.adaptive_position_notional_auto(
+                equity, signal.stop_pct, strategy_id="trend_ema_atr", symbol=symbol,
+                regime=signal.regime, horizon_seconds=adaptive_horizon, action="BUY",
+            )
+            notional = min(decision.max_notional, adaptive_notional)
+            self.log("ADAPTIVE_RISK_SIZING", {
+                "symbol": symbol, "context_key": adaptive_snapshot.context_key,
+                "multiplier": adaptive_snapshot.multiplier, "eligible": adaptive_snapshot.eligible,
+                "reason": adaptive_snapshot.reason, "samples": adaptive_snapshot.samples,
+            })
+            if notional <= 0:
+                continue
+
+            current_exposure = sum(
+                float(position.entry) * float(position.qty)
+                for position in self.state.open_positions.values()
+            )
+            current_symbol_exposure = 0.0
+            if symbol in self.state.open_positions:
+                current_position = self.state.open_positions[symbol]
+                current_symbol_exposure = float(current_position.entry) * float(current_position.qty)
+
+            symbol_limit = self.config.get("symbol_limits", {}).get(symbol, {})
+            risk_decision = self.risk.authorize_order(
+                symbol,
+                "BUY",
+                equity=equity,
+                proposed_notional=notional,
+                current_exposure=current_exposure,
+                current_symbol_exposure=current_symbol_exposure,
+                current_open_positions=len(self.state.open_positions),
+                max_open_positions=int(self.config["engine"]["max_open_positions"]),
+                max_total_exposure_pct=float(self.config["engine"]["max_total_exposure_pct"]),
+                max_symbol_exposure_pct=float(symbol_limit.get("max_exposure_pct", 0.10)),
+                stop_pct=float(signal.stop_pct),
+            )
+            if not risk_decision.authorized:
+                self.log("FINAL_RISK_BLOCK", {
+                    "symbol": symbol,
+                    "reason": risk_decision.reason,
+                    "notional": notional,
+                })
+                continue
+
+            qty = notional / price
+            self._open_position(
+                exchange, symbol, price, qty, signal.stop_pct, signal.take_profit_pct,
+                signal.reason, spreads.get(symbol, 0.0),
+                execution_checks={
+                    "opportunity_ok": signal.action == "BUY" and scores.get(symbol, 0.0) > 0,
+                    "risk_ok": bool(risk_decision.authorized),
+                    "exchange_ok": bool(exchange) and str(getattr(exchange, "name", "")) in self.exchanges,
+                    "stale_ok": self._ticker_is_fresh(ticker),
+                },
+            )
+
+        self._persist_recovery()
+
+    def _ticker_is_fresh(self, ticker: dict, *, now_ms: float | None = None) -> bool:
+        """Fail closed when an execution ticker has no trustworthy timestamp."""
+        if not isinstance(ticker, dict):
+            return False
+        try:
+            timestamp = float(ticker.get("timestamp") or 0.0)
+        except (TypeError, ValueError):
+            return False
+        if timestamp <= 0:
+            return False
+        quality_cfg = self.config.get("market_data_quality", {})
+        max_age_seconds = max(0.1, float(quality_cfg.get("max_ticker_age_seconds", 10.0)))
