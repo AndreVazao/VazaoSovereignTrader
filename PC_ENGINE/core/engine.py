@@ -1135,7 +1135,8 @@ class SovereignEngine:
         positions = copy.deepcopy(self.state.open_positions)
         pending = copy.deepcopy(self.state.pending_orders)
         financial = copy.deepcopy(self.state.financial_account)
-        risk_state = self.risk.snapshot_state()
+        risk_obj = getattr(self, "risk", None)
+        risk_state = risk_obj.snapshot_state() if risk_obj is not None and hasattr(risk_obj, "snapshot_state") else {"pnl_today_pct": float(getattr(self.state, "pnl_today_pct", 0.0)), "pnl_week_pct": float(getattr(self.state, "pnl_week_pct", 0.0)), "symbol_loss_streak": {}}
         ledger_records = []
         symbol = str(item["symbol"])
         position = positions.get(symbol)
@@ -1349,12 +1350,6 @@ class SovereignEngine:
                     continue
                 delta_notional = max(0.0, cumulative_notional - known_notional)
 
-                reconciliation_transaction = self._prepare_reconciliation_transaction(
-                    order_id, item, side, delta, delta_notional, fee_delta, final_filled,
-                    cumulative_fee, cumulative_notional,
-                    float(raw.get("average") or raw.get("price") or item.get("known_fill_price") or 0.0),
-                    terminal,
-                )
                 if delta > 1e-12:
                     position = self.state.open_positions.get(symbol)
                     if delta_notional <= 0:
@@ -1428,6 +1423,10 @@ class SovereignEngine:
                         })
                         continue
 
+                reconciliation_transaction = self._prepare_reconciliation_transaction(
+                    order_id, item, side, delta, delta_notional, fee_delta, final_filled,
+                    cumulative_fee, cumulative_notional, fill_price, terminal,
+                )
                 if delta > 1e-12 and side in {"buy", "sell"}:
                     self._record_financial_fill(side, symbol, delta, delta_notional, fee_delta)
 
