@@ -10,7 +10,7 @@ from typing import Dict
 from PC_ENGINE.core.config import DATA_DIR
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _canonical_payload(payload: dict) -> bytes:
@@ -33,6 +33,7 @@ class RecoveryManager:
             state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state_path = state_path
         self.backup_path = state_path.with_suffix(state_path.suffix + ".bak")
+        self.reconciliation_journal_path = state_path.with_suffix(state_path.suffix + ".reconciliation.json")
 
     @staticmethod
     def _empty_state() -> Dict:
@@ -92,6 +93,63 @@ class RecoveryManager:
             return payload, None
         except Exception as exc:
             return None, f"{type(exc).__name__}: {exc}"
+
+
+    def _write_json_atomic(self, path: Path, payload: dict) -> None:
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp_path.replace(path)
+
+    def prepare_reconciliation(self, target_state: dict, ledger_records: list[dict] | None = None) -> str:
+        """Durably prepare a reconciliation transaction before live state mutation."""
+        import uuid
+        current, _ = self._read_valid(self.state_path)
+        generation = int((current or {}).get("generation", 0) or 0) + 1
+        payload = dict(target_state)
+        payload["schema_version"] = SCHEMA_VERSION
+        payload["generation"] = generation
+        payload["ts"] = int(time.time())
+        payload["integrity_sha256"] = _digest(payload)
+        transaction = {
+            "schema_version": SCHEMA_VERSION,
+            "transaction_id": uuid.uuid4().hex,
+            "target_state": payload,
+            "ledger_records": list(ledger_records or []),
+        }
+        transaction["integrity_sha256"] = _digest(transaction)
+        self._write_json_atomic(self.reconciliation_journal_path, transaction)
+        return str(transaction["transaction_id"])
+
+    def load_reconciliation_journal(self) -> dict | None:
+        path = self.reconciliation_journal_path
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or payload.get("integrity_sha256") != _digest(payload):
+                raise ValueError("reconciliation journal integrity mismatch")
+            target = payload.get("target_state")
+            if not isinstance(target, dict) or target.get("integrity_sha256") != _digest(target):
+                raise ValueError("reconciliation target integrity mismatch")
+            if int(payload.get("schema_version", 0)) > SCHEMA_VERSION:
+                raise ValueError("unsupported reconciliation journal schema")
+            if not isinstance(payload.get("ledger_records", []), list):
+                raise ValueError("reconciliation ledger_records must be a list")
+            return payload
+        except Exception as exc:
+            raise RuntimeError(f"reconciliation journal corrupt: {type(exc).__name__}: {exc}") from exc
+
+    def commit_reconciliation(self, transaction_id: str) -> None:
+        journal = self.load_reconciliation_journal()
+        if journal is None or str(journal.get("transaction_id")) != str(transaction_id):
+            raise RuntimeError("reconciliation transaction missing or mismatched")
+        target = dict(journal["target_state"])
+        self._write_json_atomic(self.state_path, target)
+        self._write_json_atomic(self.backup_path, target)
+
+    def clear_reconciliation(self) -> None:
+        if self.reconciliation_journal_path.exists():
+            self.reconciliation_journal_path.unlink()
 
     def save_positions(
         self,
@@ -186,3 +244,5 @@ class RecoveryManager:
             self.state_path.unlink()
         if self.backup_path.exists():
             self.backup_path.unlink()
+        if self.reconciliation_journal_path.exists():
+            self.reconciliation_journal_path.unlink()
