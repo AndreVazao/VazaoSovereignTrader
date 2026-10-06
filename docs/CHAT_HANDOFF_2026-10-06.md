@@ -136,3 +136,21 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - Local Windows pytest execution for this reconciliation module currently stalls after starting the test process even on the existing baseline test; it was terminated to avoid hanging the PC. This is recorded as **inconclusive local execution**, not green. No runtime code changed in this checkpoint.
 - No hosted Actions run was triggered because this is audit/documentation-only and the current Actions budget policy remains local-first.
 - Next recovery focus: remaining primary/backup crash permutations and restart/idempotency around authoritative reconciliation evidence, with no automatic state correction on mismatch.
+
+
+## Recovery audit checkpoint — PR #367 — automatic engine restart ledger replay
+
+- PR #367 merged to main as 25c808e31103e5f5e0468205cd959001338884ad.
+- Added focused integration coverage in tests/test_engine_restart_recovery.py for the real startup recovery path: a durable reconciliation journal containing a ledger record is discovered by a fresh SovereignEngine, the target state is committed, the ledger side effect is replayed idempotently, the journal is cleared, and a second restart does not duplicate the trade.
+- Local targeted validation on PC-Vazao-Anjos: 4 passed (tests/test_engine_restart_recovery.py).
+- This checkpoint changed tests only; no production runtime code, REAL authorization, order path or capital-transfer path changed.
+- The test closes an end-to-end gap between the lower-level crash/replay tests and the actual engine startup recovery path.
+- Local PC and GitHub were synchronized before the change and will be synchronized back to main after this documentation checkpoint.
+- Next recovery audit: exercise the remaining primary/backup crash permutations and authoritative account-reconciliation mismatch/restart behavior without introducing automatic state correction.
+
+## Current live baseline (supersedes older SHA references above)
+
+- main: 25c808e31103e5f5e0468205cd959001338884ad
+- PRs #355 through #367 relevant to the current recovery/local-first line are merged as documented across this handoff.
+- Routine hosted Actions remain constrained by the exhausted included-minute budget; final Windows installer/EXE and Android APK builds remain GitHub Actions responsibilities and are not replaced by local builds.
+- PAPER/read-only remains the default. No REAL order, cancellation or capital-transfer authorization is enabled.
