@@ -120,3 +120,11 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - No browser/Android automation that bypasses security controls.
 - No REAL authorization inferred from capability declarations, persisted evidence, reports or CI.
 - No claim that CI is green unless the exact head SHA has SUCCESS conclusions.
+
+## Recovery audit checkpoint — PR #364
+- PR #364 merged: focused crash-window regression coverage for reconciliation ledger side effects.
+- Local targeted validation: tests/test_recovery_pending_orders.py — **10 passed**.
+- Covered: ledger write interruption after durable state commit; restart with journal still pending; successful retry without duplicate ledger record; journal-clear interruption after successful ledger write; restart idempotency.
+- No production runtime code changed in #364.
+- Main merge SHA: ce82f1b885dbd997dd082ee7fb8bcfe051f558e6.
+- Next recovery focus remains authoritative reconciliation mismatch / SAFE_MODE transitions and any remaining primary/backup crash permutations.
