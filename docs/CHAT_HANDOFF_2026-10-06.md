@@ -3,8 +3,8 @@
 ## Current main baseline
 
 - Repository: `AndreVazao/VazaoSovereignTrader`
-- Current main SHA after PR #348 and roadmap documentation: `60517fce773a5e7df1c7cbc5dada0cc3ce4a5318`
-- Latest implementation merge: PR #348, merge SHA `0979c5242a944a63a34a258fe323b14c77b6ec2e`
+- Current main SHA after PR #357 local-first Actions policy: `83ba82f89ee5f4d3400dafd2155c803e4de834b1`
+- Latest CI/operations merges: PR #355 CI trigger prune, PR #356 artifact retention prune, PR #357 local-first validation/manual Actions policy.
 - PR #347 merge SHA: `f28a40a7444e9bac1a8997b44171c6ea26d1a5e3`
 - PAPER/read-only remains the default. No REAL order, cancellation or transfer authorization was enabled.
 
@@ -62,6 +62,17 @@
 - Corrupt primary can fall back to a valid backup.
 - Ambiguous financial outcomes must remain pending/unknown until authoritative reconciliation.
 - The next recovery audit should focus on any remaining multi-writer assumptions, crash windows around commit/clear ordering, and end-to-end restart/reconciliation tests rather than merely adding more unit tests.
+
+## GitHub Actions / local validation
+
+- Routine heavy Actions are now manual/release-only to conserve the exhausted included minute budget.
+- Python and Shared Learning workflows are manual dispatch only.
+- Windows EXE/installer and Android APK are manual plus explicit release tags.
+- Artifact pruning remains monthly and intentionally lightweight.
+- Desktop Commander is the preferred local validation path.
+- Added scripts/run_local_validation.ps1 with isolated .venv support for Python tests and optional shared-learning/windows scopes.
+- The GitHub connector currently does not expose workflow dispatch; never claim a hosted run was triggered unless an actual dispatch-capable path performs it.
+- A PC validation attempt initially failed because the active global Python lacked ccxt; the local runner was then hardened to isolate dependencies in .venv. Full dependency installation was still underway when the temporary validation process was stopped. No application-code failure was established.
 
 ## Current strategic next steps
 
