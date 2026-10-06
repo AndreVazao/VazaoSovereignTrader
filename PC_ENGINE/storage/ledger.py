@@ -1,11 +1,69 @@
 from __future__ import annotations
 
 import json
+import os
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List
 
 from PC_ENGINE.core.config import LOG_DIR
+
+
+class LedgerLockError(RuntimeError):
+    """Ledger lock could not be acquired or released safely."""
+
+
+@contextmanager
+def _ledger_lock(path: Path) -> Iterator[None]:
+    """Serialize idempotent ledger mutations across processes.
+
+    The lock is an OS-level advisory/mandatory file lock on a persistent
+    sibling file. No third-party dependency is required, and the lock is
+    released automatically when the file descriptor closes.
+    """
+    lock_path = path.with_name(f"{path.name}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = None
+    try:
+        handle = lock_path.open("a+b")
+        handle.seek(0)
+        if handle.read(1) == b"":
+            handle.seek(0)
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+        yield
+    except (OSError, ValueError) as exc:
+        raise LedgerLockError("ledger lock unavailable") from exc
+    finally:
+        if handle is not None:
+            try:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except (OSError, ValueError):
+                # The original operation is already fail-closed. Do not
+                # replace it with a best-effort unlock failure.
+                pass
+            finally:
+                handle.close()
 
 
 class Ledger:
@@ -35,18 +93,22 @@ class Ledger:
         key = str(idempotency_key or "").strip()
         if not key:
             raise ValueError("idempotency_key is required")
-        if self.path.exists():
-            for line in self.path.read_text(encoding="utf-8").splitlines():
-                try:
-                    row = json.loads(line)
-                except Exception:
-                    continue
-                if str(row.get("reconciliation_key") or "").strip() == key:
-                    return False
-        row = {"ts": int(time.time()), "reconciliation_key": key, **record}
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        return True
+
+        with _ledger_lock(self.path):
+            if self.path.exists():
+                for line in self.path.read_text(encoding="utf-8").splitlines():
+                    try:
+                        row = json.loads(line)
+                    except Exception:
+                        continue
+                    if str(row.get("reconciliation_key") or "").strip() == key:
+                        return False
+            row = {"ts": int(time.time()), "reconciliation_key": key, **record}
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            return True
 
     def read_trades(self, limit: int | None = None) -> List[Dict[str, Any]]:
         if not self.path.exists():
