@@ -172,3 +172,93 @@ def test_reconciliation_journal_survives_state_commit_until_ledger_completion(tm
     assert ledger.trade_idempotent(entry["record"], entry["reconciliation_key"]) is False
     recovery.clear_reconciliation()
     assert recovery.load_financial_account()["quote_flow"] == 5.0
+
+
+def test_reconciliation_ledger_failure_survives_restart_and_retries_idempotently(tmp_path, monkeypatch):
+    from PC_ENGINE.storage.ledger import Ledger
+
+    state_path = tmp_path / 'runtime_state.json'
+    ledger = Ledger(tmp_path / 'trades.jsonl', tmp_path / 'events.jsonl')
+    recovery = RecoveryManager(state_path)
+    recovery.save_positions({}, {}, {}, {}, {}, {})
+    target = {
+        'positions': {}, 'pending_orders': {}, 'order_guards': {},
+        'execution_intents': {}, 'financial_account': {'quote_flow': 7.5},
+        'risk_state': {},
+    }
+    tx = recovery.prepare_reconciliation(
+        target,
+        [{'reconciliation_key': 'crash-ledger-1', 'record': {'symbol': 'BTC/USDT', 'side': 'close', 'qty': 0.3}}],
+    )
+    recovery.commit_reconciliation(tx)
+
+    journal = recovery.load_reconciliation_journal()
+    entry = journal['ledger_records'][0]
+    original = ledger.trade_idempotent
+    calls = {'count': 0}
+
+    def fail_once(record, key):
+        calls['count'] += 1
+        if calls['count'] == 1:
+            raise OSError('simulated ledger write interruption')
+        return original(record, key)
+
+    monkeypatch.setattr(ledger, 'trade_idempotent', fail_once)
+    try:
+        ledger.trade_idempotent(entry['record'], entry['reconciliation_key'])
+    except OSError:
+        pass
+    assert recovery.reconciliation_journal_path.exists()
+    assert recovery.load_financial_account()['quote_flow'] == 7.5
+
+    restarted = RecoveryManager(state_path)
+    restarted_journal = restarted.load_reconciliation_journal()
+    assert restarted_journal['transaction_id'] == tx
+    restarted.commit_reconciliation(tx)
+    restarted_entry = restarted_journal['ledger_records'][0]
+    assert ledger.trade_idempotent(restarted_entry['record'], restarted_entry['reconciliation_key']) is True
+    assert ledger.trade_idempotent(restarted_entry['record'], restarted_entry['reconciliation_key']) is False
+    restarted.clear_reconciliation()
+    assert not restarted.reconciliation_journal_path.exists()
+    assert len(ledger.read_trades()) == 1
+
+
+def test_reconciliation_clear_failure_leaves_durable_journal_for_restart(tmp_path, monkeypatch):
+    from PC_ENGINE.storage.ledger import Ledger
+
+    state_path = tmp_path / 'runtime_state.json'
+    ledger = Ledger(tmp_path / 'trades.jsonl', tmp_path / 'events.jsonl')
+    recovery = RecoveryManager(state_path)
+    recovery.save_positions({}, {}, {}, {}, {}, {})
+    target = {
+        'positions': {}, 'pending_orders': {}, 'order_guards': {},
+        'execution_intents': {}, 'financial_account': {'quote_flow': 8.5},
+        'risk_state': {},
+    }
+    tx = recovery.prepare_reconciliation(
+        target,
+        [{'reconciliation_key': 'clear-failure-1', 'record': {'symbol': 'ETH/USDT', 'side': 'close', 'qty': 0.4}}],
+    )
+    recovery.commit_reconciliation(tx)
+    journal = recovery.load_reconciliation_journal()
+    entry = journal['ledger_records'][0]
+    assert ledger.trade_idempotent(entry['record'], entry['reconciliation_key']) is True
+
+    def fail_clear():
+        raise OSError('simulated journal clear interruption')
+
+    monkeypatch.setattr(recovery, 'clear_reconciliation', fail_clear)
+    try:
+        recovery.clear_reconciliation()
+    except OSError:
+        pass
+    assert recovery.reconciliation_journal_path.exists()
+
+    restarted = RecoveryManager(state_path)
+    restarted_journal = restarted.load_reconciliation_journal()
+    assert restarted_journal['transaction_id'] == tx
+    restarted.commit_reconciliation(tx)
+    restarted_entry = restarted_journal['ledger_records'][0]
+    assert ledger.trade_idempotent(restarted_entry['record'], restarted_entry['reconciliation_key']) is False
+    restarted.clear_reconciliation()
+    assert len(ledger.read_trades()) == 1
