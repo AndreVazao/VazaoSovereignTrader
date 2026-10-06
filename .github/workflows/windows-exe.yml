@@ -1,21 +1,7 @@
 name: Windows EXE
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - "PC_ENGINE/**"
-      - "requirements-pc.txt"
-      - "scripts/**"
-      - "installer/**"
   push:
-    branches:
-      - main
-    paths:
-      - "PC_ENGINE/**"
-      - "requirements-pc.txt"
-      - "scripts/**"
-      - "installer/**"
     tags:
       - "pc-v*"
 concurrency:
@@ -57,9 +43,7 @@ jobs:
           $proc = Start-Process -FilePath dist\VazaoSovereignTrader.exe -WorkingDirectory (Resolve-Path test-runtime) -PassThru
           try {
             Start-Sleep -Seconds 5
-            if ($proc.HasExited) {
-              throw "EXE exited before health check (exit code $($proc.ExitCode))"
-            }
+            if ($proc.HasExited) { throw "EXE exited before health check (exit code $($proc.ExitCode))" }
             $ready = $false
             $healthLog = @()
             for ($i = 0; $i -lt 60; $i++) {
@@ -67,17 +51,12 @@ jobs:
               try {
                 $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/health -TimeoutSec 2
                 if ($response.StatusCode -eq 200) { $ready = $true; break }
-              } catch {
-                $healthLog += $_.Exception.Message
-              }
+              } catch { $healthLog += $_.Exception.Message }
             }
-            if (-not $ready) {
-              throw "EXE health endpoint did not become ready. Recent request errors: $($healthLog -join ' | ')"
-            }
+            if (-not $ready) { throw "EXE health endpoint did not become ready. Recent request errors: $($healthLog -join ' | ')" }
           } finally {
             if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
           }
-
       - name: Package
         shell: pwsh
         run: |
