@@ -45,16 +45,26 @@ class CapitalTransferAdapter(Protocol):
         ...
 
 
+class CapitalTransferJournal(Protocol):
+    def reserve(self, record: CapitalTransferRecord) -> CapitalTransferRecord:
+        ...
+
+    def mark_submitted(self, record: CapitalTransferRecord) -> CapitalTransferRecord:
+        ...
+
+    def resolve(self, record: CapitalTransferRecord) -> CapitalTransferRecord:
+        ...
+
+
 TransferAuthorizer = Callable[[CapitalTransferIntent], bool]
 
 
 class CapitalTransferContract:
-    """Fail-closed boundary for capital movement.
+    """Fail-closed, durable boundary for capital movement.
 
-    This contract deliberately separates authorization from adapter execution.
-    No adapter call is possible without an explicit per-transfer authorizer.
-    A submitted transfer is never retried automatically: an ambiguous external
-    outcome becomes UNKNOWN_OUTCOME and requires reconciliation.
+    The journal is written before the external side effect. Once SUBMITTED is
+    durable, a restart cannot turn the transfer back into a retryable state.
+    Ambiguous outcomes require reconciliation rather than another submission.
     """
 
     def __init__(
@@ -63,10 +73,12 @@ class CapitalTransferContract:
         owner_id: str,
         adapter: CapitalTransferAdapter | None = None,
         transfer_authorizer: TransferAuthorizer | None = None,
+        journal: CapitalTransferJournal | None = None,
     ) -> None:
         self.owner_id = str(owner_id or "").strip().lower()
         self.adapter = adapter
         self.transfer_authorizer = transfer_authorizer
+        self.journal = journal
         if not self.owner_id:
             raise ValueError("owner_id is required")
 
@@ -112,80 +124,70 @@ class CapitalTransferContract:
 
     def execute(self, record: CapitalTransferRecord) -> CapitalTransferRecord:
         if record.status is not TransferStatus.PREPARED:
-            return CapitalTransferRecord(
-                intent=record.intent,
-                status=TransferStatus.BLOCKED,
-                external_id=record.external_id,
-                reason="transfer_not_in_prepared_state",
-            )
+            return self._blocked(record, "transfer_not_in_prepared_state")
         if record.intent.owner_id != self.owner_id:
-            return CapitalTransferRecord(
-                intent=record.intent,
-                status=TransferStatus.BLOCKED,
-                reason="owner_isolation",
-            )
+            return self._blocked(record, "owner_isolation")
+        if self.journal is not None:
+            record = self.journal.reserve(record)
+            if record.status is not TransferStatus.PREPARED:
+                return record
         if self.adapter is None:
-            return CapitalTransferRecord(
-                intent=record.intent,
-                status=TransferStatus.BLOCKED,
-                reason="transfer_adapter_unavailable",
-            )
+            return self._blocked(record, "transfer_adapter_unavailable")
         if self.transfer_authorizer is None:
-            return CapitalTransferRecord(
-                intent=record.intent,
-                status=TransferStatus.BLOCKED,
-                reason="explicit_transfer_authorization_required",
-            )
+            return self._blocked(record, "explicit_transfer_authorization_required")
         try:
             authorized = self.transfer_authorizer(record.intent) is True
         except Exception as exc:
-            return CapitalTransferRecord(
-                intent=record.intent,
-                status=TransferStatus.BLOCKED,
-                reason=f"authorization_error:{type(exc).__name__}",
-            )
+            return self._blocked(record, f"authorization_error:{type(exc).__name__}")
         if not authorized:
-            return CapitalTransferRecord(
-                intent=record.intent,
-                status=TransferStatus.BLOCKED,
-                reason="transfer_authorization_denied",
-            )
+            return self._blocked(record, "transfer_authorization_denied")
 
-        submitted = CapitalTransferRecord(
-            intent=record.intent,
-            status=TransferStatus.SUBMITTED,
-        )
+        submitted = CapitalTransferRecord(intent=record.intent, status=TransferStatus.SUBMITTED)
+        if self.journal is not None:
+            submitted = self.journal.mark_submitted(submitted)
+            if submitted.status is not TransferStatus.SUBMITTED:
+                return submitted
+
         try:
             result = self.adapter.transfer(submitted.intent)
         except Exception as exc:
-            return CapitalTransferRecord(
-                intent=submitted.intent,
-                status=TransferStatus.UNKNOWN_OUTCOME,
-                reason=f"adapter_exception_after_submission:{type(exc).__name__}",
+            return self._resolve(
+                CapitalTransferRecord(
+                    intent=submitted.intent,
+                    status=TransferStatus.UNKNOWN_OUTCOME,
+                    reason=f"adapter_exception_after_submission:{type(exc).__name__}",
+                )
             )
 
         if result.status is TransferStatus.CONFIRMED and result.external_id:
-            return CapitalTransferRecord(
+            return self._resolve(CapitalTransferRecord(
                 intent=submitted.intent,
                 status=TransferStatus.CONFIRMED,
                 external_id=result.external_id,
                 reason=result.reason,
-            )
-        if result.status is TransferStatus.UNKNOWN_OUTCOME:
-            return CapitalTransferRecord(
-                intent=submitted.intent,
-                status=TransferStatus.UNKNOWN_OUTCOME,
-                external_id=result.external_id,
-                reason=result.reason or "external_outcome_requires_reconciliation",
-            )
-        return CapitalTransferRecord(
+            ))
+        return self._resolve(CapitalTransferRecord(
             intent=submitted.intent,
             status=TransferStatus.UNKNOWN_OUTCOME,
             external_id=result.external_id,
-            reason=result.reason or "transfer_not_confirmed",
+            reason=result.reason or "external_outcome_requires_reconciliation",
+        ))
+
+    def _resolve(self, record: CapitalTransferRecord) -> CapitalTransferRecord:
+        if self.journal is None:
+            return record
+        return self.journal.resolve(record)
+
+    @staticmethod
+    def _blocked(record: CapitalTransferRecord, reason: str) -> CapitalTransferRecord:
+        return CapitalTransferRecord(
+            intent=record.intent,
+            status=TransferStatus.BLOCKED,
+            external_id=record.external_id,
+            reason=reason,
         )
 
     @staticmethod
     def can_retry(record: CapitalTransferRecord) -> bool:
-        # Capital movement must never be blindly retried after submission.
+        # Only a never-submitted PREPARED identity is retryable.
         return record.status is TransferStatus.PREPARED
