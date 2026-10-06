@@ -124,6 +124,15 @@ class RecoveryManager:
         tmp_path.replace(path)
         self._fsync_directory(path.parent)
 
+    def _create_json_exclusive(self, path: Path, payload: dict) -> None:
+        """Create a new JSON file atomically; fail if another writer won the race."""
+        body = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        with path.open("x", encoding="utf-8") as handle:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        self._fsync_directory(path.parent)
+
     def prepare_reconciliation(self, target_state: dict, ledger_records: list[dict] | None = None) -> str:
         """Durably prepare a reconciliation transaction before live state mutation."""
         import uuid
@@ -147,7 +156,12 @@ class RecoveryManager:
             "ledger_records": list(ledger_records or []),
         }
         transaction["integrity_sha256"] = _digest(transaction)
-        self._write_json_atomic(self.reconciliation_journal_path, transaction)
+        try:
+            self._create_json_exclusive(self.reconciliation_journal_path, transaction)
+        except FileExistsError as exc:
+            raise RecoveryConcurrencyError(
+                "reconciliation transaction already pending; recover or clear it before preparing another"
+            ) from exc
         return str(transaction["transaction_id"])
 
     def load_reconciliation_journal(self) -> dict | None:
