@@ -142,3 +142,26 @@ def test_pending_reconciliation_repairs_backup_after_primary_only_commit(tmp_pat
     assert primary["integrity_sha256"] == backup["integrity_sha256"]
     assert primary["pending_orders"]["marker"]["value"] == "primary-only"
     assert backup["pending_orders"]["marker"]["value"] == "primary-only"
+
+
+def test_pending_reconciliation_repairs_corrupt_backup_when_primary_already_target(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    manager = RecoveryManager(state_path=state_path)
+    manager.save_positions({}, risk_state={"stable": True})
+    transaction_id = manager.prepare_reconciliation(target_state("corrupt-backup"))
+
+    manager.commit_reconciliation(transaction_id)
+    manager.backup_path.write_text("{broken-json", encoding="utf-8")
+
+    restarted = RecoveryManager(state_path=state_path)
+    assert restarted.recover_pending_reconciliation() == transaction_id
+
+    primary, primary_error = restarted._read_valid(restarted.state_path)
+    backup, backup_error = restarted._read_valid(restarted.backup_path)
+    assert primary is not None
+    assert backup is not None
+    assert primary_error is None
+    assert backup_error is None
+    assert primary["integrity_sha256"] == backup["integrity_sha256"]
+    assert backup["pending_orders"]["marker"]["value"] == "corrupt-backup"
+    assert restarted.load_reconciliation_journal() is None
