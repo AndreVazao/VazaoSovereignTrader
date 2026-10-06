@@ -124,6 +124,8 @@ def test_reconciliation_journal_recovers_target_and_ledger_exactly_once(tmp_path
         target,
         [{"reconciliation_key": "pending:order-1:0.1:0.01:10", "record": {"symbol": "BTC/USDT", "side": "close", "qty": 0.1}}],
     )
+    # The original process is considered gone before the fresh recovery process starts.
+    recovery._release_reconciliation_lock()
 
     # Simulate a crash after journal preparation: a fresh process can commit
     # the durable target and then safely replay the ledger side effect.
