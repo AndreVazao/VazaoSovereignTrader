@@ -306,7 +306,9 @@ class SovereignEngine:
                 if not committed:
                     raise RuntimeError("reconciliation journal missing target_state")
                 self.state.pending_orders = dict(committed.get("pending_orders", {}))
+                self.state.execution_intents = dict(committed.get("execution_intents", {}))
                 self.state.financial_account = dict(committed.get("financial_account", {}))
+                self.order_manager.restore_order_guards(dict(committed.get("order_guards", {})))
                 restored_positions = {}
                 for restored_symbol, restored_data in dict(committed.get("positions", {})).items():
                     restored_positions[restored_symbol] = Position(**restored_data)
