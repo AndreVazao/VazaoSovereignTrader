@@ -56,7 +56,9 @@ def test_pending_partial_buy_does_not_create_position_before_reconciliation():
 
     assert engine.state.open_positions == {}
     pending = engine.state.pending_orders["order-123"]
-    assert pending["known_filled_qty"] == 0.0
+    assert pending["known_filled_qty"] == 0.25
+    assert pending["known_fee"] == 0.1
+    assert pending["known_quote_notional"] == 25.0
     assert pending["requested_qty"] == 1.0
     assert engine.state.execution_intents == {}
 
@@ -78,5 +80,7 @@ def test_pending_partial_sell_does_not_reduce_position_before_reconciliation():
 
     assert engine.state.open_positions["BTC/USDT"].qty == 1.0
     pending = engine.state.pending_orders["order-123"]
-    assert pending["known_filled_qty"] == 0.0
+    assert pending["known_filled_qty"] == 0.25
+    assert pending["known_fee"] == 0.1
+    assert pending["known_quote_notional"] == 25.0
     assert pending["requested_qty"] == 1.0
