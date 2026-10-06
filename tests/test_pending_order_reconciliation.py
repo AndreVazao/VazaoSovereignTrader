@@ -290,8 +290,7 @@ def test_reconcile_partial_fill_sequence_is_cumulative_and_exactly_once():
          "filled": 0.7, "average": 100.0, "cost": 70.0, "fee": {"cost": 0.07, "currency": "USDT"}},
         {"id": "buy-seq", "symbol": "BTC/USDT", "side": "buy", "status": "closed",
          "filled": 1.0, "average": 100.0, "cost": 100.0, "fee": {"cost": 0.10, "currency": "USDT"}},
-    ]) 
-    )
+    ])}
 
     engine._reconcile_pending_orders()
     assert engine.state.open_positions["BTC/USDT"].qty == 0.4
