@@ -97,6 +97,20 @@ class RecoveryManager:
             return None, f"{type(exc).__name__}: {exc}"
 
 
+    @staticmethod
+    def _fsync_directory(path: Path) -> None:
+        """Durably persist directory-entry changes when the platform supports it."""
+        try:
+            directory_fd = os.open(str(path), os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except OSError:
+            # Directory fsync is unavailable on some platforms, notably Windows.
+            # File-level fsync and atomic same-filesystem replacement remain mandatory.
+            pass
+
     def _write_json_atomic(self, path: Path, payload: dict) -> None:
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -104,16 +118,7 @@ class RecoveryManager:
             handle.flush()
             os.fsync(handle.fileno())
         tmp_path.replace(path)
-        try:
-            directory_fd = os.open(str(path.parent), os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-        except OSError:
-            # Directory fsync is unavailable on some platforms; atomic rename
-            # and file fsync remain mandatory.
-            pass
+        self._fsync_directory(path.parent)
 
     def prepare_reconciliation(self, target_state: dict, ledger_records: list[dict] | None = None) -> str:
         """Durably prepare a reconciliation transaction before live state mutation."""
@@ -165,6 +170,7 @@ class RecoveryManager:
     def clear_reconciliation(self) -> None:
         if self.reconciliation_journal_path.exists():
             self.reconciliation_journal_path.unlink()
+            self._fsync_directory(self.reconciliation_journal_path.parent)
 
     def save_positions(
         self,
@@ -186,11 +192,9 @@ class RecoveryManager:
             risk_state,
             previous_generation + 1,
         )
-        tmp_path = self.state_path.with_suffix(self.state_path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        tmp_path.replace(self.state_path)
+        self._write_json_atomic(self.state_path, payload)
         # Keep the last known-good snapshot independently so a damaged primary can recover.
-        self.backup_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        self._write_json_atomic(self.backup_path, payload)
 
     def load_state(self) -> Dict:
         primary, primary_error = self._read_valid(self.state_path)
