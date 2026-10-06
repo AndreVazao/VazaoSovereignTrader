@@ -321,7 +321,7 @@ def test_reconcile_lookup_error_does_not_assume_fill_or_remove_order():
             "known_fee": 0.0,
         }},
     )
-    engine.exchanges = {"fake": SequenceExchange([RuntimeError("venue timeout")])
+    engine.exchanges = {"fake": SequenceExchange([RuntimeError("venue timeout")])}
 
     engine._reconcile_pending_orders()
 
