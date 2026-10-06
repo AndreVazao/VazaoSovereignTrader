@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from PC_ENGINE.core.recovery import RecoveryManager
 
 
@@ -48,4 +50,4 @@ def test_atomic_writer_fsyncs_directory_after_replace(tmp_path, monkeypatch):
     manager._write_json_atomic(manager.state_path, {"ok": True})
 
     assert calls == [manager.state_path.parent]
-    assert manager.state_path.read_text(encoding="utf-8").strip() == '{"ok": true}'
+    assert json.loads(manager.state_path.read_text(encoding="utf-8")) == {"ok": True}
