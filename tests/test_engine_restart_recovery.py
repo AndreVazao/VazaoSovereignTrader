@@ -101,3 +101,42 @@ def test_reconciliation_restart_restores_pending_orders_intents_and_guards(tmp_p
     assert second.state.execution_intents["intent-1"]["client_order_id"] == "cid-1"
     assert "guard-1" in second.order_manager.last_client_order
     assert second.state.status == "SAFE_MODE"
+
+
+def test_reconciliation_ledger_replays_automatically_on_engine_restart(tmp_path, monkeypatch):
+    from PC_ENGINE.storage.ledger import Ledger
+
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config = _config()
+    first = SovereignEngine(config)
+
+    target = first.recovery._build_payload(
+        first.state.open_positions,
+        first.state.pending_orders,
+        first.order_manager.export_order_guards(),
+        first.state.execution_intents,
+        {"quote_flow": 12.5},
+        first.risk.snapshot_state(),
+        1,
+    )
+    tx = first.recovery.prepare_reconciliation(
+        target,
+        [{
+            "reconciliation_key": "restart-ledger-1",
+            "record": {"exchange": "paper-restart", "symbol": "BTC/USDT", "side": "close", "qty": 0.1},
+        }],
+    )
+
+    second = SovereignEngine(config)
+
+    assert second.recovery.load_reconciliation_journal() is None
+    assert second.recovery.load_financial_account()["quote_flow"] == 12.5
+    trades = second.ledger.read_trades()
+    assert len(trades) == 1
+    assert trades[0]["symbol"] == "BTC/USDT"
+    assert trades[0]["qty"] == 0.1
+
+    # A further restart must not duplicate the durable reconciliation ledger entry.
+    third = SovereignEngine(config)
+    assert len(third.ledger.read_trades()) == 1
+    assert tx
