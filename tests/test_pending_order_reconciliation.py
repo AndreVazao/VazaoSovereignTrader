@@ -252,3 +252,78 @@ def test_pending_order_resolves_recorded_exchange_name_when_mapping_key_differs(
     )
 
     assert resolved is recorded_exchange
+
+
+
+class SequenceExchange(FakeExchange):
+    def __init__(self, orders):
+        self.orders = list(orders)
+
+    def fetch_order(self, order_id: str, symbol: str):
+        response = self.orders.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def test_reconcile_partial_fill_sequence_is_cumulative_and_exactly_once():
+    position = Position("fake", "BTC/USDT", 100.0, 0.0, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "buy-seq", "status": "open", "filled": 0.0},
+        position,
+        {"buy-seq": {
+            "symbol": "BTC/USDT",
+            "side": "buy",
+            "requested_qty": 1.0,
+            "known_filled_qty": 0.0,
+            "known_fill_price": 100.0,
+            "known_quote_notional": 0.0,
+            "known_fee": 0.0,
+            "stop_pct": 0.01,
+            "take_profit_pct": 0.02,
+        }},
+    )
+    engine.exchanges = {"fake": SequenceExchange([
+        {"id": "buy-seq", "symbol": "BTC/USDT", "side": "buy", "status": "open",
+         "filled": 0.4, "average": 100.0, "cost": 40.0, "fee": {"cost": 0.04, "currency": "USDT"}},
+        {"id": "buy-seq", "symbol": "BTC/USDT", "side": "buy", "status": "partially_filled",
+         "filled": 0.7, "average": 100.0, "cost": 70.0, "fee": {"cost": 0.07, "currency": "USDT"}},
+        {"id": "buy-seq", "symbol": "BTC/USDT", "side": "buy", "status": "closed",
+         "filled": 1.0, "average": 100.0, "cost": 100.0, "fee": {"cost": 0.10, "currency": "USDT"}},
+    ])}
+
+    engine._reconcile_pending_orders()
+    assert engine.state.open_positions["BTC/USDT"].qty == 0.4
+    assert engine.state.pending_orders["buy-seq"]["known_filled_qty"] == 0.4
+
+    engine._reconcile_pending_orders()
+    assert engine.state.open_positions["BTC/USDT"].qty == 0.7
+    assert engine.state.pending_orders["buy-seq"]["known_filled_qty"] == 0.7
+
+    engine._reconcile_pending_orders()
+    assert engine.state.open_positions["BTC/USDT"].qty == 1.0
+    assert "buy-seq" not in engine.state.pending_orders
+
+
+def test_reconcile_lookup_error_does_not_assume_fill_or_remove_order():
+    position = Position("fake", "BTC/USDT", 100.0, 0.2, 90.0, 120.0, 1.0)
+    engine = make_engine(
+        {"id": "unused", "status": "open", "filled": 0.0},
+        position,
+        {"unknown-1": {
+            "symbol": "BTC/USDT",
+            "side": "buy",
+            "requested_qty": 0.5,
+            "known_filled_qty": 0.0,
+            "known_fill_price": 100.0,
+            "known_quote_notional": 0.0,
+            "known_fee": 0.0,
+        }},
+    )
+    engine.exchanges = {"fake": SequenceExchange([RuntimeError("venue timeout")])}
+
+    engine._reconcile_pending_orders()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert "unknown-1" in engine.state.pending_orders
+    assert engine.state.open_positions["BTC/USDT"].qty == 0.2
