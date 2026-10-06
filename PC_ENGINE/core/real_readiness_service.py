@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PC_ENGINE.core.real_readiness import RealReadinessGate
 from PC_ENGINE.core.venue_capabilities import VenueCapabilityRegistry, build_real_execution_requirements
+from PC_ENGINE.core.capability_evidence_store import CapabilityEvidenceStore
 from PC_ENGINE.core.paper_review import PaperReview
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
@@ -56,6 +57,8 @@ class RealReadinessService:
         self.timeline_max_events = max(1, int(readiness.get("timeline_max_events", 200)))
         self.require_websocket_timing_validation = bool(readiness.get("require_websocket_timing_validation", True))
         self.websocket_timing_report_path = Path(readiness.get("websocket_timing_report_path", "PC_ENGINE/data/radar/websocket_timing_validation.json"))
+        self.capability_evidence_path = Path(readiness.get("capability_evidence_path", "PC_ENGINE/data/radar/capability_evidence.jsonl"))
+        self.max_capability_evidence_age_seconds = max(60, int(readiness.get("max_capability_evidence_age_seconds", 900)))
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -346,7 +349,13 @@ class RealReadinessService:
         ]
         capabilities_ok = True
         capabilities_blockers: list[str] = []
+        capability_evidence = {"path": str(self.capability_evidence_path), "applied": 0, "rejected": 0, "rejected_details": []}
         if target_is_real and self.require_verified_venue_capabilities:
+            try:
+                evidence_store = CapabilityEvidenceStore(self.capability_evidence_path)
+                capability_evidence = self.venue_capabilities.apply_evidence(evidence_store, environment="REAL", max_age_seconds=self.max_capability_evidence_age_seconds, now_ms=now_ms)
+            except (OSError, ValueError, TypeError):
+                capabilities_blockers.append("capability evidence store unavailable")
             capabilities_ok, capabilities_blockers = self.venue_capabilities.verify_required(
                 enabled_venues,
                 build_real_execution_requirements(),
@@ -392,7 +401,7 @@ class RealReadinessService:
         timing_payload = self._read_json(self.websocket_timing_report_path)
         timing_fresh, timing_fresh_detail = self._validation_fresh(self.websocket_timing_report_path, now_ms)
         timing_eligible = bool(timing_payload.get("eligible_for_economic_interpretation", False))
-        payload["venue_capabilities"] = {"required": self.require_verified_venue_capabilities, "enabled_venues": enabled_venues, "requirements": list(build_real_execution_requirements()), "blockers": capabilities_blockers, "snapshot": self.venue_capabilities.snapshot()}
+        payload["venue_capabilities"] = {"required": self.require_verified_venue_capabilities, "enabled_venues": enabled_venues, "requirements": list(build_real_execution_requirements()), "blockers": capabilities_blockers, "snapshot": self.venue_capabilities.snapshot(), "evidence": capability_evidence}
         payload["websocket_timing"] = {
             "required": self.require_websocket_timing_validation,
             "eligible_for_economic_interpretation": timing_eligible,
