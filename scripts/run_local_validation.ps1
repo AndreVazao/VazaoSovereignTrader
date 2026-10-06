@@ -19,7 +19,17 @@ function Invoke-Checked {
 
 if ($Scope -in @("python", "all")) {
     if (-not (Get-Command python -ErrorAction SilentlyContinue)) { throw "Python was not found on PATH." }
-    Invoke-Checked "python" @("-m", "pytest", "-q", "tests")
+
+    $venv = Join-Path $root ".venv"
+    $venvPython = Join-Path $venv "Scripts\python.exe"
+    if (-not (Test-Path $venvPython)) {
+        Write-Host "Creating isolated local validation environment..."
+        Invoke-Checked "python" @("-m", "venv", $venv)
+        Invoke-Checked $venvPython @("-m", "pip", "install", "--upgrade", "pip")
+        Invoke-Checked $venvPython @("-m", "pip", "install", "-r", "requirements-pc.txt", "pytest")
+    }
+
+    Invoke-Checked $venvPython @("-m", "pytest", "-q", "tests")
 }
 
 if ($Scope -in @("shared-learning", "all")) {
