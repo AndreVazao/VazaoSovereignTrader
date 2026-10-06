@@ -3,8 +3,8 @@
 ## Current main baseline
 
 - Repository: `AndreVazao/VazaoSovereignTrader`
-- Current main SHA after PR #357 local-first Actions policy: `83ba82f89ee5f4d3400dafd2155c803e4de834b1`
-- Latest CI/operations merges: PR #355 CI trigger prune, PR #356 artifact retention prune, PR #357 local-first validation/manual Actions policy.
+- Current main SHA after PR #359 recovery crash-window hardening: `162bdf61a7b19b6e721de9642acce7250e0713ea`
+- Latest CI/operations merges: PR #355 CI trigger prune, PR #356 artifact retention prune, PR #357 local-first validation/manual Actions policy, PR #358 handoff refresh, PR #359 recovery crash-window hardening.
 - PR #347 merge SHA: `f28a40a7444e9bac1a8997b44171c6ea26d1a5e3`
 - PAPER/read-only remains the default. No REAL order, cancellation or transfer authorization was enabled.
 
@@ -62,6 +62,17 @@
 - Corrupt primary can fall back to a valid backup.
 - Ambiguous financial outcomes must remain pending/unknown until authoritative reconciliation.
 - The next recovery audit should focus on any remaining multi-writer assumptions, crash windows around commit/clear ordering, and end-to-end restart/reconciliation tests rather than merely adding more unit tests.
+
+## Recovery audit checkpoint ? PR #359 merged 2026-10-06
+
+- Identified and fixed a crash window in PC_ENGINE/core/recovery.py: if the process crashed after the primary snapshot was atomically written but before the backup snapshot was written, the durable reconciliation journal could previously be cleared while the backup still pointed to an older generation.
+- PR #359 closes this window by reading/verifying the backup on every reconciliation commit and repairing a missing, invalid or stale backup before the journal can be cleared.
+- Added regression coverage simulating a crash immediately after the primary write and verifying restart recovery leaves primary and backup at the same integrity digest.
+- PR #359 squash-merged as 162bdf61a7b19b6e721de9642acce7250e0713ea.
+- Local targeted recovery/durability validation: **10 passed**.
+- Hosted exact-head Python suite run 37503646116 on e4c0b5f8e27b3dafa91a96560a2d05ea50637d3a: **SUCCESS**.
+- This hardening remains PAPER/read-only; no REAL order, cancellation or transfer authorization was changed.
+- Next recovery focus remains the broader restart/reconciliation audit: primary/backup crash permutations, UNKNOWN order outcomes, partial fills, reconciliation mismatches and SAFE_MODE behavior.
 
 ## GitHub Actions / local validation
 
