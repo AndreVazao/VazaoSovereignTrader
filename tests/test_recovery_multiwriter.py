@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import multiprocessing as mp
-import queue
 import time
 from pathlib import Path
 
@@ -10,7 +9,7 @@ import pytest
 from PC_ENGINE.core.recovery import RecoveryLockError, RecoveryManager
 
 
-def _hold_recovery_transaction(state_path: str, result_queue) -> None:
+def _hold_recovery_transaction(state_path: str, ready_conn) -> None:
     manager = RecoveryManager(Path(state_path))
     tx = manager.prepare_reconciliation(
         {
@@ -22,12 +21,13 @@ def _hold_recovery_transaction(state_path: str, result_queue) -> None:
             "risk_state": {},
         }
     )
-    result_queue.put(tx)
+    ready_conn.send(tx)
+    ready_conn.close()
     time.sleep(0.75)
     manager.clear_reconciliation()
 
 
-def _prepare_and_exit(state_path: str, result_queue) -> None:
+def _prepare_and_exit(state_path: str, ready_conn) -> None:
     manager = RecoveryManager(Path(state_path))
     tx = manager.prepare_reconciliation(
         {
@@ -39,44 +39,52 @@ def _prepare_and_exit(state_path: str, result_queue) -> None:
             "risk_state": {},
         }
     )
-    result_queue.put(tx)
+    ready_conn.send(tx)
+    ready_conn.close()
     # Process exit releases the OS lock, modelling a crash after durable journal preparation.
 
 
 def test_recovery_transaction_lock_blocks_second_process_until_first_finishes(tmp_path):
     ctx = mp.get_context("spawn")
-    result_queue = ctx.Queue()
+    first_parent, first_child = ctx.Pipe(duplex=False)
+    second_parent, second_child = ctx.Pipe(duplex=False)
 
     state_path = tmp_path / "runtime_state.json"
-    first = ctx.Process(target=_hold_recovery_transaction, args=(str(state_path), result_queue))
+    first = ctx.Process(target=_hold_recovery_transaction, args=(str(state_path), first_child))
     first.start()
+    first_child.close()
 
-    first_tx = result_queue.get(timeout=5)
+    first_tx = first_parent.recv()
     assert first_tx
 
-    second = ctx.Process(target=_prepare_and_exit, args=(str(state_path), result_queue))
+    second = ctx.Process(target=_prepare_and_exit, args=(str(state_path), second_child))
     second.start()
+    second_child.close()
 
-    with pytest.raises(queue.Empty):
-        result_queue.get(timeout=0.2)
+    assert not second_parent.poll(0.2)
 
     first.join(timeout=5)
     assert first.exitcode == 0
 
-    second_tx = result_queue.get(timeout=5)
+    assert second_parent.poll(5)
+    second_tx = second_parent.recv()
     assert second_tx
+
     second.join(timeout=5)
     assert second.exitcode == 0
 
 
 def test_recovery_journal_can_be_replayed_after_process_exit(tmp_path):
     ctx = mp.get_context("spawn")
-    result_queue = ctx.Queue()
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
     state_path = tmp_path / "runtime_state.json"
 
-    worker = ctx.Process(target=_prepare_and_exit, args=(str(state_path), result_queue))
+    worker = ctx.Process(target=_prepare_and_exit, args=(str(state_path), child_conn))
     worker.start()
-    tx = result_queue.get(timeout=5)
+    child_conn.close()
+
+    assert parent_conn.poll(5)
+    tx = parent_conn.recv()
     worker.join(timeout=5)
 
     assert worker.exitcode == 0
