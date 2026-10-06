@@ -128,3 +128,11 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - No production runtime code changed in #364.
 - Main merge SHA: ce82f1b885dbd997dd082ee7fb8bcfe051f558e6.
 - Next recovery focus remains authoritative reconciliation mismatch / SAFE_MODE transitions and any remaining primary/backup crash permutations.
+
+
+## Recovery audit checkpoint — authoritative mismatch / SAFE_MODE
+- Reviewed `SovereignEngine.reconcile_account_state()`: authoritative venue balance/open-order reads are the source of truth; local state is never overwritten to hide a mismatch. Position, base-flow, quote and unexpected-asset mismatches return BLOCKED and enter SAFE_MODE.
+- Existing regression coverage already asserts position mismatch -> BLOCKED + SAFE_MODE (`tests/test_account_reconcilition.py`) and real-start reconciliation blocks failed account reconciliation.
+- Local Windows pytest execution for this reconciliation module currently stalls after starting the test process even on the existing baseline test; it was terminated to avoid hanging the PC. This is recorded as **inconclusive local execution**, not green. No runtime code changed in this checkpoint.
+- No hosted Actions run was triggered because this is audit/documentation-only and the current Actions budget policy remains local-first.
+- Next recovery focus: remaining primary/backup crash permutations and restart/idempotency around authoritative reconciliation evidence, with no automatic state correction on mismatch.
