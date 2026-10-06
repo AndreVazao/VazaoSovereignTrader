@@ -13,7 +13,7 @@ function Invoke-Checked {
     Write-Host ">> $Command $($Arguments -join ' ')"
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code $LASTEXITCODE: $Command"
+        throw "Command failed with exit code ${LASTEXITCODE}: $Command"
     }
 }
 
@@ -35,7 +35,7 @@ if ($Scope -in @("shared-learning", "all")) {
 if ($Scope -in @("windows", "all")) {
     if (-not (Test-Path (Join-Path $root "scripts/build_windows_installer.ps1"))) { throw "Windows installer build script is missing." }
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/build_windows_installer.ps1")
-    if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed with exit code $LASTEXITCODE." }
+    if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed with exit code ${LASTEXITCODE}." }
 }
 
 if ($Scope -eq "android") {
