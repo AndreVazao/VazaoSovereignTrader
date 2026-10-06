@@ -53,3 +53,26 @@ def test_commit_refuses_stale_generation(tmp_path):
         manager.commit_reconciliation(transaction_id)
 
     assert manager.load_state()["risk_state"] == {"winner": "newer"}
+
+
+def test_prepare_allows_only_one_concurrent_journal_creator(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    state_path = tmp_path / "runtime_state.json"
+
+    def prepare(marker: str):
+        manager = RecoveryManager(state_path=state_path)
+        try:
+            return ("ok", manager.prepare_reconciliation(target_state(marker)))
+        except RecoveryConcurrencyError as exc:
+            return ("conflict", str(exc))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(prepare, ("first", "second")))
+
+    assert [result[0] for result in results].count("ok") == 1
+    assert [result[0] for result in results].count("conflict") == 1
+
+    journal = RecoveryManager(state_path=state_path).load_reconciliation_journal()
+    assert journal is not None
+    assert journal["target_state"]["pending_orders"]["marker"]["value"] in {"first", "second"}
