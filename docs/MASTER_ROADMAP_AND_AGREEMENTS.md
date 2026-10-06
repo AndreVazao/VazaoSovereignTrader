@@ -1,6 +1,6 @@
 # Vazao Sovereign Trader — Master Roadmap, Agreements & Continuity Guide
 
-Last reviewed: 2026-10-02 (UTC)
+Last reviewed: 2026-10-06 (UTC)
 Repository: https://github.com/AndreVazao/VazaoSovereignTrader
 Purpose: durable project charter and restart point for future conversations. This document consolidates the owner's stated goals, agreed product behavior, architecture constraints, implementation order, safety requirements, and open work. It complements `docs/PROJECT_CONTEXT.md` (the live engineering handover) and `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md` (opportunity/capital design).
 
@@ -210,6 +210,14 @@ Never invent test results, workflow IDs, commit SHAs, account facts or platform 
 - The current browser reconnaissance adapter is read-only, current-page structural inspection, not a full platform/account audit.
 - No verified REAL promotion is recorded. Preserve PAPER default and all independent authorization gates.
 - No cloud provisioning, paid service activation or deployment is authorized by this roadmap.
+
+## 12A. Recovery/exactly-once hardening checkpoint — 2026-10-06
+
+- PR #347 merged: ledger idempotency is serialized across processes with a persistent OS-level lock and fsync before returning success. Merge SHA: `f28a40a7444e9bac1a8997b44171c6ea26d1a5e3`. Python #2942 and Windows EXE #727 were SUCCESS on the exact PR head.
+- PR #348 merged: recovery snapshot durability was hardened. `save_positions()` now uses the durable atomic writer for both primary and backup snapshots; the temporary file is fsynced before replacement; directory-entry changes are fsynced where supported; reconciliation-journal removal also fsyncs its parent directory. Merge SHA: `0979c5242a944a63a34a258fe323b14c77b6ec2e`.
+- PR #348 exact-head CI: Python #2949 SUCCESS; Windows EXE #730 SUCCESS, including EXE and installer smoke paths.
+- Capital-transfer hardening from PRs #344/#345/#346 remains active: explicit transfer authorization, durable journal/reconciliation, UNKNOWN_OUTCOME fail-closed handling, journal integrity errors fail closed, and idempotency-key collision blocking.
+- No REAL order, cancellation or capital-transfer authorization was added by these increments. PAPER/read-only remains the operating default.
 
 ## 13. Implementation backlog (sequenced)
 
