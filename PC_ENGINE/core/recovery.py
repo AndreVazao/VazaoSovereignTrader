@@ -4,15 +4,65 @@ import hashlib
 import json
 import os
 import time
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Iterator
 
 from PC_ENGINE.core.config import DATA_DIR
 
 
 SCHEMA_VERSION = 2
 JOURNAL_SCHEMA_VERSION = 1
+
+
+class RecoveryLockError(RuntimeError):
+    """Recovery transaction lock could not be acquired or released safely."""
+
+
+@contextmanager
+def _recovery_file_lock(path: Path) -> Iterator[object]:
+    """Serialize recovery transactions across processes with an OS file lock."""
+    lock_path = path.with_name(f"{path.name}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = None
+    try:
+        handle = lock_path.open("a+b")
+        handle.seek(0)
+        if handle.read(1) == b"":
+            handle.seek(0)
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+        yield handle
+    except (OSError, ValueError) as exc:
+        raise RecoveryLockError("recovery transaction lock unavailable") from exc
+    finally:
+        if handle is not None:
+            try:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except (OSError, ValueError):
+                pass
+            finally:
+                handle.close()
 
 
 def _canonical_payload(payload: dict) -> bytes:
@@ -36,6 +86,8 @@ class RecoveryManager:
         self.state_path = state_path
         self.backup_path = state_path.with_suffix(state_path.suffix + ".bak")
         self.reconciliation_journal_path = state_path.with_suffix(state_path.suffix + ".reconciliation.json")
+        self.reconciliation_lock_path = state_path.with_suffix(state_path.suffix + ".reconciliation.lock")
+        self._reconciliation_lock_handle = None
 
     @staticmethod
     def _empty_state() -> Dict:
@@ -87,7 +139,6 @@ class RecoveryManager:
             stored_digest = str(payload.get("integrity_sha256", "")).strip()
             if stored_digest and stored_digest != _digest(payload):
                 raise ValueError("recovery integrity digest mismatch")
-            # Files from schema 1 did not carry a digest; accept them for compatibility.
             if stored_digest:
                 schema = int(payload.get("schema_version", 1))
                 if schema > SCHEMA_VERSION:
@@ -95,7 +146,6 @@ class RecoveryManager:
             return payload, None
         except Exception as exc:
             return None, f"{type(exc).__name__}: {exc}"
-
 
     @staticmethod
     def _fsync_directory(path: Path) -> None:
@@ -107,8 +157,6 @@ class RecoveryManager:
             finally:
                 os.close(directory_fd)
         except OSError:
-            # Directory fsync is unavailable on some platforms, notably Windows.
-            # File-level fsync and atomic same-filesystem replacement remain mandatory.
             pass
 
     def _write_json_atomic(self, path: Path, payload: dict) -> None:
@@ -120,25 +168,46 @@ class RecoveryManager:
         tmp_path.replace(path)
         self._fsync_directory(path.parent)
 
+    def _acquire_reconciliation_lock(self) -> None:
+        if self._reconciliation_lock_handle is not None:
+            raise RecoveryLockError("reconciliation transaction lock already held by this manager")
+        manager = _recovery_file_lock(self.reconciliation_lock_path)
+        handle = manager.__enter__()
+        self._reconciliation_lock_handle = (manager, handle)
+
+    def _release_reconciliation_lock(self) -> None:
+        held = self._reconciliation_lock_handle
+        self._reconciliation_lock_handle = None
+        if held is None:
+            return
+        manager, _handle = held
+        manager.__exit__(None, None, None)
+
     def prepare_reconciliation(self, target_state: dict, ledger_records: list[dict] | None = None) -> str:
-        """Durably prepare a reconciliation transaction before live state mutation."""
+        """Durably prepare one recovery transaction and reserve the journal writer."""
         import uuid
-        current, _ = self._read_valid(self.state_path)
-        generation = int((current or {}).get("generation", 0) or 0) + 1
-        payload = dict(target_state)
-        payload["schema_version"] = SCHEMA_VERSION
-        payload["generation"] = generation
-        payload["ts"] = int(time.time())
-        payload["integrity_sha256"] = _digest(payload)
-        transaction = {
-            "schema_version": JOURNAL_SCHEMA_VERSION,
-            "transaction_id": uuid.uuid4().hex,
-            "target_state": payload,
-            "ledger_records": list(ledger_records or []),
-        }
-        transaction["integrity_sha256"] = _digest(transaction)
-        self._write_json_atomic(self.reconciliation_journal_path, transaction)
-        return str(transaction["transaction_id"])
+
+        self._acquire_reconciliation_lock()
+        try:
+            current, _ = self._read_valid(self.state_path)
+            generation = int((current or {}).get("generation", 0) or 0) + 1
+            payload = dict(target_state)
+            payload["schema_version"] = SCHEMA_VERSION
+            payload["generation"] = generation
+            payload["ts"] = int(time.time())
+            payload["integrity_sha256"] = _digest(payload)
+            transaction = {
+                "schema_version": JOURNAL_SCHEMA_VERSION,
+                "transaction_id": uuid.uuid4().hex,
+                "target_state": payload,
+                "ledger_records": list(ledger_records or []),
+            }
+            transaction["integrity_sha256"] = _digest(transaction)
+            self._write_json_atomic(self.reconciliation_journal_path, transaction)
+            return str(transaction["transaction_id"])
+        except Exception:
+            self._release_reconciliation_lock()
+            raise
 
     def load_reconciliation_journal(self) -> dict | None:
         path = self.reconciliation_journal_path
@@ -168,9 +237,12 @@ class RecoveryManager:
         self._write_json_atomic(self.backup_path, target)
 
     def clear_reconciliation(self) -> None:
-        if self.reconciliation_journal_path.exists():
-            self.reconciliation_journal_path.unlink()
-            self._fsync_directory(self.reconciliation_journal_path.parent)
+        try:
+            if self.reconciliation_journal_path.exists():
+                self.reconciliation_journal_path.unlink()
+                self._fsync_directory(self.reconciliation_journal_path.parent)
+        finally:
+            self._release_reconciliation_lock()
 
     def save_positions(
         self,
@@ -193,7 +265,6 @@ class RecoveryManager:
             previous_generation + 1,
         )
         self._write_json_atomic(self.state_path, payload)
-        # Keep the last known-good snapshot independently so a damaged primary can recover.
         self._write_json_atomic(self.backup_path, payload)
 
     def load_state(self) -> Dict:
@@ -259,9 +330,12 @@ class RecoveryManager:
         return self.load_state().get("risk_state", {})
 
     def clear(self) -> None:
-        if self.state_path.exists():
-            self.state_path.unlink()
-        if self.backup_path.exists():
-            self.backup_path.unlink()
-        if self.reconciliation_journal_path.exists():
-            self.reconciliation_journal_path.unlink()
+        try:
+            if self.state_path.exists():
+                self.state_path.unlink()
+            if self.backup_path.exists():
+                self.backup_path.unlink()
+            if self.reconciliation_journal_path.exists():
+                self.reconciliation_journal_path.unlink()
+        finally:
+            self._release_reconciliation_lock()
