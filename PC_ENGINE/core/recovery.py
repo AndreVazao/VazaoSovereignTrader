@@ -25,6 +25,10 @@ def _digest(payload: dict) -> str:
     return hashlib.sha256(_canonical_payload(payload)).hexdigest()
 
 
+class RecoveryConcurrencyError(RuntimeError):
+    """Raised when a recovery transaction would conflict with another pending writer."""
+
+
 class RecoveryManager:
     def __init__(self, state_path: Path | None = None, owner_id: str = "andre"):
         if state_path is None:
@@ -123,8 +127,13 @@ class RecoveryManager:
     def prepare_reconciliation(self, target_state: dict, ledger_records: list[dict] | None = None) -> str:
         """Durably prepare a reconciliation transaction before live state mutation."""
         import uuid
+        if self.reconciliation_journal_path.exists():
+            raise RecoveryConcurrencyError(
+                "reconciliation transaction already pending; recover or clear it before preparing another"
+            )
         current, _ = self._read_valid(self.state_path)
-        generation = int((current or {}).get("generation", 0) or 0) + 1
+        base_generation = int((current or {}).get("generation", 0) or 0)
+        generation = base_generation + 1
         payload = dict(target_state)
         payload["schema_version"] = SCHEMA_VERSION
         payload["generation"] = generation
@@ -133,6 +142,7 @@ class RecoveryManager:
         transaction = {
             "schema_version": JOURNAL_SCHEMA_VERSION,
             "transaction_id": uuid.uuid4().hex,
+            "base_generation": base_generation,
             "target_state": payload,
             "ledger_records": list(ledger_records or []),
         }
@@ -164,6 +174,19 @@ class RecoveryManager:
         if journal is None or str(journal.get("transaction_id")) != str(transaction_id):
             raise RuntimeError("reconciliation transaction missing or mismatched")
         target = dict(journal["target_state"])
+        current, current_error = self._read_valid(self.state_path)
+        if current is None and current_error not in (None, "missing"):
+            raise RecoveryConcurrencyError(f"cannot commit over invalid recovery state: {current_error}")
+        current_generation = int((current or {}).get("generation", 0) or 0)
+        base_generation = int(journal.get("base_generation", max(int(target.get("generation", 1)) - 1, 0)) or 0)
+        target_generation = int(target.get("generation", 0) or 0)
+        if current_generation == target_generation and current is not None:
+            if current.get("integrity_sha256") == target.get("integrity_sha256"):
+                return
+        if current_generation != base_generation:
+            raise RecoveryConcurrencyError(
+                f"reconciliation generation conflict: expected {base_generation}, found {current_generation}"
+            )
         self._write_json_atomic(self.state_path, target)
         self._write_json_atomic(self.backup_path, target)
 
