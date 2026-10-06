@@ -274,7 +274,7 @@ python -m playwright install chromium
 A camada browser não contorna CAPTCHA, 2FA, anti-bot ou outros mecanismos de segurança da plataforma.
 
 
-## Estado técnico consolidado — setembro de 2026
+## Estado técnico consolidado — outubro de 2026
 
 A infraestrutura de segurança e execução evoluiu significativamente além da base inicial. O projeto deve continuar a ser desenvolvido sempre por branch → testes → PR → CI → merge.
 
@@ -314,6 +314,19 @@ A validação de market data está em PC_ENGINE/core/preflight.py e cobre:
 - volume negativo.
 
 A regra é fail-closed: dados inválidos não devem alimentar uma decisão de trading.
+
+### Durabilidade de recovery e exactly-once
+
+A camada de persistência foi reforçada para reduzir janelas de perda/duplicação após crash:
+
+- o ledger de idempotência usa lock persistente por processo e fsync antes de confirmar uma nova entrada;
+- snapshots primário e backup do recovery usam escrita atómica com fsync do ficheiro temporário;
+- alterações de diretório são fsyncadas quando o sistema operativo suporta essa operação;
+- a remoção do journal de reconciliação também sincroniza o diretório;
+- journals de transferência corruptos ou incompatíveis falham fechados;
+- resultados financeiros ambíguos permanecem UNKNOWN_OUTCOME até reconciliação autoritativa.
+
+Estas proteções não autorizam REAL. Continuam subordinadas a readiness, preflight, Risk Engine, RealModeGuard, execução idempotente e reconciliação.
 
 ### Execução e reconciliação
 
