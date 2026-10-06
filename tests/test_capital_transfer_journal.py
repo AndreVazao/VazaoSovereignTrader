@@ -166,3 +166,28 @@ def test_existing_submitted_identity_blocks_duplicate_adapter_call(tmp_path):
 
     assert result.status is TransferStatus.SUBMITTED
     assert adapter.calls == 0
+
+
+def test_corrupt_journal_fails_closed(tmp_path):
+    path = tmp_path / "transfers.json"
+    path.write_text("{not-json", encoding="utf-8")
+    journal = CapitalTransferJournal(path)
+    contract = CapitalTransferContract(owner_id="owner")
+    record = _prepared(contract)
+    try:
+        journal.reserve(record)
+        assert False, "corrupt journal must not be treated as empty"
+    except RuntimeError as exc:
+        assert "journal" in str(exc)
+
+
+def test_idempotency_key_collision_is_blocked(tmp_path):
+    path = tmp_path / "transfers.json"
+    journal = CapitalTransferJournal(path)
+    contract = CapitalTransferContract(owner_id="owner")
+    first = _prepared(contract)
+    journal.reserve(first)
+    second = contract.prepare(owner_id="owner", venue_id="other-venue", account_id="account", asset="USDT", amount=10, source="spot", destination="funding", idempotency_key="transfer-1")
+    result = journal.reserve(second)
+    assert result.status is TransferStatus.BLOCKED
+    assert result.reason == "idempotency_key_collision"
