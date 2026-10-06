@@ -358,3 +358,17 @@ Branch `fix/source-ingestion-dns-preflight` adds pre-connection DNS validation t
 ## DNS pinned transport increment — pending review (2026-10-02)
 
 Branch `fix/source-ingestion-pinned-transport` replaces the DNS preflight-only transport gap with a validated-IP HTTPS connection. The fetcher pins the TCP dial to the validated public address while retaining the original hostname for TLS SNI/certificate verification, disables ambient HTTP(S) proxy configuration for this path, and rejects proxy tunneling. Regression tests cover the IP dial and TLS hostname invariants. Exact-head Python and Windows workflows are required before merge. Host/network egress controls remain defense-in-depth beyond this application-layer boundary.
+
+## 19. Recovery crash-window hardening ? PR #359 merged 2026-10-06
+
+The recovery audit found a concrete durability window between the primary and backup snapshot writes. If a process stopped after the primary write but before the backup write, the pending reconciliation journal could otherwise be considered complete while the backup still contained an older generation.
+
+PR #359 closes this by making reconciliation commit inspect both snapshots every time and repair the backup whenever it is missing, invalid or not equal to the durable target before the journal is cleared. A regression test simulates a crash immediately after the primary write and verifies restart recovery converges primary and backup to the same integrity digest.
+
+Verification:
+- PR #359 squash-merged to main as 162bdf61a7b19b6e721de9642acce7250e0713ea.
+- Local targeted recovery/durability tests: **10 passed**.
+- Hosted exact-head Python suite 37503646116 against e4c0b5f8e27b3dafa91a96560a2d05ea50637d3a: **SUCCESS**.
+- No REAL order, cancellation, transfer or capital authorization was added or changed.
+
+Next recovery audit remains end-to-end crash/restart semantics for UNKNOWN order results, partial fills, reconciliation mismatches and SAFE_MODE transitions.
