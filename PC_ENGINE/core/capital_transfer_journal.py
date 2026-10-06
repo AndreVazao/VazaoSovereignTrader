@@ -12,6 +12,10 @@ from PC_ENGINE.core.capital_transfer_contract import (
 )
 
 
+class CapitalTransferJournalError(RuntimeError):
+    """Journal integrity/storage failure; callers must fail closed."""
+
+
 class CapitalTransferJournal:
     """Durable transfer state machine used before any external side effect.
 
@@ -31,11 +35,13 @@ class CapitalTransferJournal:
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict) or raw.get("schema_version") != self.SCHEMA_VERSION:
-                return {}
-            records = raw.get("records", {})
-            return dict(records) if isinstance(records, dict) else {}
-        except (OSError, ValueError, TypeError):
-            return {}
+                raise CapitalTransferJournalError("transfer journal schema invalid")
+            records = raw.get("records")
+            if not isinstance(records, dict):
+                raise CapitalTransferJournalError("transfer journal records invalid")
+            return dict(records)
+        except (OSError, ValueError, TypeError) as exc:
+            raise CapitalTransferJournalError("transfer journal unreadable") from exc
 
     def _save(self, records: dict[str, dict[str, Any]]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,6 +92,13 @@ class CapitalTransferJournal:
         key = record.intent.idempotency_key
         existing = records.get(key)
         if existing:
+            if any(existing.get(k) != v for k, v in {
+                "owner_id": record.intent.owner_id, "venue_id": record.intent.venue_id,
+                "account_id": record.intent.account_id, "asset": record.intent.asset,
+                "amount": record.intent.amount, "source": record.intent.source,
+                "destination": record.intent.destination, "idempotency_key": record.intent.idempotency_key,
+            }.items()):
+                return CapitalTransferRecord(intent=record.intent, status=TransferStatus.BLOCKED, reason="idempotency_key_collision")
             status = str(existing.get("status", TransferStatus.UNKNOWN_OUTCOME.value))
             try:
                 state = TransferStatus(status)
