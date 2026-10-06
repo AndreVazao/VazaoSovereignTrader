@@ -189,6 +189,7 @@ class RecoveryManager:
             raise RuntimeError("reconciliation transaction missing or mismatched")
         target = dict(journal["target_state"])
         current, current_error = self._read_valid(self.state_path)
+        primary_valid = current is not None
         if current is None and current_error not in (None, "missing"):
             # A crash may have left the primary invalid after the backup was
             # durably written. Treat the last valid backup as the recovery
@@ -204,6 +205,13 @@ class RecoveryManager:
         target_generation = int(target.get("generation", 0) or 0)
         if current_generation == target_generation and current is not None:
             if current.get("integrity_sha256") == target.get("integrity_sha256"):
+                # A valid backup may be the only surviving baseline after a
+                # crash. Even when it already equals the journal target, the
+                # damaged primary must still be repaired before recovery is
+                # considered complete.
+                if primary_valid:
+                    return
+                self._write_json_atomic(self.state_path, target)
                 return
         if current_generation != base_generation:
             raise RecoveryConcurrencyError(
