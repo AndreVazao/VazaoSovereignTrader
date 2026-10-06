@@ -76,3 +76,34 @@ def test_prepare_allows_only_one_concurrent_journal_creator(tmp_path):
     journal = RecoveryManager(state_path=state_path).load_reconciliation_journal()
     assert journal is not None
     assert journal["target_state"]["pending_orders"]["marker"]["value"] in {"first", "second"}
+
+
+def test_pending_reconciliation_replays_after_restart(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    manager = RecoveryManager(state_path=state_path)
+    transaction_id = manager.prepare_reconciliation(target_state("restart"))
+
+    restarted = RecoveryManager(state_path=state_path)
+    assert restarted.recover_pending_reconciliation() == transaction_id
+    assert restarted.load_pending_orders()["marker"]["value"] == "restart"
+    assert restarted.load_reconciliation_journal() is None
+
+    restarted.recover_pending_reconciliation()
+    assert restarted.load_pending_orders()["marker"]["value"] == "restart"
+
+
+def test_pending_reconciliation_repairs_primary_from_backup(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    manager = RecoveryManager(state_path=state_path)
+    manager.save_positions({}, risk_state={"stable": True})
+    transaction_id = manager.prepare_reconciliation(target_state("repair"))
+
+    manager.commit_reconciliation(transaction_id)
+    state_path.write_text("{broken-json", encoding="utf-8")
+
+    restarted = RecoveryManager(state_path=state_path)
+    assert restarted.recover_pending_reconciliation() == transaction_id
+    recovered = restarted.load_state()
+    assert recovered["pending_orders"]["marker"]["value"] == "repair"
+    assert recovered["recovery_source"] == "primary"
+    assert restarted.load_reconciliation_journal() is None

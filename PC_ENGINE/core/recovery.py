@@ -189,13 +189,29 @@ class RecoveryManager:
             raise RuntimeError("reconciliation transaction missing or mismatched")
         target = dict(journal["target_state"])
         current, current_error = self._read_valid(self.state_path)
+        primary_valid = current is not None
         if current is None and current_error not in (None, "missing"):
-            raise RecoveryConcurrencyError(f"cannot commit over invalid recovery state: {current_error}")
+            # A crash may have left the primary invalid after the backup was
+            # durably written. Treat the last valid backup as the recovery
+            # baseline and repair the primary from the pending transaction.
+            backup, backup_error = self._read_valid(self.backup_path)
+            if backup is None:
+                raise RecoveryConcurrencyError(
+                    f"cannot commit over invalid recovery state: primary={current_error}; backup={backup_error}"
+                )
+            current = backup
         current_generation = int((current or {}).get("generation", 0) or 0)
         base_generation = int(journal.get("base_generation", max(int(target.get("generation", 1)) - 1, 0)) or 0)
         target_generation = int(target.get("generation", 0) or 0)
         if current_generation == target_generation and current is not None:
             if current.get("integrity_sha256") == target.get("integrity_sha256"):
+                # A valid backup may be the only surviving baseline after a
+                # crash. Even when it already equals the journal target, the
+                # damaged primary must still be repaired before recovery is
+                # considered complete.
+                if primary_valid:
+                    return
+                self._write_json_atomic(self.state_path, target)
                 return
         if current_generation != base_generation:
             raise RecoveryConcurrencyError(
@@ -203,6 +219,23 @@ class RecoveryManager:
             )
         self._write_json_atomic(self.state_path, target)
         self._write_json_atomic(self.backup_path, target)
+
+    def recover_pending_reconciliation(self, transaction_id: str | None = None) -> str | None:
+        """Replay a durable reconciliation after restart, then clear its journal.
+
+        The journal is the recovery intent. If the process crashed after either
+        state write but before journal cleanup, replay is safe because commit is
+        generation-checked and idempotent for the same target.
+        """
+        journal = self.load_reconciliation_journal()
+        if journal is None:
+            return None
+        journal_id = str(journal.get("transaction_id"))
+        if transaction_id is not None and journal_id != str(transaction_id):
+            raise RuntimeError("reconciliation transaction missing or mismatched")
+        self.commit_reconciliation(journal_id)
+        self.clear_reconciliation()
+        return journal_id
 
     def clear_reconciliation(self) -> None:
         if self.reconciliation_journal_path.exists():
