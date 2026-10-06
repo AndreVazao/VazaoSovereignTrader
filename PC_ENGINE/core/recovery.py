@@ -229,20 +229,34 @@ class RecoveryManager:
             raise RuntimeError(f"reconciliation journal corrupt: {type(exc).__name__}: {exc}") from exc
 
     def commit_reconciliation(self, transaction_id: str) -> None:
-        journal = self.load_reconciliation_journal()
-        if journal is None or str(journal.get("transaction_id")) != str(transaction_id):
-            raise RuntimeError("reconciliation transaction missing or mismatched")
-        target = dict(journal["target_state"])
-        self._write_json_atomic(self.state_path, target)
-        self._write_json_atomic(self.backup_path, target)
+        acquired_here = False
+        if self._reconciliation_lock_handle is None:
+            self._acquire_reconciliation_lock()
+            acquired_here = True
+        try:
+            journal = self.load_reconciliation_journal()
+            if journal is None or str(journal.get("transaction_id")) != str(transaction_id):
+                raise RuntimeError("reconciliation transaction missing or mismatched")
+            target = dict(journal["target_state"])
+            self._write_json_atomic(self.state_path, target)
+            self._write_json_atomic(self.backup_path, target)
+        except Exception:
+            if acquired_here:
+                self._release_reconciliation_lock()
+            raise
 
     def clear_reconciliation(self) -> None:
+        acquired_here = False
+        if self.reconciliation_journal_path.exists() and self._reconciliation_lock_handle is None:
+            self._acquire_reconciliation_lock()
+            acquired_here = True
         try:
             if self.reconciliation_journal_path.exists():
                 self.reconciliation_journal_path.unlink()
                 self._fsync_directory(self.reconciliation_journal_path.parent)
         finally:
-            self._release_reconciliation_lock()
+            if acquired_here or self._reconciliation_lock_handle is not None:
+                self._release_reconciliation_lock()
 
     def save_positions(
         self,
