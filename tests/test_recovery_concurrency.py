@@ -107,3 +107,38 @@ def test_pending_reconciliation_repairs_primary_from_backup(tmp_path):
     assert recovered["pending_orders"]["marker"]["value"] == "repair"
     assert recovered["recovery_source"] == "primary"
     assert restarted.load_reconciliation_journal() is None
+
+
+def test_pending_reconciliation_repairs_backup_after_primary_only_commit(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    manager = RecoveryManager(state_path=state_path)
+    manager.save_positions({}, risk_state={"stable": True})
+    transaction_id = manager.prepare_reconciliation(target_state("primary-only"))
+
+    original = manager._write_json_atomic
+
+    def fail_after_primary(path, payload):
+        original(path, payload)
+        if path == manager.state_path:
+            raise RuntimeError("simulated crash after primary write")
+
+    manager._write_json_atomic = fail_after_primary
+
+    with pytest.raises(RuntimeError, match="simulated crash after primary write"):
+        manager.commit_reconciliation(transaction_id)
+
+    backup_before = manager._read_valid(manager.backup_path)[0]
+    assert backup_before is not None
+    assert backup_before["generation"] == 1
+
+    restarted = RecoveryManager(state_path=state_path)
+    assert restarted.recover_pending_reconciliation() == transaction_id
+    assert restarted.load_reconciliation_journal() is None
+
+    primary, _ = restarted._read_valid(restarted.state_path)
+    backup, _ = restarted._read_valid(restarted.backup_path)
+    assert primary is not None
+    assert backup is not None
+    assert primary["integrity_sha256"] == backup["integrity_sha256"]
+    assert primary["pending_orders"]["marker"]["value"] == "primary-only"
+    assert backup["pending_orders"]["marker"]["value"] == "primary-only"

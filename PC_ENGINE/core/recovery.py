@@ -190,11 +190,11 @@ class RecoveryManager:
         target = dict(journal["target_state"])
         current, current_error = self._read_valid(self.state_path)
         primary_valid = current is not None
+        backup, backup_error = self._read_valid(self.backup_path)
         if current is None and current_error not in (None, "missing"):
             # A crash may have left the primary invalid after the backup was
             # durably written. Treat the last valid backup as the recovery
             # baseline and repair the primary from the pending transaction.
-            backup, backup_error = self._read_valid(self.backup_path)
             if backup is None:
                 raise RecoveryConcurrencyError(
                     f"cannot commit over invalid recovery state: primary={current_error}; backup={backup_error}"
@@ -205,13 +205,19 @@ class RecoveryManager:
         target_generation = int(target.get("generation", 0) or 0)
         if current_generation == target_generation and current is not None:
             if current.get("integrity_sha256") == target.get("integrity_sha256"):
-                # A valid backup may be the only surviving baseline after a
-                # crash. Even when it already equals the journal target, the
-                # damaged primary must still be repaired before recovery is
-                # considered complete.
-                if primary_valid:
-                    return
-                self._write_json_atomic(self.state_path, target)
+                # The primary may already contain the target because a crash
+                # happened after the primary write but before the backup write.
+                # Recovery must still verify and repair the backup before the
+                # journal can be cleared; otherwise a later primary failure
+                # would resurrect an older snapshot.
+                backup_matches_target = (
+                    backup is not None
+                    and backup.get("integrity_sha256") == target.get("integrity_sha256")
+                )
+                if not primary_valid:
+                    self._write_json_atomic(self.state_path, target)
+                if not backup_matches_target:
+                    self._write_json_atomic(self.backup_path, target)
                 return
         if current_generation != base_generation:
             raise RecoveryConcurrencyError(
