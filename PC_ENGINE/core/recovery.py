@@ -61,6 +61,7 @@ class RecoveryManager:
         financial_account: Dict | None,
         risk_state: Dict | None,
         generation: int,
+        runtime_status: str = "OFF",
     ) -> dict:
         payload = {
             "schema_version": SCHEMA_VERSION,
@@ -72,6 +73,7 @@ class RecoveryManager:
             "execution_intents": dict(sorted((execution_intents or {}).items())),
             "financial_account": dict(financial_account or {}),
             "risk_state": dict(risk_state or {}),
+            "runtime_status": str(runtime_status or "OFF").upper(),
         }
         payload["integrity_sha256"] = _digest(payload)
         return payload
@@ -256,6 +258,7 @@ class RecoveryManager:
         execution_intents: Dict[str, dict] | None = None,
         financial_account: Dict | None = None,
         risk_state: Dict | None = None,
+        runtime_status: str = "OFF",
     ) -> None:
         current, _ = self._read_valid(self.state_path)
         previous_generation = int((current or {}).get("generation", 0) or 0)
@@ -267,6 +270,7 @@ class RecoveryManager:
             financial_account,
             risk_state,
             previous_generation + 1,
+            runtime_status,
         )
         self._write_json_atomic(self.state_path, payload)
         # Keep the last known-good snapshot independently so a damaged primary can recover.
@@ -293,6 +297,7 @@ class RecoveryManager:
             return state
 
         state = {name: selected.get(name, {}) for name in self._empty_state()}
+        state["runtime_status"] = str(selected.get("runtime_status", "OFF") or "OFF").upper()
         state["recovery_source"] = recovery_source
         state["recovery_generation"] = int(selected.get("generation", 0) or 0)
         if recovery_error:
