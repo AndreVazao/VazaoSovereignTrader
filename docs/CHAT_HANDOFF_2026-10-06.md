@@ -166,8 +166,23 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - PC local main was synchronized to the merged GitHub main SHA 19ac92c5f852b49a20a844c37dddf9d7847095de and the worktree is clean.
 - Next recovery focus: authoritative reconciliation evidence across restart/idempotency, especially mismatch -> SAFE_MODE preservation without automatic state correction, plus any genuinely remaining crash permutation.
 
+## Recovery audit checkpoint — PR #371 — authoritative reconciliation SAFE_MODE persistence
+
+- PR #371 merged to main as `984271a76c33595131183ec6fe271b686e9521a2`.
+- Identified a genuine durability gap: authoritative account-reconciliation mismatch entered `SAFE_MODE` in memory, but the runtime safety status itself was not part of the durable recovery snapshot.
+- Hardened recovery to persist an optional scalar `runtime_status` without changing the recovery schema or breaking older snapshots.
+- Engine startup now restores persisted `SAFE_MODE` before normal operation, and authoritative reconciliation persists the safety state immediately after a blocking mismatch.
+- The implementation does not overwrite local positions/account state to make the mismatch disappear; repeated reconciliation remains BLOCKED and preserves the local position snapshot.
+- Added regression coverage for mismatch -> SAFE_MODE -> persisted snapshot -> fresh engine restart, plus repeated mismatch idempotency.
+- Local `git diff --check`: clean.
+- Local pytest attempts for `tests/test_account_reconciliation.py` and `tests/test_recovery_concurrency.py` stalled with no output in the existing Windows environment; processes were terminated. These validations remain **inconclusive, not green**.
+- No hosted Actions run was triggered because the current included-minute budget is exhausted and this change did not justify consuming the manual clean-environment budget.
+- No REAL order, cancellation, transfer authorization, or automatic state correction was introduced.
+- PC main was synchronized to the merged GitHub main SHA `984271a76c33595131183ec6fe271b686e9521a2` before starting this documentation checkpoint.
+- Next recovery focus: verify remaining authoritative-evidence/restart permutations and ensure any future SAFE_MODE exit requires an independent, explicit recovery path rather than implicit startup normalization.
+
 ## Current live baseline
 
-- main: 19ac92c5f852b49a20a844c37dddf9d7847095de
-- PRs #355 through #370 relevant to the current recovery/local-first line are merged as documented across this handoff.
+- main: 984271a76c33595131183ec6fe271b686e9521a2
+- PRs #355 through #371 relevant to the current recovery/local-first line are merged as documented across this handoff.
 - PAPER/read-only remains the default. No REAL order, cancellation or capital-transfer authorization is enabled.
