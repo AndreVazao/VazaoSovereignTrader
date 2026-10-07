@@ -165,3 +165,37 @@ def test_pending_reconciliation_repairs_corrupt_backup_when_primary_already_targ
     assert primary["integrity_sha256"] == backup["integrity_sha256"]
     assert backup["pending_orders"]["marker"]["value"] == "corrupt-backup"
     assert restarted.load_reconciliation_journal() is None
+
+
+def test_pending_reconciliation_repairs_invalid_primary_from_backup(tmp_path):
+    state_path = tmp_path / "runtime_state.json"
+    manager = RecoveryManager(state_path=state_path)
+    manager.save_positions({}, risk_state={"stable": True})
+    transaction_id = manager.prepare_reconciliation(target_state("invalid-primary"))
+
+    original = manager._write_json_atomic
+
+    def fail_after_backup(path, payload):
+        original(path, payload)
+        if path == manager.backup_path:
+            manager.state_path.write_text("{broken-json", encoding="utf-8")
+            raise RuntimeError("simulated crash after backup write")
+
+    manager._write_json_atomic = fail_after_backup
+
+    with pytest.raises(RuntimeError, match="simulated crash after backup write"):
+        manager.commit_reconciliation(transaction_id)
+
+    restarted = RecoveryManager(state_path=state_path)
+    assert restarted.recover_pending_reconciliation() == transaction_id
+    assert restarted.load_reconciliation_journal() is None
+
+    primary, primary_error = restarted._read_valid(restarted.state_path)
+    backup, backup_error = restarted._read_valid(restarted.backup_path)
+    assert primary is not None
+    assert backup is not None
+    assert primary_error is None
+    assert backup_error is None
+    assert primary["integrity_sha256"] == backup["integrity_sha256"]
+    assert primary["pending_orders"]["marker"]["value"] == "invalid-primary"
+    assert backup["pending_orders"]["marker"]["value"] == "invalid-primary"
