@@ -286,3 +286,19 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - Changed Python files compile successfully and `git diff --check` is clean.
 - Full account-reconciliation pytest remains inconclusive/stalled; no green claim. No GitHub Actions consumed.
 - Next: review this recovery implementation with focused tests, then continue the end-to-end REAL caller/path audit.
+
+
+## 2026-10-07 — Recovery validation + REAL caller-path audit
+
+- Exhaustive SAFE_MODE mutation audit remains closed: only recover_from_safe_mode() can clear SAFE_MODE.
+- Recovery now generates its own preflight/readiness/reconciliation/timing evidence and checks freshness; caller booleans are gone.
+- Added authenticated POST /safe-mode/recover with explicit confirmation only.
+- Added REAL authorization caller-path audit. Production entry points checked: /real/arm, /real/disarm, /start, /mode, autonomous promotion, and explicit recovery.
+- Fixed /mode REAL sequencing so the one-shot RealModeGuard authorization is consumed before SovereignEngine.set_mode("REAL"), which requires freshly consumed authorization.
+- Focused recovery validation: 7 passed. Full account-reconciliation suite remains stalled/inconclusive.
+- No REAL order, cancellation, transfer, or capital authorization was enabled.
+
+## Next
+1. Continue end-to-end REAL execution-path audit from REAL_ACTIVE through order gate, adapter, authoritative outcome, persistence and recovery.
+2. Add API-level regression coverage for /mode REAL authorization consumption without invoking live services.
+3. Keep all REAL execution disabled while auditing.

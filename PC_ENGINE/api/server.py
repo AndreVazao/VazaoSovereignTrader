@@ -837,6 +837,9 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             authorized, reason = guard.can_enable_real()
             if not authorized:
                 return jsonify({"ok": False, "error": "real_mode_not_authorized", "reason": reason, "guard": guard.snapshot()}), 403
+            consumed, consume_reason = guard.consume()
+            if not consumed:
+                return jsonify({"ok": False, "error": "real_mode_authorization_consumption_failed", "reason": consume_reason, "guard": guard.snapshot()}), 403
             engine.set_mode("REAL", real_authorized=True)
             preflight = engine.run_preflight()
             reconciliation = engine.reconcile_account_state()

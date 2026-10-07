@@ -213,3 +213,78 @@ def test_safe_mode_stop_does_not_clear_safety_latch(tmp_path, monkeypatch):
 
     assert engine.state.status == "SAFE_MODE"
     assert engine.recovery.load_state()["runtime_status"] == "SAFE_MODE"
+
+
+def _minimal_recovery_engine(mode="PAPER", readiness=None):
+    import threading
+    import time
+    from types import SimpleNamespace
+    from PC_ENGINE.core.execution_gate import ExecutionGate
+    engine = object.__new__(SovereignEngine)
+    engine.mode = mode
+    engine.config = {"safe_mode_recovery": {"confirmation_phrase": "RECUPERAR SAFE MODE", "max_evidence_age_seconds": 30}}
+    engine.state = SimpleNamespace(status="SAFE_MODE", operational={})
+    engine.lock = threading.Lock()
+    engine.execution_gate = ExecutionGate()
+    engine._persist_recovery = lambda: None
+    engine.log = lambda *args, **kwargs: None
+    engine.run_preflight = lambda: {"ok": True}
+    engine.real_readiness_service = SimpleNamespace(collect=lambda *args, **kwargs: readiness or {
+        "ready": True, "status": "READY", "blockers": [], "collected_at_ms": int(time.time() * 1000),
+        "paper_review": {"ready": True}, "websocket_timing": {"required": False, "fresh": True, "eligible_for_economic_interpretation": True},
+    })
+    return engine
+
+
+def test_safe_mode_recovery_blocks_stale_readiness_without_engine_bootstrap():
+    import time
+    engine = _minimal_recovery_engine(readiness={
+        "ready": True, "status": "READY", "blockers": [], "collected_at_ms": int(time.time() * 1000) - 31_000,
+        "paper_review": {"ready": True}, "websocket_timing": {"required": False, "fresh": True, "eligible_for_economic_interpretation": True},
+    })
+    result = engine.recover_from_safe_mode(human_confirmation="RECUPERAR SAFE MODE")
+    assert result["ok"] is False
+    assert result["reason"] == "recovery_evidence_not_satisfied"
+    assert result["evidence"]["fresh"] is False
+    assert engine.state.status == "SAFE_MODE"
+
+
+def test_safe_mode_recovery_blocks_preflight_failure_without_engine_bootstrap():
+    engine = _minimal_recovery_engine()
+    engine.run_preflight = lambda: {"ok": False, "reason": "synthetic"}
+    result = engine.recover_from_safe_mode(human_confirmation="RECUPERAR SAFE MODE")
+    assert result["ok"] is False
+    assert result["reason"] == "preflight_failed"
+    assert engine.state.status == "SAFE_MODE"
+
+
+def test_safe_mode_recovery_blocks_timing_failure_without_engine_bootstrap():
+    engine = _minimal_recovery_engine(readiness={
+        "ready": True, "status": "READY", "blockers": [], "collected_at_ms": __import__("time").time_ns() // 1_000_000,
+        "paper_review": {"ready": True}, "websocket_timing": {"required": True, "fresh": False, "eligible_for_economic_interpretation": False},
+    })
+    result = engine.recover_from_safe_mode(human_confirmation="RECUPERAR SAFE MODE")
+    assert result["ok"] is False
+    assert result["reason"] == "recovery_evidence_not_satisfied"
+    assert result["evidence"]["timing_ok"] is False
+    assert engine.state.status == "SAFE_MODE"
+
+
+def test_safe_mode_recovery_real_requires_fresh_guard_authorization():
+    from PC_ENGINE.core.real_mode_guard import RealModeGuard
+    engine = _minimal_recovery_engine(mode="REAL")
+    engine.reconcile_account_state = lambda: {"ok": True, "status": "MATCH"}
+    engine.real_mode_guard = RealModeGuard({"enabled": True, "allow_real": True, "confirmation_phrase": "EU ACEITO O RISCO"})
+    result = engine.recover_from_safe_mode(human_confirmation="RECUPERAR SAFE MODE")
+    assert result["ok"] is False
+    assert result["reason"] == "fresh_real_human_authorization_required"
+    assert engine.state.status == "SAFE_MODE"
+
+
+def test_safe_mode_recovery_paper_keeps_execution_gate_in_paper():
+    engine = _minimal_recovery_engine()
+    result = engine.recover_from_safe_mode(human_confirmation="RECUPERAR SAFE MODE")
+    assert result["ok"] is True
+    assert engine.state.status == "OFF"
+    assert engine.execution_gate.state.value == "PAPER"
+    assert engine.execution_gate.human_authorized is False

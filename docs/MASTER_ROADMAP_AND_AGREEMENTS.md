@@ -397,3 +397,14 @@ Next recovery audit remains end-to-end crash/restart semantics for UNKNOWN order
 - REAL recovery requires fresh REAL human authorization in addition to the independently generated evidence.
 - Validation is local-first: compile + diff-check passed; pytest remains inconclusive/stalled and is not classified green.
 - No REAL execution/capital capability was enabled.
+
+
+## 2026-10-07 — Focused recovery validation + REAL caller-path checkpoint
+
+- Product main current checkpoint advances beyond the #376 baseline with hardened SAFE_MODE recovery evidence and the REAL caller-path fix described below.
+- Added docs/REAL_AUTHORIZATION_CALLER_PATH_AUDIT_2026-10-07.md.
+- Audited production REAL entry callers: /real/arm, /real/disarm, /start, /mode, autonomous PAPER→REAL promotion, and recover_from_safe_mode().
+- Found and fixed an internal /mode REAL authorization sequencing bug: the route checked can_enable_real() but did not consume the one-shot authorization required by SovereignEngine.set_mode("REAL"). The route now consumes immediately before the guarded transition and fails closed on consumption failure.
+- Focused SAFE_MODE recovery contract validation: 7 tests passed. These cover stale readiness, failed preflight, stale/required timing, missing fresh REAL authorization, explicit recovery, and PAPER gate preservation.
+- Full account-reconciliation pytest remains an environmental stall and is not classified green.
+- REAL execution/capital operations remain forbidden; no authorization is created automatically.
