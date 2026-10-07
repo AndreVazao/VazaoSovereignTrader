@@ -732,10 +732,14 @@ class SovereignEngine:
         self.log("PREFLIGHT_DONE", payload)
         return payload
 
-    def pause(self, paused: bool = True) -> None:
+    def pause(self, paused: bool = True) -> bool:
+        if not paused and self.state.status == "SAFE_MODE":
+            self.log("SAFE_MODE_RESUME_BLOCKED", {"reason": "explicit_recovery_required"})
+            return False
         with self.lock:
             self.state.status = "PAUSED" if paused else "RUNNING"
         self.log("ENGINE_PAUSED" if paused else "ENGINE_RESUMED")
+        return True
 
     def stop(self) -> None:
         self.stop_event.set()

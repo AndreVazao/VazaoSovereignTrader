@@ -800,7 +800,9 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     @app.post("/resume")
     def resume():
         require_scope("trade_paper")
-        engine.pause(False)
+        resumed = engine.pause(False)
+        if not resumed:
+            return jsonify({"ok": False, "error": "safe_mode_requires_explicit_recovery"}), 409
         return jsonify({"ok": True})
 
     @app.post("/stop")
