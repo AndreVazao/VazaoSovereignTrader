@@ -750,7 +750,10 @@ class SovereignEngine:
         if self.research_thread is not None and self.research_thread.is_alive():
             self.research_thread.join(timeout=1.0)
         with self.lock:
-            self.state.status = "OFF"
+            # Stopping workers is allowed from SAFE_MODE, but stopping must never
+            # clear the safety latch. Only recover_from_safe_mode() may exit it.
+            if self.state.status != "SAFE_MODE":
+                self.state.status = "OFF"
             self.state.paper_collector = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
         self._persist_recovery()
         self.log("ENGINE_STOPPED")
