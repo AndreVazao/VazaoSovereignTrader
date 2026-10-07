@@ -1,4 +1,4 @@
-# VazaoSovereignTrader — Chat Handoff — 2026-10-06
+# VazaoSovereignTrader â€” Chat Handoff â€” 2026-10-06
 
 ## Current main baseline
 
@@ -101,16 +101,16 @@
 
 ## Repository documents
 
-- `docs/MASTER_ROADMAP_AND_AGREEMENTS.md` — master product/safety/roadmap charter.
-- `docs/PROJECT_CONTEXT.md` — live engineering history and continuity context.
-- `docs/REAL_CAPITAL_EXECUTION_AUDIT_2026-10-04.md` — REAL capital execution audit.
-- `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md` — opportunity/capital design.
-- `docs/OPPORTUNITY_REGISTRY.md` — typed opportunity evidence/state model.
-- `docs/CHAT_HANDOFF_2026-10-05.md` — previous handoff; this file supersedes it for the current session.
+- `docs/MASTER_ROADMAP_AND_AGREEMENTS.md` â€” master product/safety/roadmap charter.
+- `docs/PROJECT_CONTEXT.md` â€” live engineering history and continuity context.
+- `docs/REAL_CAPITAL_EXECUTION_AUDIT_2026-10-04.md` â€” REAL capital execution audit.
+- `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md` â€” opportunity/capital design.
+- `docs/OPPORTUNITY_REGISTRY.md` â€” typed opportunity evidence/state model.
+- `docs/CHAT_HANDOFF_2026-10-05.md` â€” previous handoff; this file supersedes it for the current session.
 
 ## Working style
 
-The owner prefers autonomous forward progress with focused small-to-medium PRs rather than micro-PRs or giant changes. When the owner says “Avança”, inspect live GitHub state, implement the next safe coherent increment, run/verify CI, merge when green, document the result and continue to the next hardening item.
+The owner prefers autonomous forward progress with focused small-to-medium PRs rather than micro-PRs or giant changes. When the owner says â€œAvanÃ§aâ€, inspect live GitHub state, implement the next safe coherent increment, run/verify CI, merge when green, document the result and continue to the next hardening item.
 
 ## Do not lose these boundaries
 
@@ -121,16 +121,16 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - No REAL authorization inferred from capability declarations, persisted evidence, reports or CI.
 - No claim that CI is green unless the exact head SHA has SUCCESS conclusions.
 
-## Recovery audit checkpoint � PR #364
+## Recovery audit checkpoint — PR #364
 - PR #364 merged: focused crash-window regression coverage for reconciliation ledger side effects.
-- Local targeted validation: tests/test_recovery_pending_orders.py � **10 passed**.
+- Local targeted validation: tests/test_recovery_pending_orders.py — **10 passed**.
 - Covered: ledger write interruption after durable state commit; restart with journal still pending; successful retry without duplicate ledger record; journal-clear interruption after successful ledger write; restart idempotency.
 - No production runtime code changed in #364.
 - Main merge SHA: ce82f1b885dbd997dd082ee7fb8bcfe051f558e6.
 - Next recovery focus remains authoritative reconciliation mismatch / SAFE_MODE transitions and any remaining primary/backup crash permutations.
 
 
-## Recovery audit checkpoint — authoritative mismatch / SAFE_MODE
+## Recovery audit checkpoint â€” authoritative mismatch / SAFE_MODE
 - Reviewed `SovereignEngine.reconcile_account_state()`: authoritative venue balance/open-order reads are the source of truth; local state is never overwritten to hide a mismatch. Position, base-flow, quote and unexpected-asset mismatches return BLOCKED and enter SAFE_MODE.
 - Existing regression coverage already asserts position mismatch -> BLOCKED + SAFE_MODE (`tests/test_account_reconcilition.py`) and real-start reconciliation blocks failed account reconciliation.
 - Local Windows pytest execution for this reconciliation module currently stalls after starting the test process even on the existing baseline test; it was terminated to avoid hanging the PC. This is recorded as **inconclusive local execution**, not green. No runtime code changed in this checkpoint.
@@ -138,7 +138,7 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - Next recovery focus: remaining primary/backup crash permutations and restart/idempotency around authoritative reconciliation evidence, with no automatic state correction on mismatch.
 
 
-## Recovery audit checkpoint — PR #367 — automatic engine restart ledger replay
+## Recovery audit checkpoint â€” PR #367 â€” automatic engine restart ledger replay
 
 - PR #367 merged to main as 25c808e31103e5f5e0468205cd959001338884ad.
 - Added focused integration coverage in tests/test_engine_restart_recovery.py for the real startup recovery path: a durable reconciliation journal containing a ledger record is discovered by a fresh SovereignEngine, the target state is committed, the ledger side effect is replayed idempotently, the journal is cleared, and a second restart does not duplicate the trade.
@@ -153,4 +153,21 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - main: 25c808e31103e5f5e0468205cd959001338884ad
 - PRs #355 through #367 relevant to the current recovery/local-first line are merged as documented across this handoff.
 - Routine hosted Actions remain constrained by the exhausted included-minute budget; final Windows installer/EXE and Android APK builds remain GitHub Actions responsibilities and are not replaced by local builds.
+- PAPER/read-only remains the default. No REAL order, cancellation or capital-transfer authorization is enabled.
+
+
+## Recovery audit checkpoint — PR #370 — invalid primary / valid backup replay
+
+- PR #370 merged to main as 19ac92c5f852b49a20a844c37dddf9d7847095de.
+- Added focused regression coverage for the complementary crash permutation: backup is durably written, primary becomes unreadable, and the reconciliation journal remains pending.
+- Restart/replay must converge primary and backup to the journal target, preserve identical integrity digests, and clear the journal only after convergence.
+- Local targeted validation on PC-Vazao-Anjos: tests/test_recovery_concurrency.py — 9 passed in 1.81s.
+- Test-only checkpoint; no production runtime, REAL authorization, order execution or capital-transfer behavior changed.
+- PC local main was synchronized to the merged GitHub main SHA 19ac92c5f852b49a20a844c37dddf9d7847095de and the worktree is clean.
+- Next recovery focus: authoritative reconciliation evidence across restart/idempotency, especially mismatch -> SAFE_MODE preservation without automatic state correction, plus any genuinely remaining crash permutation.
+
+## Current live baseline
+
+- main: 19ac92c5f852b49a20a844c37dddf9d7847095de
+- PRs #355 through #370 relevant to the current recovery/local-first line are merged as documented across this handoff.
 - PAPER/read-only remains the default. No REAL order, cancellation or capital-transfer authorization is enabled.
