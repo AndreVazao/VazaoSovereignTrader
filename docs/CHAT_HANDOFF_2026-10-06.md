@@ -224,3 +224,19 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - main: `42362843672d979371e4b0a16aedd91fc32ab9d4`
 - PR #373 and #374 are merged.
 - Next focus: enumerate remaining state-mutating API/control paths and ensure none can clear SAFE_MODE except the explicit recovery path.
+
+
+## Recovery audit checkpoint — PR #375 — autonomous promotion bypass closed
+
+- PR #375 merged to main as `9e05e8121911a6bbb69765cec746098f3477624a`.
+- Full status mutation audit found a third SAFE_MODE exit path: `_maybe_autonomous_real_promotion()` ran before the cycle SAFE_MODE hold and could promote PAPER to REAL.
+- `_maybe_autonomous_real_promotion()` now fails closed immediately while SAFE_MODE is active and requires explicit recovery first.
+- Regression validation: **10 passed** focused autonomous-promotion/SAFE_MODE tests in `.venv`.
+- `git diff --check`: clean.
+- No REAL authorization or execution capability was enabled/relaxed.
+
+## Current live baseline
+
+- main: `9e05e8121911a6bbb69765cec746098f3477624a`
+- SAFE_MODE exits now blocked across startup, `/resume`, `pause(False)`, and autonomous PAPER→REAL promotion.
+- Next focus: enumerate any remaining state-mutating paths and then make recovery evidence independently generated/fresh rather than caller-supplied booleans.
