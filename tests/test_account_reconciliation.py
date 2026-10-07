@@ -168,3 +168,27 @@ def test_safe_mode_blocks_resume_without_explicit_recovery(tmp_path, monkeypatch
     engine.state.status = "SAFE_MODE"
     assert engine.pause(False) is False
     assert engine.state.status == "SAFE_MODE"
+
+
+
+def test_safe_mode_stop_does_not_clear_safety_latch(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    import PC_ENGINE.core.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config_path = Path(__file__).resolve().parents[1] / "PC_ENGINE" / "config" / "config.example.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["owner"]["id"] = "safe-mode-stop-owner"
+    config["radar"]["enabled"] = False
+    config["shared_intelligence"]["sync_enabled"] = False
+    config["exchanges"] = {}
+
+    engine = SovereignEngine(config)
+    engine.state.status = "SAFE_MODE"
+    engine._persist_recovery()
+
+    engine.stop()
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.recovery.load_state()["runtime_status"] == "SAFE_MODE"
