@@ -30,7 +30,7 @@ The complete `self.state.status` write inventory in `PC_ENGINE/core/engine.py` i
 4. `start()` — `RUNNING`.
 5. `recover_from_safe_mode()` — `OFF`.
 6. `pause()` — `PAUSED` or `RUNNING`.
-7. `stop()` — `OFF), but only when current status is not `SAFE_MODE`.
+7. `stop()` — `OFF`, but only when current status is not `SAFE_MODE`.
 8. `_maybe_autonomous_real_promotion()` — `RUNNING`.
 9. `cycle()` — `KILL_SWITCH`.
 
