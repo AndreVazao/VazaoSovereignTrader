@@ -207,3 +207,20 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - PRs #355 through #373 relevant to the current recovery/local-first line are merged as documented.
 - PAPER/read-only remains the default. No REAL order, cancellation or capital-transfer authorization is enabled.
 - Next focus: audit all callers/API surfaces that can clear SAFE_MODE and ensure recovery evidence is independently produced and fresh, rather than caller-supplied flags.
+
+
+## Recovery audit checkpoint — PR #374 — SAFE_MODE resume bypass closed
+
+- PR #374 merged to main as `42362843672d979371e4b0a16aedd91fc32ab9d4`.
+- Found and closed a second SAFE_MODE exit path: `pause(False)` could set `RUNNING`, and `/resume` exposed that path with a PAPER scope.
+- `SovereignEngine.pause(False)` now refuses to resume from SAFE_MODE and records a blocking event.
+- `/resume` now returns HTTP 409 with `safe_mode_requires_explicit_recovery` when SAFE_MODE is active.
+- Focused `.venv` validation: **4 passed** SAFE_MODE tests.
+- `git diff --check`: clean.
+- No REAL authorization/execution behavior was enabled or relaxed.
+
+## Current live baseline
+
+- main: `42362843672d979371e4b0a16aedd91fc32ab9d4`
+- PR #373 and #374 are merged.
+- Next focus: enumerate remaining state-mutating API/control paths and ensure none can clear SAFE_MODE except the explicit recovery path.
