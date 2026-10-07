@@ -186,3 +186,24 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - main: 984271a76c33595131183ec6fe271b686e9521a2
 - PRs #355 through #371 relevant to the current recovery/local-first line are merged as documented across this handoff.
 - PAPER/read-only remains the default. No REAL order, cancellation or capital-transfer authorization is enabled.
+
+
+## Recovery audit checkpoint — PR #373 — explicit SAFE_MODE recovery
+
+- PR #373 merged to main as `91c8a08ea79bb292b79050f06aab47674ca07350`.
+- Identified a genuine gap after PR #371: persisted SAFE_MODE was restored correctly, but `start()` could still proceed to RUNNING after a restart because it did not block on the restored safety state.
+- Hardened `SovereignEngine.start()` to fail closed while `state.status == SAFE_MODE` and require explicit recovery instead of implicit normalization.
+- Added `recover_from_safe_mode()` requiring explicit human confirmation plus readiness/reconciliation/timing evidence. REAL recovery additionally remains behind `ExecutionGate`.
+- Added focused regression coverage for multiple SAFE_MODE restarts, blocked start, explicit recovery, and persisted OFF after recovery.
+- Local `.venv` targeted SAFE_MODE validation: **3 passed**.
+- `git diff --check`: clean.
+- Full account-reconciliation module remained **inconclusive/stalled** in the existing Windows environment; not green.
+- Global Python environment also lacks `ccxt`; validation was therefore performed against the isolated project `.venv`.
+- No hosted Actions were consumed and no REAL authorization/execution capability was enabled or relaxed.
+
+## Current live baseline
+
+- main: `91c8a08ea79bb292b79050f06aab47674ca07350`
+- PRs #355 through #373 relevant to the current recovery/local-first line are merged as documented.
+- PAPER/read-only remains the default. No REAL order, cancellation or capital-transfer authorization is enabled.
+- Next focus: audit all callers/API surfaces that can clear SAFE_MODE and ensure recovery evidence is independently produced and fresh, rather than caller-supplied flags.
