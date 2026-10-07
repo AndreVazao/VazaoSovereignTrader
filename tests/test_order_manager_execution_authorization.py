@@ -83,3 +83,20 @@ def test_real_order_authorizer_runs_immediately_before_adapter():
     assert result.status == "FILLED"
     assert exchange.calls == 1
     assert seen == [("TEST", "BTC/USDT", "sell", 0.1, "client-2", 0)]
+
+
+class AmbiguousExchangeStub(ExchangeStub):
+    def market_buy(self, symbol, qty):
+        self.calls += 1
+        raise TimeoutError("venue accepted order but response was lost")
+
+
+def test_real_order_exception_is_unknown_outcome_not_rejected():
+    exchange = AmbiguousExchangeStub()
+    manager = OrderManager(RulesStub(), PaperStub(), execution_authorizer=lambda *args: True)
+
+    result = manager.buy(exchange, "BTC/USDT", 0.1, 100.0, paper=False, client_order_id="client-ambiguous")
+
+    assert result.status == "UNKNOWN_OUTCOME"
+    assert "ambiguous exchange outcome" in result.reason
+    assert exchange.calls == 1

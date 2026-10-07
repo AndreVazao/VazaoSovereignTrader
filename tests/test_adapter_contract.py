@@ -73,3 +73,18 @@ def test_overfill_is_fail_closed():
             requested_qty=0.1,
             fallback_price=100.0,
         )
+
+
+def test_client_order_identity_mismatch_is_fail_closed():
+    with pytest.raises(AdapterContractError):
+        normalize_order_response(
+            {
+                "id": "v-6", "status": "closed", "filled": 0.1, "average": 100.0,
+                "clientOrderId": "different-client",
+            },
+            symbol="BTC/USDT",
+            side="buy",
+            requested_qty=0.1,
+            fallback_price=100.0,
+            expected_client_order_id="expected-client",
+        )

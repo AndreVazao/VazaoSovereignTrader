@@ -34,6 +34,7 @@ def normalize_order_response(
     side: str,
     requested_qty: float,
     fallback_price: float,
+    expected_client_order_id: str | None = None,
 ) -> NormalizedOrder:
     if not isinstance(raw, dict):
         raise AdapterContractError("adapter order response must be a mapping")
@@ -105,6 +106,8 @@ def normalize_order_response(
     client_order_id = str(
         raw.get("clientOrderId") or raw.get("client_order_id") or ""
     ).strip() or None
+    if expected_client_order_id and client_order_id and client_order_id != expected_client_order_id:
+        raise AdapterContractError("adapter client order identity mismatch")
 
     return NormalizedOrder(
         venue_order_id=order_id,

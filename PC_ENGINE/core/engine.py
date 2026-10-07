@@ -1715,260 +1715,6 @@ class SovereignEngine:
             self._enter_safe_state("critical_runtime_condition")
 
 
-    def _ticker_is_fresh(self, ticker: dict, *, now_ms: float | None = None) -> bool:
-        """Fail closed when an execution ticker has no trustworthy timestamp."""
-        if not isinstance(ticker, dict):
-            return False
-        try:
-            timestamp = float(ticker.get("timestamp") or 0.0)
-        except (TypeError, ValueError):
-            return False
-        if timestamp <= 0:
-            return False
-        quality_cfg = self.config.get("market_data_quality", {})
-        max_age_seconds = max(0.1, float(quality_cfg.get("max_ticker_age_seconds", 10.0)))
-        current_ms = float(now_ms if now_ms is not None else time.time() * 1000.0)
-        age_ms = current_ms - timestamp
-        return -2000.0 <= age_ms <= max_age_seconds * 1000.0
-
-    def _open_position(
-        self, exchange: CcxtExchangeClient, symbol: str, price: float, qty: float,
-        stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0,
-        execution_checks: dict | None = None,
-    ) -> None:
-        if not getattr(self, "paper", True):
-            gate = getattr(self, "execution_gate", None)
-            if gate is None:
-                self._enter_real_fail_safe("execution_gate_missing")
-                return
-            checks = execution_checks if isinstance(execution_checks, dict) else {}
-            decision = gate.can_submit(
-                opportunity_ok=bool(checks.get("opportunity_ok", False)),
-                risk_ok=bool(checks.get("risk_ok", False)),
-                exchange_ok=bool(checks.get("exchange_ok", False)),
-                stale_ok=bool(checks.get("stale_ok", False)),
-            )
-            if not decision.allowed:
-                self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": symbol, "side": "buy", "state": decision.state.value, "reason": decision.reason})
-                if (
-                    decision.state != ExecutionState.REAL_ACTIVE
-                    or not bool(checks.get("exchange_ok", False))
-                    or not bool(checks.get("stale_ok", False))
-                ):
-                    self._enter_real_fail_safe("execution_gate_order_blocked", {"symbol": symbol, "reason": decision.reason})
-                return
-        intent_id = f"intent-{time.time_ns()}"
-        client_order_id = f"vzt-{time.time_ns()}-buy"
-        self.state.execution_intents[intent_id] = {
-            "exchange": exchange.name, "symbol": symbol, "side": "buy",
-            "requested_qty": float(qty), "reference_price": float(price),
-            "client_order_id": client_order_id,
-            "stop_pct": float(stop_pct),
-            "take_profit_pct": float(tp_pct),
-            "reason": reason,
-            "created_ts": time.time(),
-        }
-        self._persist_recovery()
-        try:
-            result = self.order_manager.buy(exchange, symbol, qty, price, self.paper, spread_pct, client_order_id)
-        except Exception:
-            self._enter_safe_state("critical_runtime_condition")
-            self._persist_recovery()
-            raise
-        if result.status == "PENDING_OR_PARTIAL":
-            self._enter_safe_state("critical_runtime_condition")
-            self.log("ORDER_FILL_UNCONFIRMED", {
-                "symbol": symbol,
-                "side": "buy",
-                "order_id": result.order_id,
-                "filled_qty": result.qty,
-                "requested_qty": result.requested_qty,
-                "reason": result.reason,
-            })
-            if not result.order_id:
-                self.log("ORDER_RECONCILIATION_REQUIRED", {"symbol": symbol, "side": "buy", "reason": "missing_order_id"})
-                return
-            self.state.pending_orders[result.order_id] = {
-                "exchange": exchange.name,
-                "symbol": symbol,
-                "side": "buy",
-                "requested_qty": result.requested_qty,
-                "known_filled_qty": 0.0,
-                "known_fill_price": result.price,
-                "known_fee": 0.0,
-                "known_quote_notional": 0.0,
-                "created_ts": time.time(),
-                "client_order_id": client_order_id,
-                "stop_pct": stop_pct,
-                "take_profit_pct": tp_pct,
-                "reason": reason,
-            }
-            self._persist_recovery()
-            self.state.execution_intents.pop(intent_id, None)
-            self._persist_recovery()
-            # A pending/partial result is never applied to the live position.
-            # Reconciliation is the single source of truth for exchange fills.
-            return
-        if not result.ok:
-            self.state.execution_intents.pop(intent_id, None)
-            self._persist_recovery()
-            self.log("ORDER_REJECTED", {"symbol": symbol, "side": "buy", "reason": result.reason})
-            return
-        position = Position(
-            exchange=exchange.name,
-            symbol=symbol,
-            entry=result.price,
-            qty=result.qty,
-            stop=result.price * (1 - stop_pct),
-            take_profit=result.price * (1 + tp_pct),
-            opened_ts=time.time(),
-            entry_fee=result.fee,
-        )
-        if result.status != "PENDING_OR_PARTIAL":
-            self._record_financial_fill("buy", symbol, float(result.qty), float(result.qty) * float(result.price), float(result.fee))
-        lock = getattr(self, "lock", None)
-        if lock is None:
-            from contextlib import nullcontext
-            lock = nullcontext()
-        with lock:
-            self.state.open_positions[symbol] = position
-        self._persist_recovery()
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
-        self.log("POSITION_OPENED", {"symbol": symbol, "price": result.price, "qty": result.qty, "fee": result.fee, "reason": reason})
-
-    def _close_position(
-        self, exchange: CcxtExchangeClient, position: Position, price: float,
-        reason: str, spread_pct: float = 0.0, execution_checks: dict | None = None,
-    ) -> None:
-        if not getattr(self, "paper", True):
-            gate = getattr(self, "execution_gate", None)
-            if gate is None:
-                self._enter_real_fail_safe("execution_gate_missing")
-                return
-            checks = execution_checks if isinstance(execution_checks, dict) else {}
-            decision = gate.can_submit(
-                opportunity_ok=bool(checks.get("opportunity_ok", False)),
-                risk_ok=bool(checks.get("risk_ok", False)),
-                exchange_ok=bool(checks.get("exchange_ok", False)),
-                stale_ok=bool(checks.get("stale_ok", False)),
-            )
-            if not decision.allowed:
-                self.log("EXECUTION_GATE_BLOCKED_ORDER", {"symbol": position.symbol, "side": "sell", "state": decision.state.value, "reason": decision.reason})
-                if (
-                    decision.state != ExecutionState.REAL_ACTIVE
-                    or not bool(checks.get("exchange_ok", False))
-                    or not bool(checks.get("stale_ok", False))
-                ):
-                    self._enter_real_fail_safe("execution_gate_order_blocked", {"symbol": position.symbol, "reason": decision.reason})
-                return
-        intent_id = f"intent-{time.time_ns()}"
-        client_order_id = f"vzt-{time.time_ns()}-sell"
-        self.state.execution_intents[intent_id] = {
-            "exchange": exchange.name, "symbol": position.symbol, "side": "sell",
-            "requested_qty": float(position.qty), "reference_price": float(price),
-            "client_order_id": client_order_id,
-            "reason": reason,
-            "created_ts": time.time(),
-        }
-        self._persist_recovery()
-        try:
-            result = self.order_manager.sell(exchange, position.symbol, position.qty, price, self.paper, spread_pct, client_order_id)
-        except Exception:
-            self._enter_safe_state("critical_runtime_condition")
-            self._persist_recovery()
-            raise
-        if result.status == "PENDING_OR_PARTIAL":
-            self._enter_safe_state("critical_runtime_condition")
-            self.log("EXIT_FILL_UNCONFIRMED", {
-                "symbol": position.symbol,
-                "side": "sell",
-                "order_id": result.order_id,
-                "filled_qty": result.qty,
-                "requested_qty": result.requested_qty,
-                "reason": result.reason,
-            })
-            if not result.order_id:
-                self.log("ORDER_RECONCILIATION_REQUIRED", {"symbol": position.symbol, "side": "sell", "reason": "missing_order_id"})
-                return
-            self.state.pending_orders[result.order_id] = {
-                "exchange": exchange.name,
-                "symbol": position.symbol,
-                "side": "sell",
-                "requested_qty": result.requested_qty,
-                "known_filled_qty": 0.0,
-                "known_fill_price": result.price,
-                "known_fee": 0.0,
-                "known_quote_notional": 0.0,
-                "created_ts": time.time(),
-                "stop_pct": max(0.0, (position.entry - position.stop) / position.entry) if position.entry > 0 else 0.0,
-                "take_profit_pct": max(0.0, (position.take_profit - position.entry) / position.entry) if position.entry > 0 else 0.0,
-            }
-            self._persist_recovery()
-            self.state.execution_intents.pop(intent_id, None)
-            self._persist_recovery()
-            # Pending/partial fills remain outside live positions until reconciliation.
-            return
-        if not result.ok:
-            self.state.execution_intents.pop(intent_id, None)
-            self._persist_recovery()
-            self.log("ORDER_REJECTED", {"symbol": position.symbol, "side": "sell", "reason": result.reason})
-            return
-        filled_qty = min(float(result.qty), float(position.qty))
-        if filled_qty <= 0:
-            return
-        if result.status != "PENDING_OR_PARTIAL":
-            self._record_financial_fill("sell", position.symbol, filled_qty, float(result.price) * filled_qty, float(result.fee))
-        allocated_entry_fee = position.entry_fee * (filled_qty / position.qty) if position.qty > 0 else 0.0
-        notional = result.price * filled_qty
-        gross_pnl = (result.price - position.entry) * filled_qty
-        net_pnl = gross_pnl - allocated_entry_fee - result.fee
-        pnl_pct = net_pnl / (position.entry * filled_qty) if position.entry and filled_qty > 0 else 0.0
-        risk_obj = getattr(self, "risk", None)
-        risk_callback = getattr(risk_obj, "record_trade_result", None)
-        if callable(risk_callback):
-            risk_callback(position.symbol, pnl_pct)
-        risk_state = getattr(risk_obj, "state", None)
-        drawdown = float(getattr(risk_state, "drawdown_pct", 0.0))
-        champion_callback = getattr(getattr(self, "champion", None), "record", None)
-        if callable(champion_callback):
-            champion_callback("trend_ema_atr", pnl_pct, drawdown, live=True)
-        remaining_qty = max(0.0, position.qty - filled_qty)
-        lock = getattr(self, "lock", None)
-        if lock is None:
-            from contextlib import nullcontext
-            lock = nullcontext()
-        with lock:
-            if remaining_qty <= 1e-12:
-                self.state.open_positions.pop(position.symbol, None)
-            else:
-                position.qty = remaining_qty
-                position.entry_fee = max(0.0, position.entry_fee - allocated_entry_fee)
-        ledger_obj = getattr(self, "ledger", None)
-        ledger_trade = getattr(ledger_obj, "trade", None)
-        if callable(ledger_trade):
-            ledger_trade({
-                "exchange": position.exchange,
-                "symbol": position.symbol,
-                "side": "close",
-                "qty": filled_qty,
-                "entry": position.entry,
-                "exit": result.price,
-                "fees": allocated_entry_fee + result.fee,
-                "pnl_pct": pnl_pct,
-                "reason": reason,
-            })
-        self.state.execution_intents.pop(intent_id, None)
-        self._persist_recovery()
-        self.log("POSITION_PARTIALLY_CLOSED" if remaining_qty > 1e-12 else "POSITION_CLOSED", {
-            "symbol": position.symbol,
-            "filled_qty": filled_qty,
-            "remaining_qty": remaining_qty,
-            "pnl_pct": pnl_pct,
-            "fee": allocated_entry_fee + result.fee,
-            "reason": reason,
-        })
-
     def _maybe_autonomous_real_promotion(self) -> bool:
         """Promote PAPER to REAL only when the full readiness contract is satisfied."""
         if self.state.status == "SAFE_MODE":
@@ -2332,6 +2078,20 @@ class SovereignEngine:
             self._persist_recovery()
             # Pending/partial fills remain outside live positions until reconciliation.
             return
+        if result.status == "UNKNOWN_OUTCOME":
+            self._enter_safe_state("ambiguous_external_order_outcome", {
+                "symbol": symbol,
+                "side": "buy",
+                "client_order_id": client_order_id,
+            })
+            self.log("ORDER_UNKNOWN_OUTCOME", {
+                "symbol": symbol,
+                "side": "buy",
+                "client_order_id": client_order_id,
+                "reason": result.reason,
+            })
+            self._persist_recovery()
+            return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)
             self._persist_recovery()
@@ -2433,6 +2193,20 @@ class SovereignEngine:
             self._persist_recovery()
             # A pending/partial sell is never applied to the live position here.
             # Reconciliation is the single source of truth for observed fills.
+            return
+        if result.status == "UNKNOWN_OUTCOME":
+            self._enter_safe_state("ambiguous_external_order_outcome", {
+                "symbol": position.symbol,
+                "side": "sell",
+                "client_order_id": client_order_id,
+            })
+            self.log("ORDER_UNKNOWN_OUTCOME", {
+                "symbol": position.symbol,
+                "side": "sell",
+                "client_order_id": client_order_id,
+                "reason": result.reason,
+            })
+            self._persist_recovery()
             return
         if not result.ok:
             self.state.execution_intents.pop(intent_id, None)

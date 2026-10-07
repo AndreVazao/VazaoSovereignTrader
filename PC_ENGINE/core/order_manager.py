@@ -98,13 +98,14 @@ class OrderManager:
                     side=side,
                     requested_qty=normalized_qty,
                     fallback_price=price,
+                    expected_client_order_id=client_order_id,
                 )
             except AdapterContractError as exc:
                 self.last_client_order.pop(fingerprint, None)
                 return OrderResult(
                     False, side, symbol, normalized_qty, price, 0.0, "",
                     f"adapter contract rejected response: {exc}",
-                    normalized_qty, "SAFE_MODE",
+                    normalized_qty, "UNKNOWN_OUTCOME",
                 )
             ok = normalized.filled_qty > 0
             reason = "exchange fill confirmed" if normalized.status == "FILLED" else "exchange order submitted without full fill confirmation"
@@ -115,7 +116,18 @@ class OrderManager:
             )
         except Exception as exc:
             self.last_client_order.pop(fingerprint, None)
-            return OrderResult(False, side, symbol, normalized_qty, price, 0.0, "", f"exchange error: {exc}", normalized_qty, "ERROR")
+            return OrderResult(
+                False,
+                side,
+                symbol,
+                0.0,
+                price,
+                0.0,
+                "",
+                f"ambiguous exchange outcome: {type(exc).__name__}",
+                normalized_qty,
+                "UNKNOWN_OUTCOME",
+            )
 
     @staticmethod
     def _extract_fee(raw: dict, symbol: str, fill_price: float) -> float:
