@@ -1870,6 +1870,9 @@ class SovereignEngine:
 
     def _maybe_autonomous_real_promotion(self) -> bool:
         """Promote PAPER to REAL only when the full readiness contract is satisfied."""
+        if self.state.status == "SAFE_MODE":
+            self.log("SAFE_MODE_AUTONOMOUS_PROMOTION_BLOCKED", {"reason": "explicit_recovery_required"})
+            return False
         if self.mode != "PAPER":
             return False
         auto_cfg = self.config.get("autonomous_execution", {})

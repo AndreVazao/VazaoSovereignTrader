@@ -1,8 +1,8 @@
-from types import SimpleNamespace
+﻿from types import SimpleNamespace
 
 from PC_ENGINE.core.real_mode_guard import RealModeGuard
 from PC_ENGINE.core.real_readiness_service import RealReadinessService
-from PC_ENGINE.core.engine import SovereignEngine
+from PC_ENGINE.core.engine import RuntimeState, SovereignEngine
 
 
 def test_readiness_target_real_requires_live_credentials(monkeypatch, tmp_path):
@@ -194,3 +194,14 @@ def test_engine_autonomous_promotion_fails_safe_when_reconciliation_fails():
     assert engine.state.status == "SAFE_MODE"
     assert fail_safe_calls
     assert fail_safe_calls[0][0] == "autonomous_real_reconciliation_failed"
+
+
+def test_safe_mode_blocks_autonomous_real_promotion(monkeypatch):
+    engine = object.__new__(SovereignEngine)
+    engine.state = RuntimeState(status="SAFE_MODE", mode="PAPER")
+    engine.mode = "PAPER"
+    engine.config = {"autonomous_execution": {"enabled": True, "allow_real": True, "auto_promote_real": True}}
+    events = []
+    engine.log = lambda event, payload=None: events.append((event, payload))
+    assert engine._maybe_autonomous_real_promotion() is False
+    assert events[-1][0] == "SAFE_MODE_AUTONOMOUS_PROMOTION_BLOCKED"
