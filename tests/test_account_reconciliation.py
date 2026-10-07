@@ -94,3 +94,58 @@ def test_account_reconciliation_safe_mode_persists_across_restart(tmp_path, monk
     assert repeated["status"] == "BLOCKED"
     assert first.state.status == "SAFE_MODE"
     assert first.state.open_positions["BTC/USDT"].qty == 0.5
+
+def test_safe_mode_blocks_start_after_multiple_restarts(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    import PC_ENGINE.core.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config_path = Path(__file__).resolve().parents[1] / "PC_ENGINE" / "config" / "config.example.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["owner"]["id"] = "safe-mode-restart-owner"
+    config["radar"]["enabled"] = False
+    config["shared_intelligence"]["sync_enabled"] = False
+    config["exchanges"] = {}
+
+    first = SovereignEngine(config)
+    first.state.status = "SAFE_MODE"
+    first._persist_recovery()
+
+    second = SovereignEngine(config)
+    assert second.state.status == "SAFE_MODE"
+    second.start()
+    assert second.state.status == "SAFE_MODE"
+
+    third = SovereignEngine(config)
+    assert third.state.status == "SAFE_MODE"
+
+
+def test_safe_mode_requires_explicit_recovery_evidence(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    import PC_ENGINE.core.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config_path = Path(__file__).resolve().parents[1] / "PC_ENGINE" / "config" / "config.example.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["owner"]["id"] = "safe-mode-explicit-recovery-owner"
+    config["radar"]["enabled"] = False
+    config["shared_intelligence"]["sync_enabled"] = False
+    config["exchanges"] = {}
+
+    engine = SovereignEngine(config)
+    engine.state.status = "SAFE_MODE"
+    engine._persist_recovery()
+
+    blocked = engine.recover_from_safe_mode(human_confirmed=False, readiness_ok=True, reconciliation_ok=True, timing_ok=True)
+    assert blocked["ok"] is False
+    assert engine.state.status == "SAFE_MODE"
+
+    recovered = engine.recover_from_safe_mode(human_confirmed=True, readiness_ok=True, reconciliation_ok=True, timing_ok=True)
+    assert recovered["ok"] is True
+    assert engine.state.status == "OFF"
+    assert engine.recovery.load_state()["runtime_status"] == "OFF"
+
+    restarted = SovereignEngine(config)
+    assert restarted.state.status != "SAFE_MODE"
