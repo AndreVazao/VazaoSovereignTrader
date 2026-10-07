@@ -70,8 +70,7 @@ $output = Join-Path $repo "installer-output"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 $installerName = "VazaoSovereignTrader-Setup.exe"
 $expected = Join-Path $output $installerName
-$generated = Get-ChildItem -Path $repo -Filter "VazaoSovereignTrader-Setup*.exe" -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -notmatch "\\.git\\|\\installer\\build\\" } |
+$generated = Get-ChildItem -Path $output -Filter "VazaoSovereignTrader-Setup*.exe" -File -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 if (-not $generated) { throw "Inno Setup completed but no setup EXE was found." }
