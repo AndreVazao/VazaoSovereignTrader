@@ -372,3 +372,15 @@ Verification:
 - No REAL order, cancellation, transfer or capital authorization was added or changed.
 
 Next recovery audit remains end-to-end crash/restart semantics for UNKNOWN order results, partial fills, reconciliation mismatches and SAFE_MODE transitions.
+
+
+## 2026-10-07 — SAFE_MODE mutation audit checkpoint / PR #376
+
+- PR #376 merged as `953a8bd7db3e26f0d59a01abc41fe6a74a34484a`.
+- Full status mutation audit identified and closed a fourth implicit SAFE_MODE exit: `SovereignEngine.stop()` previously forced SAFE_MODE to OFF.
+- Stop now preserves SAFE_MODE while still stopping workers and persisting the protected runtime state.
+- Regression coverage verifies in-memory and persisted SAFE_MODE survive stop.
+- Current closed exit inventory: startup normalization, `pause(False)`/API resume, autonomous PAPER→REAL promotion, and stop.
+- Local account-reconciliation suite remains inconclusive/stalled in the existing Windows environment; no green claim made. No hosted Actions consumed.
+- No REAL authorization/execution/transfer capability changed.
+- Next: enumerate all remaining status mutation paths, then harden `recover_from_safe_mode()` so readiness/reconciliation/timing evidence is independently generated, fresh, and verifiable rather than caller-supplied booleans.

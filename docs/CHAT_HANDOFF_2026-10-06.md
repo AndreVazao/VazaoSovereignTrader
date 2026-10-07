@@ -256,3 +256,19 @@ The owner prefers autonomous forward progress with focused small-to-medium PRs r
 - main: `953a8bd7db3e26f0d59a01abc41fe6a74a34484a`
 - SAFE_MODE exits identified and closed: startup, `pause(False)`/resume, autonomous PAPER→REAL promotion, and stop.
 - Remaining priority: prove by source/test inventory that no other state-mutating path can clear SAFE_MODE, then replace caller-supplied recovery booleans with independently generated/fresh/verifiable recovery evidence before any REAL recovery consideration.
+
+
+## Recovery audit checkpoint — PR #376 — SAFE_MODE stop bypass closed
+
+- PR #376 merged to main as `953a8bd7db3e26f0d59a01abc41fe6a74a34484a`.
+- Full status-mutation audit found a fourth SAFE_MODE exit path: `SovereignEngine.stop()` unconditionally changed SAFE_MODE to OFF after stopping workers.
+- `stop()` now stops workers/persists state but preserves SAFE_MODE; only `recover_from_safe_mode()` may clear the safety latch.
+- Added regression coverage proving stop preserves both in-memory SAFE_MODE and persisted `runtime_status=SAFE_MODE`.
+- Local full account-reconciliation pytest remains inconclusive/stalled in the known Windows environment; the isolated new test also did not produce a completion result. This is not green CI evidence.
+- No REAL authorization, order execution, cancellation, or capital-transfer capability was enabled or relaxed.
+
+## Current live baseline
+
+- main: `953a8bd7db3e26f0d59a01abc41fe6a74a34484a`
+- SAFE_MODE exits identified and closed: startup, `pause(False)`/resume, autonomous PAPER→REAL promotion, and stop.
+- Remaining priority: prove by source/test inventory that no other state-mutating path can clear SAFE_MODE, then replace caller-supplied recovery booleans with independently generated/fresh/verifiable recovery evidence before any REAL recovery consideration.
