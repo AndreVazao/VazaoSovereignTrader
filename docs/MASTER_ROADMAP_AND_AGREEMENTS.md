@@ -384,3 +384,16 @@ Next recovery audit remains end-to-end crash/restart semantics for UNKNOWN order
 - Local account-reconciliation suite remains inconclusive/stalled in the existing Windows environment; no green claim made. No hosted Actions consumed.
 - No REAL authorization/execution/transfer capability changed.
 - Next: enumerate all remaining status mutation paths, then harden `recover_from_safe_mode()` so readiness/reconciliation/timing evidence is independently generated, fresh, and verifiable rather than caller-supplied booleans.
+
+
+## 2026-10-07 — SAFE_MODE mutation proof / recovery evidence checkpoint
+
+- Current product main: `8a20e6ca099d0ec0917e9f38b399e2f24032cd49`.
+- Exhaustive production status-mutation inventory completed. No additional SAFE_MODE exit bypass found after #376.
+- The invariant is now source-audited: only `recover_from_safe_mode()` can clear SAFE_MODE.
+- Added `docs/SAFE_MODE_STATE_MUTATION_AUDIT_2026-10-07.md`.
+- Recovery no longer accepts caller-supplied readiness/reconciliation/timing booleans. It generates preflight, readiness, reconciliation and timing evidence internally and checks freshness before clearing the latch.
+- Added authenticated `POST /safe-mode/recover`; explicit human confirmation remains required.
+- REAL recovery requires fresh REAL human authorization in addition to the independently generated evidence.
+- Validation is local-first: compile + diff-check passed; pytest remains inconclusive/stalled and is not classified green.
+- No REAL execution/capital capability was enabled.

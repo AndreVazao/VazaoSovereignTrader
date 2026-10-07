@@ -764,6 +764,15 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("trade_paper")
         return jsonify(engine.run_preflight())
 
+    @app.post("/safe-mode/recover")
+    def recover_safe_mode():
+        require_scope("trade_paper")
+        payload = request.get_json(force=True) or {}
+        result = engine.recover_from_safe_mode(
+            human_confirmation=str(payload.get("confirmation", "")),
+        )
+        return jsonify(result), (200 if result.get("ok") else 409)
+
     @app.post("/start")
     def start():
         principal = require_scope("trade_paper")

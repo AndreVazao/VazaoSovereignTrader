@@ -138,12 +138,33 @@ def test_safe_mode_requires_explicit_recovery_evidence(tmp_path, monkeypatch):
     engine.state.status = "SAFE_MODE"
     engine._persist_recovery()
 
-    blocked = engine.recover_from_safe_mode(human_confirmed=False, readiness_ok=True, reconciliation_ok=True, timing_ok=True)
+    blocked = engine.recover_from_safe_mode(human_confirmation="wrong")
     assert blocked["ok"] is False
+    assert blocked["reason"] == "human_confirmation_required"
     assert engine.state.status == "SAFE_MODE"
 
-    recovered = engine.recover_from_safe_mode(human_confirmed=True, readiness_ok=True, reconciliation_ok=True, timing_ok=True)
+    import time
+    engine.run_preflight = lambda: {"ok": True}
+    engine.real_readiness_service.collect = lambda *args, **kwargs: {
+        "ready": True,
+        "status": "READY",
+        "blockers": [],
+        "collected_at_ms": int(time.time() * 1000),
+        "paper_review": {"ready": True},
+        "websocket_timing": {
+            "required": False,
+            "fresh": True,
+            "eligible_for_economic_interpretation": True,
+        },
+    }
+
+    recovered = engine.recover_from_safe_mode(human_confirmation="RECUPERAR SAFE MODE")
     assert recovered["ok"] is True
+    assert recovered["evidence"]["preflight_ok"] is True
+    assert recovered["evidence"]["readiness_ok"] is True
+    assert recovered["evidence"]["reconciliation_ok"] is True
+    assert recovered["evidence"]["timing_ok"] is True
+    assert recovered["evidence"]["fresh"] is True
     assert engine.state.status == "OFF"
     assert engine.recovery.load_state()["runtime_status"] == "OFF"
 

@@ -470,6 +470,7 @@ class RealReadinessService:
                 },
                 readiness_trend=payload["readiness_trend"] if self.require_temporal_stability else {"status": "STABLE", "recent_ready_ratio": 1.0, "consecutive_ready": 1, "required_consecutive_ready": 1},
             )
+        payload["collected_at_ms"] = now_ms
         if persist_history:
             self._persist_history(payload, now_ms)
         return payload

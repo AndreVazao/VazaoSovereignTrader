@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import math
 import threading
 import time
@@ -670,55 +671,152 @@ class SovereignEngine:
         self.thread.start()
         self.log("ENGINE_STARTED", {"mode": self.mode})
 
-    def recover_from_safe_mode(
-        self,
-        *,
-        human_confirmed: bool = False,
-        readiness_ok: bool = False,
-        reconciliation_ok: bool = False,
-        timing_ok: bool = False,
-    ) -> dict:
-        """Explicitly clear SAFE_MODE only after operator confirmation and recovery evidence.
+    def recover_from_safe_mode(self, *, human_confirmation: str = "") -> dict:
+        """Clear SAFE_MODE only after explicit human confirmation and fresh engine evidence.
 
-        Startup never clears SAFE_MODE implicitly. The caller must explicitly confirm
-        recovery and provide fresh readiness/reconciliation/timing evidence. For REAL,
-        the execution gate must also approve the recovery transition before RUNNING.
+        The caller cannot assert readiness, reconciliation, or timing by flag. The
+        engine generates those facts itself immediately before the transition.
+        REAL recovery additionally requires a fresh REAL authorization window.
         """
         if self.state.status != "SAFE_MODE":
             return {"ok": False, "status": self.state.status, "reason": "not_in_safe_mode"}
-        if not human_confirmed:
+
+        recovery_cfg = self.config.get("safe_mode_recovery", {})
+        expected_phrase = str(recovery_cfg.get("confirmation_phrase", ""))
+        supplied_phrase = str(human_confirmation or "")
+        if not expected_phrase or not hmac.compare_digest(supplied_phrase, expected_phrase):
             self.log("SAFE_MODE_RECOVERY_BLOCKED", {"reason": "human_confirmation_required"})
             return {"ok": False, "status": "SAFE_MODE", "reason": "human_confirmation_required"}
-        if not (readiness_ok and reconciliation_ok and timing_ok):
-            self.log("SAFE_MODE_RECOVERY_BLOCKED", {"reason": "recovery_evidence_not_satisfied"})
-            return {"ok": False, "status": "SAFE_MODE", "reason": "recovery_evidence_not_satisfied"}
+
+        preflight = self.run_preflight()
+        if not preflight.get("ok", False):
+            self.log("SAFE_MODE_RECOVERY_BLOCKED", {"reason": "preflight_failed", "preflight": preflight})
+            return {"ok": False, "status": "SAFE_MODE", "reason": "preflight_failed", "preflight": preflight}
+
+        if self.mode == "REAL":
+            reconciliation = self.reconcile_account_state()
+            if not reconciliation.get("ok", False):
+                self.log("SAFE_MODE_RECOVERY_BLOCKED", {
+                    "reason": "authoritative_account_reconciliation_failed",
+                    "reconciliation": reconciliation,
+                })
+                return {
+                    "ok": False,
+                    "status": "SAFE_MODE",
+                    "reason": "authoritative_account_reconciliation_failed",
+                    "reconciliation": reconciliation,
+                }
+        else:
+            reconciliation = {
+                "ok": True,
+                "status": "PAPER",
+                "source": "local_paper_state",
+                "checked_at": time.time(),
+            }
+
+        try:
+            readiness = self.real_readiness_service.collect(
+                self,
+                persist_history=False,
+                target_mode=self.mode,
+            )
+        except Exception as exc:
+            self.log("SAFE_MODE_RECOVERY_BLOCKED", {
+                "reason": "readiness_evaluation_failed",
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            return {"ok": False, "status": "SAFE_MODE", "reason": "readiness_evaluation_failed"}
+
+        now_ms = int(time.time() * 1000)
+        collected_at_ms = int(readiness.get("collected_at_ms", 0) or 0)
+        max_age_seconds = max(1, int(recovery_cfg.get("max_evidence_age_seconds", 30)))
+        evidence_age_ms = max(0, now_ms - collected_at_ms) if collected_at_ms else None
+        evidence_fresh = evidence_age_ms is not None and evidence_age_ms <= max_age_seconds * 1000
+
+        readiness_ok = bool(readiness.get("ready")) and bool(
+            (readiness.get("paper_review") or {}).get("ready")
+        )
+        timing = readiness.get("websocket_timing") or {}
+        timing_ok = bool(timing.get("fresh"))
+        if bool(timing.get("required", False)):
+            timing_ok = timing_ok and bool(timing.get("eligible_for_economic_interpretation"))
+
+        reconciliation_ok = bool(reconciliation.get("ok", False))
+        evidence_ok = bool(preflight.get("ok")) and readiness_ok and reconciliation_ok and timing_ok and evidence_fresh
+        evidence = {
+            "collected_at_ms": collected_at_ms,
+            "age_ms": evidence_age_ms,
+            "max_age_ms": max_age_seconds * 1000,
+            "fresh": evidence_fresh,
+            "preflight_ok": bool(preflight.get("ok")),
+            "readiness_ok": readiness_ok,
+            "reconciliation_ok": reconciliation_ok,
+            "timing_ok": timing_ok,
+            "readiness_status": readiness.get("status"),
+            "readiness_blockers": list(readiness.get("blockers", [])),
+            "timing": dict(timing),
+            "account_reconciliation": dict(reconciliation),
+        }
+        if not evidence_ok:
+            self.log("SAFE_MODE_RECOVERY_BLOCKED", {
+                "reason": "recovery_evidence_not_satisfied",
+                "evidence": evidence,
+            })
+            return {
+                "ok": False,
+                "status": "SAFE_MODE",
+                "reason": "recovery_evidence_not_satisfied",
+                "evidence": evidence,
+            }
+
         gate = getattr(self, "execution_gate", None)
         if self.mode == "REAL":
             if gate is None:
                 return {"ok": False, "status": "SAFE_MODE", "reason": "execution_gate_missing"}
-            if not gate.human_authorized:
-                return {"ok": False, "status": "SAFE_MODE", "reason": "real_human_authorization_required"}
+            guard = getattr(self, "real_mode_guard", None)
+            if guard is None:
+                return {"ok": False, "status": "SAFE_MODE", "reason": "real_mode_guard_missing"}
+            authorized, authorization_reason = guard.can_enable_real()
+            if not authorized:
+                return {
+                    "ok": False,
+                    "status": "SAFE_MODE",
+                    "reason": "fresh_real_human_authorization_required",
+                    "detail": authorization_reason,
+                    "evidence": evidence,
+                }
+            gate.human_authorize()
             decision = gate.evaluate_recovery(
                 readiness_ok=readiness_ok,
                 reconciliation_ok=reconciliation_ok,
                 timing_ok=timing_ok,
             )
             if not decision.allowed:
-                return {"ok": False, "status": "SAFE_MODE", "reason": decision.reason}
+                return {"ok": False, "status": "SAFE_MODE", "reason": decision.reason, "evidence": evidence}
             activation = gate.activate_real()
             if not activation.allowed:
-                return {"ok": False, "status": "SAFE_MODE", "reason": activation.reason}
+                return {"ok": False, "status": "SAFE_MODE", "reason": activation.reason, "evidence": evidence}
+            consumed, consume_reason = guard.consume()
+            if not consumed:
+                gate.fail_safe("REAL recovery authorization consumption failed")
+                return {
+                    "ok": False,
+                    "status": "SAFE_MODE",
+                    "reason": "real_authorization_consumption_failed",
+                    "detail": consume_reason,
+                    "evidence": evidence,
+                }
+
         with self.lock:
             self.state.status = "OFF"
             self.state.operational["safe_mode_recovered"] = True
-            self.state.operational["safe_mode_recovery_evidence"] = {
-                "readiness_ok": bool(readiness_ok),
-                "reconciliation_ok": bool(reconciliation_ok),
-                "timing_ok": bool(timing_ok),
-            }
+            self.state.operational["safe_mode_recovery_evidence"] = evidence
         self._persist_recovery()
-        self.log("SAFE_MODE_RECOVERED", {"explicit_human_confirmation": True})
-        return {"ok": True, "status": "OFF", "reason": "explicit_recovery_completed"}
+        self.log("SAFE_MODE_RECOVERED", {
+            "explicit_human_confirmation": True,
+            "evidence_fresh": evidence_fresh,
+        })
+        return {"ok": True, "status": "OFF", "reason": "explicit_recovery_completed", "evidence": evidence}
 
     def run_preflight(self) -> dict:
         runtime_config = dict(self.config)
