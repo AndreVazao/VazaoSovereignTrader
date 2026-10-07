@@ -608,6 +608,9 @@ class SovereignEngine:
         if self.thread and self.thread.is_alive():
             self.pause(False)
             return
+        if self.state.status == "SAFE_MODE":
+            self.log("SAFE_MODE_START_BLOCKED", {"reason": "explicit_recovery_required"})
+            return
         preflight = self.run_preflight()
         if self.config.get("engine", {}).get("preflight_required", True) and not preflight["ok"]:
             self._enter_safe_state("preflight_failed", preflight)
@@ -666,6 +669,56 @@ class SovereignEngine:
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
         self.log("ENGINE_STARTED", {"mode": self.mode})
+
+    def recover_from_safe_mode(
+        self,
+        *,
+        human_confirmed: bool = False,
+        readiness_ok: bool = False,
+        reconciliation_ok: bool = False,
+        timing_ok: bool = False,
+    ) -> dict:
+        """Explicitly clear SAFE_MODE only after operator confirmation and recovery evidence.
+
+        Startup never clears SAFE_MODE implicitly. The caller must explicitly confirm
+        recovery and provide fresh readiness/reconciliation/timing evidence. For REAL,
+        the execution gate must also approve the recovery transition before RUNNING.
+        """
+        if self.state.status != "SAFE_MODE":
+            return {"ok": False, "status": self.state.status, "reason": "not_in_safe_mode"}
+        if not human_confirmed:
+            self.log("SAFE_MODE_RECOVERY_BLOCKED", {"reason": "human_confirmation_required"})
+            return {"ok": False, "status": "SAFE_MODE", "reason": "human_confirmation_required"}
+        if not (readiness_ok and reconciliation_ok and timing_ok):
+            self.log("SAFE_MODE_RECOVERY_BLOCKED", {"reason": "recovery_evidence_not_satisfied"})
+            return {"ok": False, "status": "SAFE_MODE", "reason": "recovery_evidence_not_satisfied"}
+        gate = getattr(self, "execution_gate", None)
+        if self.mode == "REAL":
+            if gate is None:
+                return {"ok": False, "status": "SAFE_MODE", "reason": "execution_gate_missing"}
+            if not gate.human_authorized:
+                return {"ok": False, "status": "SAFE_MODE", "reason": "real_human_authorization_required"}
+            decision = gate.evaluate_recovery(
+                readiness_ok=readiness_ok,
+                reconciliation_ok=reconciliation_ok,
+                timing_ok=timing_ok,
+            )
+            if not decision.allowed:
+                return {"ok": False, "status": "SAFE_MODE", "reason": decision.reason}
+            activation = gate.activate_real()
+            if not activation.allowed:
+                return {"ok": False, "status": "SAFE_MODE", "reason": activation.reason}
+        with self.lock:
+            self.state.status = "OFF"
+            self.state.operational["safe_mode_recovered"] = True
+            self.state.operational["safe_mode_recovery_evidence"] = {
+                "readiness_ok": bool(readiness_ok),
+                "reconciliation_ok": bool(reconciliation_ok),
+                "timing_ok": bool(timing_ok),
+            }
+        self._persist_recovery()
+        self.log("SAFE_MODE_RECOVERED", {"explicit_human_confirmation": True})
+        return {"ok": True, "status": "OFF", "reason": "explicit_recovery_completed"}
 
     def run_preflight(self) -> dict:
         runtime_config = dict(self.config)
