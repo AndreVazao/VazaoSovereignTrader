@@ -22,6 +22,7 @@ This checklist is the final software release gate for any future explicit human-
 - UNKNOWN_OUTCOME retains durable execution intent and enters SAFE_MODE.
 - Pending/partial recovery preserves cumulative observed fill, fee, notional, and client identity.
 - Restart recovery resolves exact recorded venue/order identity and never blind-retries UNKNOWN.
+- Controlled restart/recovery E2E now proves `execution_intent -> simulated process death -> exact client identity -> authoritative reconciliation -> safe intent cleanup`.
 - Ledger/reconciliation paths are idempotent and fail closed on invariant violations.
 
 ## Gate D — Freshness and reconciliation
@@ -31,12 +32,15 @@ This checklist is the final software release gate for any future explicit human-
 
 ## Gate E — Validation evidence
 - Controlled REAL runtime E2E: **2 passed**.
-- Combined deterministic regression checkpoint: **12 passed**.
+- Controlled restart/recovery E2E: **2 passed**.
+- Combined restart/runtime/recovery checkpoint: **12 passed in 6.67s**.
+- Current authorization/execution/recovery focused checkpoint: **23 passed in 12.22s**.
 - Previous external-side-effect regression: **56 passed**.
 - Previous UNKNOWN/crash-window regression: **26 passed**.
 - Previous SAFE_MODE/recovery authorization suite: **21 passed, 6 deselected**.
 - `git diff --check` clean.
-- Production modules compile successfully.
+- Production modules and the new E2E test compile successfully.
+- The broader `test_account_reconciliation.py` invocation remains known to stall on Windows; it is not claimed green.
 
 ## Release blocker
 
