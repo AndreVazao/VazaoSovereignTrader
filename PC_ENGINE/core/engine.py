@@ -335,6 +335,10 @@ class SovereignEngine:
         pending = raw_state.get("pending_orders", {})
         intents = raw_state.get("execution_intents", {})
         financial_account = raw_state.get("financial_account", {})
+        persisted_runtime_status = str(raw_state.get("runtime_status", "OFF") or "OFF").upper()
+        if persisted_runtime_status == "SAFE_MODE":
+            self._enter_safe_state("persisted_safe_mode")
+            self.state.operational["persisted_safe_mode"] = True
         if isinstance(financial_account, dict):
             self.state.financial_account.update(financial_account)
         risk_state = raw_state.get("risk_state", {})
@@ -410,6 +414,7 @@ class SovereignEngine:
             self.state.execution_intents,
             self.state.financial_account,
             self.risk.snapshot_state(),
+            self.state.status,
         )
 
     def _record_financial_fill(self, side: str, symbol: str, qty: float, quote_notional: float, fee: float) -> None:
@@ -538,6 +543,13 @@ class SovereignEngine:
         self.state.account_reconciliation = result
         if not result.get("ok"):
             self._enter_safe_state("critical_runtime_condition")
+            recovery = getattr(self, "recovery", None)
+            if isinstance(recovery, RecoveryManager):
+                try:
+                    self._persist_recovery()
+                except Exception as exc:
+                    self.state.operational["safe_mode_persistence_error"] = f"{type(exc).__name__}: {exc}"
+                    self.log("ACCOUNT_RECONCILIATION_SAFE_MODE_PERSIST_FAILED", {"error": str(exc)})
             self.log("ACCOUNT_RECONCILIATION_BLOCKED", result)
         else:
             self.log("ACCOUNT_RECONCILIATION_MATCH", result)

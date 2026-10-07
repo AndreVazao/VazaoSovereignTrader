@@ -55,3 +55,42 @@ def test_account_reconciliation_blocks_unexpected_assets_and_open_orders():
     assert result["ok"] is False
     assert result["open_orders"] == 1
     assert result["unexpected_assets"][0]["asset"] == "ETH"
+
+
+def test_account_reconciliation_safe_mode_persists_across_restart(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    import PC_ENGINE.core.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
+    config_path = Path(__file__).resolve().parents[1] / "PC_ENGINE" / "config" / "config.example.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["owner"]["id"] = "reconciliation-safe-mode-owner"
+    config["radar"]["enabled"] = False
+    config["shared_intelligence"]["sync_enabled"] = False
+    config["exchanges"] = {}
+
+    first = SovereignEngine(config)
+    first.mode = "REAL"
+    first.paper = False
+    first.state.mode = "REAL"
+    first.exchanges = {"fake": FakeExchange({"total": {"BTC": 0.2, "USDT": 1000.0}}, [])}
+    first.state.open_positions = {
+        "BTC/USDT": Position("fake", "BTC/USDT", 100.0, 0.5, 90.0, 120.0, 1.0)
+    }
+
+    blocked = first.reconcile_account_state()
+    assert blocked["status"] == "BLOCKED"
+    assert first.state.status == "SAFE_MODE"
+    assert first.state.open_positions["BTC/USDT"].qty == 0.5
+    assert first.recovery.load_state()["runtime_status"] == "SAFE_MODE"
+
+    second = SovereignEngine(config)
+    assert second.state.status == "SAFE_MODE"
+    assert second.state.operational["persisted_safe_mode"] is True
+    assert second.state.open_positions["BTC/USDT"].qty == 0.5
+
+    repeated = first.reconcile_account_state()
+    assert repeated["status"] == "BLOCKED"
+    assert first.state.status == "SAFE_MODE"
+    assert first.state.open_positions["BTC/USDT"].qty == 0.5
