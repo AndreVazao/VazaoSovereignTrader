@@ -28,6 +28,7 @@ from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scor
 from PC_ENGINE.diagnostics.execution_surface_catalog import build_execution_surface_catalog
 from PC_ENGINE.execution.surface_runtime_manager import ExecutionSurfaceRuntimeManager
 from PC_ENGINE.api.operator_exchange import OperatorExchange
+from PC_ENGINE.api.assistant_gateway import OperatorAssistantGateway
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -52,6 +53,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         )
         human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
     research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
+    assistant = OperatorAssistantGateway(engine, research)
     surface_runtime = ExecutionSurfaceRuntimeManager(engine.config)
     exchange_cfg = dict(engine.config.get("operator_exchange", {}))
     operator_exchange = OperatorExchange(
@@ -640,6 +642,18 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         return jsonify({"ok": True, "request": asdict(item)})
+
+    @app.post("/assistant/message")
+    def assistant_message():
+        principal = require_scope("read_private_state")
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = assistant.handle(str(payload.get("message", "")), principal)
+        except PermissionError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 403
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify(result), (200 if result.get("ok", False) else 409)
 
     @app.post("/human-interaction/heartbeat")
     def human_interaction_heartbeat():

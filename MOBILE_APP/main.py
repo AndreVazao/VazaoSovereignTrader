@@ -15,6 +15,11 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
 try:
+    from ui import Surface, build_chat_cockpit
+except ImportError:
+    from MOBILE_APP.ui import Surface, build_chat_cockpit
+
+try:
     from secure_token import delete_device_token, load_device_token, save_device_token
 except ImportError:
     from MOBILE_APP.secure_token import delete_device_token, load_device_token, save_device_token
@@ -40,60 +45,70 @@ class MobileCockpit(App):
         self._saved_pc_url = self.pc_url
         self.connection_state = "NOT_TESTED"
         self.human_widgets = {}
-        self.exchange_box = BoxLayout(orientation="vertical", spacing=4, size_hint_y=None)
-        self.exchange_box.bind(minimum_height=self.exchange_box.setter("height"))
         self._android_activity_bound = False
         self._pending_download = None
-        # The cockpit contains more fixed-height controls than a small Android display can
-        # show at once. Keep the whole screen scrollable so connection/pairing controls
-        # remain reachable on phones such as the Redmi Note 15.
-        root = ScrollView(do_scroll_x=False, do_scroll_y=True, bar_width=8)
-        content = BoxLayout(orientation="vertical", padding=8, spacing=5, size_hint_y=None)
-        content.bind(minimum_height=content.setter("height"))
-        self.status = Label(text="PC: ---", font_size=19, size_hint_y=None, height=35)
-        self.balance = Label(text="Saldo/equity: ---", size_hint_y=None, height=28)
-        self.risk = Label(text="Risco: ---", size_hint_y=None, height=28)
-        self.readiness = Label(text="REAL: ---", size_hint_y=None, height=28)
-        self.ip_input = TextInput(text=self.pc_url, hint_text="PC local/Tailscale: http://100.x.y.z:8765", multiline=False, size_hint_y=None, height=42)
-        self.ip_input.bind(text=self._on_url_changed)
-        self.token_input = TextInput(hint_text="Token proprietário (não é guardado)", multiline=False, password=True, size_hint_y=None, height=42)
         self._secure_token_path = Path(self.user_data_dir) / "paired_device_token.bin"
         self.device_token = load_device_token(self._secure_token_path)
         self.pairing_challenge = None
         self.pairing_code = ""
-        row_conn = BoxLayout(orientation="horizontal", spacing=5, size_hint_y=None, height=42)
-        row_conn.add_widget(Button(text="TESTAR", on_press=lambda _: self.test_connection()))
-        row_conn.add_widget(Button(text="ATUALIZAR", on_press=lambda _: self.refresh(0)))
-        row_pairing = BoxLayout(orientation="horizontal", spacing=5, size_hint_y=None, height=42)
-        row_pairing.add_widget(Button(text="EMPARELHAR", on_press=lambda _: self.begin_pairing()))
-        row_pairing.add_widget(Button(text="CONCLUIR", on_press=lambda _: self.complete_pairing()))
-        row_pairing.add_widget(Button(text="ESQUECER", on_press=lambda _: self.forget_device()))
-        row1 = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=42)
-        for label, endpoint in (("INICIAR", "/start"), ("PAUSAR", "/pause"), ("RETOMAR", "/resume"), ("PARAR", "/stop")):
-            row1.add_widget(Button(text=label, on_press=lambda _, e=endpoint: self.command(e)))
-        row2 = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=42)
-        row2.add_widget(Button(text="PAPER", on_press=lambda _: self.set_mode("PAPER")))
-        row2.add_widget(Button(text="ARM REAL", on_press=lambda _: self.arm_real()))
-        row2.add_widget(Button(text="REAL", on_press=lambda _: self.set_mode("REAL")))
-        row2.add_widget(Button(text="DESARMAR", on_press=lambda _: self.command("/real/disarm")))
-        exchange_row = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=42)
-        exchange_row.add_widget(Button(text="FICHEIROS", on_press=lambda _: self.refresh_exchange()))
-        exchange_row.add_widget(Button(text="ENVIAR FICHEIRO AO PC", on_press=lambda _: self.open_upload_picker()))
-        exchange_scroll = ScrollView(size_hint_y=0.22)
-        exchange_scroll.add_widget(self.exchange_box)
-        self.human_box = BoxLayout(orientation="vertical", spacing=5, size_hint_y=None)
-        self.human_box.bind(minimum_height=self.human_box.setter("height"))
-        human_scroll = ScrollView(size_hint_y=0.35)
-        human_scroll.add_widget(self.human_box)
-        for w in (self.ip_input, self.token_input, row_conn, row_pairing, self.status, self.balance, self.risk, self.readiness, row1, row2, exchange_row, exchange_scroll, human_scroll):
-            content.add_widget(w)
-        root.add_widget(content)
-        Clock.schedule_once(lambda *_: setattr(root, 'scroll_y', 1), 0.2)
+        self.balance = Label(text="Saldo/equity: ---")
+        self.risk = Label(text="Risco: ---")
+        self.readiness = Label(text="REAL: ---")
+        root = build_chat_cockpit(self)
+        Clock.schedule_once(lambda *_: setattr(root, "scroll_y", 1) if hasattr(root, "scroll_y") else None, 0.2)
         Clock.schedule_interval(self.refresh, 5)
         Clock.schedule_interval(self.refresh_human, 3)
         self._bind_android_activity()
         Clock.schedule_interval(self.heartbeat, 10)
         return root
+
+    def _append_chat_message(self, role, text):
+        history = getattr(self, "chat_history_box", None)
+        if history is None:
+            return
+        title = "Tu" if role == "user" else "Sovereign"
+        fill = (0.08, 0.10, 0.14, 1) if role == "user" else (0.06, 0.11, 0.12, 1)
+        card = Surface(orientation="vertical", padding=10, spacing=3, size_hint_y=None, height=74, fill=fill, radius=15)
+        card.add_widget(Label(text=title, color=(0.50, 0.78, 1, 1), font_size=11, bold=True, halign="left", size_hint_y=None, height=20))
+        card.add_widget(Label(text=str(text), color=(0.92, 0.94, 0.98, 1), font_size=13, halign="left", valign="middle"))
+        history.add_widget(card)
+        Clock.schedule_once(lambda *_: setattr(self._chat_scroll, "scroll_y", 0), 0.05) if hasattr(self, "_chat_scroll") else None
+
+    def send_chat_message(self):
+        message = self.chat_input.text.strip()
+        if not message:
+            return
+        self._append_chat_message("user", message)
+        self.chat_input.text = ""
+        try:
+            response = self._request("POST", "/assistant/message", json={"message": message}, timeout=20)
+            try:
+                payload = response.json()
+            except Exception:
+                payload = {}
+            if response.status_code == 200 or response.status_code == 409:
+                reply = payload.get("reply") or payload.get("error") or "Pedido recebido."
+            else:
+                reply = payload.get("error") or f"Pedido recusado: HTTP {response.status_code}"
+            self._append_chat_message("assistant", reply)
+            if payload.get("intent") == "STATUS":
+                self.refresh(0)
+        except Exception as exc:
+            self._append_chat_message("assistant", f"Não consegui contactar o PC: {exc}")
+
+    def start_voice_input(self):
+        try:
+            from android import activity
+            from jnius import autoclass
+            Intent = autoclass("android.content.Intent")
+            RecognizerIntent = autoclass("android.speech.RecognizerIntent")
+            intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-PT")
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Fala com o Sovereign Trader")
+            activity.startActivityForResult(intent, 4201)
+        except Exception as exc:
+            self.status.text = f"Voz indisponível: {exc}"
 
     def _bind_android_activity(self):
         try:
@@ -124,6 +139,15 @@ class MobileCockpit(App):
         try:
             from jnius import autoclass
             Activity = autoclass("android.app.Activity")
+            if request_code == 4201:
+                if result_code != Activity.RESULT_OK or intent is None:
+                    return
+                RecognizerIntent = autoclass("android.speech.RecognizerIntent")
+                results = intent.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                if results and len(results) > 0 and hasattr(self, "chat_input"):
+                    self.chat_input.text = str(results.get(0) if hasattr(results, "get") else results[0])
+                    self.chat_input.focus = True
+                return
             if result_code != Activity.RESULT_OK or intent is None:
                 return
             uri = intent.getData()
