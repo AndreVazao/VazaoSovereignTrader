@@ -88,6 +88,7 @@ class MobileCockpit(App):
         for w in (self.ip_input, self.token_input, row_conn, row_pairing, self.status, self.balance, self.risk, self.readiness, row1, row2, exchange_row, exchange_scroll, human_scroll):
             content.add_widget(w)
         root.add_widget(content)
+        Clock.schedule_once(lambda *_: setattr(root, 'scroll_y', 1), 0.2)
         Clock.schedule_interval(self.refresh, 5)
         Clock.schedule_interval(self.refresh_human, 3)
         self._bind_android_activity()
