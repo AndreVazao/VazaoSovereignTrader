@@ -44,7 +44,12 @@ class MobileCockpit(App):
         self.exchange_box.bind(minimum_height=self.exchange_box.setter("height"))
         self._android_activity_bound = False
         self._pending_download = None
-        root = BoxLayout(orientation="vertical", padding=8, spacing=5)
+        # The cockpit contains more fixed-height controls than a small Android display can
+        # show at once. Keep the whole screen scrollable so connection/pairing controls
+        # remain reachable on phones such as the Redmi Note 15.
+        root = ScrollView(do_scroll_x=False, do_scroll_y=True, bar_width=8)
+        content = BoxLayout(orientation="vertical", padding=8, spacing=5, size_hint_y=None)
+        content.bind(minimum_height=content.setter("height"))
         self.status = Label(text="PC: ---", font_size=19, size_hint_y=None, height=35)
         self.balance = Label(text="Saldo/equity: ---", size_hint_y=None, height=28)
         self.risk = Label(text="Risco: ---", size_hint_y=None, height=28)
@@ -81,7 +86,8 @@ class MobileCockpit(App):
         human_scroll = ScrollView(size_hint_y=0.35)
         human_scroll.add_widget(self.human_box)
         for w in (self.ip_input, self.token_input, row_conn, row_pairing, self.status, self.balance, self.risk, self.readiness, row1, row2, exchange_row, exchange_scroll, human_scroll):
-            root.add_widget(w)
+            content.add_widget(w)
+        root.add_widget(content)
         Clock.schedule_interval(self.refresh, 5)
         Clock.schedule_interval(self.refresh_human, 3)
         self._bind_android_activity()
