@@ -58,7 +58,7 @@ Target flow:
 - `ollama list` could not connect to a running instance; Ollama daemon is currently stopped. Installed model inventory is therefore not yet confirmed.
 - `claude` command exists and Node.js/npm are installed. The pinned Node-compatible CLI/FCC setup is documented in `AndreOS-Memory/AndreOS/02_PROJETOS/CLAUDE_CODE_DASHBOARD`.
 - `tailscale status` showed PC `100.69.225.47` online and Redmi `100.101.25.85` offline, last seen about 33 minutes earlier. Tailscale was already functional; it must not be stopped as part of this inspection.
-- `vercel` CLI was not found in PATH. This does not prove that no Vercel project/deployment exists; inspect the connected Vercel account/project before assuming deployment.
+- `vercel` CLI was not found in PATH, but the connected Vercel account confirms a Hobby team and a linked `vazao-sovereign-trader` project for this GitHub repository. The latest deployment is `READY` on production and points to commit `7ea1a897` (`Add conversational mobile cockpit`). The project metadata reports `live: false` and SSO protection enabled for deployments except custom domains. This confirms a deployment exists, but does **not** confirm the shared-learning API is publicly reachable or that Supabase is provisioned/configured. Root directory, production endpoint routes and database readiness still need a read-only verification before clients are wired to it.
 - QEMU executables were not found in PATH or the first common program-directory check. The phrase "QEMU 2" needs an exact installed-app inventory if it becomes relevant; do not infer that it is installed from this check.
 - No optional service was started or stopped during inspection.
 
