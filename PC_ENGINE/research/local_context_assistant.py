@@ -143,9 +143,10 @@ class LocalContextAssistant:
 def create_local_context_assistant(*, model: str | None = None) -> LocalContextAssistant | None:
     """Discover a local executable and cached model without starting any service.
 
-    Set VST_LOCAL_CONTEXT_AI=off to disable even this optional research capability.
+    The default is off. Set VST_LOCAL_CONTEXT_AI=auto to opt in to on-demand startup.
     """
-    if os.environ.get("VST_LOCAL_CONTEXT_AI", "auto").strip().lower() in {"off", "0", "false", "disabled"}:
+    mode = os.environ.get("VST_LOCAL_CONTEXT_AI", "off").strip().lower()
+    if mode not in {"auto", "on", "1", "true", "enabled"}:
         return None
     spec: ServiceSpec | None = discover_ollama_spec()
     if spec is None:

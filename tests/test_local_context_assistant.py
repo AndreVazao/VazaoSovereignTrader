@@ -59,3 +59,11 @@ def test_service_failure_falls_back_without_propagating():
     assistant = LocalContextAssistant(supervisor)
     assert assistant.interpret("check context") is None
     assert assistant.last_status == "LOCAL_AI_UNAVAILABLE"
+
+
+def test_local_ai_is_disabled_by_default_without_starting_or_discovering_services(monkeypatch):
+    import PC_ENGINE.research.local_context_assistant as module
+
+    monkeypatch.delenv("VST_LOCAL_CONTEXT_AI", raising=False)
+    monkeypatch.setattr(module, "discover_ollama_spec", lambda: (_ for _ in ()).throw(AssertionError("must remain off")))
+    assert module.create_local_context_assistant() is None
