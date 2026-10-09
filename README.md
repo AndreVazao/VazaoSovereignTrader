@@ -209,7 +209,7 @@ A suíte passou de 25 jobs por ficheiro para um job único que executa todos os 
 
 ## Serviços opcionais, IA local e descoberta PC/Android
 
-A IA externa não é dependência do motor de trading e a inferência paga fica desativada por defeito. Ollama, Claude Code/FCC e Tailscale são capacidades opcionais: o ciclo de mercado/risco nunca deve esperar por elas. O ciclo de vida automático (detetar, iniciar sob pedido, partilhar leases e parar apenas o processo iniciado pelo supervisor quando já não for necessário) está documentado como objetivo e ainda precisa de implementação/testes próprios.
+A IA externa não é dependência do motor de trading e a inferência paga fica desativada por defeito. Ollama, Claude Code/FCC e Tailscale são capacidades opcionais: o ciclo de mercado/risco nunca deve esperar por elas. Está implementado localmente um supervisor allow-listed com leases para Ollama e um assistente de contexto apenas local para investigação com páginas públicas já obtidas; o uso real do modelo ainda precisa de smoke test. A gestão automática do Tailscale e a integração Vercel/Android continuam por validar/implementar.
 
 A descoberta automática PC/Android deve usar identidade e leases curtas no serviço Vercel, seguida de ligação direta autenticada através do Tailscale; não deve exigir introdução manual de IP no uso normal. A cloud não pode transportar ordens nem ser necessária para o PC continuar localmente.
 

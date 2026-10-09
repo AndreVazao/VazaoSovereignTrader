@@ -55,7 +55,7 @@ Target flow:
 ## Current observations on PC-Vazao-Anjos (2026-10-09)
 
 - `ollama` CLI exists at `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`, version `0.23.0`.
-- `ollama list` could not connect to a running instance; Ollama daemon is currently stopped. Installed model inventory is therefore not yet confirmed.
+- `ollama list` could not connect to a running instance; Ollama daemon is currently stopped. Read-only inspection of the model cache (without starting the daemon) found four installed manifests: `deepseek-r1:1.5b`, `llama3.2:1b`, `qwen2.5:1.5b`, and `qwen2.5-coder:1.5b`; the blob cache was about 4.11 GB. Model runtime readiness has not yet been tested.
 - `claude` command exists and Node.js/npm are installed. The pinned Node-compatible CLI/FCC setup is documented in `AndreOS-Memory/AndreOS/02_PROJETOS/CLAUDE_CODE_DASHBOARD`.
 - `tailscale status` showed PC `100.69.225.47` online and Redmi `100.101.25.85` offline, last seen about 33 minutes earlier. Tailscale was already functional; it must not be stopped as part of this inspection.
 - `vercel` CLI was not found in PATH, but the connected Vercel account confirms a Hobby team and a linked `vazao-sovereign-trader` project for this GitHub repository. The latest deployment is `READY` on production and points to commit `7ea1a897` (`Add conversational mobile cockpit`). The project metadata reports `live: false` and SSO protection enabled for deployments except custom domains. This confirms a deployment exists, but does **not** confirm the shared-learning API is publicly reachable or that Supabase is provisioned/configured. Root directory, production endpoint routes and database readiness still need a read-only verification before clients are wired to it.
@@ -70,3 +70,16 @@ Target flow:
 4. Finish Vercel/Supabase endpoint lease API and approved device flow; verify deployment state before connecting clients.
 5. Wire PC and Android to authenticated endpoint discovery, direct Tailscale connection, expiry, revocation and offline UX.
 6. Only enable automatic lifecycle and cloud discovery after tests prove no trading-loop blocking, no unauthorized service termination, no cross-owner endpoint leakage and correct recovery when services are offline.
+
+
+## Implementation checkpoint (2026-10-09)
+
+Implemented locally, not yet merged to `main`:
+
+- `PC_ENGINE/services/optional_service_supervisor.py`: allow-listed Ollama lifecycle, local health check, process ownership, shared leases, idle grace, exact-process termination and bounded startup. It never manages Tailscale yet; Tailscale is deliberately left alone because it is already the active remote path.
+- `PC_ENGINE/research/local_context_assistant.py`: local-only Ollama provider, cached-model detection without daemon startup, 8,000-character input bounds, 64 KiB response bound, 30-second maximum request timeout, `keep_alive=0`, no model download, and `VST_LOCAL_CONTEXT_AI=off` override. Cloud inference is not implemented.
+- `PC_ENGINE/research/worker.py`: after a public page is successfully retrieved, optionally asks the local model to interpret owner intent and summarize testable hypotheses. The output is appended as explicitly unvalidated advisory text only; it cannot alter the deterministic category, evaluation result, risk or execution.
+- No daemon is started merely by constructing the worker. It is acquired only for a successfully fetched public research page. When done, the model is unloaded and the owned Ollama process is eligible to stop after the idle grace period. A pre-existing Ollama instance is borrowed and never stopped by this supervisor.
+- Focused tests cover external-service reuse, shared leases, timeout cleanup, allow-list, idempotent release, bounded advisory output and fail-open behavior. Runtime validation against the real installed models has not yet been performed; do not claim those models work until a user-authorized local smoke test is run.
+
+Still outstanding: Tailscale service start/stop leases (must not interrupt mobile access), end-to-end verification of the Vercel endpoint lease API and Android discovery, and integration testing of local inference under the PC's memory/CPU constraints.

@@ -13,6 +13,7 @@ from pathlib import Path
 from PC_ENGINE.research.inbox import TraderResearchInbox
 from PC_ENGINE.research.knowledge import ResearchKnowledge
 from PC_ENGINE.research.evaluator import ResearchOwnDataEvaluator
+from PC_ENGINE.research.local_context_assistant import create_local_context_assistant
 
 
 class ResearchWorker:
@@ -34,6 +35,9 @@ class ResearchWorker:
         self.inbox = TraderResearchInbox(data_dir)
         self.knowledge = ResearchKnowledge(data_dir)
         self.evaluator = ResearchOwnDataEvaluator(replay_path=replay_path, oos_path=oos_path)
+        # Local-only discovery has no service side effect; Ollama starts only for research.
+        # If no executable or cached model exists, deterministic research remains unchanged.
+        self.context_assistant = create_local_context_assistant()
         self.timeout = float(timeout_seconds)
 
     def run_forever(self, stop_event, interval_seconds: float = 2.0) -> None:
@@ -59,6 +63,16 @@ class ResearchWorker:
             self.inbox._append(item)
             try:
                 result = self._process(item.message, item.urls)
+                if self.context_assistant is not None and result.get("pages_read", 0) > 0:
+                    try:
+                        interpretation = self.context_assistant.interpret(
+                            item.message, source_text=result.get("source_excerpt", "")
+                        )
+                    except Exception:
+                        interpretation = None
+                    if interpretation:
+                        # Advisory only: a model cannot change classification or execution state.
+                        result["summary"] += " Interpretação local advisory (não validada): " + interpretation[:3_000]
                 item.result = result["summary"]
                 item.status = "COMPLETED" if result["interesting"] else "DISCARDED"
                 evaluation = self.evaluator.evaluate(item.message)
@@ -102,12 +116,14 @@ class ResearchWorker:
                     "category": "market_pattern",
                     "summary": "Hipótese interna autónoma; não depende de fonte web. Será medida apenas contra os dados próprios disponíveis.",
                     "pages_read": 0,
+                    "source_excerpt": "",
                 }
             return {
                 "interesting": False,
                 "category": "failed_hypothesis",
                 "summary": "Nenhuma fonte pública acessível foi encontrada; hipótese descartada.",
                 "pages_read": 0,
+                "source_excerpt": "",
             }
 
         corpus = " ".join(text for _, text in pages)
@@ -121,7 +137,13 @@ class ResearchWorker:
             f"Esta é evidência de investigação, não uma regra de trading; qualquer hipótese "
             f"terá de ser medida nos dados próprios e passar PAPER/OOS."
         )
-        return {"interesting": interesting, "category": category, "summary": summary, "pages_read": len(pages)}
+        return {
+            "interesting": interesting,
+            "category": category,
+            "summary": summary,
+            "pages_read": len(pages),
+            "source_excerpt": corpus[:8_000],
+        }
 
     @staticmethod
     def _validate_public_url(url: str) -> None:
