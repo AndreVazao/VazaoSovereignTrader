@@ -58,18 +58,20 @@ Target flow:
 - `ollama list` could not connect to a running instance; Ollama daemon is currently stopped. Read-only inspection of the model cache (without starting the daemon) found four installed manifests: `deepseek-r1:1.5b`, `llama3.2:1b`, `qwen2.5:1.5b`, and `qwen2.5-coder:1.5b`; the blob cache was about 4.11 GB. Model runtime readiness has not yet been tested.
 - `claude` command exists and Node.js/npm are installed. The pinned Node-compatible CLI/FCC setup is documented in `AndreOS-Memory/AndreOS/02_PROJETOS/CLAUDE_CODE_DASHBOARD`.
 - `tailscale status` showed PC `100.69.225.47` online and Redmi `100.101.25.85` offline, last seen about 33 minutes earlier. Tailscale was already functional; it must not be stopped as part of this inspection.
-- `vercel` CLI was not found in PATH, but the connected Vercel account confirms a Hobby team and a linked `vazao-sovereign-trader` project for this GitHub repository. The latest deployment is `READY` on production and points to commit `7ea1a897` (`Add conversational mobile cockpit`). The project metadata reports `live: false` and SSO protection enabled for deployments except custom domains. This confirms a deployment exists, but does **not** confirm the shared-learning API is publicly reachable or that Supabase is provisioned/configured. Root directory, production endpoint routes and database readiness still need a read-only verification before clients are wired to it.
+- `vercel` CLI was not found in PATH, but the connected Vercel account confirms the `vazao-sovereign-trader` project and a `READY` production deployment at commit `7ea1a897` (`Add conversational mobile cockpit`). Read-only HTTP checks against `https://vazao-sovereign-trader.vercel.app/api/health` returned `200` with `service=vazao-shared-learning`; GET `/api/v1/devices/endpoint` returned `405`, matching the route's signed-POST-only contract. Thus the API routes are deployed and reachable on this alias. Project metadata still reports `live: false` and SSO protection for non-custom domains, so the other aliases should not be assumed public.
+- Read-only Vercel environment inventory returned **zero configured environment variables** (`hiddenProductionEnvCount: 0`). The connected Supabase account lists only `baribudos-studio-website`, which is `INACTIVE`; no separate Trader/shared-learning Supabase project was found. Therefore database-backed auth/device endpoint actions are **not production-ready** and likely return `service_not_configured`/503 once a valid token reaches the handler. No credentials were read, no project was created, and no deployment/environment setting was changed. Provisioning any database requires a separate cost/organization decision and is not authorized by the zero-spend policy.
 - QEMU executables were not found in PATH or the first common program-directory check. The phrase "QEMU 2" needs an exact installed-app inventory if it becomes relevant; do not infer that it is installed from this check.
 - No optional service was started or stopped during inspection.
 
 ## Next implementation order
 
-1. Implement and test the lease-based local service supervisor independently of the trading loop.
-2. Add an explicit AI capability interface with provider discovery, cost guard, timeouts, bounded output and deterministic fallback; cloud inference disabled by default.
-3. Make research intent understanding optional: local model when available, otherwise preserve the request and ask/produce a conservative structured hypothesis without blocking.
-4. Finish Vercel/Supabase endpoint lease API and approved device flow; verify deployment state before connecting clients.
-5. Wire PC and Android to authenticated endpoint discovery, direct Tailscale connection, expiry, revocation and offline UX.
-6. Only enable automatic lifecycle and cloud discovery after tests prove no trading-loop blocking, no unauthorized service termination, no cross-owner endpoint leakage and correct recovery when services are offline.
+1. **Done locally:** implement/test the lease-based Ollama supervisor independently of the trading loop. Six supervisor tests pass; a real-model smoke test remains pending.
+2. **Done locally:** add the local-only AI interface with cached-model detection, bounded I/O, short inference keep-alive, no download and deterministic fallback. Cloud inference is not implemented.
+3. **Done locally:** let successful public-link research optionally use the local model for owner-intent interpretation; model output is advisory only. A focused integration test and a real local inference smoke test remain pending.
+4. **Blocked by infrastructure/cost policy:** endpoint-lease routes exist in Vercel source and are deployed, but Vercel currently has zero environment variables and no active Trader/shared-learning Supabase project was found. Do not create/provision a database without first confirming the actual plan and zero-cost implications.
+5. Wire PC and Android to authenticated endpoint discovery, direct Tailscale connection, expiry, revocation and offline UX after backend readiness is proven.
+6. Implement Tailscale lifecycle with session leases only after mobile discovery works; never stop an already-running Tailscale service or one with an active mobile session.
+7. Only enable automatic lifecycle and cloud discovery after tests prove no trading-loop blocking, no unauthorized service termination, no cross-owner endpoint leakage and correct recovery when services are offline.
 
 
 ## Implementation checkpoint (2026-10-09)
@@ -83,3 +85,10 @@ Implemented locally, not yet merged to `main`:
 - Focused tests cover external-service reuse, shared leases, timeout cleanup, allow-list, idempotent release, bounded advisory output and fail-open behavior. Runtime validation against the real installed models has not yet been performed; do not claim those models work until a user-authorized local smoke test is run.
 
 Still outstanding: Tailscale service start/stop leases (must not interrupt mobile access), end-to-end verification of the Vercel endpoint lease API and Android discovery, and integration testing of local inference under the PC's memory/CPU constraints.
+
+
+### Verification follow-up (2026-10-09)
+
+- After wiring the local context assistant into the research worker, focused tests were rerun with `VST_LOCAL_CONTEXT_AI=off` to guarantee the tests themselves would not start the installed Ollama daemon: **17 passed** across supervisor/context/research tests, then **8 passed** across REAL-order boundary tests. Python compilation and `git diff --check` passed. Combined: **25 passed**. This validates deterministic fallback and contracts, not actual local model quality.
+- Read-only live API checks: health endpoint `200`; endpoint-lease route GET `405`; unauthenticated endpoint-lease POST `{}` returns `401 unauthorized` as required. No authenticated/device write was attempted.
+- Vercel environment inventory has zero configured variables; Supabase inventory contains only the unrelated inactive website project. API routing is deployed, but authenticated device discovery is blocked until a correctly scoped Supabase backend and environment are provisioned. No resources, paid services, credentials, or deployment settings were changed.
