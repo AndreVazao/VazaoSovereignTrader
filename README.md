@@ -337,6 +337,8 @@ O princípio operacional é:
 
 Fills parciais e múltiplos fills são tratados por diferenças cumulativas. O sistema persiste marcadores, posição, fees, notional e estado de risco para permitir recuperação sem duplicar efeitos financeiros depois de crashes/restarts.
 
+A fronteira `OrderManager` rejeita agora qualquer submissão REAL sem `client_order_id` não vazio, antes de chamar o autorizador ou o adapter. Um contrato AST também limita chamadas diretas de submissão CCXT ao adapter revisto. Detalhes e validação: `docs/REAL_CLIENT_ORDER_ID_BOUNDARY_2026-10-09.md`.
+
 ### Readiness, evidência e diagnóstico PAPER
 
 A camada de readiness é agora uma cadeia explícita e persistente, ainda exclusivamente PAPER/read-only:

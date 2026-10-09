@@ -100,3 +100,38 @@ def test_real_order_exception_is_unknown_outcome_not_rejected():
     assert result.status == "UNKNOWN_OUTCOME"
     assert "ambiguous exchange outcome" in result.reason
     assert exchange.calls == 1
+
+
+def test_real_order_requires_nonempty_client_identity_before_authorization_or_adapter():
+    for client_order_id in (None, "", "   "):
+        exchange = ExchangeStub()
+        authorization_calls = []
+        manager = OrderManager(
+            RulesStub(),
+            PaperStub(),
+            execution_authorizer=lambda *args: authorization_calls.append(args) or True,
+        )
+
+        result = manager.buy(
+            exchange,
+            "BTC/USDT",
+            0.1,
+            100.0,
+            paper=False,
+            client_order_id=client_order_id,
+        )
+
+        assert result.status == "REJECTED"
+        assert "client order identity" in result.reason
+        assert authorization_calls == []
+        assert exchange.calls == 0
+
+
+def test_paper_order_does_not_require_client_identity():
+    exchange = ExchangeStub()
+    manager = OrderManager(RulesStub(), PaperStub())
+
+    result = manager.buy(exchange, "BTC/USDT", 0.1, 100.0, paper=True)
+
+    assert result.status == "FILLED"
+    assert exchange.calls == 0

@@ -70,6 +70,16 @@ class OrderManager:
                     )
                 return OrderResult(True, side, symbol, normalized_qty, fill.fill_price, fill.fee, f"paper-{side}", "paper fill", normalized_qty, "FILLED")
 
+            # REAL submissions must always carry a durable, deterministic identity so
+            # restart recovery can reconcile the exact venue-side order without retrying blindly.
+            if not isinstance(client_order_id, str) or not client_order_id.strip():
+                self.last_client_order.pop(fingerprint, None)
+                return OrderResult(
+                    False, side, symbol, normalized_qty, price, 0.0, "",
+                    "real execution requires a non-empty client order identity",
+                    normalized_qty, "REJECTED",
+                )
+
             authorizer = self.execution_authorizer
             if authorizer is None:
                 self.last_client_order.pop(fingerprint, None)
