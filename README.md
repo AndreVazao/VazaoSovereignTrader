@@ -207,6 +207,14 @@ A mesma recolha também produz `PC_ENGINE/data/radar/state_outcomes.jsonl`, com 
 A suíte passou de 25 jobs por ficheiro para um job único que executa todos os testes. Isto reduz ruído e emails quando existe falha de infraestrutura. Runs antigos da mesma branch são cancelados automaticamente.
 
 
+## Serviços opcionais, IA local e descoberta PC/Android
+
+A IA externa não é dependência do motor de trading e a inferência paga fica desativada por defeito. Ollama, Claude Code/FCC e Tailscale são capacidades opcionais: o ciclo de mercado/risco nunca deve esperar por elas. O ciclo de vida automático (detetar, iniciar sob pedido, partilhar leases e parar apenas o processo iniciado pelo supervisor quando já não for necessário) está documentado como objetivo e ainda precisa de implementação/testes próprios.
+
+A descoberta automática PC/Android deve usar identidade e leases curtas no serviço Vercel, seguida de ligação direta autenticada através do Tailscale; não deve exigir introdução manual de IP no uso normal. A cloud não pode transportar ordens nem ser necessária para o PC continuar localmente.
+
+Detalhes e estado real dos serviços: `docs/OPTIONAL_LOCAL_AI_AND_SERVICE_LIFECYCLE.md`.
+
 ## PC 24/7 + controlo remoto
 
 - scripts/setup_windows.ps1 prepara o ambiente Windows.
