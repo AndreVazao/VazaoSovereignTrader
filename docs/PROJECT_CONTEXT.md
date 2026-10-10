@@ -1276,3 +1276,25 @@ Review points before merge:
 - TLS keeps the approved hostname as SNI/certificate-verification identity. Ambient HTTP(S) proxy configuration is disabled for this security-sensitive fetch path and proxy tunneling is rejected.
 - Regression tests cover the validated-IP dial and hostname-preserving TLS handshake boundary.
 - Exact-head Python and Windows CI remain mandatory before merge. Host/network egress restrictions remain defense-in-depth.
+
+
+## USB Android validation — 2026-10-10
+
+- Redmi `2510DRA23E`, Android 16 / SDK 36, is connected and authorized over ADB. Installed package is `pt.andrevazao.vazaosovereigntrader` version 0.4.0 (versionCode 1024400).
+- `adb reverse tcp:8765 tcp:8765` is active. PC `/health` returns HTTP 200 in PAPER mode.
+- A temporary diagnostic API process is running on `127.0.0.1:8765` only, with PAPER auto-start disabled and REAL disabled in the in-memory config; the engine itself was not started. This is not a persistent service.
+- A cryptographically random 32-byte `VST_LOCAL_TOKEN` was created and stored in the Windows user environment because no token existed. Never log or expose its value. Existing `ensure_windows_token.ps1` fails on Windows PowerShell/.NET because `RandomNumberGenerator.Fill` is unavailable; `pair_android_usb.ps1` also fails to parse due to encoding/accents. Fix and test both scripts.
+- APK fails to remain launched. Android exit info reports native SIGABRT/status 6; logcat shows `FORTIFY: pthread_mutex_lock called on a destroyed mutex` in `hwuiTask0`/`hwuiTask1`, with stack in `libhwui.so`. Diagnose Kivy/SDL/HWUI compatibility on Android 16 and rebuild a new APK before retrying.
+- End-to-end phone HTTP was not verified: Toybox has no `wget`, and the `nc` probe returned no response. Host-local health is confirmed; do not claim mobile connection complete.
+- Full evidence and next steps: `docs/USB_SESSION_2026-10-10.md`. No trading engine started, no exchange calls/orders, no APK install, and no changes to PAPER/REAL persistent config.
+
+
+## USB Android validation — 2026-10-10
+
+- Redmi `2510DRA23E`, Android 16 / SDK 36, is connected and authorized over ADB. Installed package is `pt.andrevazao.vazaosovereigntrader` version 0.4.0 (versionCode 1024400).
+- `adb reverse tcp:8765 tcp:8765` is active. PC `/health` returns HTTP 200 in PAPER mode.
+- A temporary diagnostic API process is running on `127.0.0.1:8765` only, with PAPER auto-start disabled and REAL disabled in the in-memory config; the engine itself was not started. This is not a persistent service.
+- A cryptographically random 32-byte `VST_LOCAL_TOKEN` was created and stored in the Windows user environment because no token existed. Never log or expose its value. Existing `ensure_windows_token.ps1` fails on Windows PowerShell/.NET because `RandomNumberGenerator.Fill` is unavailable; `pair_android_usb.ps1` also fails to parse due to encoding/accents. Fix and test both scripts.
+- APK fails to remain launched. Android exit info reports native SIGABRT/status 6; logcat shows `FORTIFY: pthread_mutex_lock called on a destroyed mutex` in `hwuiTask0`/`hwuiTask1`, with stack in `libhwui.so`. Diagnose Kivy/SDL/HWUI compatibility on Android 16 and rebuild a new APK before retrying.
+- End-to-end phone HTTP was not verified: Toybox has no `wget`, and the `nc` probe returned no response. Host-local health is confirmed; do not claim mobile connection complete.
+- Full evidence and next steps: `docs/USB_SESSION_2026-10-10.md`. No trading engine started, no exchange calls/orders, no APK install, and no changes to PAPER/REAL persistent config.
