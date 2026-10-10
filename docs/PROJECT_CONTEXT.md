@@ -1298,3 +1298,11 @@ Review points before merge:
 - APK fails to remain launched. Android exit info reports native SIGABRT/status 6; logcat shows `FORTIFY: pthread_mutex_lock called on a destroyed mutex` in `hwuiTask0`/`hwuiTask1`, with stack in `libhwui.so`. Diagnose Kivy/SDL/HWUI compatibility on Android 16 and rebuild a new APK before retrying.
 - End-to-end phone HTTP was not verified: Toybox has no `wget`, and the `nc` probe returned no response. Host-local health is confirmed; do not claim mobile connection complete.
 - Full evidence and next steps: `docs/USB_SESSION_2026-10-10.md`. No trading engine started, no exchange calls/orders, no APK install, and no changes to PAPER/REAL persistent config.
+
+## 2026-10-10 — Hot Path Lead/Lag hardening
+- Hardened `PC_ENGINE/radar/hot_path.py`: normalized venue/symbol identity, rejects malformed prices/timestamps/latency and non-finite learned expectancy, and rejects negative local follower quote age instead of clamping it to zero.
+- Added four regression tests in `tests/test_hot_path.py`.
+- Focused suite: 29 passed; broader brain/learning suite: 61 passed in 18.91s.
+- PAPER-only observation invariant preserved; no engine or live orders started.
+- Android 16 Kivy/HWUI crash and PowerShell USB bootstrap script issues remain separate blockers.
+- Detail: `docs/HOT_PATH_LEAD_LAG_HARDENING_2026-10-10.md`.
