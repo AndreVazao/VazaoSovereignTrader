@@ -1324,3 +1324,17 @@ Review points before merge:
 - Net expectation must agree (within rounding tolerance) with expected response less all configured costs; identities are normalized on registration.
 - Added regression coverage; selected brain/learning suite now **67 passed in 7.47s**, compilation and diff check passed.
 - Safety invariant unchanged: observation-only/PAPER, no engine start, exchange calls, order submission, paid inference, or REAL-mode changes.
+
+
+## Checkpoint 2026-10-11 — temporal consistency gate
+
+- Outcome registration rejects follower-entry timestamps later than the leader timestamp and requires the supplied quote age to equal the timestamp difference. This prevents impossible chronology from polluting PAPER calibration.
+- Validation after the change: 67 selected brain/learning tests passed in 7.45s; compile and diff checks passed. Commit `d0c0e02` is local; `artifacts/` remains untracked and preserved.
+
+
+## Checkpoint 2026-10-11 — OOS freshness/cost diagnostics
+
+- Completed PAPER outcomes now preserve follower quote age at signal, outcome receive latency, observed horizon deviation, and modeled total cost.
+- Relationship-level chronological OOS reports expose additional-cost scenarios per relationship and group test outcomes into freshness buckets, with explicit legacy/missing-data coverage. Latency and horizon deviations are summarized when present.
+- These fields are diagnostics only: stress costs are hypothetical deductions and never mutate source outcomes or authorize execution.
+- Targeted tests: 38 passed in 3.92s; compilation and diff checks passed. Full suite validation and local commit remain pending.

@@ -122,3 +122,33 @@ def test_relationship_oos_never_splits_equal_timestamps_across_train_and_test(tm
     assert relationship["train_samples"] == 8
     assert relationship["test_samples"] == 2
     assert relationship["train_end_ms"] < relationship["test_start_ms"]
+
+
+def test_relationship_oos_reports_cost_stress_and_freshness_coverage(tmp_path):
+    path = tmp_path / "outcomes.jsonl"
+    rows = [
+        _row(i, 2.0, follower_quote_age_at_signal_ms=age, outcome_receive_latency_ms=latency,
+             observed_horizon_deviation_ms=deviation)
+        for i, (age, latency, deviation) in enumerate([
+            (50, 4, 0), (80, 5, 1), (120, 6, 2), (200, 7, 3),
+            (300, 8, 4), (400, 9, 5), (600, 10, 6), (700, 11, 7),
+            (60, 4, 0), (150, 6, 2), (350, 8, 4), (800, 12, 8),
+        ])
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    report = build_relationship_oos_report(
+        path, min_samples=12, min_test_samples=4, train_fraction=0.67,
+        extra_cost_scenarios_bps=(0.0, 1.0, 3.0, -1.0), now_ms=100_000,
+    )
+    relationship = report["relationship_details"][0]
+    stress = {row["extra_cost_bps"]: row for row in relationship["oos_cost_stress"]}
+    assert report["extra_cost_scenarios_bps"] == [0.0, 1.0, 3.0]
+    assert stress[0.0]["mean_net_bps"] == 2.0
+    assert stress[1.0]["mean_net_bps"] == 1.0
+    assert stress[3.0]["mean_net_bps"] == -1.0
+    assert relationship["freshness_coverage_samples"] == relationship["test_samples"]
+    assert relationship["mean_outcome_receive_latency_ms"] is not None
+    assert relationship["mean_observed_horizon_deviation_ms"] is not None
+    assert sum(row["samples"] for row in relationship["oos_freshness_buckets"]) == relationship["test_samples"]
+    assert report["execution_authorized"] is False

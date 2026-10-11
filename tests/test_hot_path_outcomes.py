@@ -58,6 +58,10 @@ def test_outcome_tracker_waits_until_horizon_then_records_net_result():
     assert outcome["realized_response_bps"] > 19.0
     assert outcome["realized_net_bps"] > 13.0
     assert outcome["profitable_after_costs"] is True
+    assert outcome["follower_quote_age_at_signal_ms"] == opportunity.age_ms
+    assert outcome["outcome_receive_latency_ms"] == 5
+    assert outcome["observed_horizon_deviation_ms"] == 100
+    assert outcome["modeled_total_cost_bps"] == 6.0
 
 
 def test_outcome_tracker_rejects_non_observational_opportunities():

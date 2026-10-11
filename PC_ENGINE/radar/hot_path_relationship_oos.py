@@ -183,6 +183,7 @@ def build_relationship_oos_report(
     min_test_samples: int = 20,
     train_fraction: float = 0.7,
     max_records: int = 100_000,
+    extra_cost_scenarios_bps: tuple[float, ...] = (0.0, 0.5, 1.0, 2.0, 3.0),
     now_ms: int | None = None,
 ) -> dict[str, Any]:
     """Build per-relationship chronological holdout evidence from completed PAPER outcomes."""
@@ -194,6 +195,14 @@ def build_relationship_oos_report(
         fraction = 0.7
     if not math.isfinite(fraction) or fraction < 0.5 or fraction > 0.9:
         fraction = 0.7
+
+    cost_scenarios: set[float] = set()
+    for raw_cost in extra_cost_scenarios_bps:
+        cost = _finite(raw_cost)
+        if cost is not None and cost >= 0.0:
+            cost_scenarios.add(round(cost, 6))
+    if not cost_scenarios:
+        cost_scenarios = {0.0, 0.5, 1.0, 2.0, 3.0}
 
     path = Path(outcomes_path)
     now = int(now_ms if now_ms is not None else time.time_ns() // 1_000_000)
@@ -225,6 +234,50 @@ def build_relationship_oos_report(
         upper = ci["upper"]
         enough = count >= min_samples and len(test) >= min_test_samples
         supported = bool(enough and ci["assessment"] == "AVAILABLE" and lower is not None and lower > 0.0)
+
+        cost_stress = []
+        for extra_cost in sorted(cost_scenarios):
+            adjusted = [value - extra_cost for value in test_values]
+            cost_stress.append({
+                "extra_cost_bps": extra_cost,
+                "samples": len(adjusted),
+                "mean_net_bps": round(statistics.fmean(adjusted), 6) if adjusted else None,
+                "positive_rate": round(sum(value > 0.0 for value in adjusted) / len(adjusted), 6) if adjusted else None,
+                "positive_edge": bool(adjusted and statistics.fmean(adjusted) > 0.0),
+            })
+
+        freshness_groups: dict[str, list[float]] = {
+            "FRESH_0_100MS": [],
+            "MODERATE_101_250MS": [],
+            "AGING_251_500MS": [],
+            "STALE_OVER_500MS": [],
+            "UNKNOWN_OR_LEGACY": [],
+        }
+        for row in test:
+            age = _finite(row.get("follower_quote_age_at_signal_ms"))
+            if age is None or age < 0.0:
+                bucket = "UNKNOWN_OR_LEGACY"
+            elif age <= 100.0:
+                bucket = "FRESH_0_100MS"
+            elif age <= 250.0:
+                bucket = "MODERATE_101_250MS"
+            elif age <= 500.0:
+                bucket = "AGING_251_500MS"
+            else:
+                bucket = "STALE_OVER_500MS"
+            freshness_groups[bucket].append(float(row["realized_net_bps"]))
+        freshness_summary = [
+            {
+                "bucket": bucket,
+                "samples": len(values),
+                "mean_realized_net_bps": round(statistics.fmean(values), 6) if values else None,
+                "positive_rate": round(sum(value > 0.0 for value in values) / len(values), 6) if values else None,
+            }
+            for bucket, values in freshness_groups.items()
+        ]
+        known_age_rows = [row for row in test if _finite(row.get("follower_quote_age_at_signal_ms")) is not None and _finite(row.get("follower_quote_age_at_signal_ms")) >= 0.0]
+        outcome_latencies = [int(value) for row in test if (value := _finite(row.get("outcome_receive_latency_ms"))) is not None and value >= 0.0]
+        horizon_deviations = [int(value) for row in test if (value := _finite(row.get("observed_horizon_deviation_ms"))) is not None]
         relationships.append({
             "symbol": key[0],
             "leader": key[1],
@@ -248,6 +301,14 @@ def build_relationship_oos_report(
             "oos_bootstrap_replicates": ci["bootstrap_replicates"],
             "oos_bootstrap_block_length": ci["block_length"],
             "oos_confidence_interval_available": ci["assessment"] == "AVAILABLE",
+            "oos_cost_stress": cost_stress,
+            "freshness_coverage_samples": len(known_age_rows),
+            "freshness_coverage_rate": round(len(known_age_rows) / len(test), 6) if test else None,
+            "oos_freshness_buckets": freshness_summary,
+            "outcome_latency_samples": len(outcome_latencies),
+            "mean_outcome_receive_latency_ms": round(statistics.fmean(outcome_latencies), 6) if outcome_latencies else None,
+            "horizon_deviation_samples": len(horizon_deviations),
+            "mean_observed_horizon_deviation_ms": round(statistics.fmean(horizon_deviations), 6) if horizon_deviations else None,
             "sample_sufficiency": "SUFFICIENT" if enough else "INSUFFICIENT",
             "oos_edge_supported": supported,
             "eligible_for_paper_review": supported,
@@ -269,6 +330,7 @@ def build_relationship_oos_report(
         "min_samples": min_samples,
         "min_test_samples": min_test_samples,
         "train_fraction": fraction,
+        "extra_cost_scenarios_bps": sorted(cost_scenarios),
         "eligible_relationships_for_paper_review": sum(
             1 for row in relationships if row["eligible_for_paper_review"]
         ),

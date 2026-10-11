@@ -38,3 +38,18 @@ Four tests were added for future follower timestamps, case/whitespace normalizat
 - Added regressions for NaN/infinite evidence, negative costs, inconsistent expected-net values, and identity normalization at registration.
 - Selected brain/learning suite: **67 passed in 7.47s**; `compileall` and `git diff --check` passed.
 - Remains bounded, in-memory, PAPER-only and order-free.
+
+## Temporal consistency follow-up — 2026-10-11
+
+- Outcome registration now also enforces `follower_entry_local_ts_ms <= leader_local_ts_ms` and requires `age_ms == leader_local_ts_ms - follower_entry_local_ts_ms`. Candidates with impossible quote chronology cannot enter the pending evidence queue.
+- Re-ran the selected brain/learning suite after this change: **67 passed in 7.45s**; compile and diff checks passed.
+- Commit: `d0c0e02 fix: enforce temporal consistency in outcome evidence` (local only).
+
+
+## OOS freshness and cost sensitivity — 2026-10-11
+
+- Completed PAPER outcome rows now carry `follower_quote_age_at_signal_ms`, `outcome_receive_latency_ms`, `observed_horizon_deviation_ms`, and `modeled_total_cost_bps` so downstream analysis can distinguish signal freshness, observed processing latency, horizon overshoot and modeled costs.
+- Relationship-level chronological OOS reports now include per-relationship additional-cost stress (default 0, 0.5, 1, 2, 3 bps), OOS freshness buckets, freshness-data coverage, observed receive-latency summaries, and horizon-deviation summaries. These are descriptive diagnostics; hypothetical cost deductions do not rewrite recorded outcomes.
+- Added regression coverage for the new outcome telemetry and OOS cost/freshness diagnostics.
+- Targeted validation: **38 passed in 3.92s** across outcome tracking, relationship OOS, robustness, calibration, scorecard, walk-forward and learning. `compileall` and `git diff --check` passed.
+- All outputs remain PAPER-only; no orders, exchange calls or execution authorization.

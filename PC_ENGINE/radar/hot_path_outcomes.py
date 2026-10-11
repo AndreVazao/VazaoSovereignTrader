@@ -98,6 +98,7 @@ class HotPathOutcomeTracker:
         try:
             local_ts_ms = int(event.local_ts_ms)
             price = float(event.price)
+            receive_latency_ms = int(event.local_receive_latency_ms)
         except (TypeError, ValueError, OverflowError):
             return
         if (
@@ -106,6 +107,8 @@ class HotPathOutcomeTracker:
             or local_ts_ms <= 0
             or not math.isfinite(price)
             or price <= 0.0
+            or isinstance(event.local_receive_latency_ms, bool)
+            or receive_latency_ms < 0
         ):
             return
 
@@ -160,6 +163,10 @@ class HotPathOutcomeTracker:
                     "outcome_local_ts_ms": int(event.local_ts_ms),
                     "horizon_ms": int(pending["horizon_ms"]),
                     "observed_horizon_ms": int(event.local_ts_ms) - int(pending["leader_local_ts_ms"]),
+                    "observed_horizon_deviation_ms": int(event.local_ts_ms) - int(pending["target_local_ts_ms"]),
+                    "follower_quote_age_at_signal_ms": int(pending["age_ms"]),
+                    "outcome_receive_latency_ms": receive_latency_ms,
+                    "modeled_total_cost_bps": round(cost_bps, 6),
                     "profitable_after_costs": realized_net_bps > 0.0,
                     "expected_edge_met": realized_net_bps >= expected_net_bps,
                 })
