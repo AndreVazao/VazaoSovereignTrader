@@ -61,7 +61,9 @@ class HotPathOutcomeTracker:
             or horizon_ms <= 0
             or leader_local_ts_ms <= 0
             or follower_entry_local_ts_ms <= 0
+            or follower_entry_local_ts_ms > leader_local_ts_ms
             or age_ms < 0
+            or age_ms != leader_local_ts_ms - follower_entry_local_ts_ms
             or leader_price <= 0.0
             or entry_price <= 0.0
             or not all(math.isfinite(value) for value in numeric_values)
