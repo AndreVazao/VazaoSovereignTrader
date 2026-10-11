@@ -1345,3 +1345,11 @@ Review points before merge:
 - Relationship OOS test windows now report separate outcome statistics and additional-cost stress by recorded market regime, with per-regime sample sufficiency explicitly marked.
 - This helps reveal a relationship whose aggregate result hides an adverse or under-sampled regime. Regime labels are only as trustworthy as the upstream labeling; unlabelled historical rows remain `UNCLASSIFIED`.
 - Validation: 40 selected tests passed in 3.90s; module compilation and diff checks passed. Local commit pending. No execution authority is added.
+
+
+## Checkpoint 2026-10-11 — multi-market research
+
+- Research and source links recorded in `docs/MULTI_MARKET_EDGE_RESEARCH_2026-10-11.md`.
+- Proposed order: read-only crypto spot CEX feeds first; then broker API/demo FX; later equities/ETFs and CEX-DEX. The strategy must distinguish directional lead/lag from two-leg arbitrage and use executable bid/ask/depth, fees, slippage, latency, partial fills, inventory, settlement/custody and regional eligibility.
+- Official exchange APIs and provider permissions should precede UI automation. Android/desktop automation is a last-resort adapter, not a latency-critical data source. Capital ladder is a manual evidence/risk review gate, never automatic deposits.
+- Validation after regime diagnostics: **78 selected brain tests passed in 8.52s**, compileall and git diff check passed. No exchange calls, orders, deposits, paid services or REAL-mode changes.
