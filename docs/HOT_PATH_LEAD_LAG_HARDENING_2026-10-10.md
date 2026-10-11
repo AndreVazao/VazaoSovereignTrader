@@ -30,3 +30,11 @@ Four tests were added for future follower timestamps, case/whitespace normalizat
 - Added regressions for atomic batch rejection, empty identities, NaN prices, invalid timestamps, and normalized outcome-event identity.
 - Validation: **65 tests passed in 7.85s** across hot path, outcome tracking, calibration, OOS robustness, lead/lag learning, evidence learning, champion outcomes/runtime, state outcomes, regime, walk-forward, GOD Ultra, market state, WebSocket radar and lead/lag validation. `compileall` and `git diff --check` passed.
 - Still observation-only/PAPER; no engine startup, exchange calls, orders, paid inference, or REAL-mode changes.
+
+## Follow-up hardening — 2026-10-11 (outcome registration)
+
+- `HotPathOutcomeTracker.register()` now validates opportunity identity, direction, positive horizon/timestamps/prices, finite signal and price values, non-negative cost components, and consistency of expected net edge with gross expectation minus fees/slippage/latency penalty.
+- Accepted identity fields are canonicalized before entering the pending queue; malformed/inconsistent records are rejected before they can pollute calibration evidence.
+- Added regressions for NaN/infinite evidence, negative costs, inconsistent expected-net values, and identity normalization at registration.
+- Selected brain/learning suite: **67 passed in 7.47s**; `compileall` and `git diff --check` passed.
+- Remains bounded, in-memory, PAPER-only and order-free.

@@ -1316,3 +1316,11 @@ Review points before merge:
 - Validation on PC: **65 passed in 7.85s** for the selected brain/learning suite; module `compileall` and `git diff --check` passed.
 - No engine startup, exchange calls, orders, paid services/inference, or REAL changes. Android 16/Kivy/HWUI crash remains unresolved and separate.
 - Next: inspect diff, commit this isolated increment, update persistent memory without staging the unrelated DGM-MAT modification, and assess safe PR publication strategy rather than pushing the branch blindly.
+
+
+## Checkpoint 2026-10-11 — outcome registration integrity
+
+- `HotPathOutcomeTracker.register()` now rejects non-finite/inconsistent opportunity evidence, invalid identity/direction, invalid timestamps/horizon/prices, and negative fee/slippage/latency costs before queueing.
+- Net expectation must agree (within rounding tolerance) with expected response less all configured costs; identities are normalized on registration.
+- Added regression coverage; selected brain/learning suite now **67 passed in 7.47s**, compilation and diff check passed.
+- Safety invariant unchanged: observation-only/PAPER, no engine start, exchange calls, order submission, paid inference, or REAL-mode changes.

@@ -24,16 +24,63 @@ class HotPathOutcomeTracker:
         self._dropped = 0
 
     def register(self, opportunity: HotPathOpportunity) -> bool:
+        """Accept only internally consistent, finite PAPER opportunities."""
+        try:
+            symbol = str(opportunity.symbol).strip().upper()
+            leader = str(opportunity.leader).strip().lower()
+            follower = str(opportunity.follower).strip().lower()
+            direction = str(opportunity.direction).strip().upper()
+            horizon_ms = int(opportunity.horizon_ms)
+            leader_local_ts_ms = int(opportunity.leader_local_ts_ms)
+            follower_entry_local_ts_ms = int(opportunity.follower_entry_local_ts_ms)
+            age_ms = int(opportunity.age_ms)
+            leader_price = float(opportunity.leader_price)
+            entry_price = float(opportunity.follower_entry_price)
+            expected_response_bps = float(opportunity.expected_response_bps)
+            expected_net_bps = float(opportunity.expected_net_bps)
+            fee_bps = float(opportunity.fees_bps)
+            slippage_bps = float(opportunity.slippage_bps)
+            latency_penalty_bps = float(opportunity.latency_penalty_bps)
+            leader_move_bps = float(opportunity.leader_move_bps)
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return False
+
+        numeric_values = (
+            leader_price, entry_price, expected_response_bps, expected_net_bps,
+            fee_bps, slippage_bps, latency_penalty_bps, leader_move_bps,
+        )
+        expected_net_from_costs = expected_response_bps - fee_bps - slippage_bps - latency_penalty_bps
         if (
             not opportunity.paper_only
             or opportunity.execution_allowed
-            or opportunity.follower_entry_price <= 0
-            or opportunity.leader_local_ts_ms <= 0
+            or not symbol
+            or not leader
+            or not follower
+            or leader == follower
+            or direction not in {"UP", "DOWN"}
+            or horizon_ms <= 0
+            or leader_local_ts_ms <= 0
+            or follower_entry_local_ts_ms <= 0
+            or age_ms < 0
+            or leader_price <= 0.0
+            or entry_price <= 0.0
+            or not all(math.isfinite(value) for value in numeric_values)
+            or min(fee_bps, slippage_bps, latency_penalty_bps) < 0.0
+            or not math.isclose(expected_net_bps, expected_net_from_costs, rel_tol=1e-4, abs_tol=0.02)
         ):
             return False
+
         row = asdict(opportunity)
-        row["target_local_ts_ms"] = int(opportunity.leader_local_ts_ms + opportunity.horizon_ms)
-        row["registered_local_ts_ms"] = int(opportunity.leader_local_ts_ms)
+        row["symbol"] = symbol
+        row["leader"] = leader
+        row["follower"] = follower
+        row["direction"] = direction
+        row["horizon_ms"] = horizon_ms
+        row["leader_local_ts_ms"] = leader_local_ts_ms
+        row["follower_entry_local_ts_ms"] = follower_entry_local_ts_ms
+        row["age_ms"] = age_ms
+        row["target_local_ts_ms"] = leader_local_ts_ms + horizon_ms
+        row["registered_local_ts_ms"] = leader_local_ts_ms
         with self._lock:
             if len(self._pending) >= self.max_pending:
                 self._pending.pop(0)

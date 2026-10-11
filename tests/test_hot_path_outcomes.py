@@ -124,3 +124,32 @@ def test_outcome_tracker_ignores_non_positive_or_invalid_timestamps():
     tracker.on_market_event(_event("coinbase", 100.2, 0))
     assert tracker.snapshot()["pending"] == 1
     assert tracker.peek_completed() == []
+
+
+def test_outcome_tracker_rejects_non_finite_or_inconsistent_opportunity_evidence():
+    from dataclasses import replace
+
+    opportunity = _opportunity()
+    assert opportunity is not None
+    tracker = HotPathOutcomeTracker()
+    assert not tracker.register(replace(opportunity, expected_response_bps=float("nan")))
+    assert not tracker.register(replace(opportunity, leader_price=float("inf")))
+    assert not tracker.register(replace(opportunity, fees_bps=-1.0))
+    assert not tracker.register(replace(opportunity, expected_net_bps=999.0))
+    assert tracker.snapshot()["pending"] == 0
+
+
+def test_outcome_tracker_normalizes_identity_at_registration():
+    from dataclasses import replace
+
+    opportunity = _opportunity()
+    assert opportunity is not None
+    tracker = HotPathOutcomeTracker()
+    assert tracker.register(replace(opportunity, symbol=" btc/usdt ", leader=" BINANCE ", follower=" Coinbase ", direction=" up "))
+    tracker.on_market_event(_event(" COINBASE ", 100.2, 1700))
+    outcome = tracker.peek_completed()
+    assert len(outcome) == 1
+    assert outcome[0]["symbol"] == "BTC/USDT"
+    assert outcome[0]["leader"] == "binance"
+    assert outcome[0]["follower"] == "coinbase"
+    assert outcome[0]["direction"] == "UP"
