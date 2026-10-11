@@ -278,6 +278,29 @@ def build_relationship_oos_report(
         known_age_rows = [row for row in test if _finite(row.get("follower_quote_age_at_signal_ms")) is not None and _finite(row.get("follower_quote_age_at_signal_ms")) >= 0.0]
         outcome_latencies = [int(value) for row in test if (value := _finite(row.get("outcome_receive_latency_ms"))) is not None and value >= 0.0]
         horizon_deviations = [int(value) for row in test if (value := _finite(row.get("observed_horizon_deviation_ms"))) is not None]
+
+        regime_groups: dict[str, list[float]] = defaultdict(list)
+        for row in test:
+            regime = str(row.get("market_regime", row.get("regime", "UNCLASSIFIED"))).strip().upper() or "UNCLASSIFIED"
+            regime_groups[regime].append(float(row["realized_net_bps"]))
+        regime_breakdown = []
+        for regime, values in sorted(regime_groups.items()):
+            regime_breakdown.append({
+                "market_regime": regime,
+                "samples": len(values),
+                "mean_realized_net_bps": round(statistics.fmean(values), 6),
+                "median_realized_net_bps": round(statistics.median(values), 6),
+                "positive_rate": round(sum(value > 0.0 for value in values) / len(values), 6),
+                "cost_stress": [
+                    {
+                        "extra_cost_bps": extra_cost,
+                        "mean_net_bps": round(statistics.fmean(value - extra_cost for value in values), 6),
+                        "positive_edge": statistics.fmean(value - extra_cost for value in values) > 0.0,
+                    }
+                    for extra_cost in sorted(cost_scenarios)
+                ],
+                "paper_review_sample_sufficient": len(values) >= min_test_samples,
+            })
         relationships.append({
             "symbol": key[0],
             "leader": key[1],
@@ -305,6 +328,8 @@ def build_relationship_oos_report(
             "freshness_coverage_samples": len(known_age_rows),
             "freshness_coverage_rate": round(len(known_age_rows) / len(test), 6) if test else None,
             "oos_freshness_buckets": freshness_summary,
+            "oos_regime_breakdown": regime_breakdown,
+            "regime_count": len(regime_breakdown),
             "outcome_latency_samples": len(outcome_latencies),
             "mean_outcome_receive_latency_ms": round(statistics.fmean(outcome_latencies), 6) if outcome_latencies else None,
             "horizon_deviation_samples": len(horizon_deviations),

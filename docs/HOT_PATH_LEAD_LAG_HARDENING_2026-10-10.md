@@ -53,3 +53,12 @@ Four tests were added for future follower timestamps, case/whitespace normalizat
 - Added regression coverage for the new outcome telemetry and OOS cost/freshness diagnostics.
 - Targeted validation: **38 passed in 3.92s** across outcome tracking, relationship OOS, robustness, calibration, scorecard, walk-forward and learning. `compileall` and `git diff --check` passed.
 - All outputs remain PAPER-only; no orders, exchange calls or execution authorization.
+
+
+## Market-regime OOS breakdown — 2026-10-11
+
+- Relationship-level chronological OOS reports now split test-window outcomes by the recorded `market_regime`/`regime` label and report sample count, mean/median net bps, positive rate, and the same additional-cost stress scenarios per regime.
+- Each regime reports whether its own sample count reaches the configured minimum for PAPER review. This is a descriptive sub-group check only; it does not independently authorize promotion or execution.
+- Added regression coverage ensuring a small adverse regime is visible rather than hidden by a profitable aggregate and remains flagged as sample-insufficient.
+- Targeted validation: **40 passed in 3.90s** across relationship OOS, OOS robustness, scorecard, outcomes, calibration and learning tests. `compileall` and `git diff --check` passed.
+- Safety remains PAPER-only; no orders or execution authority.

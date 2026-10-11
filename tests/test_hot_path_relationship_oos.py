@@ -152,3 +152,27 @@ def test_relationship_oos_reports_cost_stress_and_freshness_coverage(tmp_path):
     assert relationship["mean_observed_horizon_deviation_ms"] is not None
     assert sum(row["samples"] for row in relationship["oos_freshness_buckets"]) == relationship["test_samples"]
     assert report["execution_authorized"] is False
+
+
+def test_relationship_oos_breaks_down_regimes_without_promoting_small_samples(tmp_path):
+    path = tmp_path / "outcomes.jsonl"
+    rows = []
+    for i in range(40):
+        regime = "TRENDING" if i < 30 else "CHOPPY"
+        net = 2.0 if regime == "TRENDING" else -1.0
+        rows.append(_row(i, net, market_regime=regime))
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    report = build_relationship_oos_report(
+        path, min_samples=40, min_test_samples=15, train_fraction=0.25,
+        extra_cost_scenarios_bps=(0.0, 1.0), now_ms=100_000,
+    )
+    relationship = report["relationship_details"][0]
+    regimes = {row["market_regime"]: row for row in relationship["oos_regime_breakdown"]}
+    assert regimes["TRENDING"]["mean_realized_net_bps"] == 2.0
+    assert regimes["TRENDING"]["cost_stress"][1]["mean_net_bps"] == 1.0
+    assert regimes["CHOPPY"]["mean_realized_net_bps"] == -1.0
+    assert regimes["CHOPPY"]["paper_review_sample_sufficient"] is False
+    assert sum(row["samples"] for row in relationship["oos_regime_breakdown"]) == relationship["test_samples"]
+    assert relationship["eligible_for_paper_review"] is False or relationship["oos_confidence_interval_available"] is True
+    assert report["execution_authorized"] is False

@@ -1338,3 +1338,10 @@ Review points before merge:
 - Relationship-level chronological OOS reports expose additional-cost scenarios per relationship and group test outcomes into freshness buckets, with explicit legacy/missing-data coverage. Latency and horizon deviations are summarized when present.
 - These fields are diagnostics only: stress costs are hypothetical deductions and never mutate source outcomes or authorize execution.
 - Targeted tests: 38 passed in 3.92s; compilation and diff checks passed. Full suite validation and local commit remain pending.
+
+
+## Checkpoint 2026-10-11 — market-regime OOS breakdown
+
+- Relationship OOS test windows now report separate outcome statistics and additional-cost stress by recorded market regime, with per-regime sample sufficiency explicitly marked.
+- This helps reveal a relationship whose aggregate result hides an adverse or under-sampled regime. Regime labels are only as trustworthy as the upstream labeling; unlabelled historical rows remain `UNCLASSIFIED`.
+- Validation: 40 selected tests passed in 3.90s; module compilation and diff checks passed. Local commit pending. No execution authority is added.
