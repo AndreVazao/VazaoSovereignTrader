@@ -92,13 +92,26 @@ class HotPathLeadLagEngine:
             self._expectancy[key] = max(0.0, value)
 
     def set_expectancies(self, rows: Mapping[tuple[str, str, str, str], float]) -> None:
+        """Validate a complete expectancy batch before publishing it atomically."""
+        validated: dict[tuple[str, str, str, str], float] = {}
+        for key, value in rows.items():
+            if len(key) != 4:
+                raise ValueError("expectancy key must contain symbol, leader, follower, direction")
+            symbol, leader, follower, direction = key
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                raise ValueError("expected response must be finite")
+            normalized_key = (
+                str(symbol).strip().upper(),
+                str(leader).strip().lower(),
+                str(follower).strip().lower(),
+                str(direction).strip().upper(),
+            )
+            if not all(normalized_key):
+                raise ValueError("expectancy key fields must be non-empty")
+            validated[normalized_key] = max(0.0, numeric)
         with self._lock:
-            for key, value in rows.items():
-                symbol, leader, follower, direction = key
-                numeric = float(value)
-                if not math.isfinite(numeric):
-                    raise ValueError("expected response must be finite")
-                self._expectancy[(symbol.strip().upper(), leader.strip().lower(), follower.strip().lower(), direction.strip().upper())] = max(0.0, numeric)
+            self._expectancy.update(validated)
 
     def snapshot(self) -> dict:
         with self._lock:

@@ -138,3 +138,36 @@ def test_hot_path_rejects_non_finite_expectancy():
             direction="UP",
             expected_response_bps=float("nan"),
         )
+
+
+def test_hot_path_expectancy_batch_is_atomic_on_invalid_value():
+    import pytest
+
+    engine = HotPathLeadLagEngine(exchanges=["binance", "coinbase"])
+    engine.set_expectancy(
+        symbol="BTC/USDT",
+        leader="binance",
+        follower="coinbase",
+        direction="UP",
+        expected_response_bps=3,
+    )
+    before = dict(engine._expectancy)
+
+    with pytest.raises(ValueError, match="finite"):
+        engine.set_expectancies(
+            {
+                ("BTC/USDT", "binance", "coinbase", "UP"): 99,
+                ("ETH/USDT", "binance", "coinbase", "UP"): float("inf"),
+            }
+        )
+
+    assert engine._expectancy == before
+
+
+def test_hot_path_expectancy_batch_rejects_empty_identity_fields():
+    import pytest
+
+    engine = HotPathLeadLagEngine(exchanges=["binance", "coinbase"])
+    with pytest.raises(ValueError, match="non-empty"):
+        engine.set_expectancies({("BTC/USDT", "binance", "", "UP"): 5})
+    assert engine.snapshot()["expectancy_models"] == 0

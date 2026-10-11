@@ -96,3 +96,31 @@ def test_completed_outcomes_remain_buffered_until_persistence_is_acknowledged():
     assert tracker.acknowledge_completed(1) == 1
     assert tracker.peek_completed() == []
     assert tracker.snapshot()["completed_buffered"] == 0
+
+
+def test_outcome_tracker_ignores_invalid_quotes_without_consuming_pending_outcome():
+    opportunity = _opportunity()
+    assert opportunity is not None
+    tracker = HotPathOutcomeTracker()
+    assert tracker.register(opportunity)
+
+    tracker.on_market_event(_event("coinbase", float("nan"), 1700))
+    assert tracker.snapshot()["pending"] == 1
+    assert tracker.peek_completed() == []
+
+    tracker.on_market_event(_event(" COINBASE ", 100.2, 1700))
+    outcomes = tracker.peek_completed()
+    assert len(outcomes) == 1
+    assert outcomes[0]["paper_only"] is True
+    assert outcomes[0]["orders_submitted"] is False
+
+
+def test_outcome_tracker_ignores_non_positive_or_invalid_timestamps():
+    opportunity = _opportunity()
+    assert opportunity is not None
+    tracker = HotPathOutcomeTracker()
+    assert tracker.register(opportunity)
+
+    tracker.on_market_event(_event("coinbase", 100.2, 0))
+    assert tracker.snapshot()["pending"] == 1
+    assert tracker.peek_completed() == []

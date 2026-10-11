@@ -1306,3 +1306,13 @@ Review points before merge:
 - PAPER-only observation invariant preserved; no engine or live orders started.
 - Android 16 Kivy/HWUI crash and PowerShell USB bootstrap script issues remain separate blockers.
 - Detail: `docs/HOT_PATH_LEAD_LAG_HARDENING_2026-10-10.md`.
+
+## Checkpoint 2026-10-11 — brain evidence integrity follow-up
+
+- Product branch remains `hardening/require-client-order-id-at-real-boundary`; previous hot-path commit is `e8a98bf`, and this follow-up is being validated locally before commit. `artifacts/` remains untracked and must be preserved.
+- `HotPathLeadLagEngine.set_expectancies()` now validates all incoming model rows before applying a single atomic update; invalid batches cannot partially mutate expectancy state.
+- `HotPathOutcomeTracker` rejects malformed timestamps and non-finite/non-positive prices before resolving a pending PAPER outcome; exchange/symbol matching is normalized.
+- Added five regressions across `tests/test_hot_path.py` and `tests/test_hot_path_outcomes.py`.
+- Validation on PC: **65 passed in 7.85s** for the selected brain/learning suite; module `compileall` and `git diff --check` passed.
+- No engine startup, exchange calls, orders, paid services/inference, or REAL changes. Android 16/Kivy/HWUI crash remains unresolved and separate.
+- Next: inspect diff, commit this isolated increment, update persistent memory without staging the unrelated DGM-MAT modification, and assess safe PR publication strategy rather than pushing the branch blindly.

@@ -1,6 +1,7 @@
 # Path: PC_ENGINE/radar/hot_path_outcomes.py
 from __future__ import annotations
 
+import math
 import threading
 from dataclasses import asdict
 from typing import Any
@@ -42,26 +43,42 @@ class HotPathOutcomeTracker:
         return True
 
     def on_market_event(self, event: MarketEvent) -> None:
-        """Resolve outcomes only when a later follower quote crosses the horizon."""
+        """Resolve outcomes only when a valid later follower quote crosses the horizon."""
+        exchange = str(event.exchange).strip().lower()
+        symbol = str(event.symbol).strip().upper()
+        try:
+            local_ts_ms = int(event.local_ts_ms)
+            price = float(event.price)
+        except (TypeError, ValueError, OverflowError):
+            return
+        if (
+            not exchange
+            or not symbol
+            or local_ts_ms <= 0
+            or not math.isfinite(price)
+            or price <= 0.0
+        ):
+            return
+
         with self._lock:
             remaining: list[dict[str, Any]] = []
             for pending in self._pending:
-                if event.symbol.upper() != str(pending["symbol"]).upper():
+                if symbol != str(pending["symbol"]).strip().upper():
                     remaining.append(pending)
                     continue
-                if event.exchange.lower() != str(pending["follower"]).lower():
+                if exchange != str(pending["follower"]).strip().lower():
                     remaining.append(pending)
                     continue
                 target = int(pending["target_local_ts_ms"])
-                if int(event.local_ts_ms) < target:
+                if local_ts_ms < target:
                     remaining.append(pending)
                     continue
                 entry = float(pending["follower_entry_price"])
-                if entry <= 0 or float(event.price) <= 0:
+                if not math.isfinite(entry) or entry <= 0:
                     remaining.append(pending)
                     continue
                 direction_sign = 1.0 if str(pending["direction"]).upper() == "UP" else -1.0
-                response_bps = direction_sign * (float(event.price) - entry) / entry * 10000.0
+                response_bps = direction_sign * (price - entry) / entry * 10000.0
                 cost_bps = (
                     float(pending["fees_bps"])
                     + float(pending["slippage_bps"])

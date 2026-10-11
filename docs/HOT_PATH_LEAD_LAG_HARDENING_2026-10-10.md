@@ -22,3 +22,11 @@ Four tests were added for future follower timestamps, case/whitespace normalizat
 - Android 16 native Kivy/HWUI crash remains a separate unresolved blocker.
 - PowerShell USB/token bootstrap scripts remain unmodified because the earlier remote edit attempts were blocked; revisit separately.
 - This hardening is local to the current branch and is not claimed merged into main.
+
+## Follow-up hardening — 2026-10-11
+
+- `set_expectancies()` now validates and normalizes the entire batch before taking the lock and applying one atomic update. Invalid values or empty identity fields leave the previous model unchanged.
+- `HotPathOutcomeTracker.on_market_event()` now rejects malformed/non-positive timestamps and non-finite/non-positive prices before examining pending outcomes. Venue/symbol identifiers are normalized consistently, and invalid quotes do not consume pending observations.
+- Added regressions for atomic batch rejection, empty identities, NaN prices, invalid timestamps, and normalized outcome-event identity.
+- Validation: **65 tests passed in 7.85s** across hot path, outcome tracking, calibration, OOS robustness, lead/lag learning, evidence learning, champion outcomes/runtime, state outcomes, regime, walk-forward, GOD Ultra, market state, WebSocket radar and lead/lag validation. `compileall` and `git diff --check` passed.
+- Still observation-only/PAPER; no engine startup, exchange calls, orders, paid inference, or REAL-mode changes.
