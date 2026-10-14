@@ -142,3 +142,37 @@ Não implementar o escritório, não criar agentes artificiais, não mudar a arq
 ## Referência inicial
 
 - README do projeto na branch `main`: https://github.com/AndreVazao/VazaoSovereignTrader/blob/main/README.md
+
+## 12. Proatividade na investigação de oportunidades financeiras — sem autoevolução do software
+
+### Objetivo
+O Sovereign Trader deve investigar proativamente oportunidades financeiras dentro de parâmetros definidos, em vez de depender sempre de um pedido manual. A proatividade pretendida é **pesquisa, análise, comparação, monitorização e apresentação de oportunidades**. Não é autoevolução de código nem autorização para alterar o próprio sistema.
+
+### Ciclo proativo de pesquisa
+1. Consultar os limites de risco, universo de instrumentos, mercados, horários, fontes de dados e orçamento de recursos autorizados.
+2. Recolher dados de fontes permitidas e verificar frescura, qualidade, cobertura e limitações.
+3. Procurar condições relevantes em mercados e instrumentos dentro do universo aprovado, sem assumir que tem de existir uma oportunidade em cada ciclo.
+4. Formular hipóteses e comparar estratégias/cenários com metodologia reproduzível, distinguindo dados observados, inferências e especulação.
+5. Considerar taxas, spread, slippage, liquidez, volatilidade, drawdown, risco de cauda e condições em que a hipótese deixa de ser válida.
+6. Validar ideias com backtests adequados, períodos fora da amostra e paper trading; vigiar sobreajuste, look-ahead bias, survivorship bias e qualidade dos dados.
+7. Classificar as oportunidades por evidência, risco, horizonte temporal, confiança calibrada e condições de invalidação.
+8. Produzir um relatório acionável: hipótese, evidências, riscos, custos estimados, cenário adverso, condições de entrada/saída propostas e motivos para não agir.
+9. Monitorizar alterações relevantes e rever ou retirar oportunidades quando os pressupostos deixam de ser válidos.
+10. Registar resultados reais e de paper trading para avaliação posterior, sem tratar desempenho passado como garantia futura.
+
+### Autonomia e limites
+- Pode pesquisar, calcular, comparar e emitir alertas automaticamente dentro dos limites e fontes autorizados.
+- Pode recomendar oportunidades e propor testes em paper mode, mas não deve garantir lucros nem apresentar previsões como certezas.
+- Não pode aumentar autonomamente o risco permitido, alterar os limites do Risk Engine, contornar o RealModeGuard, passar de PAPER a REAL ou executar operações reais sem as autorizações explicitamente definidas.
+- Não deve reescrever o próprio código, alterar estratégias de produção ou instalar módulos autonomamente. Mudanças ao software seguem um processo separado de desenvolvimento, testes, revisão e aprovação.
+- Não pode recorrer silenciosamente a APIs pagas nem exceder limites de custo definidos.
+- Quando dados forem insuficientes, contraditórios, desatualizados ou a oportunidade não compensar o risco/custos, deve dizer isso claramente e preferir não agir.
+- Toda a recomendação deve permitir rastrear os dados, momento da análise, metodologia, versão da estratégia e limites aplicados.
+
+### Métricas e critérios de avaliação
+A proatividade não se mede pelo número de alertas nem pela frequência de negociação. Deve ser avaliada pela qualidade dos dados, validade fora da amostra, relação risco/retorno após custos, drawdown, calibração das estimativas, estabilidade entre regimes de mercado, taxa de falsos positivos e qualidade das decisões de não agir.
+
+### Separação do DGM-MAT
+O Sovereign Trader conserva runtime, estado, escritório virtual, contratos e ciclo de vida independentes. Não depende do DGM-MAT ou do Mades para a sua lógica essencial. O DGM-MAT pode prestar apoio de investigação ou engenharia apenas mediante integração explícita e autorizada; essa assistência não transfere controlo de trading nem remove as salvaguardas próprias do Sovereign Trader.
+
+**Aviso de escopo:** este documento define requisitos de produto e governação, não comprova que a pesquisa autónoma, as estratégias, o paper trading ou as integrações já estejam implementados.
