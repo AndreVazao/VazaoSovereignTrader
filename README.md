@@ -9,7 +9,8 @@ Sistema privado, local-first, para trading automatizado com controlo de risco.
 - **shared** contém contratos comuns entre PC e APK.
 - Tudo começa em **PAPER** por defeito.
 - Nenhuma chave de API deve ser colocada no GitHub.
-
+- Virtual AI Office Runtime and storyboard.
+- 
 ## Estado inicial
 
 Esta versão entrega uma base funcional e segura:
