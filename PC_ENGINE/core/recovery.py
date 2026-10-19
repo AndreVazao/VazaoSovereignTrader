@@ -292,7 +292,11 @@ class RecoveryManager:
                 recovery_error = f"primary={primary_error}; backup={backup_error}"
         if selected is None:
             state = self._empty_state()
-            state["recovery_error"] = recovery_error
+            # A first launch has no primary or backup yet; that is a clean
+            # empty state, not evidence of corruption. Any present-but-invalid
+            # file still produces recovery_error and keeps the engine fail-closed.
+            if not (primary_error == "missing" and backup_error == "missing"):
+                state["recovery_error"] = recovery_error
             state["recovery_source"] = "none"
             return state
 
