@@ -1,0 +1,61 @@
+name: Trading engine PAPER smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "PC_ENGINE/core/**"
+      - "PC_ENGINE/exchanges/**"
+      - "PC_ENGINE/storage/**"
+      - "PC_ENGINE/services/paper_market_collector.py"
+      - "tests/test_engine_paper_e2e.py"
+      - "tests/test_engine_restart_recovery.py"
+      - "tests/test_engine_unknown_outcome.py"
+      - "tests/test_order_manager.py"
+      - "tests/test_risk_final_authorization.py"
+      - "tests/test_external_side_effect_adapter_contract.py"
+      - "tests/test_financial_order_invariants.py"
+      - "requirements-pc.txt"
+      - ".github/workflows/trading-engine-paper-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trading-engine-paper-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  paper-smoke:
+    name: PAPER lifecycle and safety boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-pc.txt
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-pc.txt pytest
+
+      - name: Run focused PAPER and financial safety tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_engine_paper_e2e.py
+          tests/test_engine_restart_recovery.py
+          tests/test_engine_unknown_outcome.py
+          tests/test_order_manager.py
+          tests/test_risk_final_authorization.py
+          tests/test_external_side_effect_adapter_contract.py
+          tests/test_financial_order_invariants.py
+
+      - name: Compile trading engine Python modules
+        run: python -m compileall -q PC_ENGINE
