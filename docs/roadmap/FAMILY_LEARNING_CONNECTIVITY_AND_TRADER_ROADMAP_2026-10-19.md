@@ -76,3 +76,30 @@ Hard data boundaries:
 ## Execution boundary
 
 This roadmap is not permission to submit orders, enable REAL, create paid infrastructure, provision a database, access exchange credentials, or change risk limits. Continue with read-only audits, offline tests, documentation and isolated PAPER work until a specific change is reviewed and validated.
+
+
+## Packaging and device ownership: Windows EXE + Android APK
+
+The intended deliverable is an installable Windows `.exe` and Android `.apk`. Each family member has an independent installation/pairing scope:
+
+- The owner's PC and phone belong to the owner's account; the brother-in-law's PC and optional phone belong to his separate account. A phone is optional: a user may run the PC installation alone.
+- Pair devices explicitly to the same owner. A device may only access that owner's local trading engine, credentials, accounts, orders, positions, configuration, diagnostics and private history.
+- Installing the same application does not imply shared identity. Enrollment, device revocation, session expiry, per-install keys and owner-scoped authorization must be designed and tested.
+- Device pairing and rendezvous may exchange only the minimum metadata needed for secure connectivity. An IP address or Tailscale endpoint is not an identity or permission.
+- The cross-user channel is limited to explicitly approved, sanitized learning artifacts. No cross-user access to raw trade records, accounts, balances, keys, private logs or private strategy settings.
+- Build/release pipelines must test the Windows EXE and APK separately, retain artifact provenance and signing/release metadata, and test upgrade/recovery behavior. Never include secrets in packaged binaries or repository files.
+- Android stability is a known validation item: the historical USB checkpoint recorded a native Android 16/Kivy-HWUI crash and failed to prove end-to-end phone HTTP. The APK must not be called ready until rebuilt and tested on a physical device.
+
+## Capital scaling between platforms
+
+The existing `docs/OPPORTUNITY_DISCOVERY_AND_CAPITAL_LADDER.md` and master roadmap define the capital ladder as a configurable planning and review target, not an automatic transfer/trading instruction. Preserve that existing design rather than inventing a new ladder or silently changing its thresholds.
+
+Before implementation, read the canonical capital-ladder document and verify current main for its exact steps and constraints. Any platform-specific balance/equity tracking must remain private to the owning user and venue. Account for fees, minimums, locked funds, open positions, custody/venue risk, transfer reconciliation and net equity. Reaching a target is never sufficient by itself to enable REAL, transfer funds, activate a bot or increase risk; retain explicit operator approval, readiness/preflight, Risk Engine, RealModeGuard, authentication and reconciliation gates.
+
+## Supabase and GraphQL separation decision
+
+No decision is recorded here to reuse the owner's existing Baributo Studio Supabase project. Treat that project as out of scope and do not connect Trader to it.
+
+If Supabase is selected later, it must be a dedicated Trader project with its own configuration, credentials, schema/migrations, access policies, backups and cost review. It must not mix Baributo Studio or other projects' tables, credentials, logs or user data. GraphQL (if selected) must likewise have a dedicated Trader endpoint/schema/authz boundary, not a shared endpoint that blurs project ownership.
+
+First define the data model and threat boundaries, then compare whether a dedicated database is needed for shared learning versus a signed/versioned artifact archive. A shared-learning archive should store only approved, sanitized research artifacts with provenance, compatibility/version information, validation/holdout evidence, quality status and expiry. Supabase is not automatically required just because it is available. Do not create resources, apply production migrations, add paid services or configure secrets without explicit owner authorization after cost/terms review.
