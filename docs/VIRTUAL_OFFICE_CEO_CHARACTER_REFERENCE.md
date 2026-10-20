@@ -2,7 +2,7 @@
 
 ## Visual direction
 
-Use the owner-provided photograph from the conversation as the canonical visual reference for the lead human character in the Sovereign Trader virtual office. The character is the CEO / brain: a calm, experienced, approachable executive in a navy suit, white shirt and dark tie, with short grey hair and a grey beard.
+Use the repository image `1792476724975.jpg` as the canonical visual reference for the lead human character in the Sovereign Trader virtual office. The character is the CEO / brain: a calm, experienced, approachable executive in a navy suit, white shirt and dark tie, with short grey hair and a grey beard.
 
 ## Role and behaviour
 
@@ -15,9 +15,7 @@ Use the owner-provided photograph from the conversation as the canonical visual 
 
 ## Asset handling
 
-Canonical future asset location: `virtual_office/assets/characters/ceo-reference.jpg`.
-
-The source photograph is currently present in the conversation upload, but has **not** been committed as a binary repository asset. Do not claim the path above exists until the image is actually added and verified. Once available, derive optimized portrait/thumbnail variants from that source and document any generated derivatives.
+The reference image is committed at repository root as `1792476724975.jpg` (blob SHA: `7167153c6ae083a1131d8d26073cf6277f52692c`). A future optimized copy may be placed at `virtual_office/assets/characters/ceo-reference.jpg`; do not assume that derivative exists until it is created and verified.
 
 ## Integration boundary
 
