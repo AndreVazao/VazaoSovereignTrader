@@ -1,6 +1,13 @@
 name: Python tests
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "PC_ENGINE/**"
+      - "tests/**"
+      - "requirements-pc.txt"
+      - ".github/workflows/python-tests.yml"
   workflow_dispatch:
 
 concurrency:
