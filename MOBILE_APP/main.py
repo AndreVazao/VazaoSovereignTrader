@@ -276,7 +276,11 @@ class MobileCockpit(App):
                     lan_url = str(payload.get("pc_url", "")).strip()
         except (OSError, ValueError, TypeError):
             pass
-        return normalize_endpoint(lan_url), normalize_endpoint(tailscale_url)
+        try:
+            return normalize_endpoint(lan_url), normalize_endpoint(tailscale_url)
+        except ValueError:
+            # Invalid persisted values fail closed; user can correct them in the PC screen.
+            return "", ""
 
     def _save_connection_url(self, url=None):
         """Persist both route fields locally; the legacy argument updates the LAN field."""
