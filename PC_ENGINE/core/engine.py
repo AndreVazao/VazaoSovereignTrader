@@ -611,6 +611,13 @@ class SovereignEngine:
             return
         if self.state.status == "SAFE_MODE":
             self.log("SAFE_MODE_START_BLOCKED", {"reason": "explicit_recovery_required"})
+            # Preserve the most actionable blocker when recovery contains
+            # unresolved financial side effects; never attempt recovery here.
+            if self.state.execution_intents:
+                self.log("RECOVERY_UNRESOLVED_EXECUTION_INTENTS_BLOCK_START", {
+                    "intent_ids": list(self.state.execution_intents),
+                    "reason": "safe_mode_requires_explicit_recovery",
+                })
             return
         preflight = self.run_preflight()
         if self.config.get("engine", {}).get("preflight_required", True) and not preflight["ok"]:
