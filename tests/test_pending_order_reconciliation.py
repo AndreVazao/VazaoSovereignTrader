@@ -72,6 +72,8 @@ def make_engine(order, position, pending):
     engine.state.open_positions[position.symbol] = position
     engine.state.pending_orders = pending
     engine.exchanges = {"fake": FakeExchange(order)}
+    # Legacy fixtures without a venue field explicitly use this test's fake main venue.
+    engine._main_exchange = lambda: engine.exchanges["fake"]
     engine.recovery = FakeRecovery()
     engine.ledger = FakeLedger()
     engine.risk = FakeRisk()
