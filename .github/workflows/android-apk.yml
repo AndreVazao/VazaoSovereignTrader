@@ -2,6 +2,10 @@ name: Android APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "MOBILE_APP/**"
+      - ".github/workflows/android-apk.yml"
   push:
     tags:
       - "mobile-v*"
