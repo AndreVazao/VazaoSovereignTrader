@@ -155,7 +155,7 @@ def build_chat_cockpit(app):
     def pc_page():
         page = BoxLayout(orientation="vertical", spacing=dp(8))
         page.add_widget(header("PC & Ligação", "Rede privada, emparelhamento e controlo PAPER"))
-        card = Surface(orientation="vertical", padding=dp(14), spacing=dp(8), size_hint_y=None, height=dp(218))
+        card = Surface(orientation="vertical", padding=dp(14), spacing=dp(8), size_hint_y=None, height=dp(310))
         card.add_widget(_label("Endereço do PC em casa (LAN)", size=12, color=MUTED, size_hint_y=None, height=dp(22)))
         app.lan_input = TextInput(text=app.lan_url, multiline=False, hint_text="http://192.168.1.20:8765", size_hint_y=None, height=dp(40), background_color=(0.04, 0.048, 0.068, 1), foreground_color=TEXT)
         app.lan_input.route_kind = "lan"
