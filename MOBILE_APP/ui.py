@@ -186,7 +186,25 @@ def build_chat_cockpit(app):
             rowc=BoxLayout(spacing=dp(6), size_hint_y=None, height=dp(44))
             rowc.add_widget(RoundedButton(text=labels[0], fill=PANEL_2, on_release=lambda _,e=labels[1]: app.command(e)))
             control.add_widget(rowc)
-        page.add_widget(control)
+        # Keep the page header visible while making all connection and control
+        # actions reachable on short phone screens.
+        page.remove_widget(card)
+        page.remove_widget(pair)
+        page.remove_widget(control)
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=[0, 0, 0, dp(8)],
+            size_hint_y=None,
+            height=dp(620),
+        )
+        content.add_widget(card)
+        content.add_widget(pair)
+        content.add_widget(control)
+        scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), scroll_type=["content", "bars"])
+        scroll.add_widget(content)
+        page.add_widget(scroll)
+        app.pc_scroll = scroll
         return page
 
     def files_page():
