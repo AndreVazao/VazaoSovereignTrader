@@ -96,3 +96,36 @@ O objetivo de somar pequenas vantagens em vários venues deve ser avaliado por r
 - [ ] Relatórios mostram resultados fora da amostra, incerteza e condições de falha.
 - [ ] Fast Execution não pode ultrapassar os gates de REAL nem operar a partir de sinais não validados.
 - [ ] Nenhum personagem, agente, oportunidade, lucro ou execução é apresentado como real sem evidência.
+
+
+## 11. Seis modos visuais documentados (requisito de produto)
+A seleção visual deve oferecer cinco níveis de fidelidade e um modo sem cenário. Os nomes descrevem a apresentação, não a inteligência, a velocidade de decisão nem a segurança do motor.
+
+1. **Modo 1 — Arcade/Spectrum (ultraleve):** personagens em bonecos simples, paleta retro e animação mínima. Deve funcionar em hardware modesto e servir como fallback de baixo consumo.
+2. **Modo 2 — Pixel/Voxel (Minecraft-like):** ambientes e personagens em blocos/pixels, salas reconhecíveis e movimento simples. Não implica dependência de Minecraft nem de assets proprietários.
+3. **Modo 3 — Escritório interativo detalhado:** personagens e salas mais trabalhados, interações explícitas, tarefas e transições visíveis, sempre ligadas a estados reais do sistema.
+4. **Modo 4 — Alta definição / 3D fluido:** materiais, iluminação e movimento de maior qualidade; suporte VR apenas quando o dispositivo, runtime e controladores forem compatíveis. VR não é requisito para PC ou telemóvel comuns.
+5. **Modo 5 — Fidelidade máxima disponível:** melhor qualidade que o hardware suporta, personagens a caminhar, zoom in/out e interações cinematográficas em tempo real. A qualidade deve degradar de forma progressiva antes de afetar responsividade ou autonomia.
+6. **Modo 6 — Só Chat:** desativa o cenário e mantém chat, comandos, alertas, aprovações, estado operacional e relatórios essenciais.
+
+### Seleção automática e controlo do utilizador
+- Oferecer seleção manual persistente, opção **Automático** e opção **Só Chat** claramente visíveis.
+- A decisão automática deve considerar CPU, GPU, RAM disponível, desempenho observado, temperatura/thermal throttling, bateria e alimentação, tamanho/resolução do ecrã, capacidades gráficas e compatibilidade VR. Não presumir capacidades apenas pelo nome do dispositivo.
+- No telemóvel, começar por um modo leve/responsivo e adaptar ao ecrã; nunca exigir que o cenário de PC seja renderizado integralmente.
+- Se houver quedas de frames, pressão de memória, temperatura elevada ou bateria crítica, reduzir primeiro resolução, efeitos, distância de visão, detalhe, animações e frequência de renderização. Oferecer fallback para modo 1 ou Só Chat.
+- Ao minimizar ou ficar em segundo plano, suspender renderização contínua e animações não essenciais; usar atualizações orientadas a eventos e retomar com estado sincronizado.
+- Os seis modos partilham a mesma semântica de salas, tarefas, agentes e estados. Só muda a apresentação: não duplicar a lógica de trading nem deixar que o cliente visual tome decisões financeiras.
+
+### Fronteira de arquitetura e verdade operacional
+O motor de trading permanece independente da camada gráfica e deve continuar a funcionar quando o escritório está fechado, minimizado, em Só Chat ou indisponível. O cliente recebe estado através de uma API/contrato de eventos versionado, com timestamps, frescura, identidade de origem, permissões e estados explícitos de desconhecido/desatualizado/desconectado. Eventos perdidos devem ser recuperáveis através de uma leitura autoritativa do estado; não confiar apenas numa animação ou sequência de eventos transitórios.
+
+Personagens, salas, luzes, animações e efeitos não são fontes de verdade. Não fabricar agentes, ordens, lucro, oportunidades, aprovações ou atividade para preencher a cena. O modo visual nunca pode bloquear, atrasar ou relaxar risk checks, persistência, reconciliação, gates de execução ou alertas críticos. Chat e alertas essenciais devem continuar utilizáveis com gráficos desativados.
+
+### Critérios de aceitação específicos
+- [ ] Todos os seis modos existem como escolhas explícitas de produto, incluindo Só Chat.
+- [ ] Automático e escolha manual funcionam; a escolha manual não é silenciosamente sobrescrita, salvo fallback de segurança/performance claramente comunicado.
+- [ ] PC e Android representam o mesmo estado operacional com layouts adequados a cada ecrã.
+- [ ] Testes confirmam que o motor e os controlos de risco não dependem do renderer.
+- [ ] Em background, o cliente não mantém uma renderização contínua dispendiosa.
+- [ ] VR é detetado como capacidade opcional, nunca presumida.
+- [ ] Estado stale/desconhecido é mostrado como tal em todos os níveis de fidelidade.
