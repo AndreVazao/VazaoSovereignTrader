@@ -72,6 +72,22 @@ def test_expired_or_old_evidence_is_returned_as_stale():
     now[0] += 11_000_000
     assert memory.get(record.key).status == "stale"
     assert memory.get(record.key, max_age_ms=1).status == "stale"
+    assert memory.list_records(status="stale")[0].key == record.key
+    assert memory.list_records(status="supported") == ()
+
+
+def test_freshness_windows_require_integer_milliseconds():
+    memory = SharedLearningMemory()
+    with pytest.raises(ValueError, match="ttl_ms"):
+        memory.put(
+            key="bad-ttl",
+            value=1,
+            department="research",
+            provenance="test",
+            ttl_ms=1.5,
+        )
+    with pytest.raises(ValueError, match="max_age_ms"):
+        memory.get("missing", max_age_ms=0.5)
 
 
 def test_invalid_confidence_or_status_is_rejected():
