@@ -58,3 +58,16 @@ The shell's connection panel currently:
 **Limitations:** this is the first read-only connection slice, not full cockpit parity. The panel does not yet render detailed typed models for every endpoint, subscribe to a server event stream, reconnect automatically, or integrate the conversational message form with `POST /assistant/message`. The conversation remains a local demo until a separately tested authenticated gateway integration is added. Keep the PC cockpit as the existing capability reference.
 
 Before packaging the office into an EXE or embedding it in Android, verify the HTML asset is included in the distribution. Do not point the UI at a public Vercel URL or turn Vercel into a traffic proxy; open the office from the PC backend's LAN or private Tailscale URL.
+
+### Conversational gateway connection
+
+The office chat form now sends submitted messages to the existing authenticated `POST /assistant/message` gateway, but only after the operator has connected successfully. It uses the same in-memory token and `X-Token` header as the read-only panel; it does not save the token in browser storage or a URL. The server remains the authority for scope checks.
+
+The current gateway is a deterministic command router, not an unconstrained LLM:
+- status questions return a snapshot;
+- investigation/research requests and URLs are queued only when the principal has `submit_research`;
+- PAPER start/pause/resume/stop phrases require `trade_paper` and go through the existing engine methods;
+- requests containing REAL/live-money language are explicitly refused and do not arm REAL mode;
+- a request without an implemented intent returns a bounded informational response.
+
+The browser displays the gateway's response and execution flags. On a transport error it warns that the outcome is unknown and tells the operator to check state before retrying; it does not automatically replay a mutation. This first pass has no streaming, rich typed rendering, automatic reconnect, or browser end-to-end test yet. Treat the HTML as a prototype until those tests and packaging checks exist.
