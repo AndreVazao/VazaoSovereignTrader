@@ -101,6 +101,7 @@ def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
 
     engine._reconcile_pending_orders()
 
+    assert not any("PENDING_ORDER_RECONCILE_ERROR" in row for row in engine.state.logs), engine.state.logs
     assert engine.state.open_positions["BTC/USDT"].qty == 0.5
     assert engine.state.pending_orders == {}
 
