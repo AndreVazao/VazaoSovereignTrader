@@ -1,0 +1,52 @@
+# PC Cockpit + Virtual Office — functional parity contract
+
+**Branch:** `feat/pc-cockpit-full-office-shell-2026-10-20`
+**Status:** first responsive interaction shell; demo-only, not connected to the trading engine.
+
+## Product decision
+The Virtual Office is a complete alternative interface to the PC cockpit, not a decorative map. It must expose the same permitted capabilities and server-authoritative state. The office adds visual navigation; it must not remove functions available in the compact/conversational cockpit.
+
+## Three persistent regions
+- **Left navigation:** overview, office, conversational cockpit, markets/exchanges, research, strategies/PAPER, risk/readiness, events/audit, devices and settings.
+- **Central workspace:** responsive 2D/2.5D rooms for the brain/CEO, exchanges, market radar, research, PAPER lab, risk, recovery, audit and human intervention.
+- **Right conversation panel:** persistent chat, requests and alerts. Natural-language requests are sent only to the authenticated backend once integration is implemented.
+
+On mobile/narrow windows, the sidebars collapse to overlays and the center switches to a compact or chat-first layout. Keep keyboard focus, visible labels, reduced-motion support and accessible control names.
+
+## Authority and security
+- The headless PC/server backend remains the only authority for market data, trading state, balances, positions, orders, risk, readiness and audit.
+- Cockpit and office are clients of the same API. They may not instantiate a second engine or keep independent authoritative state.
+- Display live status only when sourced from a successful API response/event with freshness metadata. Empty, stale, disconnected and unauthorized are distinct states.
+- Every privileged command is authenticated, scoped to the paired device, checked against server-side risk/readiness gates and audited. UI visibility is not authorization.
+- Do not claim command success before server confirmation. For timeout/connection loss after a mutation, display outcome unknown and reconcile; never automatically replay non-idempotent commands.
+- Exchange secrets stay on the backend. Client configuration may store endpoint metadata and protected device credentials only.
+- Home route: configured LAN endpoint. Away-from-home route: configured Tailscale endpoint. LAN operation must not depend on Vercel or Tailscale. Vercel is discovery/enrollment coordination, never an order relay or permanent traffic proxy. No public unauthenticated fallback.
+- Human login/2FA/CAPTCHA challenges remain manual and can be presented as pending-intervention requests; never bypass them.
+- Office movement, agents, carriers, transfers and metrics are illustrative until bound to real, timestamped backend events. The UI must label demo state.
+
+## First shell delivered in this increment
+`virtual_office/prototype/full_cockpit_shell.html` is a standalone, dependency-free responsive interaction prototype:
+- left-side navigation, central department map and persistent right-side conversation panel;
+- office, compact and conversation presentation modes;
+- selectable departments and chat/requests/alerts tabs;
+- narrow-screen sidebar overlays;
+- demo labels that make clear no backend request or trading action occurs.
+
+This is a visual/interaction shell only. The chat is intentionally local demo behavior. It does not claim API integration, authenticated commands, live events, installation packaging or production readiness.
+
+## Integration sequence
+1. Inventory the current PC cockpit and API routes; map every existing capability to a named API action and response schema.
+2. Add a typed client adapter with explicit connection/authentication states, timeouts, cancellation and freshness tracking.
+3. Integrate read-only health/status/events first, including stale/offline behavior and contract tests.
+4. Integrate conversational requests and human-intervention workflows, with server-confirmed outcomes and audit references.
+5. Integrate permitted controls only after checking server-side auth, scopes, idempotency, readiness and risk gates.
+6. Validate LAN at home, Tailscale away, Vercel outage, backend restart, revoked device, stale responses, ambiguous mutation timeout, small screens and keyboard accessibility.
+7. Only after these gates, bind office room/agent animations to real backend events. Preserve compact/chat fallback and keep 3D optional.
+
+## Acceptance criteria
+- Office and compact cockpit provide equivalent permitted actions and status.
+- Both use one backend and show consistent server-authoritative data.
+- Conversation panel remains available from every department.
+- No fabricated live activity, no client-held exchange keys, no unauthorized/public fallback.
+- Disconnects, stale data, permission failures and unknown mutation outcomes are explicit.
+- Chat-only mode remains usable on low-power devices.
