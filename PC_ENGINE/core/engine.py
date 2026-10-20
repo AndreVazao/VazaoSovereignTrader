@@ -1311,27 +1311,40 @@ class SovereignEngine:
         }
 
     def _exchange_for_pending_order(self, item: dict):
-        """Resolve a pending order to its recorded venue without cross-venue fallback."""
+        """Resolve only the recorded venue; legacy main-venue fallback must match its identity."""
         exchanges = getattr(self, "exchanges", {}) or {}
-        venue_id = str(item.get("venue_id") or "").strip()
-        if venue_id:
-            exchange = exchanges.get(venue_id)
-            if exchange is None:
-                named_matches = [
-                    candidate for candidate in exchanges.values()
-                    if str(getattr(candidate, "name", "")).strip() == venue_id
-                ]
-                if len(named_matches) == 1:
-                    exchange = named_matches[0]
-            if exchange is None:
-                self._enter_safe_state("critical_runtime_condition")
-                self.log("PENDING_ORDER_VENUE_UNAVAILABLE", {
-                    "venue_id": venue_id,
-                    "symbol": str(item.get("symbol") or ""),
-                    "order_id": str(item.get("external_id") or ""),
-                })
-            return exchange
-        return self._main_exchange()
+        # Older pending-order records use "exchange"; newer records may also carry "venue_id".
+        venue_id = str(item.get("venue_id") or item.get("exchange") or "").strip()
+        if not venue_id:
+            return self._main_exchange()
+
+        exchange = exchanges.get(venue_id)
+        if exchange is None:
+            named_matches = [
+                candidate for candidate in exchanges.values()
+                if str(getattr(candidate, "name", "")).strip() == venue_id
+            ]
+            if len(named_matches) == 1:
+                exchange = named_matches[0]
+
+        # Some legacy integrations expose only _main_exchange(), not self.exchanges.
+        # Use it only when its declared identity matches the venue on the order.
+        if exchange is None:
+            try:
+                main_exchange = self._main_exchange()
+            except (AttributeError, KeyError, RuntimeError):
+                main_exchange = None
+            if str(getattr(main_exchange, "name", "")).strip() == venue_id:
+                exchange = main_exchange
+
+        if exchange is None:
+            self._enter_safe_state("critical_runtime_condition")
+            self.log("PENDING_ORDER_VENUE_UNAVAILABLE", {
+                "venue_id": venue_id,
+                "symbol": str(item.get("symbol") or ""),
+                "order_id": str(item.get("external_id") or ""),
+            })
+        return exchange
 
     def _prepare_reconciliation_transaction(self, order_id: str, item: dict, side: str, delta: float, delta_notional: float, fee_delta: float, final_filled: float, cumulative_fee: float, cumulative_notional: float, fill_price: float, terminal: bool) -> str:
         import copy

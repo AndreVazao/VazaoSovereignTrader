@@ -16,23 +16,10 @@ class FakeExchange:
 
 
 class FakeRecovery:
-    def save_positions(
-        self,
-        positions,
-        pending_orders=None,
-        order_guards=None,
-        execution_intents=None,
-        financial_account=None,
-        risk_state=None,
-    ):
-        self.saved = (
-            positions,
-            pending_orders,
-            order_guards,
-            execution_intents,
-            financial_account,
-            risk_state,
-        )
+    def save_positions(self, positions, *state_parts):
+        # Keep this legacy test double tolerant of new durable-state fields.
+        # Production RecoveryManager validates and persists the full schema.
+        self.saved = (positions, *state_parts)
 
 
 class FakeLedger:
@@ -72,6 +59,8 @@ def make_engine(order, position, pending):
     engine.state.open_positions[position.symbol] = position
     engine.state.pending_orders = pending
     engine.exchanges = {"fake": FakeExchange(order)}
+    # Legacy fixtures without a venue field explicitly use this test's fake main venue.
+    engine._main_exchange = lambda: engine.exchanges["fake"]
     engine.recovery = FakeRecovery()
     engine.ledger = FakeLedger()
     engine.risk = FakeRisk()
@@ -99,6 +88,7 @@ def test_reconcile_pending_buy_applies_only_unseen_fill_delta():
 
     engine._reconcile_pending_orders()
 
+    assert not any("PENDING_ORDER_RECONCILE_ERROR" in row for row in engine.state.logs), engine.state.logs
     assert engine.state.open_positions["BTC/USDT"].qty == 0.5
     assert engine.state.pending_orders == {}
 
