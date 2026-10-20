@@ -16,23 +16,10 @@ class FakeExchange:
 
 
 class FakeRecovery:
-    def save_positions(
-        self,
-        positions,
-        pending_orders=None,
-        order_guards=None,
-        execution_intents=None,
-        financial_account=None,
-        risk_state=None,
-    ):
-        self.saved = (
-            positions,
-            pending_orders,
-            order_guards,
-            execution_intents,
-            financial_account,
-            risk_state,
-        )
+    def save_positions(self, positions, *state_parts):
+        # Keep this legacy test double tolerant of new durable-state fields.
+        # Production RecoveryManager validates and persists the full schema.
+        self.saved = (positions, *state_parts)
 
 
 class FakeLedger:
