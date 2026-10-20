@@ -155,7 +155,7 @@ def build_chat_cockpit(app):
     def pc_page():
         page = BoxLayout(orientation="vertical", spacing=dp(8))
         page.add_widget(header("PC & Ligação", "Rede privada, emparelhamento e controlo PAPER"))
-        card = Surface(orientation="vertical", padding=dp(14), spacing=dp(8))
+        card = Surface(orientation="vertical", padding=dp(14), spacing=dp(8), size_hint_y=None, height=dp(218))
         card.add_widget(_label("Endereço do PC", size=12, color=MUTED, size_hint_y=None, height=dp(22)))
         app.ip_input = TextInput(text=app.pc_url, multiline=False, hint_text="http://100.x.y.z:8765", size_hint_y=None, height=dp(44), background_color=(0.04, 0.048, 0.068, 1), foreground_color=TEXT)
         app.ip_input.bind(text=app._on_url_changed)
@@ -180,13 +180,31 @@ def build_chat_cockpit(app):
         pair.add_widget(RoundedButton(text="ESQUECER DISPOSITIVO", fill=(0.16, 0.07, 0.09, 1), on_release=lambda *_: app.forget_device(), size_hint_y=None, height=dp(42)))
         page.add_widget(pair)
 
-        control = Surface(orientation="vertical", padding=dp(14), spacing=dp(7))
+        control = Surface(orientation="vertical", padding=dp(14), spacing=dp(7), size_hint_y=None, height=dp(252))
         control.add_widget(_label("Controlo rápido", size=15, bold=True, size_hint_y=None, height=dp(26)))
         for labels in (("INICIAR","/start"),("PAUSAR","/pause"),("RETOMAR","/resume"),("PARAR","/stop")):
             rowc=BoxLayout(spacing=dp(6), size_hint_y=None, height=dp(44))
             rowc.add_widget(RoundedButton(text=labels[0], fill=PANEL_2, on_release=lambda _,e=labels[1]: app.command(e)))
             control.add_widget(rowc)
-        page.add_widget(control)
+        # Keep the page header visible while making all connection and control
+        # actions reachable on short phone screens.
+        page.remove_widget(card)
+        page.remove_widget(pair)
+        page.remove_widget(control)
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=[0, 0, 0, dp(8)],
+            size_hint_y=None,
+        )
+        content.bind(minimum_height=content.setter("height"))
+        content.add_widget(card)
+        content.add_widget(pair)
+        content.add_widget(control)
+        scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), scroll_type=["content", "bars"])
+        scroll.add_widget(content)
+        page.add_widget(scroll)
+        app.pc_scroll = scroll
         return page
 
     def files_page():
