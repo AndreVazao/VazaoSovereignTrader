@@ -11,6 +11,10 @@ on:
       - "tests/test_engine_paper_e2e.py"
       - "tests/test_engine_restart_recovery.py"
       - "tests/test_engine_unknown_outcome.py"
+      - "tests/test_recovery_integrity.py"
+      - "tests/test_recovery_atomicity.py"
+      - "tests/test_recovery_durability.py"
+      - "tests/test_recovery_pending_orders.py"
       - "tests/test_order_manager.py"
       - "tests/test_risk_final_authorization.py"
       - "tests/test_external_side_effect_adapter_contract.py"
@@ -52,6 +56,10 @@ jobs:
           tests/test_engine_paper_e2e.py
           tests/test_engine_restart_recovery.py
           tests/test_engine_unknown_outcome.py
+          tests/test_recovery_integrity.py
+          tests/test_recovery_atomicity.py
+          tests/test_recovery_durability.py
+          tests/test_recovery_pending_orders.py
           tests/test_order_manager.py
           tests/test_risk_final_authorization.py
           tests/test_external_side_effect_adapter_contract.py
