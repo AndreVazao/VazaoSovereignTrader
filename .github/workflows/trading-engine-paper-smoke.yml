@@ -15,6 +15,9 @@ on:
       - "tests/test_recovery_atomicity.py"
       - "tests/test_recovery_durability.py"
       - "tests/test_recovery_pending_orders.py"
+      - "tests/test_pending_order_financial_recovery.py"
+      - "tests/test_execution_intent_recovery.py"
+      - "tests/test_controlled_restart_recovery_e2e.py"
       - "tests/test_order_manager.py"
       - "tests/test_risk_final_authorization.py"
       - "tests/test_external_side_effect_adapter_contract.py"
@@ -60,6 +63,9 @@ jobs:
           tests/test_recovery_atomicity.py
           tests/test_recovery_durability.py
           tests/test_recovery_pending_orders.py
+          tests/test_pending_order_financial_recovery.py
+          tests/test_execution_intent_recovery.py
+          tests/test_controlled_restart_recovery_e2e.py
           tests/test_order_manager.py
           tests/test_risk_final_authorization.py
           tests/test_external_side_effect_adapter_contract.py
