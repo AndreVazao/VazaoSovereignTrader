@@ -35,4 +35,64 @@ document.querySelectorAll("[data-page]").forEach(b=>b.addEventListener("click",(
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===b));let area=document.getElementById("messages");if(b.dataset.tab==="chat")return;area.innerHTML='<div class="msg"><small>'+b.textContent.toUpperCase()+' · DEMONSTRAÇÃO</small>Este painel será alimentado por eventos autenticados do backend. Não existem dados em direto nesta pré-visualização.</div>'}));
 document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefault();let input=document.getElementById("chatInput"),value=input.value.trim();if(!value)return;let msg=document.createElement("div");msg.className="msg user";let small=document.createElement("small");small.textContent="OPERADOR · LOCAL";msg.append(small,document.createTextNode(value));document.getElementById("messages").append(msg);let response=document.createElement("div");response.className="msg";let meta=document.createElement("small");meta.textContent="DEMONSTRAÇÃO · NÃO ENVIADO";response.append(meta,document.createTextNode("Mensagem registada apenas nesta pré-visualização. Nenhum pedido foi enviado ao motor. A ligação real será implementada através da API autenticada."));document.getElementById("messages").append(response);input.value="";document.getElementById("messages").scrollTop=document.getElementById("messages").scrollHeight});
 document.getElementById("openChat").addEventListener("click",()=>document.getElementById("chatPanel").classList.toggle("open"));document.getElementById("openMenu").addEventListener("click",()=>{document.getElementById("leftnav").style.display=document.getElementById("leftnav").style.display==="flex"?"none":"flex";document.getElementById("leftnav").style.position="fixed";document.getElementById("leftnav").style.zIndex="8";document.getElementById("leftnav").style.top="58px";document.getElementById("leftnav").style.bottom="0";document.getElementById("leftnav").style.width="230px"});
+</script><script>
+(function(){
+  const panel=document.createElement("section");
+  panel.className="surface";
+  panel.id="liveConnectionPanel";
+  panel.style.margin="0 0 12px";
+  panel.innerHTML='<h2>Ligação ao motor soberano</h2><p class="muted" style="font-size:11px;margin:0 0 10px">Leitura autenticada, na mesma origem do servidor. O token fica apenas nesta memória de página e nunca é guardado.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="vstApiToken" type="password" autocomplete="off" placeholder="Token de acesso do cockpit" aria-label="Token de acesso" style="flex:1;min-width:180px;border:1px solid #2b4a65;border-radius:9px;background:#071421;padding:10px"><button id="vstConnect" type="button" style="border:0;background:#1674c9;border-radius:9px;padding:9px 13px;font-weight:700">Ligar / atualizar</button><button id="vstDisconnect" type="button" style="border:1px solid #2b4a65;background:#071421;border-radius:9px;padding:9px 13px">Desligar</button></div><div id="vstConnectionState" role="status" aria-live="polite" class="item"><span>Estado da ligação</span><span class="tag">Ainda não ligado</span></div><div id="vstLiveSummary" style="font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere;color:#c7d9ec"></div>';
+  const headline=document.querySelector(".headline");
+  if(headline) headline.insertAdjacentElement("afterend",panel);
+  let currentToken="";
+  let busy=false;
+  const stateEl=()=>document.getElementById("vstConnectionState");
+  const summaryEl=()=>document.getElementById("vstLiveSummary");
+  function state(label,detail){const el=stateEl();el.replaceChildren();const a=document.createElement("span");a.textContent=label;const b=document.createElement("span");b.className="tag";b.textContent=detail;el.append(a,b)}
+  function safeSummary(rows){summaryEl().textContent=rows.map(([label,value])=>label+": "+value).join("\n")}
+  function describe(value){if(value===null||value===undefined)return "não fornecido";if(typeof value==="string"||typeof value==="number"||typeof value==="boolean")return String(value);return JSON.stringify(value).slice(0,900)}
+  async function connect(){
+    if(busy)return;busy=true;
+    const token=document.getElementById("vstApiToken").value.trim();
+    if(!token){state("Ligação bloqueada","Introduz o token; não foi enviado nada.");busy=false;return}
+    const base=window.location.origin;
+    if(!/^https?:\/\//i.test(base)||base==="null"){state("Ligação bloqueada","Abre /virtual-office através do servidor do PC.");busy=false;return}
+    currentToken=token;
+    state("A verificar autenticação","A testar GET /status…");
+    const endpoints=[
+      ["Estado do motor","/status"],
+      ["Saúde das exchanges","/venue-health"],
+      ["Diagnóstico operacional","/diagnostics"],
+      ["Intervenções humanas pendentes","/human-interaction/pending"],
+      ["Pedidos de investigação","/research"]
+    ];
+    const rows=[];
+    try{
+      const first=await fetch(base+"/status",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+      if(first.status===401||first.status===403){currentToken="";state("Acesso recusado","Token inválido ou sem permissão de leitura.");safeSummary([]);busy=false;return}
+      if(!first.ok)throw new Error("GET /status respondeu HTTP "+first.status);
+      const firstData=await first.json();
+      rows.push(["Motor",describe(firstData.status||firstData.state||firstData.mode||"Resposta recebida")]);
+      rows.push(["Modo",describe(firstData.mode)]);
+      rows.push(["Última leitura",new Date().toLocaleString()]);
+      for(const [label,path] of endpoints.slice(1)){
+        try{
+          const response=await fetch(base+path,{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+          if(response.status===401||response.status===403){rows.push([label,"Sem autorização"]);continue}
+          if(!response.ok){rows.push([label,"HTTP "+response.status]);continue}
+          const data=await response.json();
+          let count;
+          if(path==="/venue-health")count=Array.isArray(data)?data.length:(Array.isArray(data.venues)?data.venues.length:null);
+          else if(path==="/human-interaction/pending")count=Array.isArray(data)?data.length:(Array.isArray(data.requests)?data.requests.length:null);
+          else if(path==="/research")count=Array.isArray(data)?data.length:(Array.isArray(data.requests)?data.requests.length:null);
+          rows.push([label,count===null||count===undefined?"Resposta recebida":"Registos: "+count]);
+        }catch(e){rows.push([label,"Indisponível: "+String(e.message||e).slice(0,100)])}
+      }
+      safeSummary(rows);state("Ligado ao backend","Leitura autenticada; sem comandos de trading.");
+    }catch(e){currentToken="";state("Falha de ligação",String(e.message||e).slice(0,150));safeSummary([["Nota","Confirma que estás a abrir esta página através do servidor Sovereign Trader no PC, por LAN ou Tailscale."]])}
+    finally{busy=false}
+  }
+  document.getElementById("vstConnect").addEventListener("click",connect);
+  document.getElementById("vstDisconnect").addEventListener("click",()=>{currentToken="";document.getElementById("vstApiToken").value="";state("Desligado","Token removido da memória desta página.");safeSummary([])});
+})();
 </script></body></html>
