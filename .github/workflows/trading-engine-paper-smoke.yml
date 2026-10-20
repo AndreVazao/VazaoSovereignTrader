@@ -15,6 +15,11 @@ on:
       - "tests/test_recovery_atomicity.py"
       - "tests/test_recovery_durability.py"
       - "tests/test_recovery_pending_orders.py"
+      - "tests/test_recovery_concurrency.py"
+      - "tests/test_browser_pending_recovery.py"
+      - "tests/test_closed_order_recovery.py"
+      - "tests/test_lost_position_recovery.py"
+      - "tests/test_pending_order_partial_reconciliation.py"
       - "tests/test_pending_order_financial_recovery.py"
       - "tests/test_execution_intent_recovery.py"
       - "tests/test_controlled_restart_recovery_e2e.py"
@@ -63,6 +68,11 @@ jobs:
           tests/test_recovery_atomicity.py
           tests/test_recovery_durability.py
           tests/test_recovery_pending_orders.py
+          tests/test_recovery_concurrency.py
+          tests/test_browser_pending_recovery.py
+          tests/test_closed_order_recovery.py
+          tests/test_lost_position_recovery.py
+          tests/test_pending_order_partial_reconciliation.py
           tests/test_pending_order_financial_recovery.py
           tests/test_execution_intent_recovery.py
           tests/test_controlled_restart_recovery_e2e.py
