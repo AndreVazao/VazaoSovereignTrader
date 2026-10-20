@@ -104,7 +104,9 @@ class SharedLearningMemory:
         confidence = float(confidence)
         if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
             raise ValueError("confidence must be finite and between 0 and 1")
-        if ttl_ms is not None and (isinstance(ttl_ms, bool) or int(ttl_ms) < 1):
+        if ttl_ms is not None and (
+            isinstance(ttl_ms, bool) or not isinstance(ttl_ms, int) or ttl_ms < 1
+        ):
             raise ValueError("ttl_ms must be a positive integer or None")
         now = self._clock_ns()
 
@@ -137,7 +139,9 @@ class SharedLearningMemory:
     def get(self, key: str, *, max_age_ms: int | None = None) -> LearningRecord | None:
         key = self._validate_text(key, "key")
         now = self._clock_ns()
-        if max_age_ms is not None and (isinstance(max_age_ms, bool) or int(max_age_ms) < 0):
+        if max_age_ms is not None and (
+            isinstance(max_age_ms, bool) or not isinstance(max_age_ms, int) or max_age_ms < 0
+        ):
             raise ValueError("max_age_ms must be a non-negative integer or None")
         with self._lock:
             record = self._records.get(key)
@@ -157,9 +161,16 @@ class SharedLearningMemory:
                 raise ValueError("unsupported validation status")
         with self._lock:
             records = tuple(self._records.values())
+        now = self._clock_ns()
+        current_records = []
+        for record in records:
+            expired = record.expires_at_ns is not None and now >= record.expires_at_ns
+            if expired and record.status != "stale":
+                record = LearningRecord(**{**record.__dict__, "status": "stale"})
+            current_records.append(record)
         if status is not None:
-            records = tuple(record for record in records if record.status == status)
-        return tuple(sorted(records, key=lambda record: record.key))
+            current_records = [record for record in current_records if record.status == status]
+        return tuple(sorted(current_records, key=lambda record: record.key))
 
     def mark_stale(self, key: str, *, expected_version: int | None = None) -> LearningRecord:
         current = self.get(key)
