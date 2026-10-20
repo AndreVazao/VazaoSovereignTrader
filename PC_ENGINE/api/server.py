@@ -102,6 +102,21 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
     def dashboard():
         return Response(DASHBOARD_HTML, mimetype="text/html")
 
+    @app.get("/virtual-office")
+    def virtual_office():
+        """Serve the office shell from the same origin as the authenticated cockpit API."""
+        from pathlib import Path
+
+        office_path = Path(__file__).resolve().parents[2] / "virtual_office" / "prototype" / "full_cockpit_shell.html"
+        try:
+            html = office_path.read_text(encoding="utf-8")
+        except OSError:
+            return jsonify({"ok": False, "error": "virtual_office_asset_unavailable"}), 404
+        response = Response(html, mimetype="text/html")
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     @app.get("/operator-files")
     def operator_files():
         require_scope("read_private_state")
