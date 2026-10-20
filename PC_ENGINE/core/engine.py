@@ -1313,7 +1313,8 @@ class SovereignEngine:
     def _exchange_for_pending_order(self, item: dict):
         """Resolve a pending order to its recorded venue without cross-venue fallback."""
         exchanges = getattr(self, "exchanges", {}) or {}
-        venue_id = str(item.get("venue_id") or "").strip()
+        # Older pending-order records use "exchange"; newer records may also carry "venue_id".
+        venue_id = str(item.get("venue_id") or item.get("exchange") or "").strip()
         if venue_id:
             exchange = exchanges.get(venue_id)
             if exchange is None:
