@@ -8,6 +8,22 @@ Sovereign Trader is a headless backend: it runs as a background service on a nor
 
 The cockpit, desktop virtual office and Android APK are separate installable clients. They show backend state and send authenticated, authorized requests. They must not run a second trading engine, maintain their own authoritative positions, or contain exchange API secrets.
 
+## Network and rendezvous model: Vercel first, Tailscale afterward
+
+Vercel is the initial rendezvous/co-ordination point for account-scoped device enrollment, approval status, short-lived endpoint discovery and versioned shared-learning metadata. It is not the trading engine and must not be required for the PC to continue local operation. The cloud coordination service must not relay trading orders or become a permanent proxy for private PC/phone traffic.
+
+After enrollment, the clients should use the owner's Tailscale private network to reach the backend directly whenever possible. The client must authenticate independently to the PC API; Tailscale connectivity alone is not permission to read private data or issue commands. The backend must validate owner identity, device identity, scopes and risk/command permissions. Tailscale address announcements are discovery metadata, not proof that an endpoint is reachable or a transport credential.
+
+Implementation requirements:
+- Use a cloud account session and per-install device identity/keypair for enrollment; require proof of possession and explicit approval before trusting a device.
+- Publish only the minimum Tailscale endpoint metadata needed for discovery, with short leases, refresh, expiry and per-device revocation.
+- Keep cloud coordination tokens separate from local PC API pairing tokens. Never reuse one token family as the other.
+- Do not expose the PC API publicly or assume Vercel can itself create a Tailscale peer-to-peer tunnel. Tailscale must be configured on the relevant devices, or an explicitly reviewed supported integration must be implemented.
+- Show offline/stale status and fail safely if Vercel, Tailscale or the PC is unavailable. Cloud outage must not stop local PAPER research or enable REAL execution.
+- If direct private connectivity is unavailable, report that clearly; do not silently fall back to public unauthenticated access or proxy commands through Vercel.
+- Shared learning is a separate, governed sync feature. Never sync exchange secrets, balances, positions, private trade history or personal account state by default.
+- Do not create cloud resources, configure production secrets, deploy new infrastructure or incur costs without explicit authorization and a cost/terms review.
+
 ## Installable components
 
 ### 1. Sovereign Trader Backend
@@ -41,7 +57,7 @@ The cockpit, desktop virtual office and Android APK are separate installable cli
 ## Remote command lifecycle
 1. Backend starts and reports version, health, mode and data freshness.
 2. Operator explicitly pairs a client; access can be revoked per device.
-3. Client connects over a private network, authenticates and negotiates API version/capabilities.
+3. Client obtains rendezvous/discovery information from Vercel, then connects over the configured Tailscale private network, authenticates to the PC API and negotiates API version/capabilities.
 4. Client reads state/events and sends a validated command with request/idempotency identity where appropriate.
 5. Backend authenticates, authorizes, checks current state/mode and risk, executes or rejects, and records an audit event.
 6. Client displays the server's result and timestamp. A timeout means “outcome unknown until reconciled”, not success or failure.
@@ -57,7 +73,7 @@ Audit the existing routes before adding new ones. The contract should cover heal
 ## Delivery order
 1. Reproduce and diagnose the current Android startup crash using the APK build output and Android logcat; a layout fix alone does not prove the crash is fixed.
 2. Stabilize backend service lifecycle and document the existing API contract without changing the trading engine's authority.
-3. Implement secure device pairing, revocation and scoped permissions; test remote access over a private network.
+3. Implement secure Vercel rendezvous and Tailscale endpoint discovery, enrollment, revocation and scoped permissions; test remote access over a private network.
 4. Keep the local cockpit lightweight and independent from backend process lifecycle.
 5. Build the desktop client in chat/compact mode, connecting to a local or remote backend.
 6. Connect office rooms to real API state/events; keep 2D/2.5D optional and chat-only fallback always available.
@@ -67,9 +83,11 @@ Audit the existing routes before adding new ones. The contract should cover heal
 ## Acceptance criteria
 - Backend runs headlessly with no cockpit, office or phone open.
 - Closing/crashing a client does not stop or duplicate the engine.
+- Vercel is used for initial rendezvous/discovery, while client-to-PC API traffic uses the configured private Tailscale network whenever available.
 - A separately installed desktop client connects to another PC's backend through a configured private network.
 - Desktop and Android clients show the same server-authoritative state and data freshness.
 - Privileged commands are authenticated, authorized, validated server-side and audited.
+- Cloud coordination or network outage never enables execution or silently exposes the PC API publicly.
 - Chat-only mode remains usable on low-power devices and during rendering failure.
 - No visual animation claims to be a real transfer/trade unless backed by a real event.
 - APK build, install, startup, pairing, reconnect and device layout are tested on a real Android device.
