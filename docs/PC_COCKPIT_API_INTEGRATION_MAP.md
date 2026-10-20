@@ -43,3 +43,18 @@ This is a route-level starting inventory, not a claim that every route has been 
 ## Non-goals
 
 No Freqtrade code reuse; no live exchange actions; no new cloud resources; no endpoint exposed publicly; no fake activity; no second engine instance.
+
+## Virtual Office read-only connection increment
+
+The standalone office shell is served by the same Flask application at `GET /virtual-office`. This avoids a separate-origin browser client for the first integration and lets the operator reach the same backend over LAN or the existing private Tailscale path. The route reads `virtual_office/prototype/full_cockpit_shell.html`, sends `Cache-Control: no-store`, and fails with 404 if the asset is absent.
+
+The shell's connection panel currently:
+- requires the operator to enter a token for the page session;
+- calls `GET /status` first to verify private-state access, then reads `/venue-health`, `/diagnostics`, `/human-interaction/pending` and `/research`;
+- sends the token only in the `X-Token` header, uses GET-only requests with `credentials: omit` and `cache: no-store`, and never stores the token in local storage or a URL;
+- has an explicit disconnect action that clears the page's token field and in-memory reference;
+- does not expose any mutation or trading command through this connection panel.
+
+**Limitations:** this is the first read-only connection slice, not full cockpit parity. The panel does not yet render detailed typed models for every endpoint, subscribe to a server event stream, reconnect automatically, or integrate the conversational message form with `POST /assistant/message`. The conversation remains a local demo until a separately tested authenticated gateway integration is added. Keep the PC cockpit as the existing capability reference.
+
+Before packaging the office into an EXE or embedding it in Android, verify the HTML asset is included in the distribution. Do not point the UI at a public Vercel URL or turn Vercel into a traffic proxy; open the office from the PC backend's LAN or private Tailscale URL.
