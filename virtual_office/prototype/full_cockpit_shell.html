@@ -33,8 +33,7 @@ document.querySelectorAll("[data-room]").forEach(b=>b.addEventListener("click",(
 document.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-mode]").forEach(x=>x.classList.toggle("active",x===b));let mode=b.dataset.mode;document.getElementById("officeScene").classList.toggle("hidden",mode==="chat");document.querySelector(".lower").classList.toggle("hidden",mode==="chat");document.querySelector(".stats").classList.toggle("hidden",mode==="chat");document.querySelector(".floor").style.display=mode==="compact"?"none":"grid";document.querySelector(".scenefoot").classList.toggle("hidden",mode==="compact");if(mode==="chat"){document.getElementById("chatPanel").classList.add("open")} }));
 document.querySelectorAll("[data-page]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x===b));let labels={overview:["Visão geral operacional","Acesso às capacidades do cockpit dentro do escritório virtual."],office:["Escritório virtual","Mapa de departamentos com estado real quando a API for ligada."],chat:["Cockpit conversacional","Conversa persistente para perguntas e comandos autorizados."],markets:["Mercados & exchanges","Dados e saúde dos mercados — backend necessário."],research:["Investigação","Fontes, hipóteses e evidência — backend necessário."],strategies:["Estratégias & PAPER","Resultados e validação sem autorização de execução real."],risk:["Risco & prontidão","Os bloqueios de risco são sempre decididos no servidor."],events:["Eventos & auditoria","Eventos reais, timestamps e histórico do backend."],devices:["Dispositivos","Emparelhamento, permissões e revogação por dispositivo."],settings:["Configurações","Preferências de apresentação separadas da configuração do motor."]};document.getElementById("pageTitle").textContent=labels[b.dataset.page][0];document.getElementById("pageDesc").textContent=labels[b.dataset.page][1];if(b.dataset.page==="chat"){document.getElementById("chatPanel").classList.add("open")}else if(innerWidth<=1050){document.getElementById("chatPanel").classList.remove("open")}}));
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===b));let area=document.getElementById("messages");if(b.dataset.tab==="chat")return;area.innerHTML='<div class="msg"><small>'+b.textContent.toUpperCase()+' · DEMONSTRAÇÃO</small>Este painel será alimentado por eventos autenticados do backend. Não existem dados em direto nesta pré-visualização.</div>'}));
-document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefault();let input=document.getElementById("chatInput"),value=input.value.trim();if(!value)return;let msg=document.createElement("div");msg.className="msg user";let small=document.createElement("small");small.textContent="OPERADOR · LOCAL";msg.append(small,document.createTextNode(value));document.getElementById("messages").append(msg);let response=document.createElement("div");response.className="msg";let meta=document.createElement("small");meta.textContent="DEMONSTRAÇÃO · NÃO ENVIADO";response.append(meta,document.createTextNode("Mensagem registada apenas nesta pré-visualização. Nenhum pedido foi enviado ao motor. A ligação real será implementada através da API autenticada."));document.getElementById("messages").append(response);input.value="";document.getElementById("messages").scrollTop=document.getElementById("messages").scrollHeight});
-document.getElementById("openChat").addEventListener("click",()=>document.getElementById("chatPanel").classList.toggle("open"));document.getElementById("openMenu").addEventListener("click",()=>{document.getElementById("leftnav").style.display=document.getElementById("leftnav").style.display==="flex"?"none":"flex";document.getElementById("leftnav").style.position="fixed";document.getElementById("leftnav").style.zIndex="8";document.getElementById("leftnav").style.top="58px";document.getElementById("leftnav").style.bottom="0";document.getElementById("leftnav").style.width="230px"});
+document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefault();let input=document.getElementById("chatInput"),value=input.value.trim();if(!value)return;window.dispatchEvent(new CustomEvent("vst-chat-submit",{detail:{message:value}}));input.value=""});document.getElementById("openChat").addEventListener("click",()=>document.getElementById("chatPanel").classList.toggle("open"));document.getElementById("openMenu").addEventListener("click",()=>{document.getElementById("leftnav").style.display=document.getElementById("leftnav").style.display==="flex"?"none":"flex";document.getElementById("leftnav").style.position="fixed";document.getElementById("leftnav").style.zIndex="8";document.getElementById("leftnav").style.top="58px";document.getElementById("leftnav").style.bottom="0";document.getElementById("leftnav").style.width="230px"});
 </script><script>
 (function(){
   const panel=document.createElement("section");
@@ -92,6 +91,45 @@ document.getElementById("openChat").addEventListener("click",()=>document.getEle
     }catch(e){currentToken="";state("Falha de ligação",String(e.message||e).slice(0,150));safeSummary([["Nota","Confirma que estás a abrir esta página através do servidor Sovereign Trader no PC, por LAN ou Tailscale."]])}
     finally{busy=false}
   }
+  function addChatMessage(label,message,kind){
+    const box=document.createElement("div");box.className=kind==="user"?"msg user":"msg";
+    const meta=document.createElement("small");meta.textContent=label;
+    const body=document.createElement("div");body.textContent=message;
+    box.append(meta,body);const messages=document.getElementById("messages");messages.append(box);messages.scrollTop=messages.scrollHeight;
+  }
+  let chatBusy=false;
+  window.addEventListener("vst-chat-submit",async event=>{
+    const message=String(event.detail&&event.detail.message||"").trim();
+    if(!message)return;
+    addChatMessage("OPERADOR",message,"user");
+    if(!currentToken){addChatMessage("MOTOR · NÃO ENVIADO","Para enviar esta mensagem ao cérebro, liga primeiro o cockpit com um token autorizado. Nenhum pedido foi enviado.","system");return}
+    if(chatBusy){addChatMessage("MOTOR","Já estou a processar um pedido. Aguarda pela resposta antes de enviar outro.","system");return}
+    chatBusy=true;
+    addChatMessage("SOVEREIGN TRADER · A PROCESSAR","Pedido enviado ao gateway autenticado. A resposta do servidor vai aparecer aqui.","system");
+    const messages=document.getElementById("messages");
+    const pending=messages.lastElementChild;
+    try{
+      const response=await fetch(window.location.origin+"/assistant/message",{
+        method:"POST",headers:{"X-Token":currentToken,"Accept":"application/json","Content-Type":"application/json"},
+        cache:"no-store",credentials:"omit",body:JSON.stringify({message})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(response.status===401||response.status===403){
+        currentToken="";document.getElementById("vstApiToken").value="";
+        state("Acesso recusado","Token ou permissões insuficientes.");
+        pending.querySelector("div").textContent=String(data.error||"O servidor recusou o pedido. Volta a autenticar-te.");
+      }else{
+        const reply=String(data.reply||data.error||("O servidor respondeu HTTP "+response.status));
+        pending.querySelector("small").textContent="SOVEREIGN TRADER · "+String(data.status||"RESPOSTA");
+        pending.querySelector("div").textContent=reply;
+        if(data.intent)pending.querySelector("div").textContent+="\nIntenção: "+data.intent;
+        if(data.paper_only===true)pending.querySelector("div").textContent+="\nModo protegido: PAPER/read-only.";
+        if(data.execution_authorized===false)pending.querySelector("div").textContent+="\nExecução autorizada: não.";
+      }
+    }catch(error){
+      pending.querySelector("div").textContent="Falha de ligação. Não assumas que o pedido foi processado; consulta o estado antes de o repetir. "+String(error.message||error).slice(0,120);
+    }finally{chatBusy=false}
+  });
   document.getElementById("vstConnect").addEventListener("click",connect);
   document.getElementById("vstDisconnect").addEventListener("click",()=>{currentToken="";document.getElementById("vstApiToken").value="";state("Desligado","Token removido da memória desta página.");safeSummary([])});
 })();
