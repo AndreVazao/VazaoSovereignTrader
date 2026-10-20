@@ -24,6 +24,11 @@ try:
 except ImportError:
     from MOBILE_APP.secure_token import delete_device_token, load_device_token, save_device_token
 
+try:
+    from endpoint_selection import endpoint_candidates, normalize_endpoint, can_fail_over_automatically
+except ImportError:
+    from MOBILE_APP.endpoint_selection import endpoint_candidates, normalize_endpoint, can_fail_over_automatically
+
 
 
 class _MobileHTTPResponse:
@@ -41,8 +46,9 @@ class MobileCockpit(App):
     """Remote cockpit. Exchange credentials never live in this app."""
     def build(self):
         self.lang = self._load_lang("pt")
-        self.pc_url = self._load_connection_url()
-        self._saved_pc_url = self.pc_url
+        self.lan_url, self.tailscale_url = self._load_connection_config()
+        self.pc_url = self.lan_url or self.tailscale_url or ""
+        self.active_endpoint = ""
         self.connection_state = "NOT_TESTED"
         self.human_widgets = {}
         self._android_activity_bound = False
@@ -255,43 +261,69 @@ class MobileCockpit(App):
     def _connection_config_path(self):
         return Path(self.user_data_dir) / "connection.json"
 
-    def _load_connection_url(self):
-        default = "http://127.0.0.1:8765"
+    def _load_connection_config(self):
+        """Load separate private routes, migrating the old single URL as LAN only."""
+        lan_url = ""
+        tailscale_url = ""
         try:
             path = self._connection_config_path()
             if path.exists():
                 payload = json.loads(path.read_text(encoding="utf-8"))
-                url = str(payload.get("pc_url", "")).strip().rstrip("/")
-                if url.startswith(("http://", "https://")):
-                    return url
+                lan_url = str(payload.get("lan_url", "")).strip()
+                tailscale_url = str(payload.get("tailscale_url", "")).strip()
+                # Compatibility migration: never guess whether a legacy URL is Tailscale.
+                if not lan_url and not tailscale_url:
+                    lan_url = str(payload.get("pc_url", "")).strip()
         except (OSError, ValueError, TypeError):
             pass
-        return default
+        try:
+            return normalize_endpoint(lan_url), normalize_endpoint(tailscale_url)
+        except ValueError:
+            # Invalid persisted values fail closed; user can correct them in the PC screen.
+            return "", ""
 
     def _save_connection_url(self, url=None):
-        value = (url if url is not None else self.ip_input.text).strip().rstrip("/")
-        if not value.startswith(("http://", "https://")):
-            return
+        """Persist both route fields locally; the legacy argument updates the LAN field."""
+        try:
+            lan_value = normalize_endpoint(
+                url if url is not None else getattr(self, "lan_input", None).text
+            )
+            tailscale_value = normalize_endpoint(
+                getattr(self, "tailscale_input", None).text if hasattr(self, "tailscale_input") else self.tailscale_url
+            )
+        except (ValueError, AttributeError):
+            self.status.text = "Endereço inválido: usa http(s)://host:porta, sem caminho nem credenciais."
+            return False
         try:
             path = self._connection_config_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            if value != getattr(self, "_saved_pc_url", None):
-                path.write_text(json.dumps({"pc_url": value}, indent=2), encoding="utf-8")
-                self._saved_pc_url = value
-            self.pc_url = value
+            payload = {"lan_url": lan_value, "tailscale_url": tailscale_value}
+            path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            self.lan_url, self.tailscale_url = lan_value, tailscale_value
+            self.pc_url = lan_value or tailscale_value
+            return True
         except OSError:
-            # Connection still works for this session if Android storage is unavailable.
-            pass
+            self.status.text = "Não consegui guardar a configuração; os endereços continuam apenas nesta sessão."
+            self.lan_url, self.tailscale_url = lan_value, tailscale_value
+            return False
 
-    def _on_url_changed(self, _widget, value):
-        self.pc_url = value.strip().rstrip("/")
+    def _on_url_changed(self, widget, value):
+        try:
+            normalized = normalize_endpoint(value)
+        except ValueError:
+            normalized = (value or "").strip().rstrip("/")
+        if getattr(widget, "route_kind", "lan") == "tailscale":
+            self.tailscale_url = normalized
+        else:
+            self.lan_url = normalized
+        self.pc_url = self.lan_url or self.tailscale_url
 
     def headers(self):
         # Paired token is decrypted only in memory from Android Keystore; the owner token is never persisted.
         return {"X-Token": self.device_token or self.token_input.text.strip()}
 
     def base_url(self):
-        return self.ip_input.text.strip().rstrip("/")
+        return self.active_endpoint or self.lan_url or self.tailscale_url or ""
 
     def _request(self, method, endpoint, **kwargs):
         headers = self.headers()
@@ -320,17 +352,36 @@ class MobileCockpit(App):
             headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
         if kwargs:
             raise ValueError(f"Opções HTTP não suportadas: {', '.join(kwargs)}")
-        request = urllib.request.Request(
-            self.base_url() + endpoint,
-            data=payload,
-            headers=headers,
-            method=method.upper(),
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as result:
-                return _MobileHTTPResponse(result.status, result.read())
-        except urllib.error.HTTPError as exc:
-            return _MobileHTTPResponse(exc.code, exc.read())
+        method = method.upper()
+        candidates = endpoint_candidates(self.lan_url, self.tailscale_url)
+        if self.active_endpoint and self.active_endpoint in candidates:
+            candidates = [self.active_endpoint] + [item for item in candidates if item != self.active_endpoint]
+        if not candidates:
+            raise ValueError("Configura o endereço LAN ou Tailscale do PC.")
+        last_error = None
+        for index, base in enumerate(candidates):
+            request = urllib.request.Request(
+                base + endpoint,
+                data=payload,
+                headers=headers,
+                method=method,
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as result:
+                    self.active_endpoint = base
+                    return _MobileHTTPResponse(result.status, result.read())
+            except urllib.error.HTTPError as exc:
+                # Authentication/authorization responses are definitive; don't route around them.
+                self.active_endpoint = base
+                return _MobileHTTPResponse(exc.code, exc.read())
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                last_error = exc
+                # Never replay writes/uploads: their outcome may be unknown after a disconnect.
+                if not can_fail_over_automatically(method) or index + 1 >= len(candidates):
+                    raise
+        if last_error:
+            raise last_error
+        raise OSError("Nenhum endpoint disponível.")
 
 
     def begin_pairing(self):
@@ -419,9 +470,9 @@ class MobileCockpit(App):
         try:
             response = self._request("GET", "/health", timeout=5)
             if response.status_code == 200:
-                self._save_connection_url(self.base_url())
+                self._save_connection_url()
                 self.connection_state = "CONNECTED"
-                self.status.text = f"PC: ligado | {self.base_url()}"
+                self.status.text = f"PC: ligado | {self.active_endpoint or self.base_url()} (HTTP /health; autenticação ainda não validada)"
                 self.refresh(0)
             else:
                 self.connection_state = "RETRYING"

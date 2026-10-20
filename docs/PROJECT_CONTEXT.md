@@ -1353,3 +1353,12 @@ Review points before merge:
 - Proposed order: read-only crypto spot CEX feeds first; then broker API/demo FX; later equities/ETFs and CEX-DEX. The strategy must distinguish directional lead/lag from two-leg arbitrage and use executable bid/ask/depth, fees, slippage, latency, partial fills, inventory, settlement/custody and regional eligibility.
 - Official exchange APIs and provider permissions should precede UI automation. Android/desktop automation is a last-resort adapter, not a latency-critical data source. Capital ladder is a manual evidence/risk review gate, never automatic deposits.
 - Validation after regime diagnostics: **78 selected brain tests passed in 8.52s**, compileall and git diff check passed. No exchange calls, orders, deposits, paid services or REAL-mode changes.
+
+## Android LAN/Tailscale client checkpoint — 2026-10-20
+
+- PR #388 remains the sole open PR for this work: https://github.com/AndreVazao/VazaoSovereignTrader/pull/388.
+- Android now has separate local `lan_url` and `tailscale_url` settings. Legacy `pc_url` is migrated into the LAN field without guessing that it is a Tailscale address.
+- GET requests may try LAN first and then Tailscale after a network-level failure; the last endpoint returning an HTTP response is remembered. HTTP 401/403 are not bypassed by trying another route. Non-GET requests and uploads are never automatically replayed.
+- The `/health` probe is public and proves reachability only; the UI reports that authentication is not yet validated by this probe. Authenticated private-state probing remains follow-up work.
+- GitHub Actions run 39419467665 / run #45 passed endpoint-selection unit tests and built/uploaded the debug APK. This does not prove the APK launches on a physical phone; Android 16 startup/logcat validation remains pending.
+- Keep LAN/Tailscale addresses local to Android. Vercel must not proxy orders or LAN traffic; no public port-forward fallback. No exchange keys or trading execution logic were added.
