@@ -160,11 +160,11 @@ def validate_websocket_timing(
             "out_of_order": out_of_order,
             "excessive_latency": excessive,
             "latency_ms": {
-                "mean": mean(latencies) if latencies else 0.0,
-                "p50": p50,
-                "p95": p95,
-                "p99": p99,
-                "max": max(latencies) if latencies else 0.0,
+                "mean": mean(latencies) if latencies else None,
+                "p50": p50 if latencies else None,
+                "p95": p95 if latencies else None,
+                "p99": p99 if latencies else None,
+                "max": max(latencies) if latencies else None,
             },
         },
         "lead_lag": {
