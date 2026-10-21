@@ -22,7 +22,7 @@
 <path d="M390 160L725 72L1050 172L710 266Z" fill="url(#top)" stroke="#51ddff" stroke-width="2"/>
 <path d="M390 160L710 266V294L390 188Z" fill="url(#front)" stroke="#2e607a"/>
 <path d="M710 266L1050 172V200L710 294Z" fill="url(#side)" stroke="#2e607a"/>
-<text x="690" y="153" text-anchor="middle" class="floorname">MEMÓRIA CENTRAL DE APRENDIZAGEM</text><text x="690" y="178" text-anchor="middle" class="small">conhecimento validado partilhado entre departamentos</text>
+<text x="690" y="143" text-anchor="middle" class="floorname">MEMÓRIA CENTRAL DE APRENDIZAGEM</text><text x="690" y="166" text-anchor="middle" class="small">sala visual + serviço transversal</text><text x="690" y="188" text-anchor="middle" class="small">conhecimento validado partilhado entre departamentos</text>
 </g>
 <!-- top floor CEO -->
 <g filter="url(#shadow)">
@@ -48,8 +48,8 @@
 <path d="M390 580L725 492L1050 592L710 686Z" fill="url(#top)" stroke="#42e0b0" stroke-width="2"/>
 <path d="M390 580L710 686V714L390 608Z" fill="url(#front)" stroke="#2e607a"/><path d="M710 686L1050 592V620L710 714Z" fill="url(#side)" stroke="#2e607a"/>
 <rect x="450" y="572" width="200" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="550" y="594" text-anchor="middle" class="room">Integrações Exchange</text><text x="550" y="613" text-anchor="middle" class="small">REST / WebSocket</text>
-<rect x="672" y="572" width="198" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="771" y="594" text-anchor="middle" class="room">Market Radar</text><text x="771" y="613" text-anchor="middle" class="small">comparação / lead-lag</text>
-<rect x="892" y="572" width="117" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="950" y="594" text-anchor="middle" class="room">Feeds</text><text x="950" y="613" text-anchor="middle" class="small">frescura</text>
+<rect x="672" y="572" width="198" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="771" y="594" text-anchor="middle" class="room">Market Radar</text><text x="771" y="613" text-anchor="middle" class="small">deteção / lead-lag</text>
+<rect x="892" y="572" width="117" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="950" y="589" text-anchor="middle" class="room">Comparação</text><text x="950" y="605" text-anchor="middle" class="room">Exchanges</text><text x="950" y="619" text-anchor="middle" class="small">custos / liquidez</text>
 <text x="335" y="603" class="floorname" text-anchor="end">PISO 1</text><text x="335" y="625" class="small" text-anchor="end">Mercados</text><path d="M350 600H388" class="line"/>
 </g>
 <!-- validation floor -->
@@ -58,7 +58,7 @@
 <path d="M390 720L710 826V854L390 748Z" fill="url(#front)" stroke="#6b5b36"/><path d="M710 826L1050 732V760L710 854Z" fill="url(#side)" stroke="#6b5b36"/>
 <rect x="455" y="712" width="202" height="52" rx="8" fill="#102b40" stroke="#ffc96b"/><text x="556" y="734" text-anchor="middle" class="room">Laboratório PAPER</text><text x="556" y="753" text-anchor="middle" class="small">replay / custos</text>
 <rect x="680" y="712" width="180" height="52" rx="8" fill="#102b40" stroke="#ffc96b"/><text x="770" y="734" text-anchor="middle" class="room">Controlo de Risco</text><text x="770" y="753" text-anchor="middle" class="small">gates / limites</text>
-<rect x="882" y="712" width="127" height="52" rx="8" fill="#102b40" stroke="#ffc96b"/><text x="945" y="734" text-anchor="middle" class="room">Aprovações</text><text x="945" y="753" text-anchor="middle" class="small">humano</text>
+<rect x="875" y="712" width="134" height="52" rx="8" fill="#102b40" stroke="#ffc96b"/><text x="942" y="732" text-anchor="middle" class="room">Resposta Rápida</text><text x="942" y="751" text-anchor="middle" class="small">PAPER / gates</text>
 <text x="335" y="743" class="floorname" text-anchor="end">PISO 0</text><text x="335" y="765" class="small" text-anchor="end">Validação</text><path d="M350 740H388" class="line"/>
 </g>
 <!-- basement -->
@@ -70,5 +70,5 @@
 <rect x="855" y="858" width="154" height="49" rx="8" fill="#0b1c2d" stroke="#93b7d0"/><text x="932" y="879" text-anchor="middle" class="room">Dispositivos</text><text x="932" y="898" text-anchor="middle" class="small">PC / app / APK</text>
 <text x="335" y="892" class="floorname" text-anchor="end">SUBSOLO</text><text x="335" y="914" class="small" text-anchor="end">Infraestrutura</text><path d="M350 889H388" class="line"/>
 </g>
-<text x="55" y="966" class="small">Nota: os pisos agrupam funções lógicas; não implicam agentes independentes já implementados.</text>
+<text x="55" y="966" class="small">Nota: CEO no piso superior; Radar e Comparação são departamentos distintos. Memória é sala visual e serviço transversal. Resposta Rápida fica subordinada aos gates de risco. Funções lógicas não implicam agentes autónomos já implementados.</text>
 </svg>
