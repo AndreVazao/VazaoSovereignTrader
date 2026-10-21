@@ -38,12 +38,18 @@ def latest_events_by_venue_symbol(path: str | Path) -> dict[str, dict[str, dict[
         current = latest.setdefault(venue, {}).get(symbol)
         ts = int(row.get("local_ts_ms") or 0)
         if current is None or ts >= int(current.get("local_ts_ms") or 0):
+            raw_latency = row.get("local_receive_latency_ms")
+            try:
+                latency_ms = None if raw_latency is None else int(raw_latency)
+            except (TypeError, ValueError, OverflowError):
+                latency_ms = None
             latest[venue][symbol] = {
                 "symbol": symbol,
                 "local_ts_ms": ts,
                 "exchange_ts_ms": int(row.get("exchange_ts_ms") or 0),
                 "price": row.get("price"),
-                "latency_ms": int(row.get("local_receive_latency_ms") or 0),
+                # Unknown/unvalidated latency must remain unknown, never become 0.
+                "latency_ms": latency_ms,
             }
     return {venue: dict(sorted(symbols.items())) for venue, symbols in sorted(latest.items())}
 
