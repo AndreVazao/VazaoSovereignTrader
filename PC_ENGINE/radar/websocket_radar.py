@@ -81,6 +81,10 @@ class WebSocketMarketRadar:
         self._recent_market_events: dict[str, list[MarketEvent]] = {}
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        self._lifecycle_lock = threading.RLock()
+        self._stop_lock = threading.Lock()
+        self._stopping = False
+        self._apps: dict[str, websocket.WebSocketApp] = {}
         self._last_price: dict[tuple[str, str], float] = {}
         self._last_move: dict[tuple[str, str], MarketEvent] = {}
         self._lock = threading.RLock()
@@ -105,7 +109,7 @@ class WebSocketMarketRadar:
             now = self._now_ms()
             last = dict(self._last_event)
             return {
-                "running": bool(self._threads),
+                "running": any(thread.is_alive() for thread in self._threads),
                 "symbols": list(self.symbols),
                 "exchanges": list(self.exchanges),
                 "events_total": self._events_total,
@@ -138,20 +142,54 @@ class WebSocketMarketRadar:
             }
 
     def start(self) -> None:
-        self._stop.clear()
-        for exchange in self.exchanges:
-            target = getattr(self, f"_run_{exchange}", None)
-            if target is None:
-                continue
-            thread = threading.Thread(target=target, name=f"radar-ws-{exchange}", daemon=True)
-            self._threads.append(thread)
-            thread.start()
+        """Start one worker per exchange; repeated calls are idempotent."""
+        with self._lifecycle_lock:
+            if self._stopping:
+                return
+            self._threads = [thread for thread in self._threads if thread.is_alive()]
+            if self._threads:
+                return
+            self._stop.clear()
+            for exchange in self.exchanges:
+                target = getattr(self, f"_run_{exchange}", None)
+                if target is None:
+                    continue
+                thread = threading.Thread(target=target, name=f"radar-ws-{exchange}", daemon=True)
+                self._threads.append(thread)
+                thread.start()
 
     def stop(self) -> None:
-        self._stop.set()
-        for thread in list(self._threads):
-            thread.join(timeout=3)
-        self._threads.clear()
+        """Request shutdown, close active sockets, and retain any unjoined workers."""
+        # Serialize stop requests and prevent start() from clearing the stop
+        # event while this shutdown is still joining the previous workers.
+        with self._stop_lock:
+            with self._lifecycle_lock:
+                self._stopping = True
+                self._stop.set()
+                apps = list(self._apps.values())
+                threads = list(self._threads)
+            # Closing before run_forever() begins can be too early for
+            # websocket-client: run_forever may reset its internal running flag.
+            # Retry close while joining so a startup/close race gets another
+            # close after the socket loop has actually entered.
+            deadline = time.monotonic() + 3.0
+            while True:
+                for app in apps:
+                    try:
+                        app.close()
+                    except Exception:
+                        pass
+                alive = [thread for thread in threads if thread.is_alive()]
+                if not alive:
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                for thread in alive:
+                    thread.join(timeout=min(0.05, remaining))
+            with self._lifecycle_lock:
+                self._threads = [thread for thread in self._threads if thread.is_alive()]
+                self._stopping = False
 
     def _emit(self, event: MarketEvent) -> None:
         key = (event.exchange, event.symbol)
@@ -343,13 +381,23 @@ class WebSocketMarketRadar:
                     on_open(ws)
                 connected_at = time.monotonic()
 
+            app: websocket.WebSocketApp | None = None
             try:
                 app = websocket.WebSocketApp(url, on_open=handle_open, on_message=handle_message)
-                app.run_forever(ping_interval=20, ping_timeout=10)
+                with self._lifecycle_lock:
+                    self._apps[exchange] = app
+                if self._stop.is_set():
+                    app.close()
+                else:
+                    app.run_forever(ping_interval=20, ping_timeout=10)
             except Exception:
                 with self._lock:
                     self._errors[exchange] = self._errors.get(exchange, 0) + 1
             finally:
+                if app is not None:
+                    with self._lifecycle_lock:
+                        if self._apps.get(exchange) is app:
+                            self._apps.pop(exchange, None)
                 # Only time spent after the socket opened counts as stable uptime;
                 # DNS/connect stalls must not reset the backoff.
                 elapsed = 0.0 if connected_at is None else max(0.0, time.monotonic() - connected_at)
