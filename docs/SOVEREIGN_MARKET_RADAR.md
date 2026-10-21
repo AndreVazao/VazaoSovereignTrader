@@ -406,6 +406,7 @@ Somente depois das fases anteriores:
 
 - Não existe previsão garantida.
 - Não confiar numa única exchange.
+- Um candidato lead/lag só é elegível se a ordem dos timestamps da exchange e a ordem local de receção forem coerentes; candidatos com receção invertida ou atraso local superior à janela são descartados antes das estatísticas de edge.
 - Não confiar numa única fonte.
 - Não confundir atraso de dados com oportunidade negociável.
 - Não executar por causa de uma notícia isolada.
