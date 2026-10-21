@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1000" role="img" aria-labelledby="title desc">
+<title id="title">Sovereign Trader — escritório 3D explodido</title>
+<desc id="desc">Conceito vetorial isométrico em camadas. Cada piso mostra departamentos propostos; não representa estado operacional real.</desc>
+<defs>
+  <linearGradient id="bg" x2="0" y2="1"><stop stop-color="#102b45"/><stop offset="1" stop-color="#06111f"/></linearGradient>
+  <linearGradient id="top" x2="1" y2="1"><stop stop-color="#214e6c"/><stop offset="1" stop-color="#15334c"/></linearGradient>
+  <linearGradient id="front" x2="0" y2="1"><stop stop-color="#102d43"/><stop offset="1" stop-color="#091a2b"/></linearGradient>
+  <linearGradient id="side" x2="1" y2="1"><stop stop-color="#0e263b"/><stop offset="1" stop-color="#071421"/></linearGradient>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#000" flood-opacity=".42"/></filter>
+  <style>
+  .title{font:700 34px system-ui,sans-serif;fill:#f0f8ff;letter-spacing:2px}.sub{font:16px system-ui,sans-serif;fill:#9db9d1}
+  .floorname{font:700 18px system-ui,sans-serif;fill:#e9f6ff}.room{font:600 15px system-ui,sans-serif;fill:#d8eaf7}.small{font:13px system-ui,sans-serif;fill:#93b0c9}.tag{font:700 12px system-ui,sans-serif;fill:#51ddff;letter-spacing:1px}
+  .line{stroke:#4edbff;stroke-width:1.6;fill:none;opacity:.8}.window{fill:#2c86a5;opacity:.55}
+  </style>
+</defs>
+<rect width="1400" height="1000" fill="url(#bg)"/>
+<g opacity=".18" stroke="#4b7895" stroke-width="1"><path d="M0 160H1400M0 260H1400M0 360H1400M0 460H1400M0 560H1400M0 660H1400M0 760H1400M0 860H1400"/><path d="M100 0V1000M200 0V1000M300 0V1000M400 0V1000M500 0V1000M600 0V1000M700 0V1000M800 0V1000M900 0V1000M1000 0V1000M1100 0V1000M1200 0V1000M1300 0V1000"/></g>
+<text x="55" y="65" class="title">VAZAO SOVEREIGN TRADER</text><text x="57" y="96" class="sub">ESCRITÓRIO VIRTUAL · VISTA ISOMÉTRICA EXPLODIDA</text>
+<rect x="1000" y="40" width="345" height="64" rx="12" fill="#0b1c2d" stroke="#345772"/><text x="1022" y="66" class="tag">CONCEITO PARA REVISÃO</text><text x="1022" y="88" class="small">Não é um estado operacional em direto</text>
+<!-- roof / central memory -->
+<g filter="url(#shadow)">
+<path d="M390 160L725 72L1050 172L710 266Z" fill="url(#top)" stroke="#51ddff" stroke-width="2"/>
+<path d="M390 160L710 266V294L390 188Z" fill="url(#front)" stroke="#2e607a"/>
+<path d="M710 266L1050 172V200L710 294Z" fill="url(#side)" stroke="#2e607a"/>
+<text x="690" y="153" text-anchor="middle" class="floorname">MEMÓRIA CENTRAL DE APRENDIZAGEM</text><text x="690" y="178" text-anchor="middle" class="small">conhecimento validado partilhado entre departamentos</text>
+</g>
+<!-- top floor CEO -->
+<g filter="url(#shadow)">
+<path d="M390 300L725 212L1050 312L710 406Z" fill="url(#top)" stroke="#d9ae56" stroke-width="2"/>
+<path d="M390 300L710 406V434L390 328Z" fill="url(#front)" stroke="#6b5b36"/>
+<path d="M710 406L1050 312V340L710 434Z" fill="url(#side)" stroke="#6b5b36"/>
+<rect x="475" y="291" width="195" height="53" rx="8" fill="#102b40" stroke="#d9ae56"/><text x="572" y="313" text-anchor="middle" class="floorname">CEO / CÉREBRO</text><text x="572" y="333" text-anchor="middle" class="small">Avatar oficial a inserir</text>
+<rect x="705" y="284" width="145" height="53" rx="8" fill="#102b40" stroke="#4edbff"/><text x="777" y="306" text-anchor="middle" class="room">Receção</text><text x="777" y="326" text-anchor="middle" class="small">pedidos</text>
+<rect x="866" y="284" width="143" height="53" rx="8" fill="#102b40" stroke="#4edbff"/><text x="937" y="306" text-anchor="middle" class="room">Reuniões</text><text x="937" y="326" text-anchor="middle" class="small">planeamento</text>
+<text x="335" y="323" class="floorname" text-anchor="end">PISO 3</text><text x="335" y="345" class="small" text-anchor="end">Direção</text><path d="M350 320H388" class="line"/>
+</g>
+<!-- intelligence floor -->
+<g filter="url(#shadow)">
+<path d="M390 440L725 352L1050 452L710 546Z" fill="url(#top)" stroke="#4edbff" stroke-width="2"/>
+<path d="M390 440L710 546V574L390 468Z" fill="url(#front)" stroke="#2e607a"/><path d="M710 546L1050 452V480L710 574Z" fill="url(#side)" stroke="#2e607a"/>
+<rect x="452" y="432" width="164" height="51" rx="8" fill="#102b40" stroke="#a78bfa"/><text x="534" y="453" text-anchor="middle" class="room">Investigação</text><text x="534" y="472" text-anchor="middle" class="small">fontes / hipóteses</text>
+<rect x="637" y="432" width="145" height="51" rx="8" fill="#102b40" stroke="#a78bfa"/><text x="709" y="453" text-anchor="middle" class="room">Análise</text><text x="709" y="472" text-anchor="middle" class="small">evidência</text>
+<rect x="802" y="432" width="193" height="51" rx="8" fill="#102b40" stroke="#a78bfa"/><text x="898" y="453" text-anchor="middle" class="room">Auditoria</text><text x="898" y="472" text-anchor="middle" class="small">eventos / métricas</text>
+<text x="335" y="463" class="floorname" text-anchor="end">PISO 2</text><text x="335" y="485" class="small" text-anchor="end">Inteligência</text><path d="M350 460H388" class="line"/>
+</g>
+<!-- market floor -->
+<g filter="url(#shadow)">
+<path d="M390 580L725 492L1050 592L710 686Z" fill="url(#top)" stroke="#42e0b0" stroke-width="2"/>
+<path d="M390 580L710 686V714L390 608Z" fill="url(#front)" stroke="#2e607a"/><path d="M710 686L1050 592V620L710 714Z" fill="url(#side)" stroke="#2e607a"/>
+<rect x="450" y="572" width="200" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="550" y="594" text-anchor="middle" class="room">Integrações Exchange</text><text x="550" y="613" text-anchor="middle" class="small">REST / WebSocket</text>
+<rect x="672" y="572" width="198" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="771" y="594" text-anchor="middle" class="room">Market Radar</text><text x="771" y="613" text-anchor="middle" class="small">comparação / lead-lag</text>
+<rect x="892" y="572" width="117" height="52" rx="8" fill="#102b40" stroke="#42e0b0"/><text x="950" y="594" text-anchor="middle" class="room">Feeds</text><text x="950" y="613" text-anchor="middle" class="small">frescura</text>
+<text x="335" y="603" class="floorname" text-anchor="end">PISO 1</text><text x="335" y="625" class="small" text-anchor="end">Mercados</text><path d="M350 600H388" class="line"/>
+</g>
+<!-- validation floor -->
+<g filter="url(#shadow)">
+<path d="M390 720L725 632L1050 732L710 826Z" fill="url(#top)" stroke="#ffc96b" stroke-width="2"/>
+<path d="M390 720L710 826V854L390 748Z" fill="url(#front)" stroke="#6b5b36"/><path d="M710 826L1050 732V760L710 854Z" fill="url(#side)" stroke="#6b5b36"/>
+<rect x="455" y="712" width="202" height="52" rx="8" fill="#102b40" stroke="#ffc96b"/><text x="556" y="734" text-anchor="middle" class="room">Laboratório PAPER</text><text x="556" y="753" text-anchor="middle" class="small">replay / custos</text>
+<rect x="680" y="712" width="180" height="52" rx="8" fill="#102b40" stroke="#ffc96b"/><text x="770" y="734" text-anchor="middle" class="room">Controlo de Risco</text><text x="770" y="753" text-anchor="middle" class="small">gates / limites</text>
+<rect x="882" y="712" width="127" height="52" rx="8" fill="#102b40" stroke="#ffc96b"/><text x="945" y="734" text-anchor="middle" class="room">Aprovações</text><text x="945" y="753" text-anchor="middle" class="small">humano</text>
+<text x="335" y="743" class="floorname" text-anchor="end">PISO 0</text><text x="335" y="765" class="small" text-anchor="end">Validação</text><path d="M350 740H388" class="line"/>
+</g>
+<!-- basement -->
+<g filter="url(#shadow)">
+<path d="M390 870L725 782L1050 882L710 976Z" fill="#153148" stroke="#93b7d0" stroke-width="2"/>
+<path d="M390 870L710 976V997L390 891Z" fill="#081725" stroke="#2e607a"/><path d="M710 976L1050 882V903L710 997Z" fill="#06111d" stroke="#2e607a"/>
+<rect x="470" y="858" width="185" height="49" rx="8" fill="#0b1c2d" stroke="#93b7d0"/><text x="562" y="879" text-anchor="middle" class="room">Infraestrutura</text><text x="562" y="898" text-anchor="middle" class="small">persistência / rede</text>
+<rect x="680" y="858" width="151" height="49" rx="8" fill="#0b1c2d" stroke="#93b7d0"/><text x="755" y="879" text-anchor="middle" class="room">Recuperação</text><text x="755" y="898" text-anchor="middle" class="small">saúde / reconciliação</text>
+<rect x="855" y="858" width="154" height="49" rx="8" fill="#0b1c2d" stroke="#93b7d0"/><text x="932" y="879" text-anchor="middle" class="room">Dispositivos</text><text x="932" y="898" text-anchor="middle" class="small">PC / app / APK</text>
+<text x="335" y="892" class="floorname" text-anchor="end">SUBSOLO</text><text x="335" y="914" class="small" text-anchor="end">Infraestrutura</text><path d="M350 889H388" class="line"/>
+</g>
+<text x="55" y="966" class="small">Nota: os pisos agrupam funções lógicas; não implicam agentes independentes já implementados.</text>
+</svg>
