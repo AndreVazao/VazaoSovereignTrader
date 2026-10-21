@@ -26,3 +26,18 @@ The next engineering step is to measure lock wait and engine-cycle latency, and 
 - Complete PC/mobile end-to-end testing when the owner is physically available.
 
 Do not claim full process/CPU isolation until implementation and measurements support it.
+
+
+## Cached observer publication increment
+
+The Runtime now owns a bounded latest-value mailbox for the office summary. The engine publishes a small primitive-only payload at initialization, after lifecycle transitions, and in a `finally` path after every engine cycle (including early-return paths). The mailbox overwrites the previous value rather than queueing updates, so observer lag cannot create an unbounded backlog.
+
+The authenticated `/observer/summary` route reads a detached copy from that mailbox and does not acquire `engine.lock`, call `engine.snapshot()`, serialize the full Runtime state, or perform disk/network work. Tests guard the fixed response schema, latest-value behavior, detached reads, and the absence of engine-lock acquisition in the HTTP route.
+
+### Remaining limits
+
+- Publishing a snapshot briefly acquires `engine.lock` to copy primitive fields. This work runs on the Runtime side after a cycle or lifecycle transition, not in the HTTP request path; it is small but not a proof of zero cycle impact.
+- The mailbox lock is separate and only protects a tiny in-memory dictionary. It has no subscriber queue, callbacks, or waiting for readers.
+- The snapshot is intentionally eventually consistent: the office may see the last published state until the next cycle or lifecycle transition.
+- This does not isolate CPU/process resources from the browser, and no quantitative latency budget or saturation benchmark has yet been demonstrated.
+- Next acceptance work: measure publication lock wait/hold time and cycle duration; stress slow readers and repeated refreshes; compare Runtime latency with office absent/normal/saturated; add a measured visual circuit breaker without changing trading/risk policy.
