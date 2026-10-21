@@ -45,6 +45,15 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
   if(headline) headline.insertAdjacentElement("afterend",panel);
   let currentToken="";
   let busy=false;
+  const activeRequests=new Set();
+  async function boundedFetch(url,options={},timeoutMs=2500){
+    const controller=new AbortController();
+    activeRequests.add(controller);
+    const timer=window.setTimeout(()=>controller.abort(),timeoutMs);
+    try{return await fetch(url,{...options,signal:controller.signal})}
+    finally{window.clearTimeout(timer);activeRequests.delete(controller)}
+  }
+  function abortVisualRequests(){for(const controller of activeRequests)controller.abort();activeRequests.clear()}
   const stateEl=()=>document.getElementById("vstConnectionState");
   const summaryEl=()=>document.getElementById("vstLiveSummary");
   function state(label,detail){const el=stateEl();el.replaceChildren();const a=document.createElement("span");a.textContent=label;const b=document.createElement("span");b.className="tag";b.textContent=detail;el.append(a,b)}
@@ -79,7 +88,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     ];
     const rows=[];
     try{
-      const first=await fetch(base+"/status",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+      const first=await boundedFetch(base+"/status",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
       if(first.status===401||first.status===403){currentToken="";state("Acesso recusado","Token inválido ou sem permissão de leitura.");safeSummary([]);busy=false;return}
       if(!first.ok)throw new Error("GET /status respondeu HTTP "+first.status);
       const firstData=await first.json();
@@ -89,7 +98,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
       let marketData=null;
       for(const [label,path] of endpoints.slice(1)){
         try{
-          const response=await fetch(base+path,{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+          const response=await boundedFetch(base+path,{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
           if(response.status===401||response.status===403){rows.push([label,"Sem autorização"]);continue}
           if(!response.ok){rows.push([label,"HTTP "+response.status]);continue}
           const data=await response.json();
@@ -124,7 +133,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     const messages=document.getElementById("messages");
     const pending=messages.lastElementChild;
     try{
-      const response=await fetch(window.location.origin+"/assistant/message",{
+      const response=await boundedFetch(window.location.origin+"/assistant/message",{
         method:"POST",headers:{"X-Token":currentToken,"Accept":"application/json","Content-Type":"application/json"},
         cache:"no-store",credentials:"omit",body:JSON.stringify({message})
       });
@@ -146,6 +155,6 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     }finally{chatBusy=false}
   });
   document.getElementById("vstConnect").addEventListener("click",connect);
-  document.getElementById("vstDisconnect").addEventListener("click",()=>{currentToken="";document.getElementById("vstApiToken").value="";state("Desligado","Token removido da memória desta página.");safeSummary([])});
+  document.getElementById("vstDisconnect").addEventListener("click",()=>{abortVisualRequests();currentToken="";document.getElementById("vstApiToken").value="";state("Desligado","Pedidos visuais cancelados; token removido da memória desta página.");safeSummary([])});
 })();
 </script></body></html>
