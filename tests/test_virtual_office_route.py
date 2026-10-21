@@ -194,3 +194,5 @@ def test_observer_timing_returns_bounded_authenticated_metrics(tmp_path, monkeyp
     assert payload["metrics"]["observer_lock_wait"]["max_ns"] >= 100
     assert payload["metrics"]["observer_lock_hold"]["count"] >= 1
     assert payload["metrics"]["observer_lock_hold"]["max_ns"] >= 200
+    assert payload["metrics"]["observer_lock_wait"]["sample_count"] <= 512
+    assert payload["metrics"]["observer_lock_hold"]["sample_count"] <= 512
