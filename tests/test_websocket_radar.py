@@ -21,6 +21,15 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertEqual(events[0].side, "BUY")
         self.assertEqual(events[0].exchange_ts_ms, 1234567890)
         self.assertIsNone(events[0].price_before)
+        # The exchange timestamp and local wall clock are not a latency clock.
+        self.assertIsNone(events[0].local_receive_latency_ms)
+
+    def test_make_event_does_not_infer_latency_from_wall_clock(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar._last_price = {}
+        event = radar._make_event("binance", "BTC/USDT", 100.0, 1.0, "BUY", 1000, 1200)
+        self.assertEqual(event.local_ts_ms, 1200)
+        self.assertIsNone(event.local_receive_latency_ms)
 
     def test_candidate_requires_move_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
