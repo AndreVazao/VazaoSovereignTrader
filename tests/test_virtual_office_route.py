@@ -70,7 +70,10 @@ def test_observer_summary_requires_authentication(tmp_path, monkeypatch):
 
 
 
+
 def test_observer_summary_does_not_build_full_engine_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "observer-test-secret")
+
     def forbidden_snapshot(_self):
         raise AssertionError("observer fast path must not call engine.snapshot()")
 
@@ -79,19 +82,35 @@ def test_observer_summary_does_not_build_full_engine_snapshot(tmp_path, monkeypa
 
     response = client.get(
         "/observer/summary",
-        headers={"X-Token": "test-token"},
+        headers={"X-Token": "observer-test-secret"},
     )
 
-    # Authentication must remain in force; the fast-path invariant is checked
-    # with the configured owner token in the separate authenticated test below.
-    assert response.status_code == 401
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert set(payload) == {
+        "ok",
+        "status",
+        "mode",
+        "open_positions_count",
+        "opportunities_count",
+        "updated_at_ms",
+    }
+    assert isinstance(payload["status"], str)
+    assert isinstance(payload["mode"], str)
+    assert isinstance(payload["open_positions_count"], int)
+    assert isinstance(payload["opportunities_count"], int)
+    assert isinstance(payload["updated_at_ms"], int)
 
 
-def test_observer_summary_payload_is_small_and_primitive(tmp_path, monkeypatch):
+def test_observer_summary_rejects_missing_token_without_snapshot(tmp_path, monkeypatch):
+    def forbidden_snapshot(_self):
+        raise AssertionError("observer fast path must not call engine.snapshot()")
+
+    monkeypatch.delenv("VST_LOCAL_TOKEN", raising=False)
+    monkeypatch.setattr(SovereignEngine, "snapshot", forbidden_snapshot)
     client = _app(tmp_path, monkeypatch)
 
-    # This test validates the public response contract without requiring a
-    # token fixture or exposing nested engine state.
     response = client.get("/observer/summary")
 
     assert response.status_code == 401
