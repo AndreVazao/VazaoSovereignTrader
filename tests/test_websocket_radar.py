@@ -105,6 +105,56 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertEqual(next_delay(30.0, 59.9), 30.0)
         self.assertEqual(next_delay(30.0, 60.0), 1.0)
 
+    def test_start_is_idempotent_while_worker_is_alive(self) -> None:
+        import threading
+
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=["binance"], data_dir=tmp)
+            release = threading.Event()
+            entered = threading.Event()
+
+            def worker() -> None:
+                entered.set()
+                release.wait(timeout=2)
+
+            with patch.object(radar, "_run_binance", side_effect=worker):
+                radar.start()
+                self.assertTrue(entered.wait(timeout=1))
+                radar.start()
+                self.assertEqual(len(radar._threads), 1)
+                self.assertTrue(radar.snapshot()["running"])
+                release.set()
+                radar.stop()
+                self.assertFalse(radar.snapshot()["running"])
+
+    def test_stop_closes_active_websocket_and_reports_worker_stopped(self) -> None:
+        import threading
+
+        created = threading.Event()
+        closed = threading.Event()
+
+        class FakeWebSocketApp:
+            def __init__(self, url, on_open=None, on_message=None):
+                self.url = url
+                self.on_open = on_open
+                self.on_message = on_message
+                created.set()
+
+            def run_forever(self, **kwargs):
+                closed.wait(timeout=5)
+
+            def close(self):
+                closed.set()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=["binance"], data_dir=tmp)
+            with patch("PC_ENGINE.radar.websocket_radar.websocket.WebSocketApp", FakeWebSocketApp):
+                radar.start()
+                self.assertTrue(created.wait(timeout=1))
+                radar.stop()
+                self.assertFalse(radar.snapshot()["running"])
+                self.assertEqual(radar._threads, [])
+
     def test_candidate_requires_move_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=[], data_dir=tmp, min_move_bps=5, lead_window_ms=750)
