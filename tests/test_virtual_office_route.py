@@ -36,3 +36,20 @@ def test_virtual_office_serves_shell_with_security_headers(tmp_path, monkeypatch
     assert "default-src 'self'" in csp
     assert "connect-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
+
+
+def test_virtual_office_runtime_summary_uses_authenticated_backend_data(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.get("/virtual-office")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'id="vstRuntimeEngine"' in html
+    assert 'id="vstRuntimeMode"' in html
+    assert 'id="vstRuntimeMarket"' in html
+    assert 'id="vstRuntimeUpdated"' in html
+    assert "updateRuntimeSummary(firstData,marketData)" in html
+    assert 'snapshot.status||snapshot.state||"Estado desconhecido"' in html
+    assert "PAPER*</strong>" not in html
+    assert "Aguardar dados do motor" not in html
