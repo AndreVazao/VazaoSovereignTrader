@@ -23,7 +23,8 @@ class MarketEvent:
     side: str
     exchange_ts_ms: int
     local_ts_ms: int
-    local_receive_latency_ms: int
+    # None until a validated clock-offset model can estimate one-way latency.
+    local_receive_latency_ms: int | None
     price_before: float | None = None
 
 
@@ -315,8 +316,10 @@ class WebSocketMarketRadar:
     def _make_event(self, exchange: str, symbol: str, price: float, quantity: float,
                     side: str, exchange_ts: int, receive_ts: int) -> MarketEvent:
         previous = self._last_price.get((exchange, symbol))
+        # Venue event time and collector wall time have different clock domains.
+        # Their difference is not one-way network latency without clock calibration.
         return MarketEvent(exchange, symbol, price, quantity, side, exchange_ts,
-                           receive_ts, max(0, receive_ts - exchange_ts), previous)
+                           receive_ts, None, previous)
 
     def _parse_binance(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         data = payload.get("data", payload)

@@ -60,6 +60,9 @@ class FastPathWebSocketBridge:
 
     @staticmethod
     def _event_mapping(event: MarketEvent) -> dict[str, object] | None:
+        # The fast path must not treat an uncalibrated clock difference as latency.
+        if event.local_receive_latency_ms is None:
+            return None
         if event.price_before is None or event.price_before <= 0:
             return None
         move = event.price - event.price_before
