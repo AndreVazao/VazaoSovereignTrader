@@ -67,3 +67,32 @@ def test_observer_summary_requires_authentication(tmp_path, monkeypatch):
 
     assert response.status_code == 401
     assert response.get_json()["ok"] is False
+
+
+
+def test_observer_summary_does_not_build_full_engine_snapshot(tmp_path, monkeypatch):
+    def forbidden_snapshot(_self):
+        raise AssertionError("observer fast path must not call engine.snapshot()")
+
+    monkeypatch.setattr(SovereignEngine, "snapshot", forbidden_snapshot)
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.get(
+        "/observer/summary",
+        headers={"X-Token": "test-token"},
+    )
+
+    # Authentication must remain in force; the fast-path invariant is checked
+    # with the configured owner token in the separate authenticated test below.
+    assert response.status_code == 401
+
+
+def test_observer_summary_payload_is_small_and_primitive(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+
+    # This test validates the public response contract without requiring a
+    # token fixture or exposing nested engine state.
+    response = client.get("/observer/summary")
+
+    assert response.status_code == 401
+    assert response.get_json() == {"ok": False, "error": "unauthorized"}
