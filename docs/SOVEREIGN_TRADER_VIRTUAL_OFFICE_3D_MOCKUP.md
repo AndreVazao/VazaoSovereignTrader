@@ -40,3 +40,48 @@ A disposição vertical é uma convenção de visualização, não dependência 
 - Departamento dedicado de Resposta Rápida, sem autoridade para contornar validação, custos, inventário, risco ou aprovação humana.
 
 O próximo passo de design é alinhar todos os compartimentos nos SVG com estas decisões e depois mapear cada estado visual para uma fonte real do backend antes de animar ou ligar dados em direto.
+
+
+## Renderização adaptativa por dispositivo — requisito obrigatório
+
+A planta, os nomes dos departamentos, as ligações e o contrato de estado são únicos. Só muda a forma de os desenhar. A escolha de qualidade nunca pode alterar a lógica de negócio, a memória partilhada, a autorização, o estado do Runtime ou a política de risco.
+
+### Perfis de apresentação
+
+| Perfil | Quando escolher | Representação |
+|---|---|---|
+| **Chat / acessibilidade** | Preferência do utilizador, falha gráfica ou dispositivo sem capacidade | Conversa, estado e listas; sem cena 3D |
+| **Económico / PC antigo** | RAM/CPU/GPU limitadas, bateria baixa ou pressão de memória | Planta 2D, silhuetas/palitos, gráficos simples, sem sombras, partículas, reflexos ou animação contínua |
+| **Pixel / baixo detalhe** | Capacidade modesta, mas com preferência por espaço visual | Edifício pixel-art, personagens e movimentos em baixa frequência |
+| **2.5D / equilibrado** | Dispositivo intermédio | Pisos em perspetiva, sprites/ícones, animações curtas e gráficos simplificados |
+| **3D detalhado** | Dispositivo com GPU/RAM suficientes | Edifício explodido, compartimentos, personagens e animações limitadas |
+| **Cinemático / alta definição** | Hardware forte, ecrã adequado e orçamento de desempenho disponível | Materiais e iluminação avançados, personagens detalhadas, câmara/zoom e movimento em tempo real com limites |
+
+O telefone não recebe automaticamente o perfil mais leve: se suportar o orçamento de desempenho e o utilizador quiser, pode apresentar 3D detalhado. Da mesma forma, um PC antigo deve começar no perfil económico, mesmo que o ecrã seja grande. O perfil pode ser alterado manualmente e deve poder descer de qualidade imediatamente.
+
+### Seleção e adaptação
+
+1. Começar com uma deteção conservadora e barata de capacidades disponíveis; não executar testes gráficos pesados no arranque.
+2. Considerar classe do dispositivo, memória disponível quando a plataforma a expõe, capacidade gráfica, dimensão/escala do ecrã, estado térmico/bateria quando acessível e desempenho observado.
+3. Se a plataforma não expuser dados fiáveis, escolher o perfil económico/equilibrado e permitir seleção manual.
+4. Monitorizar frame time, pressão de memória, falhas e tempo de resposta; baixar perfil antes de a interface bloquear. Subir gradualmente só após estabilidade sustentada.
+5. Respeitar preferências de reduzir movimento, contraste, leitor de ecrã e navegação por teclado/toque. Disponibilizar sempre a alternativa chat-only.
+6. Descarregar modelos, texturas e cenas de alta resolução apenas quando necessários; libertá-los ao descer de perfil. Evitar manter várias cenas completas em memória.
+7. Limitar taxa de animação e atualização visual; pausar animações fora do ecrã/aba inativa. Os dados recebidos devem ser coalescidos para mostrar o estado mais recente, sem acumular uma fila ilimitada.
+8. Se a renderização falhar, cair para 2D/chat sem perder a sessão nem afetar o Runtime.
+
+### Separação entre modelo e renderizador
+
+- **Modelo canónico:** planta, pisos, salas, departamentos, rotas de navegação, IDs estáveis e relações entre salas.
+- **Estado canónico:** snapshots/eventos autenticados do Runtime; desconhecido continua desconhecido.
+- **Renderizadores intercambiáveis:** chat, 2D/palitos, pixel, 2.5D, 3D e cinemático.
+- **Política de desempenho:** a interface adapta fidelidade e frequência; nunca pede ao Runtime que reduza a frequência do ciclo de trading nem altera gates de risco.
+- **Controlo:** o utilizador pode escolher um perfil fixo ou automático. A seleção de renderizador não altera permissões nem desbloqueia comandos.
+
+### Critérios de aceitação
+
+- A mesma sala/ID e o mesmo estado aparecem em todos os perfis; só muda a representação.
+- O perfil económico não carrega assets 3D pesados, não usa animação contínua e mantém navegação e conversa funcionais.
+- Trocar de perfil não reinicia nem bloqueia o motor, não perde comandos confirmados e não altera decisões de trading.
+- Sob pressão ou falha gráfica, a interface degrada graciosamente para 2D/chat.
+- Medir CPU, memória, frame time e tráfego no PC antigo real e no telefone real antes de declarar um perfil validado. Os valores de desempenho não devem ser inventados nem declarados validados sem medição.
