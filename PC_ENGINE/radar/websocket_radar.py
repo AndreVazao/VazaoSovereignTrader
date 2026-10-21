@@ -89,6 +89,7 @@ class WebSocketMarketRadar:
         self._last_event: dict[str, dict] = {}
         self._reconnects: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
         self._errors: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
+        self._persistence_errors = 0
 
     @staticmethod
     def normalize_symbol(symbol: str) -> tuple[str, str]:
@@ -112,6 +113,7 @@ class WebSocketMarketRadar:
                 "last_event": last,
                 "reconnects": dict(self._reconnects),
                 "errors": dict(self._errors),
+                "persistence_errors": self._persistence_errors,
                 "last_event_age_ms": {
                     exchange: max(0, now - int(row["local_ts_ms"]))
                     for exchange, row in last.items()
@@ -258,20 +260,26 @@ class WebSocketMarketRadar:
             edge = self.latency_detector.observe_event(lead)
             self._persist_latency_edge(edge)
 
+    def _append_jsonl(self, path: Path, row: object) -> None:
+        """Append one JSONL record and expose failures without stopping collection."""
+        try:
+            serialized = json.dumps(asdict(row), ensure_ascii=False, allow_nan=False)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(serialized + "\n")
+        except Exception:
+            # Disk/serialization faults must be visible in health snapshots but
+            # must not terminate the public feed or its callback path.
+            with self._lock:
+                self._persistence_errors += 1
+
     def _persist(self, event: MarketEvent) -> None:
-        path = self.data_dir / "websocket_events.jsonl"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(event), ensure_ascii=False) + "\n")
+        self._append_jsonl(self.data_dir / "websocket_events.jsonl", event)
 
     def _persist_lead_lag(self, lead: LeadLagEvent) -> None:
-        path = self.data_dir / "websocket_lead_lag.jsonl"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(lead), ensure_ascii=False) + "\n")
+        self._append_jsonl(self.data_dir / "websocket_lead_lag.jsonl", lead)
 
     def _persist_latency_edge(self, edge: object) -> None:
-        path = self.data_dir / "websocket_latency_edges.jsonl"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(edge), ensure_ascii=False) + "\n")
+        self._append_jsonl(self.data_dir / "websocket_latency_edges.jsonl", edge)
 
     def _run_binance(self) -> None:
         streams = "/".join(f"{self.normalize_symbol(s)[0].lower()}{self.normalize_symbol(s)[1].lower()}@trade" for s in self.symbols)
