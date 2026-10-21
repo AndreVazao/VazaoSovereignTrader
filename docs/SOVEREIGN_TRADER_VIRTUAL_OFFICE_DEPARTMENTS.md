@@ -63,3 +63,17 @@ Operador → CEO/Receção → departamento selecionado → memória central e e
 ## Limite de fidelidade
 
 Este documento consolida o shell e as capacidades documentadas no código existente, mas é um inventário visual para validação, não uma afirmação de que cada departamento já está implementado como agente independente.
+
+
+## Renderização adaptativa: uma planta, vários níveis de fidelidade
+
+A planta e o inventário acima são o **modelo canónico**. Não se criam edifícios ou departamentos diferentes por dispositivo. Cada sala deve ter um ID estável e um estado semântico independente da forma gráfica; os renderizadores apresentam esse mesmo modelo como chat, 2D com palitos, pixel-art, 2.5D, 3D detalhado ou modo cinemático.
+
+- **PC antigo/recursos limitados:** perfil económico por omissão, planta 2D, figuras simples, gráficos leves, sem sombras/partículas e animação mínima.
+- **Telefone capaz:** pode usar 3D detalhado se os recursos e o desempenho observados o permitirem; caso contrário, desce para 2.5D/2D.
+- **PC potente:** pode usar 3D detalhado ou cinemático, desde que permaneça dentro do orçamento de desempenho.
+- **Modo chat-only:** alternativa permanente, não uma falha nem um modelo separado do sistema.
+
+A deteção inicial deve ser conservadora, sem benchmark gráfico pesado. Quando não houver métricas de hardware fiáveis, começar leve; permitir escolha manual; observar frame time e pressão de memória e reduzir qualidade rapidamente se necessário. Assets de alta definição só são carregados quando usados e libertados ao baixar o perfil. Pausar animações em segundo plano e coalescer atualizações visuais. A falha do renderizador deve fazer fallback para 2D/chat sem interromper o Runtime.
+
+A adaptação pode reduzir detalhe, frequência de animação e taxa de refrescamento visual, mas **nunca** altera a planta, a memória central, as permissões, os gates de risco ou o ciclo de trading. Confirmar CPU, RAM, fluidez e tráfego com medições reais em cada classe de dispositivo antes de afirmar que um perfil está validado.
