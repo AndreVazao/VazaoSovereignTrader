@@ -33,7 +33,7 @@ class WebSocketRadarTests(unittest.TestCase):
 
     def test_coinbase_missing_or_malformed_trade_timestamp_is_rejected(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
-        radar.symbols = ["BTC/USDT"]
+        radar.symbols = ["BTC/USD"]
         radar._last_price = {}
         missing = {"channel": "market_trades", "events": [{"trades": [
             {"product_id": "BTC-USD", "price": "100", "size": "1", "side": "BUY"}
