@@ -347,15 +347,26 @@ class WebSocketMarketRadar:
         return MarketEvent(exchange, symbol, price, quantity, side, exchange_ts,
                            receive_ts, None, previous)
 
+    @staticmethod
+    def _parse_positive_timestamp_ms(value: object) -> int | None:
+        """Return a valid positive venue timestamp; never substitute local receive time."""
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            timestamp = int(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return timestamp if timestamp > 0 else None
+
     def _parse_binance(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         data = payload.get("data", payload)
         if data.get("e") != "trade":
             return []
         symbol = self._to_symbol(data.get("s", ""))
-        if not symbol:
+        timestamp = self._parse_positive_timestamp_ms(data.get("T"))
+        if not symbol or timestamp is None:
             return []
-        ts = int(data.get("T") or data.get("E") or receive_ts)
-        return [self._make_event("binance", symbol, float(data["p"]), float(data["q"]), "SELL" if bool(data.get("m")) else "BUY", ts, receive_ts)]
+        return [self._make_event("binance", symbol, float(data["p"]), float(data["q"]), "SELL" if bool(data.get("m")) else "BUY", timestamp, receive_ts)]
 
     def _parse_coinbase(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         if payload.get("channel") != "market_trades":
@@ -365,8 +376,10 @@ class WebSocketMarketRadar:
             for trade in item.get("trades", []):
                 symbol = self._to_symbol(trade.get("product_id", "").replace("-", "/"))
                 if symbol:
-                    ts = self._parse_iso_ms(trade.get("time"), receive_ts)
-                    events.append(self._make_event("coinbase", symbol, float(trade["price"]), float(trade["size"]), str(trade.get("side", "")).upper(), ts, receive_ts))
+                    timestamp = self._parse_iso_ms(trade.get("time"))
+                    if timestamp is None:
+                        continue
+                    events.append(self._make_event("coinbase", symbol, float(trade["price"]), float(trade["size"]), str(trade.get("side", "")).upper(), timestamp, receive_ts))
         return events
 
     def _parse_okx(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
@@ -376,8 +389,10 @@ class WebSocketMarketRadar:
         for trade in payload.get("data", []):
             symbol = self._to_symbol(str(trade.get("instId", "")).replace("-", "/"))
             if symbol:
-                ts = int(trade.get("ts") or receive_ts)
-                events.append(self._make_event("okx", symbol, float(trade["px"]), float(trade["sz"]), str(trade.get("side", "")).upper(), ts, receive_ts))
+                timestamp = self._parse_positive_timestamp_ms(trade.get("ts"))
+                if timestamp is None:
+                    continue
+                events.append(self._make_event("okx", symbol, float(trade["px"]), float(trade["sz"]), str(trade.get("side", "")).upper(), timestamp, receive_ts))
         return events
 
     def _to_symbol(self, symbol: str) -> str | None:
@@ -392,11 +407,13 @@ class WebSocketMarketRadar:
         return None
 
     @staticmethod
-    def _parse_iso_ms(value: str | None, fallback: int) -> int:
+    def _parse_iso_ms(value: str | None) -> int | None:
+        """Parse a venue-provided ISO timestamp; missing or malformed stays unknown."""
         if not value:
-            return fallback
+            return None
         try:
             from datetime import datetime
-            return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000)
-        except (ValueError, TypeError):
-            return fallback
+            timestamp = int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000)
+        except (ValueError, TypeError, OverflowError):
+            return None
+        return timestamp if timestamp > 0 else None
