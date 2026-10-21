@@ -122,7 +122,7 @@ def validate_websocket_timing(
         and _positive_timestamp(row.get("local_ts_ms"))
     )
     latency_sample_count = len(latencies)
-    p50 = median(latencies) if latencies else 0.0
+    p50 = median(latencies) if latencies else None
     p95 = _percentile(latencies, 0.95)
     p99 = _percentile(latencies, 0.99)
     excessive = sum(1 for value in latencies if value > max_receive_latency_ms)
@@ -160,19 +160,19 @@ def validate_websocket_timing(
             "out_of_order": out_of_order,
             "excessive_latency": excessive,
             "latency_ms": {
-                "mean": mean(latencies) if latencies else 0.0,
+                "mean": mean(latencies) if latencies else None,
                 "p50": p50,
-                "p95": p95,
-                "p99": p99,
-                "max": max(latencies) if latencies else 0.0,
+                "p95": p95 if latencies else None,
+                "p99": p99 if latencies else None,
+                "max": max(latencies) if latencies else None,
             },
         },
         "lead_lag": {
             "samples": len(valid_lags),
             "rejected_timestamp_pairs": lag_mismatches,
             "exchange_vs_receive_lag_delta_ms": {
-                "p95": _percentile(lag_delta, 0.95),
-                "max": max(lag_delta) if lag_delta else 0.0,
+                "p95": _percentile(lag_delta, 0.95) if lag_delta else None,
+                "max": max(lag_delta) if lag_delta else None,
             },
         },
         "thresholds": {

@@ -64,3 +64,30 @@ def test_lead_lag_timestamp_mismatch_blocks_gate():
     report = validate_websocket_timing(_events(), lead, min_samples=1, max_lead_ms=750)
     assert report["eligible_for_economic_interpretation"] is False
     assert report["lead_lag"]["rejected_timestamp_pairs"] == 1
+
+
+
+def test_empty_latency_statistics_are_unknown_not_zero():
+    events = _events()
+    for event in events:
+        event["local_receive_latency_ms"] = None
+    report = validate_websocket_timing(events, [], min_samples=2)
+    latency = report["events"]["latency_ms"]
+    assert latency == {
+        "mean": None,
+        "p50": None,
+        "p95": None,
+        "p99": None,
+        "max": None,
+    }
+    assert report["events"]["unknown_receive_latency"] == 2
+    assert report["gates"]["receive_latency_quality"] is False
+    assert report["eligible_for_economic_interpretation"] is False
+
+
+def test_empty_lead_lag_delta_statistics_are_unknown_not_zero():
+    report = validate_websocket_timing(_events(), [], min_samples=2)
+    assert report["lead_lag"]["exchange_vs_receive_lag_delta_ms"] == {
+        "p95": None,
+        "max": None,
+    }
