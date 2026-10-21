@@ -54,6 +54,38 @@ class WebSocketRadarTests(unittest.TestCase):
         ]}
         self.assertEqual(radar._parse_okx(payload, 1234567990), [])
 
+    def test_snapshot_reports_no_trade_yet_without_claiming_disconnect(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT"]
+        radar.exchanges = ["binance", "okx"]
+        radar._threads = []
+        radar._lock = __import__("threading").RLock()
+        radar._last_event = {}
+        radar._events_total = 0
+        radar._events_by_exchange = {}
+        radar._reconnects = {"binance": 0, "okx": 0}
+        radar._errors = {"binance": 0, "okx": 0}
+        radar._persistence_errors = 0
+        snapshot = radar.snapshot()
+        self.assertEqual(snapshot["trade_freshness"]["binance"], "no_trade_yet")
+        self.assertFalse(snapshot["worker_alive"]["binance"])
+
+    def test_snapshot_marks_old_trade_as_no_recent_trade(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT"]
+        radar.exchanges = ["binance"]
+        radar._threads = []
+        radar._lock = __import__("threading").RLock()
+        radar._last_event = {"binance": {"local_ts_ms": 1, "symbol": "BTC/USDT", "price": 100.0}}
+        radar._events_total = 1
+        radar._events_by_exchange = {"binance": 1}
+        radar._reconnects = {"binance": 0}
+        radar._errors = {"binance": 0}
+        radar._persistence_errors = 0
+        snapshot = radar.snapshot()
+        self.assertEqual(snapshot["trade_freshness"]["binance"], "no_recent_trade")
+        self.assertGreater(snapshot["last_event_age_ms"]["binance"], 30_000)
+
     def test_make_event_does_not_mislabel_clock_difference_as_latency(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar._last_price = {}
