@@ -349,11 +349,11 @@ class WebSocketMarketRadar:
                            receive_ts, None, previous)
 
     @staticmethod
-    def _parse_finite_number(value: object, *, allow_zero: bool = False) -> float | None:
+    def _parse_finite_number(value: object) -> float | None:
         """Reject malformed, non-finite, negative, or zero market values.
 
-        Prices must be strictly positive; quantities may be zero but never
-        negative. Invalid venue payloads must not contaminate move detection.
+        Both prices and trade quantities must be strictly positive. Invalid
+        venue payloads must not contaminate move detection.
         """
         if value is None or isinstance(value, bool):
             return None
@@ -363,7 +363,7 @@ class WebSocketMarketRadar:
             return None
         if not math.isfinite(number):
             return None
-        if number < 0 or (number == 0 and not allow_zero):
+        if number <= 0:
             return None
         return number
 
@@ -387,7 +387,7 @@ class WebSocketMarketRadar:
         if not symbol or timestamp is None:
             return []
         price = self._parse_finite_number(data.get("p"))
-        quantity = self._parse_finite_number(data.get("q"), allow_zero=True)
+        quantity = self._parse_finite_number(data.get("q"))
         if price is None or quantity is None:
             return []
         return [self._make_event("binance", symbol, price, quantity, "SELL" if bool(data.get("m")) else "BUY", timestamp, receive_ts)]
@@ -404,7 +404,7 @@ class WebSocketMarketRadar:
                     if timestamp is None:
                         continue
                     price = self._parse_finite_number(trade.get("price"))
-                    quantity = self._parse_finite_number(trade.get("size"), allow_zero=True)
+                    quantity = self._parse_finite_number(trade.get("size"))
                     if price is None or quantity is None:
                         continue
                     events.append(self._make_event("coinbase", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts))
@@ -421,7 +421,7 @@ class WebSocketMarketRadar:
                 if timestamp is None:
                     continue
                 price = self._parse_finite_number(trade.get("px"))
-                quantity = self._parse_finite_number(trade.get("sz"), allow_zero=True)
+                quantity = self._parse_finite_number(trade.get("sz"))
                 if price is None or quantity is None:
                     continue
                 events.append(self._make_event("okx", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts))
