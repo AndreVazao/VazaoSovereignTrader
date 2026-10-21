@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from PC_ENGINE.radar.websocket_radar import MarketEvent, WebSocketMarketRadar
 
@@ -79,6 +80,17 @@ class WebSocketRadarTests(unittest.TestCase):
             small = MarketEvent("binance", "BTC/USDT", 100.01, 1, "BUY", 1000, 1001, 1, 100.0)
             radar._emit(small)
             self.assertEqual(radar._last_move, {})
+
+    def test_persistence_failure_is_reported_without_stopping_radar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=[], data_dir=tmp)
+            event = MarketEvent("binance", "BTC/USDT", 100.0, 1.0, "BUY", 1000, 1001, None)
+            with patch("pathlib.Path.open", side_effect=OSError("disk unavailable")):
+                radar._emit(event)
+            snapshot = radar.snapshot()
+            self.assertEqual(snapshot["events_total"], 1)
+            self.assertEqual(snapshot["persistence_errors"], 1)
+            self.assertEqual(snapshot["last_event"]["binance"]["price"], 100.0)
 
     def test_lead_lag_candidate_is_persisted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
