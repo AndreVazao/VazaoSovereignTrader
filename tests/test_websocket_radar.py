@@ -23,6 +23,56 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertEqual(events[0].exchange_ts_ms, 1234567890)
         self.assertIsNone(events[0].price_before)
 
+    def test_venue_trade_ids_are_preserved_for_deduplication(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT", "BTC/USD"]
+        radar._last_price = {}
+
+        binance = radar._parse_binance({
+            "data": {"e": "trade", "s": "BTCUSDT", "p": "100", "q": "1",
+                     "T": 1234567890, "m": False, "t": 77},
+        }, 1234567990)
+        self.assertEqual(binance[0].trade_id, "77")
+
+        coinbase = radar._parse_coinbase({
+            "channel": "market_trades",
+            "events": [{"trades": [{
+                "product_id": "BTC-USD", "price": "100", "size": "1",
+                "side": "BUY", "time": "2026-10-21T12:00:00Z", "trade_id": "cb-77",
+            }]}],
+        }, 1234567990)
+        self.assertEqual(coinbase[0].trade_id, "cb-77")
+
+        okx = radar._parse_okx({
+            "arg": {"channel": "trades"},
+            "data": [{"instId": "BTC-USDT", "px": "100", "sz": "1",
+                      "side": "buy", "ts": "1234567890", "tradeId": "okx-77"}],
+        }, 1234567990)
+        self.assertEqual(okx[0].trade_id, "okx-77")
+
+    def test_replayed_trade_id_is_ignored_without_duplicate_event_or_callback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            callbacks = []
+            radar = WebSocketMarketRadar(
+                ["BTC/USDT"], exchanges=[], data_dir=tmp, callback=callbacks.append,
+            )
+            first = MarketEvent(
+                "binance", "BTC/USDT", 100.0, 1.0, "BUY",
+                1000, 1001, None, None, "trade-123",
+            )
+            replay = MarketEvent(
+                "binance", "BTC/USDT", 100.0, 1.0, "BUY",
+                1000, 1010, None, None, "trade-123",
+            )
+
+            radar._emit(first)
+            radar._emit(replay)
+
+            self.assertEqual(radar.snapshot()["events_total"], 1)
+            self.assertEqual(len(callbacks), 1)
+            rows = (radar.data_dir / "websocket_events.jsonl").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(rows), 1)
+
     def test_binance_missing_trade_timestamp_is_rejected_not_replaced_with_receive_time(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar.symbols = ["BTC/USDT"]
