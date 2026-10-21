@@ -55,4 +55,15 @@ def test_virtual_office_runtime_summary_uses_authenticated_backend_data(tmp_path
     assert "Aguardar dados do motor" not in html
     assert "async function boundedFetch(url,options={},timeoutMs=2500)" in html
     assert "abortVisualRequests();currentToken" in html
+    assert '/observer/summary' in html
+    assert '["Saúde dos dados de mercado","/market-data-health"]' in html
     assert "activeRequests=new Set()" in html
+
+
+def test_observer_summary_requires_authentication(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.get("/observer/summary")
+
+    assert response.status_code == 401
+    assert response.get_json()["ok"] is False

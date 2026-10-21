@@ -447,6 +447,30 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         payload["real_mode_guard"] = guard.snapshot()
         return jsonify(payload)
 
+    @app.get("/observer/summary")
+    def observer_summary():
+        """Small authenticated status snapshot for optional UI clients.
+
+        Keep this endpoint deliberately cheap: no asdict(), disk scans,
+        diagnostics aggregation, or external calls while serving a visual client.
+        """
+        require_scope("read_private_state")
+        import time
+
+        # Copy only primitive fields under the engine lock. The UI must never
+        # force a full Runtime snapshot or diagnostics build for its heartbeat.
+        with engine.lock:
+            state = engine.state
+            payload = {
+                "ok": True,
+                "status": str(state.status),
+                "mode": str(engine.mode),
+                "open_positions_count": len(state.open_positions),
+                "opportunities_count": len(state.opportunities),
+                "updated_at_ms": time.time_ns() // 1_000_000,
+            }
+        return jsonify(payload)
+
     @app.get("/paper-reconciliation")
     def paper_reconciliation():
         require_scope("read_private_state")
