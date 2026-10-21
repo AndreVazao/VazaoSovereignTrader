@@ -22,6 +22,37 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertEqual(events[0].exchange_ts_ms, 1234567890)
         self.assertIsNone(events[0].price_before)
 
+    def test_binance_missing_trade_timestamp_is_rejected_not_replaced_with_receive_time(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT"]
+        radar._last_price = {}
+        payload = {
+            "data": {"e": "trade", "s": "BTCUSDT", "p": "100.0", "q": "0.25", "E": 1234567890, "m": False},
+        }
+        self.assertEqual(radar._parse_binance(payload, 1234567990), [])
+
+    def test_coinbase_missing_or_malformed_trade_timestamp_is_rejected(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USD"]
+        radar._last_price = {}
+        missing = {"channel": "market_trades", "events": [{"trades": [
+            {"product_id": "BTC-USD", "price": "100", "size": "1", "side": "BUY"}
+        ]}]}
+        malformed = {"channel": "market_trades", "events": [{"trades": [
+            {"product_id": "BTC-USD", "price": "100", "size": "1", "side": "BUY", "time": "not-a-time"}
+        ]}]}
+        self.assertEqual(radar._parse_coinbase(missing, 1234567990), [])
+        self.assertEqual(radar._parse_coinbase(malformed, 1234567990), [])
+
+    def test_okx_missing_trade_timestamp_is_rejected_not_replaced_with_receive_time(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT"]
+        radar._last_price = {}
+        payload = {"arg": {"channel": "trades"}, "data": [
+            {"instId": "BTC-USDT", "px": "100", "sz": "1", "side": "buy"}
+        ]}
+        self.assertEqual(radar._parse_okx(payload, 1234567990), [])
+
     def test_make_event_does_not_mislabel_clock_difference_as_latency(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar._last_price = {}

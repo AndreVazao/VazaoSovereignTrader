@@ -30,3 +30,8 @@ These events are investigation candidates, not a trading signal and not proof of
 ## Compatibility note
 
 The existing `latency_ms` snapshot field remains present but is now `null` to avoid silently publishing a false latency value. Consumers should use `request_duration_ms` only to understand the local REST request duration, and must check `timing_quality` / `observation_status` before interpreting records.
+
+
+## WebSocket source timestamp policy
+
+The native Binance, Coinbase, and OKX public-trade parsers reject an event when its venue-provided trade timestamp is missing, malformed, or non-positive. They do not replace it with the collector's receive time. Collector receive time remains a separate field. This preserves the distinction between venue event-time evidence and local arrival-time evidence; a rejected event is preferable to a fabricated cross-venue lag.
