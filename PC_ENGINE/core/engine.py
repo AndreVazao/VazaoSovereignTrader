@@ -12,6 +12,7 @@ from PC_ENGINE.core.allocator import CapitalAllocator
 from PC_ENGINE.core.opportunity import PaperOpportunityEngine
 from PC_ENGINE.core.config import DATA_DIR, env_value
 from PC_ENGINE.core.owner_context import OwnerContext
+from PC_ENGINE.core.observer_snapshot import RuntimeObserverSnapshot
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.order_manager import OrderManager
 from PC_ENGINE.core.paper_broker import PaperBroker
@@ -138,6 +139,7 @@ class SovereignEngine:
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
+        self.observer_snapshot = RuntimeObserverSnapshot()
         human_cfg = dict(config.get("human_bridge", {}))
         human_cfg["data_dir"] = str(self.owner_context.private_path("human_bridge"))
         research_cfg = dict(config.get("research", {}))
@@ -167,6 +169,7 @@ class SovereignEngine:
         self.shared_intelligence_worker: SharedIntelligenceSyncWorker | None = None
         self._build_shared_intelligence_sync()
         self._load_recovery_state()
+        self._publish_observer_snapshot()
 
     def _authorize_order_side_effect(self, exchange_name: str, symbol: str, side: str, quantity: float, client_order_id: str | None) -> bool:
         """Final REAL adapter-boundary check; PAPER never reaches this callback."""
@@ -663,6 +666,7 @@ class SovereignEngine:
         self._sync_shared_intelligence_before_start()
         self.state.status = "RUNNING"
         self.real_operational = self.mode == "REAL"
+        self._publish_observer_snapshot()
         if self.config.get("research", {}).get("enabled", True):
             interval = float(self.config.get("research", {}).get("worker_interval_seconds", 2.0))
             self.research_thread = threading.Thread(
@@ -843,6 +847,7 @@ class SovereignEngine:
             return False
         with self.lock:
             self.state.status = "PAUSED" if paused else "RUNNING"
+        self._publish_observer_snapshot()
         self.log("ENGINE_PAUSED" if paused else "ENGINE_RESUMED")
         return True
 
@@ -860,6 +865,7 @@ class SovereignEngine:
             if self.state.status != "SAFE_MODE":
                 self.state.status = "OFF"
             self.state.paper_collector = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
+        self._publish_observer_snapshot()
         self._persist_recovery()
         self.log("ENGINE_STOPPED")
 
@@ -906,6 +912,7 @@ class SovereignEngine:
         if mode == "REAL":
             self.real_fail_safe_reason = ""
         self.state.mode = mode
+        self._publish_observer_snapshot()
         self.exchanges = self._build_exchanges()
         if self.paper:
             self._build_paper_collector()
@@ -1831,7 +1838,28 @@ class SovereignEngine:
             self._enter_real_fail_safe("autonomous_real_promotion_error", {"error": str(exc)})
             return False
 
+    def _publish_observer_snapshot(self) -> None:
+        """Publish a tiny latest-value view; observers never serialize Runtime state."""
+        snapshot = getattr(self, "observer_snapshot", None)
+        if snapshot is None:
+            return
+        with self.lock:
+            state = self.state
+            snapshot.publish(
+                status=str(state.status),
+                mode=str(self.mode),
+                open_positions_count=len(state.open_positions),
+                opportunities_count=len(state.opportunities),
+            )
+
     def cycle(self) -> None:
+        """Run one cycle and publish observer state after all cycle paths return."""
+        try:
+            self._cycle_once()
+        finally:
+            self._publish_observer_snapshot()
+
+    def _cycle_once(self) -> None:
         exchange = self._main_exchange()
         if exchange is None:
             self.log("NO_EXCHANGE_ENABLED")
