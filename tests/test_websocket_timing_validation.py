@@ -31,6 +31,34 @@ def test_negative_latency_blocks_economic_interpretation():
     assert report["events"]["negative_latency"] == 1
 
 
+def test_unknown_latency_stays_unknown_and_blocks_economic_interpretation():
+    events = _events()
+    for event in events:
+        event["local_receive_latency_ms"] = None
+    lead = [
+        {"exchange_lag_ms": 20, "receive_lag_ms": 22},
+        {"exchange_lag_ms": 30, "receive_lag_ms": 31},
+    ]
+    report = validate_websocket_timing(events, lead, min_samples=2)
+    assert report["gates"]["timestamp_quality"] is True
+    assert report["gates"]["receive_latency_quality"] is False
+    assert report["events"]["unknown_receive_latency"] == 2
+    assert report["eligible_for_economic_interpretation"] is False
+
+
+def test_exchange_and_local_clock_domains_are_not_subtracted_for_latency():
+    events = _events()
+    events[1]["local_ts_ms"] = 1900
+    events[1]["local_receive_latency_ms"] = 12
+    lead = [
+        {"exchange_lag_ms": 20, "receive_lag_ms": 22},
+        {"exchange_lag_ms": 30, "receive_lag_ms": 31},
+    ]
+    report = validate_websocket_timing(events, lead, min_samples=2)
+    assert report["events"]["negative_latency"] == 0
+    assert report["gates"]["receive_latency_quality"] is True
+
+
 def test_lead_lag_timestamp_mismatch_blocks_gate():
     lead = [{"exchange_lag_ms": 900, "receive_lag_ms": 20}]
     report = validate_websocket_timing(_events(), lead, min_samples=1, max_lead_ms=750)
