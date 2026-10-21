@@ -309,15 +309,24 @@ class WebSocketMarketRadar:
                 except Exception:
                     return
 
-            attempt_started = time.monotonic()
+            connected_at: float | None = None
+
+            def handle_open(ws: websocket.WebSocketApp) -> None:
+                nonlocal connected_at
+                if on_open is not None:
+                    on_open(ws)
+                connected_at = time.monotonic()
+
             try:
-                app = websocket.WebSocketApp(url, on_open=on_open, on_message=handle_message)
+                app = websocket.WebSocketApp(url, on_open=handle_open, on_message=handle_message)
                 app.run_forever(ping_interval=20, ping_timeout=10)
             except Exception:
                 with self._lock:
                     self._errors[exchange] = self._errors.get(exchange, 0) + 1
             finally:
-                elapsed = max(0.0, time.monotonic() - attempt_started)
+                # Only time spent after the socket opened counts as stable uptime;
+                # DNS/connect stalls must not reset the backoff.
+                elapsed = 0.0 if connected_at is None else max(0.0, time.monotonic() - connected_at)
 
             if self._stop.is_set():
                 break
