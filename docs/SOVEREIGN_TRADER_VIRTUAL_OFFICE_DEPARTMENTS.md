@@ -234,3 +234,72 @@ A colocação dos agentes deve ser configurável sem alterar os IDs ou as relaç
 6. Só depois ligar nós reais e departamentos de recolha pública; manter PAPER/observação e permissões mínimas.
 
 Nenhum agente deve ser apresentado como ativo apenas por existir no registo. O estado “ativo” exige heartbeat recente e evidência operacional; “instalado”, “ligado”, “ocupado” e “saudável” são estados distintos.
+
+
+## Registo global de instalações, nomes únicos e proveniência de aprendizagem — requisito do proprietário (2026-10-21)
+
+### Vercel como registo mínimo de descoberta
+
+O Vercel será o ponto inicial de encontro e descoberta entre o telemóvel do operador, o PC principal e outros PCs/servidores autorizados. Deve manter um **registo mínimo de instalações e endpoints**, não ser o cérebro do Trader nem substituir a Memória Central, o Runtime ou a rede privada.
+
+No primeiro arranque de uma instalação, o processo de registo deve:
+1. Criar ou confirmar uma identidade permanente da instalação (installation_id) e atribuir um identificador de nó (node_id).
+2. Registar o nome legível da instalação, o proprietário/conta lógica, os departamentos e funções instalados, os agentes provisionados e respetivos IDs, a versão do protocolo e as capacidades declaradas.
+3. Reservar nomes legíveis globalmente únicos para departamentos e agentes dentro do âmbito de identidade do Sovereign Trader. A reserva deve ser atómica no servidor: duas instalações concorrentes não podem receber o mesmo nome. Em caso de colisão, o registo rejeita o nome e propõe/solicita outro; não resolve silenciosamente mantendo duas identidades indistinguíveis.
+4. Emitir credenciais de instalação/dispositivo com permissões mínimas e permitir revogação. O registo não armazena chaves de exchange, segredos de trading, tokens privados nem dados de conta.
+5. Publicar apenas informação de descoberta necessária: IDs, nomes, funções, versão, capacidades permitidas, endpoint de encontro e estado/lease de presença. Não declarar um nó ativo sem heartbeat recente e autenticado.
+
+O registo não deve depender apenas do nome mostrado. Os campos installation_id, node_id, department_id e agent_id são IDs estáveis e distintos. O nome é um rótulo humano único atribuído/reservado pelo registo; os IDs são a identidade técnica. Se uma máquina for reinstalada ou substituída, o fluxo deve distinguir recuperar uma instalação autorizada de criar uma instalação nova. Uma instalação nova não pode clonar IDs ou nomes de outra.
+
+### Âmbito e unicidade dos nomes
+
+- Cada instalação tem um nome e um installation_id únicos.
+- Cada departamento provisionado tem um department_id único e um nome global único no âmbito definido pelo registo, mesmo que a sua função seja a mesma de outro departamento.
+- Cada agente tem um agent_id único e um nome próprio globalmente único; não pode existir uma segunda “Joana” com identidade de agente diferente no mesmo registo global.
+- Nomes de funções genéricas, como “Investigação” ou “Análise”, podem ser reutilizados como role_id/categoria funcional. Não são nomes de identidade. A interface deve apresentar sempre a identidade desambiguada, por exemplo **Joana · ANDRE-PC-01** ou o nome global reservado, e permitir abrir o registo do agente.
+- Os nomes de exemplo Atlas, Sherlock, Joana ou quaisquer outros não são garantidos nem devem ser copiados automaticamente por novas instalações. O provisionamento consulta o registo e recebe nomes exclusivos disponíveis.
+- O registo reserva nomes, mas não decide a hierarquia nem concede autoridade operacional. CEO, chefias, permissões e gates continuam definidos pelo Runtime autorizado e pela configuração aprovada.
+
+### Descoberta e canal privado
+
+Vercel é o ponto de rendezvous inicial para evitar que o operador tenha de introduzir IPs manualmente. Depois da descoberta e autenticação, o tráfego privado entre nós deve preferir a rede local quando apropriado e Tailscale quando remoto, conforme a arquitetura aprovada. O registo Vercel não deve tornar-se um proxy obrigatório para o fluxo contínuo de dados de mercado ou de aprendizagem.
+
+Os endpoints publicados devem ser mínimos e protegidos. Não publicar IPs domésticos, chaves, tokens, credenciais de exchange, conteúdo de conta ou dados pessoais desnecessários. O acesso a dispositivos deve exigir autenticação, autorização por instalação e revogação; um nome conhecido não é prova de identidade. A perda do Vercel não deve parar um Runtime já autorizado e em execução na rede privada: afeta a descoberta/novos emparelhamentos, não deve ser tratada como autorização para contornar segurança.
+
+### Proveniência de conhecimento partilhado entre computadores
+
+A partilha de aprendizagem deve preservar a origem e o percurso de validação de cada conclusão. Exemplo: outro computador deve conseguir compreender que **Joana, agente da instalação ANDRE-PC-01, observou uma diferença em condições específicas, reuniu as evidências e a conclusão foi validada por determinada entidade**, em vez de receber apenas uma afirmação sem contexto.
+
+Cada registo de conhecimento partilhável deve conter, conforme aplicável:
+- knowledge_id imutável, versão e hash/conteúdo referenciado;
+- instalação, nó, departamento e agente de origem (installation_id, node_id, department_id, agent_id), além dos nomes legíveis no momento da descoberta;
+- timestamp de descoberta e timestamps de origem/receção dos dados que sustentam a conclusão;
+- condições de observação: venues, instrumentos normalizados, janela temporal, versão do coletor/protocolo, qualidade/frescura dos dados e limitações conhecidas;
+- evidências/referências reproduzíveis, método e resultado do teste;
+- estado explícito: hipótese, em validação, validado, rejeitado, expirado ou substituído;
+- identidade do validador, critério aplicado, timestamp e versão da validação;
+- cadeia de revisões/derivações, para que uma instalação consumidora não apareça falsamente como autora da descoberta original.
+
+A identidade de origem nunca é reescrita para corresponder à instalação que importou o conhecimento. Uma instalação consumidora pode acrescentar uma validação local, reprodução ou contestação como um novo evento ligado ao knowledge_id original; não pode apagar nem substituir a proveniência anterior. A interface deve distinguir claramente “descoberto por”, “verificado por”, “reproduzido por” e “importado por”.
+
+Apenas conhecimento permitido e explicitamente classificado para partilha é sincronizado entre instalações. Nunca sincronizar credenciais, tokens, chaves privadas, saldos ou dados pessoais/privados de conta como parte da aprendizagem. Uma descoberta validada continua sujeita a validade temporal, contexto de mercado e revisão; validação passada não garante que continue verdadeira nem autoriza execução.
+
+### Separação entre os três planos
+
+1. **Registo/descoberta Vercel:** identidade, reserva de nomes, capacidade declarada, emparelhamento e presença mínima.
+2. **Comunicação operacional privada:** mensagens e tarefas autenticadas entre nós através da LAN/Tailscale, com deduplicação, prazos, acknowledgements e auditoria.
+3. **Memória de aprendizagem partilhável:** conclusões versionadas, evidência, condições, estado de validação e proveniência. Não concede permissões nem dispara ordens.
+
+Estes planos devem ter contratos, permissões e retenção separados. O registo de descoberta não é a memória de aprendizagem; a memória de aprendizagem não é o sistema de identidade; nenhum deles substitui o Runtime como autoridade operacional.
+
+### Critérios de aceitação antes da implementação real
+
+- Duas instalações novas registadas em paralelo não conseguem reservar o mesmo nome global de agente ou departamento.
+- Uma tentativa de reutilizar nome/ID já reservado é rejeitada ou encaminhada por um fluxo explícito de recuperação autorizado.
+- O telemóvel encontra instalações registadas sem o operador introduzir IPs, mas só se liga após autenticação e autorização.
+- O registo mostra instalado/ligado/saudável como estados distintos e expira presenças antigas por lease/heartbeat.
+- Uma descoberta criada por Joana em ANDRE-PC-01 mantém essa proveniência depois de ser importada por NODE-02; validações posteriores são acrescentadas como eventos distintos.
+- Conhecimento sem evidência ou com estado desconhecido não é apresentado como facto validado. A sincronização não executa operações de trading nem contorna gates.
+- Falha do serviço Vercel impede novos registos/descobertas que dependam dele, mas não provoca exposição de segredos nem interrompe automaticamente o Runtime local já autorizado.
+- Testes cobrem colisões concorrentes de nomes, repetição de pedidos, reinstalação, revogação, credenciais expiradas, mensagens duplicadas, nó offline, importação e divergência de validações.
+- A fase inicial é documental/simulada e PAPER/observacional. Não ativar ordens reais nem movimentação de fundos como parte deste registo.
