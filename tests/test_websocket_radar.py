@@ -196,6 +196,71 @@ class WebSocketRadarTests(unittest.TestCase):
                 self.assertFalse(radar.snapshot()["running"])
                 self.assertEqual(radar._threads, [])
 
+    def test_stop_retries_close_if_first_close_precedes_run_forever(self) -> None:
+        import threading
+
+        check_reached = threading.Event()
+        allow_check = threading.Event()
+        run_entered = threading.Event()
+        first_close = threading.Event()
+        closed = threading.Event()
+
+        class PausingStopEvent:
+            def __init__(self):
+                self.event = threading.Event()
+                self.calls = 0
+
+            def is_set(self):
+                self.calls += 1
+                value = self.event.is_set()
+                if self.calls == 2:
+                    check_reached.set()
+                    allow_check.wait(timeout=2)
+                return value
+
+            def set(self):
+                self.event.set()
+
+            def clear(self):
+                self.event.clear()
+
+            def wait(self, timeout=None):
+                return self.event.wait(timeout)
+
+        class StartupRaceWebSocketApp:
+            def __init__(self, url, on_open=None, on_message=None):
+                pass
+
+            def run_forever(self, **kwargs):
+                run_entered.set()
+                # Model websocket-client resetting its internal run flag when
+                # run_forever starts, after an earlier close was too early.
+                closed.clear()
+                closed.wait(timeout=5)
+
+            def close(self):
+                first_close.set()
+                closed.set()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=["binance"], data_dir=tmp)
+            radar._stop = PausingStopEvent()
+            with patch("PC_ENGINE.radar.websocket_radar.websocket.WebSocketApp", StartupRaceWebSocketApp):
+                radar.start()
+                self.assertTrue(check_reached.wait(timeout=1))
+                stopper = threading.Thread(target=radar.stop)
+                stopper.start()
+                self.assertTrue(first_close.wait(timeout=1))
+
+                # The worker already passed its stop check but has not entered
+                # run_forever yet; allow it to enter after the first close.
+                allow_check.set()
+                self.assertTrue(run_entered.wait(timeout=1))
+                stopper.join(timeout=2)
+                self.assertFalse(stopper.is_alive())
+                self.assertFalse(radar.snapshot()["running"])
+                self.assertEqual(radar._threads, [])
+
     def test_candidate_requires_move_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=[], data_dir=tmp, min_move_bps=5, lead_window_ms=750)
