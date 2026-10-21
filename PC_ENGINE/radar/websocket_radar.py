@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -287,6 +288,15 @@ class WebSocketMarketRadar:
             ws.send(json.dumps({"op": "subscribe", "args": args}))
         self._run_with_reconnect(self.ENDPOINTS["okx"], self._parse_okx, "okx", on_open)
 
+    @staticmethod
+    def _next_reconnect_delay(current_delay: float, connection_seconds: float,
+                              stable_connection_seconds: float = 60.0,
+                              max_delay_seconds: float = 30.0) -> float:
+        """Bound retry growth; reset only after a connection stayed up long enough."""
+        if connection_seconds >= stable_connection_seconds:
+            return 1.0
+        return min(max(1.0, float(current_delay)) * 2.0, max_delay_seconds)
+
     def _run_with_reconnect(self, url: str, parser: Callable[[dict, int], list[MarketEvent]],
                             exchange: str, on_open: Callable[[websocket.WebSocketApp], None] | None = None) -> None:
         delay = 1.0
@@ -298,20 +308,27 @@ class WebSocketMarketRadar:
                         self._emit(event)
                 except Exception:
                     return
-            app = websocket.WebSocketApp(url, on_open=on_open, on_message=handle_message)
+
+            attempt_started = time.monotonic()
             try:
+                app = websocket.WebSocketApp(url, on_open=on_open, on_message=handle_message)
                 app.run_forever(ping_interval=20, ping_timeout=10)
-                delay = 1.0
             except Exception:
                 with self._lock:
                     self._errors[exchange] = self._errors.get(exchange, 0) + 1
-                delay = min(delay * 2.0, 30.0)
-            else:
-                with self._lock:
-                    if not self._stop.is_set():
-                        self._reconnects[exchange] = self._reconnects.get(exchange, 0) + 1
-            if not self._stop.is_set():
-                self._stop.wait(delay)
+            finally:
+                elapsed = max(0.0, time.monotonic() - attempt_started)
+
+            if self._stop.is_set():
+                break
+
+            # A normal return can also mean an unexpected disconnect. Apply
+            # backoff to both normal closes and exceptions to prevent tight loops.
+            delay = self._next_reconnect_delay(delay, elapsed)
+            with self._lock:
+                self._reconnects[exchange] = self._reconnects.get(exchange, 0) + 1
+            wait_seconds = delay * random.uniform(0.8, 1.2)
+            self._stop.wait(wait_seconds)
 
     def _make_event(self, exchange: str, symbol: str, price: float, quantity: float,
                     side: str, exchange_ts: int, receive_ts: int) -> MarketEvent:
