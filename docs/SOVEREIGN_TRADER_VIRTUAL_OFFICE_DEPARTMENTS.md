@@ -122,3 +122,115 @@ Quando houver divergência entre agentes, o chefe regista as versões e evidênc
 ### Estado de implementação
 
 Esta é a **estrutura organizacional aprovada para implementação**. Os nomes identificam os papéis lógicos pretendidos; não significam que existam atualmente 12 agentes autónomos em execução. A implementação deve introduzir primeiro o contrato de mensagens, a supervisão e os relatórios auditáveis; depois ligar os agentes especializados aos departamentos, mantendo execução PAPER/observacional e sem ativar ordens reais.
+
+
+## Distribuição por máquinas e identidade permanente dos agentes
+
+### Princípio de deployment distribuído
+
+Os departamentos, chefes, subchefes e agentes especializados podem ser distribuídos por vários PCs ou servidores. A localização física é um atributo operacional mutável, **não é a identidade do agente**. O CEO, a Memória Central e os departamentos podem estar em nós diferentes, desde que a comunicação autenticada, a descoberta, a persistência e a supervisão estejam disponíveis.
+
+Exemplo de colocação (ilustrativo, não é uma exigência fixa):
+- Servidor A: CEO e orquestração de tarefas.
+- PC B: Investigação, liderada por Sherlock.
+- PC C: Análise, liderada por Athena.
+- PC D: Market Radar, liderado por Atlas.
+- Servidor E: serviço de Memória Central, liderado por Mnemosyne.
+- Outros nós: integrações de exchanges, laboratório PAPER, auditoria e recuperação.
+
+O CEO não depende de estar na mesma máquina que os departamentos. Cada nó anuncia a sua identidade de nó, os agentes que hospeda, as capacidades, a versão do protocolo, o estado de saúde e o lease de presença. A perda de ligação deve marcar o agente/nó como indisponível ou desatualizado; não pode ser interpretada como tarefa concluída. As tarefas não confirmadas ficam recuperáveis e idempotentes, sem duplicar efeitos.
+
+### Identidade estável e nomes próprios
+
+Cada agente deverá ter:
+- **Nome próprio legível e único no âmbito do sistema**, como Atlas ou a sua identidade individual de subagente.
+- `agent_id` imutável, independente do nome visual e da máquina.
+- `role_id`, departamento, supervisor direto e cadeia hierárquica.
+- `node_id` e localização de deployment atuais, que podem mudar sem alterar `agent_id`.
+- Versão de agente/protocolo, capacidades autorizadas, estado e heartbeat/lease.
+- Referências às tarefas e mensagens, proveniência de decisões e trilho de auditoria.
+- Identidade autenticada de serviço e permissões mínimas; segredos nunca são partilhados através da memória de aprendizagem nem colocados em logs.
+
+Os nomes funcionais da tabela anterior (por exemplo, “Feed Watcher”) descrevem tarefas, não cumprem sozinhos o requisito de nome próprio. Para que **todos os subagentes também tenham nome próprio**, a lista inicial abaixo propõe nomes individuais únicos. São nomes lógicos propostos; podem ser alterados pelo proprietário antes da implementação, mas cada agente provisionado deve receber um `agent_id` estável.
+
+### Registo nominal inicial de subagentes
+
+| Chefe / departamento | Nome próprio do subagente | Responsabilidade |
+|---|---|---|
+| Atlas / Market Radar | **Pulsar** | Frescura, sequência e heartbeat dos feeds |
+| Atlas / Market Radar | **Comet** | Deteção de movimentos e eventos |
+| Atlas / Market Radar | **Eclipse** | Candidatos a diferenças temporais |
+| Atlas / Market Radar | **Beacon** | Qualidade dos feeds, reconexões e cobertura |
+| Delta / Comparação entre Exchanges | **Lexicon** | Mapear e validar instrumentos equivalentes |
+| Delta / Comparação entre Exchanges | **Prism** | Comparar preços, bid/ask e profundidade |
+| Delta / Comparação entre Exchanges | **Tally** | Taxas, slippage e custos estimados |
+| Delta / Comparação entre Exchanges | **Ledger** | Inventário, disponibilidade e executabilidade |
+| Bridge / Integrações | **Bastion** | Adaptador Binance e respetivo contrato |
+| Bridge / Integrações | **Harbor** | Adaptador Coinbase e respetivo contrato |
+| Bridge / Integrações | **Keystone** | Adaptador OKX e respetivo contrato |
+| Bridge / Integrações | **Switchboard** | Protocolos, limites de taxa e saúde de conectores |
+| Sherlock / Investigação | **Quill** | Recolha de documentação e fontes |
+| Sherlock / Investigação | **Verity** | Verificação de fontes e afirmações |
+| Sherlock / Investigação | **Hypatia** | Formulação de hipóteses testáveis |
+| Sherlock / Investigação | **Cartographer** | Pesquisa de capacidades por exchange |
+| Athena / Análise | **Sage** | Análise de sinais |
+| Athena / Análise | **Proof** | Verificação cruzada de evidências |
+| Athena / Análise | **Meridian** | Contexto de mercado e regimes |
+| Athena / Análise | **Caliper** | Revisão de confiança e incerteza |
+| Flash / Resposta Rápida | **Relay** | Triagem e encaminhamento de candidatos |
+| Flash / Resposta Rápida | **Chronos** | Monitorização de frescura e urgência temporal |
+| Flash / Resposta Rápida | **Paperclip** | Planeamento de resposta exclusivamente PAPER nesta fase |
+| Flash / Resposta Rápida | **Lockstep** | Verificação de gates e condições de segurança |
+| Turing / Laboratório PAPER | **Replay** | Execução de replays determinísticos |
+| Turing / Laboratório PAPER | **Scenario** | Construção de cenários de teste |
+| Turing / Laboratório PAPER | **Slipstream** | Simulação de taxas e slippage |
+| Turing / Laboratório PAPER | **Regress** | Testes de regressão e comparação de resultados |
+| Sentinel / Controlo de Risco | **Aegis** | Monitorização de exposição |
+| Sentinel / Controlo de Risco | **Rampart** | Limites e bloqueios de risco |
+| Sentinel / Controlo de Risco | **Drawdown** | Monitorização de perdas e drawdown |
+| Sentinel / Controlo de Risco | **Redline** | Validação final de gates de risco |
+| Mnemosyne / Memória Central | **Archivist** | Curadoria e organização do conhecimento |
+| Mnemosyne / Memória Central | **Dedalus** | Deduplicação e ligação de registos relacionados |
+| Mnemosyne / Memória Central | **Origin** | Proveniência e rastreio de fontes |
+| Mnemosyne / Memória Central | **Janus** | Estado de validação, versão e expiração do conhecimento |
+| Scribe / Auditoria | **Chronicle** | Registo de eventos auditáveis |
+| Scribe / Auditoria | **Gauge** | Métricas operacionais |
+| Scribe / Auditoria | **Threadline** | Correlação de tarefas e mensagens |
+| Scribe / Auditoria | **Outlier** | Deteção de anomalias de observabilidade |
+| Phoenix / Saúde e Recuperação | **Pulse** | Heartbeat e disponibilidade |
+| Phoenix / Saúde e Recuperação | **Rejoin** | Coordenação de reconexão |
+| Phoenix / Saúde e Recuperação | **Reconcile** | Reconciliação de estado após falha |
+| Phoenix / Saúde e Recuperação | **Firebreak** | Testes de recuperação e contenção |
+| Guardian / Aprovações Humanas | **Prompt** | Coordenação de pedidos de autenticação |
+| Guardian / Aprovações Humanas | **Queuekeeper** | Fila de aprovações pendentes |
+| Guardian / Aprovações Humanas | **Timekeeper** | Expiração de sessões e aprovações |
+| Guardian / Aprovações Humanas | **Notifier** | Notificações ao operador |
+
+### Contrato de comunicação entre nós
+
+Toda a mensagem remota deverá ser autenticada e validada contra o esquema/protocolo suportado, com identificadores de origem e destino, `message_id`, `task_id`, prazo/expiração, prioridade, sequência ou versão, referência de evidência e estado de confirmação. A receção deve ser idempotente. Mensagens repetidas não podem criar duas tarefas nem executar duas ações.
+
+- O CEO envia uma tarefa ao chefe responsável; o chefe delega aos subagentes com dependências e prazos explícitos.
+- O subagente envia o resultado ao supervisor direto. O supervisor valida, consolida e só então reporta para cima.
+- Um agente não pode aumentar as próprias permissões nem mudar o seu supervisor por uma mensagem comum.
+- Se um nó ficar offline, o sistema mantém a tarefa como pendente/bloqueada até a recuperação ou reatribuição autorizada; o novo executor recebe o mesmo `task_id` e o histórico necessário.
+- A Memória Central mantém conhecimento e proveniência, mas não é automaticamente a autoridade para permissões nem para execução. A autoridade operacional e os gates continuam no Runtime autorizado.
+- A memória pode replicar-se ou ter cópias de leitura conforme a arquitetura futura, mas deve existir política explícita de versão, consistência, backup e recuperação; nunca assumir que duas cópias divergentes são simultaneamente verdade.
+- Os agentes só recebem o mínimo de dados necessário à tarefa. Credenciais de exchange, tokens de sessão, dados privados de conta e chaves não são publicados na memória partilhada nem enviados a agentes que não precisem deles.
+
+### Inventário e responsabilidade auditável
+
+O registo de cada tarefa deve permitir responder: quem a pediu, quem a aceitou, quem a delegou, quais agentes contribuíram, em que nó correram, que versão usaram, que fontes consultaram, quem validou o resultado, quando mudou de estado e por que razão foi aceite/rejeitada. Os relatórios devem separar contribuição de execução e validação: o agente que produz uma conclusão não é automaticamente o único validador dessa conclusão.
+
+A colocação dos agentes deve ser configurável sem alterar os IDs ou as relações lógicas. O dashboard apresenta nome, função, supervisor, nó atual, saúde, tarefa atual e último heartbeat; quando o estado não é conhecido, mostra **desconhecido/desatualizado**, nunca inventa atividade. A perda do dashboard não interrompe o trabalho do Runtime, e a perda de um nó não deve invalidar silenciosamente nem dar como concluído o trabalho desse nó.
+
+### Fases de implementação distribuída
+
+1. Definir esquema de identidade, registo de agentes e protocolo versionado.
+2. Implementar supervisão local e fila durável de tarefas com deduplicação/idempotência.
+3. Implementar heartbeat/leases, estado offline e recuperação/reatribuição controlada.
+4. Implementar relatório hierárquico e auditoria ponta a ponta.
+5. Testar vários nós simulados, falhas de rede, mensagens duplicadas, reinício e divergência de memória, sem rede de exchanges nem ordens.
+6. Só depois ligar nós reais e departamentos de recolha pública; manter PAPER/observação e permissões mínimas.
+
+Nenhum agente deve ser apresentado como ativo apenas por existir no registo. O estado “ativo” exige heartbeat recente e evidência operacional; “instalado”, “ligado”, “ocupado” e “saudável” são estados distintos.
