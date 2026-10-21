@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The Virtual Office should behave like a real company. The owner submits a request through the chat/reception area; Reception classifies the intent, asks a clarifying question when needed, routes a task to the correct department, tracks its progress, and returns a consolidated answer in the same conversation.
+The Virtual Office should behave like a real company while preserving three valid conversation paths: the CEO chat is the default for general requests and coordination; the owner may open a direct conversation with any department; and Reception is an optional routing path for requests the owner wants classified or delegated. The selected conversation owns its task/history correlation, and results return to that originating conversation.
 
-The Runtime/brain is authoritative. Reception, dashboard, chat, office rendering and avatars are clients/orchestration surfaces—not a second engine and not an alternate trading authority.
+The Runtime/brain is authoritative. CEO coordination, Reception, department chats, dashboard, office rendering and avatars are clients/orchestration surfaces—not a second engine and not an alternate trading authority.
 
 ## Topology: local first, distributed by design
 
@@ -17,17 +17,29 @@ The first deployment may run Runtime, dashboard and Virtual Office on the same P
 - Credentials must not be placed in URLs, logs, browser persistent storage or rendered snapshots. Enforce authorization on the Runtime/API for every private endpoint.
 - The office can be closed, disconnected, moved to another host or fail to render without stopping the Runtime.
 
-## Reception / dispatcher responsibilities
+## Conversation paths and Reception responsibilities
 
-Reception is the single natural-language entry point for operator requests.
+### CEO chat — default path
 
-1. **Capture:** retain the original request and conversation/task correlation ID.
-2. **Classify:** identify intent (status/diagnostics, research, analysis, exchange comparison, learning review, operational control, or a request needing human decision).
-3. **Clarify:** ask one focused question when the request is materially ambiguous or missing an essential parameter. Do not silently invent symbol, venue, time window, risk budget or execution intent.
-4. **Authorize:** resolve the user's authenticated identity and allowed scopes before dispatch. A natural-language statement is not a substitute for server-side authorization.
-5. **Route:** create a typed task for the responsible department using a stable task contract. Reception must not directly execute exchange operations.
-6. **Track:** expose queued/running/waiting-for-owner/completed/failed/cancelled/unknown status, timestamps, responsible department, and bounded progress updates.
-7. **Return:** summarize the outcome, evidence/freshness, uncertainties, and any next decision needed in the original chat thread.
+The CEO / Runtime coordinator is the owner's primary conversation and default landing chat. It handles general questions, system status, priorities and delegation. It may answer directly or coordinate departments and consolidate their results. The CEO coordinator is part of the authoritative Runtime, not merely a visual avatar.
+
+### Direct department chat
+
+The owner may click any department and speak to it directly, without a mandatory Reception or CEO hop. Each department chat keeps its own conversation identity and task history, within its explicit permission/capability scope. Direct access is a communication choice, not an authorization escalation; all execution and risk decisions remain under the authoritative Runtime and server-side guards.
+
+### Reception — optional routing path
+
+Reception is available when the owner wants help classifying a request or does not know which department is appropriate. It is not a mandatory entry point for CEO or direct department conversations.
+
+When selected, Reception:
+
+1. **Captures** the original request and conversation/task correlation ID.
+2. **Classifies** intent (status/diagnostics, research, analysis, exchange comparison, learning review, operational control, or a request needing human decision).
+3. **Clarifies** with one focused question when materially ambiguous or missing an essential parameter. Do not silently invent symbol, venue, time window, risk budget or execution intent.
+4. **Authorizes** by resolving the authenticated user's identity and allowed scopes before dispatch. Natural language is not a substitute for server-side authorization.
+5. **Routes** a typed task to the responsible department using a stable task contract. Reception must not directly execute exchange operations.
+6. **Tracks** queued/running/waiting-for-owner/completed/failed/cancelled/unknown status, timestamps, responsible department and bounded progress updates.
+7. **Returns** the outcome, evidence/freshness, uncertainties and any next decision needed in the same Reception thread.
 
 If a remote request times out after a mutation could have started, show outcome as unknown and reconcile before any retry. Never blindly replay an action.
 
@@ -39,7 +51,7 @@ Initial logical departments:
 - **Analysis:** assess data quality, freshness, uncertainty, costs and evidence; label hypotheses versus validated findings.
 - **Exchange comparison:** align observations by venue/symbol/event-time semantics and compare exchange-specific capabilities. It must not label polling order as executable lead/lag without validated evidence.
 - **Learning and memory:** persist/retrieve provenance-bearing lessons with freshness, versioning and owner scope. Local shared Runtime learning memory is distinct from any future cross-device knowledge-sharing layer.
-- **Fast reaction / execution:** evaluate time-sensitive candidates and, only if separately authorized, submit through the existing engine risk and execution gates. It cannot bypass risk checks, create REAL authorization, or treat Reception's wording as an order authorization.
+- **Fast reaction / execution:** evaluate time-sensitive candidates and, only if separately authorized, submit through the existing engine risk and execution gates. It cannot bypass risk checks, create REAL authorization, or treat conversational wording as order authorization.
 - **CEO / Runtime coordinator:** owns task scheduling and system-level decisions, applies policy, and consolidates department output. This is part of the authoritative Runtime, not a visual avatar.
 
 Department labels may be shown as office rooms/characters, but visual state is only a representation of authoritative task state. A character animation must never be the source of task status.
@@ -63,7 +75,7 @@ Progress notifications are observational. Use bounded latest-value snapshots or 
 ## Runtime non-blocking requirement
 
 - Runtime starts and operates without dashboard or office.
-- Reception/department UI never holds engine, risk, market-data or order locks across network I/O, rendering, serialization or acknowledgement.
+- Conversation panels and department UIs never hold engine, risk, market-data or order locks across network I/O, rendering, serialization or acknowledgement.
 - Office refresh uses lightweight snapshots; no full diagnostic aggregation on every refresh.
 - Observer queues are bounded. Superseded visual updates may be coalesced/dropped.
 - Under measured latency/resource pressure, reduce office update frequency and rendering fidelity, then disable visual rendering if necessary. Do not alter Runtime risk policy or engine scheduling to preserve animation.
@@ -76,16 +88,17 @@ Progress notifications are observational. Use bounded latest-value snapshots or 
 2. Unauthenticated and under-scoped requests are rejected at the API boundary.
 3. Ambiguous requests cause a clarification rather than guessed execution parameters.
 4. Research, analysis and exchange-comparison requests route to the expected department; unsupported intents fail visibly and safely.
-5. Task status and final response remain correlated to the original chat thread.
-6. Disconnect/reconnect, server restart, expired credentials, malformed responses and slow clients do not corrupt task state.
-7. Observer saturation/coalescing does not create unbounded memory growth or block Runtime cycles.
-8. Visual degradation/disablement leaves Runtime lifecycle and risk policy unchanged.
-9. Any execution-capable request still passes the existing engine risk/execution gates and explicit authorization checks.
-10. Logs and snapshots do not contain access tokens, exchange secrets or other credentials.
+5. Task status and final response remain correlated to the originating CEO, department or Reception thread.
+6. Direct department conversations do not pass through Reception unless explicitly requested.
+7. Disconnect/reconnect, server restart, expired credentials, malformed responses and slow clients do not corrupt task state.
+8. Observer saturation/coalescing does not create unbounded memory growth or block Runtime cycles.
+9. Visual degradation/disablement leaves Runtime lifecycle and risk policy unchanged.
+10. Any execution-capable request still passes the existing engine risk/execution gates and explicit authorization checks.
+11. Logs and snapshots do not contain access tokens, exchange secrets or other credentials.
 
 ## Implementation sequence
 
-1. Keep the current authenticated office read-only while establishing the Reception/task contract.
+1. Keep the current authenticated office read-only while establishing conversation and task contracts.
 2. Implement deterministic routing and task-state tracking before adding general LLM interpretation.
 3. Add department adapters behind typed interfaces and existing permission scopes.
 4. Add remote transport/discovery only after local contracts and authentication are tested.
@@ -94,4 +107,4 @@ Progress notifications are observational. Use bounded latest-value snapshots or 
 
 ## Current status
 
-This document specifies the target contract. It does not claim that a complete Reception dispatcher, distributed transport, automatic visual circuit breaker, or end-to-end multi-host validation already exists. The cached observer endpoint reduces HTTP-path work, but publication still briefly acquires the engine lock after cycles/transitions; performance and saturation evidence remain outstanding.
+This document specifies the target contract. It does not claim that a complete Reception dispatcher, direct department chats, distributed transport, automatic visual circuit breaker, or end-to-end multi-host validation already exists. The cached observer endpoint reduces HTTP-path work, but publication still briefly acquires the engine lock after cycles/transitions; performance and saturation evidence remain outstanding.
