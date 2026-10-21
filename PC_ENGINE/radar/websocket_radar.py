@@ -82,6 +82,8 @@ class WebSocketMarketRadar:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._lifecycle_lock = threading.RLock()
+        self._stop_lock = threading.Lock()
+        self._stopping = False
         self._apps: dict[str, websocket.WebSocketApp] = {}
         self._last_price: dict[tuple[str, str], float] = {}
         self._last_move: dict[tuple[str, str], MarketEvent] = {}
@@ -142,6 +144,8 @@ class WebSocketMarketRadar:
     def start(self) -> None:
         """Start one worker per exchange; repeated calls are idempotent."""
         with self._lifecycle_lock:
+            if self._stopping:
+                return
             self._threads = [thread for thread in self._threads if thread.is_alive()]
             if self._threads:
                 return
@@ -156,19 +160,24 @@ class WebSocketMarketRadar:
 
     def stop(self) -> None:
         """Request shutdown, close active sockets, and retain any unjoined workers."""
-        self._stop.set()
-        with self._lifecycle_lock:
-            apps = list(self._apps.values())
-            threads = list(self._threads)
-        for app in apps:
-            try:
-                app.close()
-            except Exception:
-                pass
-        for thread in threads:
-            thread.join(timeout=3)
-        with self._lifecycle_lock:
-            self._threads = [thread for thread in self._threads if thread.is_alive()]
+        # Serialize stop requests and prevent start() from clearing the stop
+        # event while this shutdown is still joining the previous workers.
+        with self._stop_lock:
+            with self._lifecycle_lock:
+                self._stopping = True
+                self._stop.set()
+                apps = list(self._apps.values())
+                threads = list(self._threads)
+            for app in apps:
+                try:
+                    app.close()
+                except Exception:
+                    pass
+            for thread in threads:
+                thread.join(timeout=3)
+            with self._lifecycle_lock:
+                self._threads = [thread for thread in self._threads if thread.is_alive()]
+                self._stopping = False
 
     def _emit(self, event: MarketEvent) -> None:
         key = (event.exchange, event.symbol)
