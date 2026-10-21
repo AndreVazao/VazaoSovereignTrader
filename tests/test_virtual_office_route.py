@@ -188,5 +188,9 @@ def test_observer_timing_returns_bounded_authenticated_metrics(tmp_path, monkeyp
     assert cycle["sample_count"] == 2
     assert cycle["p50_ns"] == 1_000_000
     assert cycle["p99_ns"] == 2_000_000
-    assert payload["metrics"]["observer_lock_wait"]["max_ns"] == 100
-    assert payload["metrics"]["observer_lock_hold"]["max_ns"] == 200
+    # Engine initialization publishes an initial observer snapshot, so real
+    # lock timings may already exist before the synthetic samples are recorded.
+    assert payload["metrics"]["observer_lock_wait"]["count"] >= 1
+    assert payload["metrics"]["observer_lock_wait"]["max_ns"] >= 100
+    assert payload["metrics"]["observer_lock_hold"]["count"] >= 1
+    assert payload["metrics"]["observer_lock_hold"]["max_ns"] >= 200
