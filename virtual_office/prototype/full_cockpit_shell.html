@@ -78,19 +78,19 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     const base=window.location.origin;
     if(!/^https?:\/\//i.test(base)||base==="null"){state("Ligação bloqueada","Abre /virtual-office através do servidor do PC.");busy=false;return}
     currentToken=token;
-    state("A verificar autenticação","A testar GET /status…");
+    state("A verificar autenticação","A testar resumo leve autenticado…");
     const endpoints=[
-      ["Estado do motor","/status"],
+      ["Estado do motor","/observer/summary"],
       ["Saúde das exchanges","/venue-health"],
-      ["Diagnóstico operacional","/diagnostics"],
+      ["Saúde dos dados de mercado","/market-data-health"],
       ["Intervenções humanas pendentes","/human-interaction/pending"],
       ["Pedidos de investigação","/research"]
     ];
     const rows=[];
     try{
-      const first=await boundedFetch(base+"/status",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+      const first=await boundedFetch(base+"/observer/summary",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
       if(first.status===401||first.status===403){currentToken="";state("Acesso recusado","Token inválido ou sem permissão de leitura.");safeSummary([]);busy=false;return}
-      if(!first.ok)throw new Error("GET /status respondeu HTTP "+first.status);
+      if(!first.ok)throw new Error("GET /observer/summary respondeu HTTP "+first.status);
       const firstData=await first.json();
       rows.push(["Motor",describe(firstData.status||firstData.state||firstData.mode||"Resposta recebida")]);
       rows.push(["Modo",describe(firstData.mode)]);
@@ -102,7 +102,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
           if(response.status===401||response.status===403){rows.push([label,"Sem autorização"]);continue}
           if(!response.ok){rows.push([label,"HTTP "+response.status]);continue}
           const data=await response.json();
-          if(path==="/diagnostics") marketData=data.market_data||data.marketData||null;
+          if(path==="/market-data-health") marketData=data;
           let count;
           if(path==="/venue-health")count=Array.isArray(data)?data.length:(Array.isArray(data.venues)?data.venues.length:null);
           else if(path==="/human-interaction/pending")count=Array.isArray(data)?data.length:(Array.isArray(data.requests)?data.requests.length:null);
