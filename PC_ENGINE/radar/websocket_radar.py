@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import OrderedDict
 import math
 import random
 import threading
@@ -28,6 +29,8 @@ class MarketEvent:
     # None until a validated clock-offset model can estimate one-way latency.
     local_receive_latency_ms: int | None
     price_before: float | None = None
+    # Venue-native trade identity, when the public feed provides one.
+    trade_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +89,9 @@ class WebSocketMarketRadar:
         self._stopping = False
         self._apps: dict[str, websocket.WebSocketApp] = {}
         self._last_price: dict[tuple[str, str], float] = {}
+        # Bounded deduplication protects against replayed trades after reconnect.
+        self._seen_trade_ids: OrderedDict[tuple[str, str, str], None] = OrderedDict()
+        self._max_seen_trade_ids = 10_000
         self._last_move: dict[tuple[str, str], MarketEvent] = {}
         self._lock = threading.RLock()
         self._events_total = 0
@@ -194,6 +200,13 @@ class WebSocketMarketRadar:
     def _emit(self, event: MarketEvent) -> None:
         key = (event.exchange, event.symbol)
         with self._lock:
+            if event.trade_id is not None:
+                identity = (event.exchange, event.symbol, str(event.trade_id))
+                if identity in self._seen_trade_ids:
+                    return
+                self._seen_trade_ids[identity] = None
+                while len(self._seen_trade_ids) > self._max_seen_trade_ids:
+                    self._seen_trade_ids.popitem(last=False)
             previous_moves = list(self._last_move.items())
             self._last_price[key] = event.price
             self._events_total += 1
@@ -419,12 +432,14 @@ class WebSocketMarketRadar:
             self._stop.wait(wait_seconds)
 
     def _make_event(self, exchange: str, symbol: str, price: float, quantity: float,
-                    side: str, exchange_ts: int, receive_ts: int) -> MarketEvent:
+                    side: str, exchange_ts: int, receive_ts: int,
+                    trade_id: object = None) -> MarketEvent:
         previous = self._last_price.get((exchange, symbol))
         # Venue event time and collector wall time have different clock domains.
         # Their difference is not one-way network latency without clock calibration.
+        normalized_trade_id = None if trade_id is None else str(trade_id)
         return MarketEvent(exchange, symbol, price, quantity, side, exchange_ts,
-                           receive_ts, None, previous)
+                           receive_ts, None, previous, normalized_trade_id)
 
     @staticmethod
     def _parse_finite_number(value: object) -> float | None:
@@ -468,7 +483,7 @@ class WebSocketMarketRadar:
         quantity = self._parse_finite_number(data.get("q"))
         if price is None or quantity is None:
             return []
-        return [self._make_event("binance", symbol, price, quantity, "SELL" if bool(data.get("m")) else "BUY", timestamp, receive_ts)]
+        return [self._make_event("binance", symbol, price, quantity, "SELL" if bool(data.get("m")) else "BUY", timestamp, receive_ts, data.get("t"))]
 
     def _parse_coinbase(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         if payload.get("channel") != "market_trades":
@@ -485,7 +500,7 @@ class WebSocketMarketRadar:
                     quantity = self._parse_finite_number(trade.get("size"))
                     if price is None or quantity is None:
                         continue
-                    events.append(self._make_event("coinbase", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts))
+                    events.append(self._make_event("coinbase", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts, trade.get("trade_id")))
         return events
 
     def _parse_okx(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
@@ -502,7 +517,7 @@ class WebSocketMarketRadar:
                 quantity = self._parse_finite_number(trade.get("sz"))
                 if price is None or quantity is None:
                     continue
-                events.append(self._make_event("okx", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts))
+                events.append(self._make_event("okx", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts, trade.get("tradeId")))
         return events
 
     def _to_symbol(self, symbol: str) -> str | None:
