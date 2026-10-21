@@ -118,6 +118,23 @@ class WebSocketMarketRadar:
                     exchange: max(0, now - int(row["local_ts_ms"]))
                     for exchange, row in last.items()
                 },
+                # Trade silence is a data-freshness signal, not proof of a
+                # disconnected socket; quiet markets/symbols can be legitimate.
+                "trade_freshness": {
+                    exchange: (
+                        "no_trade_yet" if exchange not in last else
+                        "recent_trade" if max(0, now - int(last[exchange]["local_ts_ms"])) <= 30_000 else
+                        "no_recent_trade"
+                    )
+                    for exchange in self.exchanges
+                },
+                "worker_alive": {
+                    exchange: any(
+                        thread.name == f"radar-ws-{exchange}" and thread.is_alive()
+                        for thread in self._threads
+                    )
+                    for exchange in self.exchanges
+                },
             }
 
     def start(self) -> None:
