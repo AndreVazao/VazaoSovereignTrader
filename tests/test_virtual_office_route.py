@@ -53,3 +53,6 @@ def test_virtual_office_runtime_summary_uses_authenticated_backend_data(tmp_path
     assert 'snapshot.status||snapshot.state||"Estado desconhecido"' in html
     assert "PAPER*</strong>" not in html
     assert "Aguardar dados do motor" not in html
+    assert "async function boundedFetch(url,options={},timeoutMs=2500)" in html
+    assert "abortVisualRequests();currentToken" in html
+    assert "activeRequests=new Set()" in html
