@@ -280,6 +280,28 @@ class WebSocketRadarTests(unittest.TestCase):
             self.assertEqual(snapshot["persistence_errors"], 1)
             self.assertEqual(snapshot["last_event"]["binance"]["price"], 100.0)
 
+    def test_lead_lag_rejects_receive_order_inversion_and_stale_delivery(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = WebSocketMarketRadar(
+                ["BTC/USDT"], exchanges=[], data_dir=tmp,
+                min_move_bps=5, lead_window_ms=750,
+            )
+            leader = MarketEvent("okx", "BTC/USDT", 100.10, 1, "BUY", 1000, 1100, None, 100.0)
+
+            cases = (
+                ("receive order inverted", 1050, 1051),
+                ("received too late", 1050, 2000),
+            )
+            for label, follower_exchange_ts, follower_local_ts in cases:
+                with self.subTest(case=label):
+                    follower = MarketEvent(
+                        "binance", "BTC/USDT", 100.10, 1, "BUY",
+                        follower_exchange_ts, follower_local_ts, None, 100.0,
+                    )
+                    with patch.object(radar, "_persist_lead_lag") as persist:
+                        radar._match_candidate(follower, [(("okx", "BTC/USDT"), leader)])
+                        persist.assert_not_called()
+
     def test_lead_lag_candidate_is_persisted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=[], data_dir=tmp, min_move_bps=5, lead_window_ms=750)
