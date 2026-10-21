@@ -30,6 +30,17 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertEqual(event.local_ts_ms, 9_000)
         self.assertIsNone(event.local_receive_latency_ms)
 
+    def test_reconnect_backoff_grows_after_short_disconnects(self) -> None:
+        next_delay = WebSocketMarketRadar._next_reconnect_delay
+        self.assertEqual(next_delay(1.0, 0.2), 2.0)
+        self.assertEqual(next_delay(2.0, 0.2), 4.0)
+        self.assertEqual(next_delay(20.0, 0.2), 30.0)
+
+    def test_reconnect_backoff_resets_only_after_stable_connection(self) -> None:
+        next_delay = WebSocketMarketRadar._next_reconnect_delay
+        self.assertEqual(next_delay(30.0, 59.9), 30.0)
+        self.assertEqual(next_delay(30.0, 60.0), 1.0)
+
     def test_candidate_requires_move_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=[], data_dir=tmp, min_move_bps=5, lead_window_ms=750)
