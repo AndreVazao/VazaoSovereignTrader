@@ -18,10 +18,12 @@ Representar o sistema como um edifício 3D explodido, com pisos e compartimentos
 
 | Nome visual | Responsabilidade | Estado a mostrar quando ligado |
 |---|---|---|
-| Market Radar / Comparação entre exchanges | Comparar feeds e instrumentos equivalentes, lead/lag e frescura temporal | Qualidade/frescura de dados e evidência disponível |
+| **Market Radar** | Detetar eventos, movimentos e potenciais diferenças temporais nos feeds; emitir candidatos com evidência e qualidade de dados | Frescura, sequência, confiança e timestamp de origem/receção separados |
+| **Comparação entre Exchanges** | Comparar instrumentos equivalentes entre venues, normalização de símbolos, preços, profundidade, taxas, slippage e inventário; validar se a diferença é executável | Comparação por venue, custos estimados, liquidez, inventário e motivos de rejeição |
 | Integrações de Exchanges | Adaptadores, símbolos, limites de API, saúde REST/WebSocket e reconexão | Estado por exchange, erros e idade do último evento |
 | Investigação | Recolher fontes, documentação e hipóteses verificáveis | Fonte, timestamp, confiança e conclusão |
 | Análise | Avaliar sinais, consistência, contexto e evidência | Hipótese, evidência e estado da validação |
+| **Resposta Rápida / Execução Controlada** | Receber apenas oportunidades validadas; avaliar urgência e preparar resposta PAPER. Qualquer execução futura fica atrás de todos os gates e autorização explícita | Candidato recebido, gates cumpridos/falhados, decisão e motivo; nunca contorna risco |
 | Laboratório PAPER / Replay | Testes determinísticos, replay, simulação de taxas e slippage | Resultado de teste, amostra e limitações |
 | Controlo de Risco | Guardas, limites, inventário e prontidão | Bloqueios e motivos explícitos; autoridade sempre no servidor |
 | Memória Central de Aprendizagem | Conhecimento local partilhado entre departamentos | Proveniência, data, versão e estado de validação |
@@ -31,7 +33,8 @@ Representar o sistema como um edifício 3D explodido, com pisos e compartimentos
 
 ## Laboratórios e infraestrutura
 
-- **Laboratório de Estratégias**: separado visualmente do executor; só PAPER nesta fase.
+- **Laboratório de Estratégias**: separado visualmente do departamento de Resposta Rápida; só PAPER nesta fase.
+- **Memória Central de Aprendizagem**: tem uma sala visual própria e é também um serviço transversal consumido por todos os departamentos; a sala é uma representação da memória, não um segundo armazenamento.
 - **Infraestrutura / Cofre lógico**: representa segurança, armazenamento e estado de fundos. Não implica movimento real de fundos; nenhuma transferência é permitida pelo mockup.
 - **Sala de Dispositivos**: estado do cockpit PC, app/ APK e ligação privada. A ligação remota planeada usa Tailscale após o encontro inicial; a interface não deve expor segredos.
 - **Zona de Trabalho do Operador**: espaço opcional de revisão de relatórios e configuração visual.
@@ -49,13 +52,13 @@ Operador → CEO/Receção → departamento selecionado → memória central e e
 - Tokens só em memória de página/cabeçalhos; nunca em URL, logs ou armazenamento persistente do browser.
 - Nenhuma ordem real, transferência ou ativação de modo REAL faz parte deste trabalho.
 
-## Pontos para o proprietário validar
+## Decisões aprovadas pelo proprietário — 2026-10-21
 
-1. O CEO fica no piso superior, com a receção como entrada principal?
-2. “Market Radar” e “Comparação entre exchanges” devem ser o mesmo departamento ou dois?
-3. “Investigação” e “Análise” devem ser separados?
-4. A memória central deve ser uma sala visível, ou uma infraestrutura transversal que liga todos os pisos?
-5. Devemos adicionar um departamento próprio de execução rápida? Se sim, ele só recebe oportunidades depois de todos os gates de dados, custos, inventário e risco — não tem autoridade para contorná-los.
+- CEO/Cérebro no piso superior.
+- Market Radar e Comparação entre Exchanges são departamentos distintos.
+- Investigação e Análise permanecem separados.
+- Memória Central tem sala visual própria e serviço transversal partilhado.
+- Existe departamento próprio de Resposta Rápida, subordinado a todos os gates de dados, custos, liquidez, inventário e risco. Nesta fase, trabalha em PAPER; nenhuma ordem real está autorizada.
 
 ## Limite de fidelidade
 
