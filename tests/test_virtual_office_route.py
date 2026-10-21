@@ -17,7 +17,9 @@ def _app(tmp_path, monkeypatch):
     config["exchanges"] = {}
     monkeypatch.setattr(engine_module, "DATA_DIR", tmp_path / "data")
     engine = SovereignEngine(config)
-    return create_app(engine).test_client()
+    app = create_app(engine)
+    app.config["TEST_ENGINE"] = engine
+    return app.test_client()
 
 
 def test_virtual_office_serves_shell_with_security_headers(tmp_path, monkeypatch):
@@ -115,3 +117,35 @@ def test_observer_summary_rejects_missing_token_without_snapshot(tmp_path, monke
 
     assert response.status_code == 401
     assert response.get_json() == {"ok": False, "error": "unauthorized"}
+
+
+
+def test_observer_summary_does_not_acquire_engine_lock(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "observer-test-secret")
+    client = _app(tmp_path, monkeypatch)
+    engine = client.application.config["TEST_ENGINE"]
+
+    class ForbiddenLock:
+        def __enter__(self):
+            raise AssertionError("observer HTTP request must not acquire engine.lock")
+
+        def __exit__(self, *_args):
+            return False
+
+    engine.lock = ForbiddenLock()
+    response = client.get(
+        "/observer/summary",
+        headers={"X-Token": "observer-test-secret"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert set(payload) == {
+        "ok",
+        "status",
+        "mode",
+        "open_positions_count",
+        "opportunities_count",
+        "updated_at_ms",
+    }
