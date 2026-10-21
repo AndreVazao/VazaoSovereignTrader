@@ -121,3 +121,6 @@ Endpoints autenticados:
 - `GET /diagnostics/export` — requer `read_private_state`.
 
 O diagnóstico é observacional: não envia ordens, não ativa REAL e não depende de cloud.
+
+
+The current WebSocket collector intentionally records `local_receive_latency_ms=null` until a validated clock-offset model exists. The validator reports unknown receive latency separately from malformed source timestamps and keeps economic interpretation blocked while the required latency evidence is unavailable. It must not infer latency from `local_ts_ms - exchange_ts_ms`, because those timestamps belong to different clock domains.
