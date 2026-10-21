@@ -292,7 +292,12 @@ class WebSocketMarketRadar:
                 continue
             lag = event.exchange_ts_ms - leader.exchange_ts_ms
             receive_lag = event.local_ts_ms - leader.local_ts_ms
+            # Exchange timestamps alone do not prove that the leader was
+            # observable first. Reject causally inverted or locally stale
+            # candidates before they reach PAPER edge statistics.
             if lag < 0 or lag > self.lead_window_ms:
+                continue
+            if receive_lag < 0 or receive_lag > self.lead_window_ms:
                 continue
             leader_move = (leader.price - leader.price_before) / leader.price_before
             if abs(leader_move) < self.min_move or leader_move * follower_move <= 0:
