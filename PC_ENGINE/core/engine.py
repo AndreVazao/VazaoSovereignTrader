@@ -13,6 +13,7 @@ from PC_ENGINE.core.opportunity import PaperOpportunityEngine
 from PC_ENGINE.core.config import DATA_DIR, env_value
 from PC_ENGINE.core.owner_context import OwnerContext
 from PC_ENGINE.core.observer_snapshot import RuntimeObserverSnapshot
+from PC_ENGINE.core.runtime_timing_metrics import RuntimeTimingMetrics
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.order_manager import OrderManager
 from PC_ENGINE.core.paper_broker import PaperBroker
@@ -140,6 +141,7 @@ class SovereignEngine:
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
         self.observer_snapshot = RuntimeObserverSnapshot()
+        self.runtime_timing_metrics = RuntimeTimingMetrics()
         human_cfg = dict(config.get("human_bridge", {}))
         human_cfg["data_dir"] = str(self.owner_context.private_path("human_bridge"))
         research_cfg = dict(config.get("research", {}))
@@ -1843,21 +1845,39 @@ class SovereignEngine:
         snapshot = getattr(self, "observer_snapshot", None)
         if snapshot is None:
             return
-        with self.lock:
-            state = self.state
-            snapshot.publish(
-                status=str(state.status),
-                mode=str(self.mode),
-                open_positions_count=len(state.open_positions),
-                opportunities_count=len(state.opportunities),
-            )
+        wait_started_ns = time.perf_counter_ns()
+        acquired_ns = 0
+        released_ns = 0
+        try:
+            with self.lock:
+                acquired_ns = time.perf_counter_ns()
+                state = self.state
+                snapshot.publish(
+                    status=str(state.status),
+                    mode=str(self.mode),
+                    open_positions_count=len(state.open_positions),
+                    opportunities_count=len(state.opportunities),
+                )
+        finally:
+            released_ns = time.perf_counter_ns()
+            metrics = getattr(self, "runtime_timing_metrics", None)
+            if metrics is not None:
+                if acquired_ns:
+                    metrics.record_ns("observer_lock_wait", acquired_ns - wait_started_ns)
+                    metrics.record_ns("observer_lock_hold", released_ns - acquired_ns)
 
     def cycle(self) -> None:
         """Run one cycle and publish observer state after all cycle paths return."""
+        started_ns = time.perf_counter_ns()
         try:
             self._cycle_once()
         finally:
-            self._publish_observer_snapshot()
+            try:
+                self._publish_observer_snapshot()
+            finally:
+                metrics = getattr(self, "runtime_timing_metrics", None)
+                if metrics is not None:
+                    metrics.record_ns("runtime_cycle", time.perf_counter_ns() - started_ns)
 
     def _cycle_once(self) -> None:
         exchange = self._main_exchange()
