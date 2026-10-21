@@ -97,6 +97,12 @@ class WebSocketMarketRadar:
         self._events_total = 0
         self._events_by_exchange: dict[str, int] = {}
         self._last_event: dict[str, dict] = {}
+        self._connection_state: dict[str, str] = {exchange: "never_connected" for exchange in self.exchanges}
+        self._last_connected_ts_ms: dict[str, int] = {}
+        self._last_disconnected_ts_ms: dict[str, int] = {}
+        self._last_message_ts_ms: dict[str, int] = {}
+        # Keep only a safe error category, never raw exception text or URLs.
+        self._last_connection_error: dict[str, str] = {}
         self._reconnects: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
         self._errors: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
         self._persistence_errors = 0
@@ -121,6 +127,11 @@ class WebSocketMarketRadar:
                 "events_total": self._events_total,
                 "events_by_exchange": dict(self._events_by_exchange),
                 "last_event": last,
+                "connection_state": dict(self._connection_state),
+                "last_connected_ts_ms": dict(self._last_connected_ts_ms),
+                "last_disconnected_ts_ms": dict(self._last_disconnected_ts_ms),
+                "last_message_ts_ms": dict(self._last_message_ts_ms),
+                "last_connection_error": dict(self._last_connection_error),
                 "reconnects": dict(self._reconnects),
                 "errors": dict(self._errors),
                 "persistence_errors": self._persistence_errors,
@@ -195,6 +206,10 @@ class WebSocketMarketRadar:
                     thread.join(timeout=min(0.05, remaining))
             with self._lifecycle_lock:
                 self._threads = [thread for thread in self._threads if thread.is_alive()]
+                with self._lock:
+                    state = "stopping" if self._threads else "stopped"
+                    for exchange in self.exchanges:
+                        self._connection_state[exchange] = state
                 self._stopping = False
 
     def _emit(self, event: MarketEvent) -> None:
@@ -385,6 +400,8 @@ class WebSocketMarketRadar:
         while not self._stop.is_set():
             def handle_message(_ws: websocket.WebSocketApp, raw: str) -> None:
                 receive_ts = self._now_ms()
+                with self._lock:
+                    self._last_message_ts_ms[exchange] = receive_ts
                 try:
                     for event in parser(json.loads(raw), receive_ts):
                         self._emit(event)
@@ -398,8 +415,14 @@ class WebSocketMarketRadar:
                 if on_open is not None:
                     on_open(ws)
                 connected_at = time.monotonic()
+                with self._lock:
+                    self._connection_state[exchange] = "connected"
+                    self._last_connected_ts_ms[exchange] = self._now_ms()
+                    self._last_connection_error.pop(exchange, None)
 
             app: websocket.WebSocketApp | None = None
+            with self._lock:
+                self._connection_state[exchange] = "connecting"
             try:
                 app = websocket.WebSocketApp(url, on_open=handle_open, on_message=handle_message)
                 with self._lifecycle_lock:
@@ -408,10 +431,14 @@ class WebSocketMarketRadar:
                     app.close()
                 else:
                     app.run_forever(ping_interval=20, ping_timeout=10)
-            except Exception:
+            except Exception as exc:
                 with self._lock:
                     self._errors[exchange] = self._errors.get(exchange, 0) + 1
+                    self._last_connection_error[exchange] = type(exc).__name__
             finally:
+                with self._lock:
+                    self._last_disconnected_ts_ms[exchange] = self._now_ms()
+                    self._connection_state[exchange] = "stopped" if self._stop.is_set() else "reconnecting"
                 if app is not None:
                     with self._lifecycle_lock:
                         if self._apps.get(exchange) is app:
