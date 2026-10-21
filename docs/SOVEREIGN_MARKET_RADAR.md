@@ -408,6 +408,7 @@ Somente depois das fases anteriores:
 - Não confiar numa única exchange.
 - Um candidato lead/lag só é elegível se a ordem dos timestamps da exchange e a ordem local de receção forem coerentes; candidatos com receção invertida ou atraso local superior à janela são descartados antes das estatísticas de edge.
 - Não confiar numa única fonte.
+- Quando a feed fornece identidade nativa do trade (Binance `t`, Coinbase `trade_id`, OKX `tradeId`), o coletor preserva-a e ignora replays duplicados dentro de uma janela limitada de memória; feeds sem ID continuam a ser aceites, mas sem garantia de deduplicação.
 - Não confundir atraso de dados com oportunidade negociável.
 - Não executar por causa de uma notícia isolada.
 - Não permitir que IA ultrapasse o Risk Engine.
