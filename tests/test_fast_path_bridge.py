@@ -48,3 +48,22 @@ def test_bridge_ignores_first_tick_without_previous_price():
     bridge = FastPathWebSocketBridge({"enabled": True})
     result = bridge.on_market_event(_event(price_before=None, price=101.0))
     assert result.routed is False
+
+def test_bridge_ignores_event_with_unknown_receive_latency():
+    bridge = FastPathWebSocketBridge({"enabled": True})
+    event = _event()
+    event = MarketEvent(
+        exchange=event.exchange,
+        symbol=event.symbol,
+        price=event.price,
+        quantity=event.quantity,
+        side=event.side,
+        exchange_ts_ms=event.exchange_ts_ms,
+        local_ts_ms=event.local_ts_ms,
+        local_receive_latency_ms=None,
+        price_before=event.price_before,
+    )
+    result = bridge.on_market_event(event)
+    assert result.routed is False
+    assert result.result is None
+
