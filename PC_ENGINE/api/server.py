@@ -457,6 +457,15 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("read_private_state")
         return jsonify(engine.observer_snapshot.read())
 
+    @app.get("/observer/timing")
+    def observer_timing():
+        """Expose bounded Runtime timing summaries to authenticated diagnostics clients."""
+        require_scope("read_private_state")
+        metrics = getattr(engine, "runtime_timing_metrics", None)
+        if metrics is None:
+            return jsonify({"ok": False, "error": "timing_metrics_unavailable"}), 503
+        return jsonify({"ok": True, "metrics": metrics.snapshot()})
+
     @app.get("/paper-reconciliation")
     def paper_reconciliation():
         require_scope("read_private_state")
