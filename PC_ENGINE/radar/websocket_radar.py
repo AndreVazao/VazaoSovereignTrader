@@ -168,13 +168,25 @@ class WebSocketMarketRadar:
                 self._stop.set()
                 apps = list(self._apps.values())
                 threads = list(self._threads)
-            for app in apps:
-                try:
-                    app.close()
-                except Exception:
-                    pass
-            for thread in threads:
-                thread.join(timeout=3)
+            # Closing before run_forever() begins can be too early for
+            # websocket-client: run_forever may reset its internal running flag.
+            # Retry close while joining so a startup/close race gets another
+            # close after the socket loop has actually entered.
+            deadline = time.monotonic() + 3.0
+            while True:
+                for app in apps:
+                    try:
+                        app.close()
+                    except Exception:
+                        pass
+                alive = [thread for thread in threads if thread.is_alive()]
+                if not alive:
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                for thread in alive:
+                    thread.join(timeout=min(0.05, remaining))
             with self._lifecycle_lock:
                 self._threads = [thread for thread in self._threads if thread.is_alive()]
                 self._stopping = False
