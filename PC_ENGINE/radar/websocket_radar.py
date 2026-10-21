@@ -437,7 +437,7 @@ class WebSocketMarketRadar:
         previous = self._last_price.get((exchange, symbol))
         # Venue event time and collector wall time have different clock domains.
         # Their difference is not one-way network latency without clock calibration.
-        normalized_trade_id = None if trade_id is None else str(trade_id)
+        normalized_trade_id = None if trade_id is None else (str(trade_id).strip() or None)
         return MarketEvent(exchange, symbol, price, quantity, side, exchange_ts,
                            receive_ts, None, previous, normalized_trade_id)
 
