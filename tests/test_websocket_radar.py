@@ -137,7 +137,7 @@ class WebSocketRadarTests(unittest.TestCase):
         radar._last_price = {}
 
         binance_base = {"e": "trade", "s": "BTCUSDT", "p": "100", "T": 1234567890, "m": False}
-        for invalid_quantity in ("nan", "inf", "-inf", "-1", "broken"):
+        for invalid_quantity in ("nan", "inf", "-inf", "0", "-1", "broken"):
             with self.subTest(exchange="binance", quantity=invalid_quantity):
                 self.assertEqual(
                     radar._parse_binance({"data": {**binance_base, "q": invalid_quantity}}, 1234567990),
@@ -148,7 +148,7 @@ class WebSocketRadarTests(unittest.TestCase):
             "product_id": "BTC-USD", "price": "100", "side": "BUY",
             "time": "2026-10-21T12:00:00Z",
         }
-        for invalid_quantity in ("nan", "inf", "-1", "broken"):
+        for invalid_quantity in ("nan", "inf", "0", "-1", "broken"):
             with self.subTest(exchange="coinbase", quantity=invalid_quantity):
                 payload = {"channel": "market_trades", "events": [{"trades": [{**coinbase_trade, "size": invalid_quantity}]}]}
                 self.assertEqual(radar._parse_coinbase(payload, 1234567990), [])
@@ -159,15 +159,12 @@ class WebSocketRadarTests(unittest.TestCase):
                 payload = {"arg": {"channel": "trades"}, "data": [{**okx_trade, "sz": invalid_quantity}]}
                 self.assertEqual(radar._parse_okx(payload, 1234567990), [])
 
-    def test_public_trade_parsers_allow_zero_quantity_but_not_zero_price(self) -> None:
+    def test_public_trade_parsers_reject_zero_quantity(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar.symbols = ["BTC/USDT"]
         radar._last_price = {}
         payload = {"data": {"e": "trade", "s": "BTCUSDT", "p": "100", "q": "0", "T": 1234567890, "m": False}}
-        events = radar._parse_binance(payload, 1234567990)
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].price, 100.0)
-        self.assertEqual(events[0].quantity, 0.0)
+        self.assertEqual(radar._parse_binance(payload, 1234567990), [])
 
 
 
