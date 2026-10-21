@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import statistics
 import tempfile
@@ -28,7 +29,7 @@ def percentile(values: Iterable[int], fraction: float) -> int:
     ordered = sorted(values)
     if not ordered:
         return 0
-    index = min(len(ordered) - 1, max(0, int(__import__("math").ceil(len(ordered) * fraction)) - 1))
+    index = min(len(ordered) - 1, max(0, math.ceil(len(ordered) * fraction) - 1))
     return int(ordered[index])
 
 
