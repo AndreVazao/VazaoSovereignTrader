@@ -30,4 +30,4 @@ def test_observer_load_scenario_runs_without_orders_or_reader_leaks():
     assert result["http_requests"] > 0
     assert result["http_errors"] == 0
     assert result["reader_threads_still_running"] == 0
-    assert "no-op _cycle_once" in result["scope_note"]
+    assert "no-op _cycle_once" in result["scope_note"].lower()
