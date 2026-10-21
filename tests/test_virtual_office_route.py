@@ -149,3 +149,50 @@ def test_observer_summary_does_not_acquire_engine_lock(tmp_path, monkeypatch):
         "opportunities_count",
         "updated_at_ms",
     }
+
+
+def test_observer_timing_requires_authentication(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "timing-test-secret")
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.get("/observer/timing")
+
+    assert response.status_code == 401
+    assert response.get_json() == {"ok": False, "error": "unauthorized"}
+
+
+def test_observer_timing_returns_bounded_authenticated_metrics(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "timing-test-secret")
+    client = _app(tmp_path, monkeypatch)
+    engine = client.application.config["TEST_ENGINE"]
+    engine.runtime_timing_metrics.record_ns("runtime_cycle", 1_000_000)
+    engine.runtime_timing_metrics.record_ns("runtime_cycle", 2_000_000)
+    engine.runtime_timing_metrics.record_ns("observer_lock_wait", 100)
+    engine.runtime_timing_metrics.record_ns("observer_lock_hold", 200)
+
+    response = client.get(
+        "/observer/timing",
+        headers={"X-Token": "timing-test-secret"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert set(payload["metrics"]) == {
+        "runtime_cycle",
+        "observer_lock_wait",
+        "observer_lock_hold",
+    }
+    cycle = payload["metrics"]["runtime_cycle"]
+    assert cycle["count"] == 2
+    assert cycle["sample_count"] == 2
+    assert cycle["p50_ns"] == 1_000_000
+    assert cycle["p99_ns"] == 2_000_000
+    # Engine initialization publishes an initial observer snapshot, so real
+    # lock timings may already exist before the synthetic samples are recorded.
+    assert payload["metrics"]["observer_lock_wait"]["count"] >= 1
+    assert payload["metrics"]["observer_lock_wait"]["max_ns"] >= 100
+    assert payload["metrics"]["observer_lock_hold"]["count"] >= 1
+    assert payload["metrics"]["observer_lock_hold"]["max_ns"] >= 200
+    assert payload["metrics"]["observer_lock_wait"]["sample_count"] <= 512
+    assert payload["metrics"]["observer_lock_hold"]["sample_count"] <= 512
