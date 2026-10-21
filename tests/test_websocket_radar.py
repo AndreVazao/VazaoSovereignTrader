@@ -93,5 +93,80 @@ class WebSocketRadarTests(unittest.TestCase):
             self.assertIn('"exchange_lag_ms": 50', text)
 
 
+    def test_public_trade_parsers_reject_non_finite_or_invalid_prices(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT", "BTC/USD"]
+        radar._last_price = {}
+
+        binance_base = {"e": "trade", "s": "BTCUSDT", "q": "1", "T": 1234567890, "m": False}
+        for invalid_price in ("nan", "inf", "-inf", "0", "-1", "not-a-number"):
+            with self.subTest(exchange="binance", price=invalid_price):
+                payload = {"data": {**binance_base, "p": invalid_price}}
+                self.assertEqual(radar._parse_binance(payload, 1234567990), [])
+
+        coinbase_base = {
+            "channel": "market_trades",
+            "events": [{"trades": [{
+                "product_id": "BTC-USD", "size": "1", "side": "BUY",
+                "time": "2026-10-21T12:00:00Z",
+            }]}],
+        }
+        for invalid_price in ("nan", "inf", "0", "-1", "broken"):
+            with self.subTest(exchange="coinbase", price=invalid_price):
+                payload = {
+                    **coinbase_base,
+                    "events": [{"trades": [{**coinbase_base["events"][0]["trades"][0], "price": invalid_price}]}],
+                }
+                self.assertEqual(radar._parse_coinbase(payload, 1234567990), [])
+
+        okx_base = {
+            "arg": {"channel": "trades"},
+            "data": [{"instId": "BTC-USDT", "sz": "1", "side": "buy", "ts": "1234567890"}],
+        }
+        for invalid_price in ("nan", "inf", "0", "-1", "broken"):
+            with self.subTest(exchange="okx", price=invalid_price):
+                payload = {
+                    **okx_base,
+                    "data": [{**okx_base["data"][0], "px": invalid_price}],
+                }
+                self.assertEqual(radar._parse_okx(payload, 1234567990), [])
+
+    def test_public_trade_parsers_reject_negative_or_non_finite_quantities(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT", "BTC/USD"]
+        radar._last_price = {}
+
+        binance_base = {"e": "trade", "s": "BTCUSDT", "p": "100", "T": 1234567890, "m": False}
+        for invalid_quantity in ("nan", "inf", "-inf", "0", "-1", "broken"):
+            with self.subTest(exchange="binance", quantity=invalid_quantity):
+                self.assertEqual(
+                    radar._parse_binance({"data": {**binance_base, "q": invalid_quantity}}, 1234567990),
+                    [],
+                )
+
+        coinbase_trade = {
+            "product_id": "BTC-USD", "price": "100", "side": "BUY",
+            "time": "2026-10-21T12:00:00Z",
+        }
+        for invalid_quantity in ("nan", "inf", "0", "-1", "broken"):
+            with self.subTest(exchange="coinbase", quantity=invalid_quantity):
+                payload = {"channel": "market_trades", "events": [{"trades": [{**coinbase_trade, "size": invalid_quantity}]}]}
+                self.assertEqual(radar._parse_coinbase(payload, 1234567990), [])
+
+        okx_trade = {"instId": "BTC-USDT", "px": "100", "side": "buy", "ts": "1234567890"}
+        for invalid_quantity in ("nan", "inf", "-1", "broken"):
+            with self.subTest(exchange="okx", quantity=invalid_quantity):
+                payload = {"arg": {"channel": "trades"}, "data": [{**okx_trade, "sz": invalid_quantity}]}
+                self.assertEqual(radar._parse_okx(payload, 1234567990), [])
+
+    def test_public_trade_parsers_reject_zero_quantity(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT"]
+        radar._last_price = {}
+        payload = {"data": {"e": "trade", "s": "BTCUSDT", "p": "100", "q": "0", "T": 1234567890, "m": False}}
+        self.assertEqual(radar._parse_binance(payload, 1234567990), [])
+
+
+
 if __name__ == "__main__":
     unittest.main()
