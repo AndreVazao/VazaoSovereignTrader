@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import threading
 from collections import deque
 from typing import Deque
@@ -32,7 +33,8 @@ class RuntimeTimingMetrics:
 
     @staticmethod
     def _percentile(values: list[int], fraction: float) -> int:
-        index = min(len(values) - 1, int((len(values) - 1) * fraction))
+        # Nearest-rank percentile: p99 of two samples must include the maximum.
+        index = min(len(values) - 1, max(0, math.ceil(len(values) * fraction) - 1))
         return values[index]
 
     def snapshot(self) -> dict[str, dict[str, int]]:
