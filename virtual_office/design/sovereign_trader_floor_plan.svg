@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" role="img" aria-labelledby="title desc">
+<title id="title">Sovereign Trader — planta funcional</title>
+<desc id="desc">Planta esquemática com direção, mercados, inteligência, validação, controlo e infraestrutura.</desc>
+<defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#102a43"/><stop offset="1" stop-color="#06111e"/></linearGradient><style>
+.title{font:700 29px system-ui,sans-serif;fill:#f0f8ff;letter-spacing:1px}.sub{font:15px system-ui,sans-serif;fill:#9db9d1}.room{fill:#0c2235;stroke:#3d7698;stroke-width:2}.room2{fill:#102b40;stroke:#a78bfa;stroke-width:2}.room3{fill:#102b40;stroke:#42e0b0;stroke-width:2}.room4{fill:#102b40;stroke:#ffc96b;stroke-width:2}.label{font:700 17px system-ui,sans-serif;fill:#e9f6ff}.desc{font:13px system-ui,sans-serif;fill:#9db9d1}.corridor{fill:#183750;stroke:#315b78;stroke-width:1}.route{fill:none;stroke:#4edbff;stroke-width:3;stroke-dasharray:7 6}.tag{font:700 12px system-ui,sans-serif;fill:#4edbff;letter-spacing:1px}
+</style></defs>
+<rect width="1200" height="820" fill="url(#bg)"/>
+<text x="42" y="55" class="title">SOVEREIGN TRADER · PLANTA FUNCIONAL</text><text x="44" y="83" class="sub">Vista esquemática para validar nomes e relações entre áreas — não é planta de construção.</text>
+<rect x="38" y="118" width="1124" height="640" rx="20" fill="#091a2a" stroke="#3d6886" stroke-width="3"/>
+<!-- top management -->
+<rect x="64" y="145" width="360" height="128" rx="12" class="room4"/><text x="88" y="180" class="label">CEO / CÉREBRO</text><text x="88" y="207" class="desc">Conversa principal · coordenação</text><text x="88" y="229" class="desc">Avatar oficial a inserir</text><text x="88" y="251" class="desc">Autoridade permanece no Runtime</text>
+<rect x="442" y="145" width="200" height="128" rx="12" class="room"/><text x="465" y="180" class="label">Receção</text><text x="465" y="207" class="desc">Entrada de pedidos</text><text x="465" y="229" class="desc">Encaminhamento</text>
+<rect x="660" y="145" width="220" height="128" rx="12" class="room"/><text x="683" y="180" class="label">Sala de reuniões</text><text x="683" y="207" class="desc">Planeamento / revisão</text><text x="683" y="229" class="desc">Decisões confirmadas</text>
+<rect x="898" y="145" width="236" height="128" rx="12" class="room"/><text x="920" y="180" class="label">Intervenção humana</text><text x="920" y="207" class="desc">Autenticação e aprovações</text><text x="920" y="229" class="desc">Confirmação explícita</text>
+<!-- corridor -->
+<rect x="64" y="290" width="1070" height="36" rx="8" class="corridor"/><text x="599" y="313" text-anchor="middle" class="tag">CIRCULAÇÃO / CONVERSA POR DEPARTAMENTO</text>
+<!-- intelligence -->
+<rect x="64" y="344" width="240" height="130" rx="12" class="room2"/><text x="84" y="379" class="label">Investigação</text><text x="84" y="406" class="desc">Fontes / documentação</text><text x="84" y="428" class="desc">Hipóteses verificáveis</text><text x="84" y="450" class="desc">Proveniência</text>
+<rect x="322" y="344" width="220" height="130" rx="12" class="room2"/><text x="342" y="379" class="label">Análise</text><text x="342" y="406" class="desc">Sinais / consistência</text><text x="342" y="428" class="desc">Evidência / confiança</text>
+<rect x="560" y="344" width="260" height="130" rx="12" class="room3"/><text x="580" y="379" class="label">Market Radar</text><text x="580" y="406" class="desc">Deteção de eventos</text><text x="580" y="428" class="desc">Lead/lag / frescura</text><text x="580" y="450" class="desc">Qualidade dos feeds</text>
+<rect x="838" y="344" width="296" height="130" rx="12" class="room3"/><text x="858" y="379" class="label">Comparação entre Exchanges</text><text x="858" y="406" class="desc">Símbolos / preços equivalentes</text><text x="858" y="428" class="desc">Taxas / slippage / liquidez</text><text x="858" y="450" class="desc">Viabilidade do diferencial</text>
+<!-- corridor -->
+<rect x="64" y="491" width="1070" height="36" rx="8" class="corridor"/><text x="599" y="514" text-anchor="middle" class="tag">EVIDÊNCIA VALIDADA · MEMÓRIA PARTILHADA</text>
+<!-- validation and ops -->
+<rect x="64" y="545" width="250" height="126" rx="12" class="room4"/><text x="84" y="580" class="label">Laboratório PAPER</text><text x="84" y="607" class="desc">Replay / simulação</text><text x="84" y="629" class="desc">Taxas / slippage / amostras</text><text x="84" y="651" class="desc">Sem ordens reais</text>
+<rect x="332" y="545" width="250" height="126" rx="12" class="room4"/><text x="352" y="580" class="label">Controlo de Risco</text><text x="352" y="607" class="desc">Limites / bloqueios</text><text x="352" y="629" class="desc">Gates no servidor</text><text x="352" y="651" class="desc">Nunca contornados pela UI</text>
+<rect x="600" y="545" width="250" height="126" rx="12" class="room"/><text x="620" y="580" class="label">Auditoria</text><text x="620" y="607" class="desc">Eventos / decisões</text><text x="620" y="629" class="desc">Métricas reais</text><text x="620" y="651" class="desc">Timestamps separados</text>
+<rect x="868" y="545" width="266" height="126" rx="12" class="room"/><text x="888" y="580" class="label">Resposta Rápida</text><text x="888" y="607" class="desc">Oportunidades validadas</text><text x="888" y="629" class="desc">PAPER nesta fase</text><text x="888" y="651" class="desc">Todos os gates de risco</text>
+<!-- central memory -->
+<rect x="64" y="692" width="1070" height="42" rx="9" fill="#112c42" stroke="#4edbff" stroke-width="2"/><text x="599" y="718" text-anchor="middle" class="label">MEMÓRIA CENTRAL · SALA VISUAL + SERVIÇO TRANSVERSAL PARTILHADO</text>
+<path d="M244 273V289M542 273V289M770 273V289M1016 273V289M184 474V490M432 474V490M690 474V490M985 474V490M188 671V690M457 671V690M724 671V690M1000 671V690" class="route"/>
+<text x="42" y="790" class="desc">Nota: a disposição agrupa capacidades documentadas/propostas; não afirma que cada sala seja um agente autónomo implementado.</text>
+</svg>
