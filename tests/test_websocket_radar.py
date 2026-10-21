@@ -155,6 +155,47 @@ class WebSocketRadarTests(unittest.TestCase):
                 self.assertFalse(radar.snapshot()["running"])
                 self.assertEqual(radar._threads, [])
 
+    def test_start_during_shutdown_does_not_restart_workers(self) -> None:
+        import threading
+
+        created = threading.Event()
+        closing = threading.Event()
+        allow_close = threading.Event()
+        closed = threading.Event()
+
+        class BlockingCloseWebSocketApp:
+            def __init__(self, url, on_open=None, on_message=None):
+                self.url = url
+                created.set()
+
+            def run_forever(self, **kwargs):
+                closed.wait(timeout=5)
+
+            def close(self):
+                closing.set()
+                allow_close.wait(timeout=2)
+                closed.set()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=["binance"], data_dir=tmp)
+            with patch("PC_ENGINE.radar.websocket_radar.websocket.WebSocketApp", BlockingCloseWebSocketApp):
+                radar.start()
+                self.assertTrue(created.wait(timeout=1))
+                stopper = threading.Thread(target=radar.stop)
+                stopper.start()
+                self.assertTrue(closing.wait(timeout=1))
+
+                # start() must not clear the stop event or spawn a second worker
+                # while stop() is still closing/joining the original worker.
+                radar.start()
+                self.assertEqual(len(radar._threads), 1)
+
+                allow_close.set()
+                stopper.join(timeout=2)
+                self.assertFalse(stopper.is_alive())
+                self.assertFalse(radar.snapshot()["running"])
+                self.assertEqual(radar._threads, [])
+
     def test_candidate_requires_move_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=[], data_dir=tmp, min_move_bps=5, lead_window_ms=750)
