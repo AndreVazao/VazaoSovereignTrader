@@ -437,7 +437,10 @@ class WebSocketMarketRadar:
                     self._last_connection_error[exchange] = type(exc).__name__
             finally:
                 with self._lock:
-                    self._last_disconnected_ts_ms[exchange] = self._now_ms()
+                    # A failed connection attempt is not a disconnection event.
+                    # Record disconnect time only if this attempt reached open.
+                    if connected_at is not None:
+                        self._last_disconnected_ts_ms[exchange] = self._now_ms()
                     self._connection_state[exchange] = "stopped" if self._stop.is_set() else "reconnecting"
                 if app is not None:
                     with self._lifecycle_lock:
