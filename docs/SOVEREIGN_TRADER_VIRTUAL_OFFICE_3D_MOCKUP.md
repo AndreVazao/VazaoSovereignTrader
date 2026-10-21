@@ -12,10 +12,10 @@ Os SVG são assets vetoriais editáveis por texto e mantêm-se na repository. A 
 
 ## Como ler o edifício
 
-- **Piso de direção:** CEO/Cérebro, sala de reuniões e receção de pedidos. O avatar do CEO deve vir do ficheiro de avatar oficial aprovado, sem inventar uma identidade substituta.
-- **Piso de mercado:** integrações de exchanges e Market Radar/comparação.
+- **Piso superior de direção:** CEO/Cérebro (destino de conversa por omissão), receção e sala de reuniões. O avatar do CEO deve vir do ficheiro de avatar oficial aprovado, sem inventar uma identidade substituta.
+- **Piso de mercado:** integrações de exchanges, Market Radar (deteção de eventos) e Comparação entre Exchanges (normalização e avaliação de diferenças entre venues).
 - **Piso de inteligência:** investigação, análise e memória central.
-- **Piso de validação:** laboratório PAPER/replay e estratégias.
+- **Piso de validação:** laboratório PAPER/replay, estratégias, controlo de risco e Resposta Rápida/Execução Controlada (separada, inicialmente apenas PAPER e sempre subordinada aos gates de risco).
 - **Piso transversal de controlo:** risco, auditoria, recuperação e intervenção humana.
 - **Piso técnico/subsolo:** infraestrutura, persistência e dispositivos; “cofre” é metáfora visual, não autorização para transferir fundos.
 
@@ -31,6 +31,12 @@ A disposição vertical é uma convenção de visualização, não dependência 
 6. O escritório adapta fidelidade ao hardware: modo simples/2D, pixel/low-detail, 2.5D, 3D detalhado e, mais tarde, modo cinematográfico. Chat-only permanece sempre disponível.
 7. O backend deve continuar a operar se o cliente estiver desligado ou sob carga.
 
-## Revisão pedida
+## Decisões aprovadas pelo proprietário — 2026-10-21
 
-Usar o inventário em `SOVEREIGN_TRADER_VIRTUAL_OFFICE_DEPARTMENTS.md` para aprovar, renomear, fundir ou acrescentar compartimentos. Antes de produzir um modelo 3D real ou animações, congelar a nomenclatura e mapear cada estado visual para uma fonte real do backend.
+- CEO no piso superior.
+- Market Radar e Comparação entre Exchanges em salas/departamentos separados.
+- Investigação e Análise separados.
+- Memória Central representada por sala visual e serviço transversal.
+- Departamento dedicado de Resposta Rápida, sem autoridade para contornar validação, custos, inventário, risco ou aprovação humana.
+
+O próximo passo de design é alinhar todos os compartimentos nos SVG com estas decisões e depois mapear cada estado visual para uma fonte real do backend antes de animar ou ligar dados em direto.
