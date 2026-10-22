@@ -445,3 +445,38 @@ Nenhum destes processos autoriza execução REAL.
 ## Telemetria de erros de processamento de mensagens
 
 O snapshot do radar distingue erros de ligação de erros ocorridos ao descodificar JSON, executar o parser ou despachar eventos. `message_errors` conta falhas de processamento por exchange e `last_message_error` regista apenas a classe da exceção; o payload bruto, a mensagem da exceção e URLs não são guardados. Estas métricas ajudam a distinguir uma ligação viva com mensagens problemáticas de uma falha de conexão. Payloads válidos que o parser rejeita deliberadamente como não relevantes/inválidos não são exceções e não incrementam este contador.
+
+## Estudo técnico de referência — Freqtrade WebSocket (2026-10-22)
+
+Esta secção regista padrões arquiteturais observados na implementação pública do Freqtrade para orientar decisões próprias do Sovereign Trader. É um estudo de referência, não uma dependência nova nem uma autorização para copiar código.
+
+Fontes consultadas:
+- Implementação: https://github.com/AndreVazao/freqtrade/blob/main/freqtrade/exchange/exchange_ws.py
+- Testes: https://github.com/AndreVazao/freqtrade/blob/main/tests/exchange/test_exchange_ws.py
+
+### Padrões observados e adaptação própria
+
+1. **Ciclo de vida explícito:** a referência separa o loop assíncrono, tarefas em segundo plano, cancelamento e encerramento. No SMR, manter o ciclo de vida por exchange explícito, assegurar que `stop()` fecha sockets e não deixa workers órfãos; não introduzir um loop asyncio apenas por imitação.
+2. **Estado partilhado protegido:** a referência usa locks para watchlists e caches. No SMR, qualquer novo estado partilhado entre workers deve ter regras claras de sincronização e testes de concorrência; evitar manter locks durante I/O ou callbacks externos.
+3. **Freshness separada de existência:** a referência guarda tempos de pedido/refresh e remove dados expirados. No SMR, preservar timestamps de evento da exchange e de receção local separadamente, definir TTLs por tipo de dado e nunca interpretar silêncio de trades, por si só, como desconexão.
+4. **Caches limitadas e cópias defensivas:** a referência limita o ciclo de vida de subscrições e devolve cópias do cache. No SMR, caches e deduplicação devem ter limites explícitos, política de expiração e semântica documentada; cópias defensivas devem ser usadas onde previnem mutação concorrente real.
+5. **Capacidades e fallback explícitos:** a referência consulta as capacidades declaradas pela exchange antes de usar operações opcionais e tolera operações de unwatch não suportadas. No SMR, cada adaptador deve declarar capabilities testadas; REST pode ser fallback para snapshots/recuperação quando a API oficial suportar o caso, sem mascarar falhas de dados como sucesso.
+6. **Testes determinísticos:** a referência usa mocks e relógio controlado para testar agendamento, cache, erros e limpeza. O SMR deve testar reconnect, cancelamento, freshness, payloads inválidos e callbacks sem depender de credenciais ou de mercados ao vivo.
+
+### Limites da evidência e recuperação de dados
+
+O ficheiro consultado trata principalmente de streams OHLCV via CCXT Pro; não demonstra, por si só, que um feed público de trades fornece sequência global, checksum, replay ou recuperação sem perdas. Não inferir lacunas a partir de IDs de trades, nem afirmar entrega exatamente-uma-vez. Para cada exchange, qualquer sincronização de order book ou recuperação de eventos exige documentação oficial específica para snapshot, sequência/updates, checksum (se aplicável), limites de replay e comportamento após reconexão. Se essas garantias não estiverem documentadas ou implementadas, reportar a qualidade como desconhecida/degradada e continuar apenas em observação.
+
+### Licenças e dependências
+
+Esta leitura não copia código, não adiciona dependências e não reutiliza ficheiros do Freqtrade. Antes de qualquer reutilização ou adaptação direta de código/dependências, rever a licença efetiva e os avisos de terceiros da versão exata, a compatibilidade com a distribuição pretendida (.exe/APK) e obrigações de atribuição/redistribuição. O ficheiro `LICENSE` consultado na cópia pública indicada não fornece, por si só, uma concessão de licença clara; por isso, o estado de licença deve ser tratado como **não confirmado**, não presumido.
+
+### Critérios de aceitação para futuras mudanças inspiradas neste estudo
+
+- estado e métricas por exchange, sem confundir freshness de dados com estado do socket;
+- limites finitos para caches, tarefas, tentativas e tempos de espera;
+- encerramento idempotente e sem workers abandonados;
+- fallback explícito, com a origem e a idade dos dados visíveis;
+- testes unitários determinísticos e de concorrência para os caminhos alterados;
+- nenhuma alegação de recuperação sem perdas sem prova do protocolo oficial;
+- nenhuma ordem REAL, credencial ou acesso privado introduzido por esta camada de observação.
