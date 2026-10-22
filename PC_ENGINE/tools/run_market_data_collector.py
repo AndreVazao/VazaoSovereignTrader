@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import signal
 import threading
 import time
@@ -23,6 +24,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def _resolve_path(raw: str | Path) -> Path:
     path = Path(raw)
     return path if path.is_absolute() else REPO_ROOT / path
+
+
+def _health_heartbeat_interval_seconds(radar_cfg: dict) -> float:
+    """Keep the health heartbeat comfortably inside the API stale threshold."""
+    try:
+        configured = float(radar_cfg.get("health_heartbeat_seconds", 10.0))
+    except (TypeError, ValueError):
+        return 10.0
+    if not math.isfinite(configured):
+        return 10.0
+    return min(60.0, max(5.0, configured))
 
 
 def _outcomes_path(radar_cfg: dict, data_dir: Path) -> Path:
@@ -155,9 +167,19 @@ def main() -> None:
     study_minutes = float(args.study_minutes if args.study_minutes is not None else study_cfg.get("interval_minutes", 15))
     next_learning = 0.0
     next_study = 0.0
+    next_health_heartbeat = time.monotonic() + _health_heartbeat_interval_seconds(radar_cfg)
     try:
         while not stop.is_set():
             now = time.monotonic()
+            if now >= next_health_heartbeat:
+                # Refresh liveness independently of slower learning/study cycles.
+                write_health(
+                    "RUNNING",
+                    radar=radar.snapshot(),
+                    hot_path=hot_path.snapshot(),
+                    hot_path_outcomes=outcome_tracker.snapshot(),
+                )
+                next_health_heartbeat = now + _health_heartbeat_interval_seconds(radar_cfg)
             if now >= next_learning:
                 stats = learner.learn()
                 calibration = write_hot_path_calibration(
