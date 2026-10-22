@@ -134,3 +134,13 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 3. Before depth-based edge evaluation, add protocol-contract tests and explicit wiring evidence for Binance synchronized views; implement separate OKX/Coinbase synchronization or keep those venues ineligible for depth signals.
 4. Prove normalized instrument identity and net edge after fees, spread, slippage, funding, latency, inventory and failure costs using chronological out-of-sample PAPER/shadow evaluation.
 5. Keep independent office agents, persistent department conversations and browser E2E labelled incomplete until runtime evidence exists.
+
+
+## Addendum — Coinbase L2 parser and current-main checkpoint (2026-10-22)
+
+- Current main checkpoint: `95a34f7881c3c27880966f2f35f94236ce380734` (PR #442 merged).
+- PR #442: https://github.com/AndreVazao/VazaoSovereignTrader/pull/442. The Coinbase Advanced Trade parser now accepts the inbound `l2_data` envelope while retaining the `level2` subscription name, validates and preserves the envelope `sequence_num`, checks each event's `product_id` against the configured instrument, uses the envelope timestamp as fallback, and rejects unknown event types.
+- Exact-head Python workflow run `39748485048` passed. Windows EXE workflow run `39748484977` passed, including installer build and install/launch/health/uninstall smoke. Snyk reported no manifest changes; CodeRabbit skipped automated review and manual diff review was performed. Vercel did not deploy because its daily deployment quota was exhausted; this is not a Python or Windows test failure.
+- Scope limit: this is parser hardening only. Coinbase's sequence number is now preserved in emitted observations, but a protocol-specific Coinbase synchronized-book state machine, gap/reconnect recovery, and integration into any temporal-edge calculator remain unproven. Do not enable Coinbase L2 for depth-based decisions based on this parser change alone.
+- Binance book invalidation notifications are present on main; live snapshot/delta continuity and wiring to the edge calculator still require evidence. OKX protocol-specific book synchronization also remains incomplete.
+- No live venue connection, private credential, physical device, live order or profitability test was performed in this review. PAPER/read-only remains the operating posture.
