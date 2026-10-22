@@ -535,3 +535,30 @@ A varredura transversal identificou ainda um terceiro consumidor independente do
 A pure, deterministic `BinanceSpotDepthBook` is implemented in `PC_ENGINE/market_events/binance_book_state.py` with states `UNINITIALIZED`, `SYNCED`, and `INVALID`. It accepts a caller-supplied REST snapshot, only accepts deltas whose Binance `U/u` range covers the next update ID, ignores old/duplicate updates, applies zero-quantity deletions, and invalidates/clears the book on sequence gaps or malformed levels. Negative/reversed sequence ranges and non-finite freshness configuration are rejected; crossed/locked books are not eligible. Regression coverage is in `tests/test_binance_book_state.py`.
 
 **This remains isolated groundwork, not a live synchronized book.** The live collector is not wired to this class. Bounded WebSocket buffering, REST snapshot acquisition, replay, reconnect/resync orchestration, and operational metrics remain required before this data can feed any signal. Do not treat the current raw L2 JSONL as a synchronized order book. OKX `books5` and Coinbase require their own protocol-specific contracts; do not reuse Binance `U/u` semantics.
+
+
+## Binance Spot synchronized L2 collector (implementation increment)
+
+The L2 runner now writes two separate files:
+
+- `websocket_orderbook_events.jsonl`: raw normalized events, useful for diagnosis only; **not a synchronized order book**.
+- `binance_synchronized_orderbook_views.jsonl`: emitted only after a public REST depth snapshot has been aligned with buffered Binance Spot diff-depth updates and the resulting book passes sequence continuity, non-crossed-book, and freshness checks.
+
+The Binance synchronizer uses a bounded pre-snapshot/recovery buffer (default 2,000 events), REST snapshot limit 1,000, sequence-gap invalidation, buffer-overflow invalidation, and retry backoff. A gap or overflow invalidates and clears the book and requests a new snapshot. If a snapshot cannot be obtained, the output remains unavailable rather than presenting a plausible book. This is still an observational data artifact and is not connected to signal generation or order execution.
+
+OKX and Coinbase continue to be raw event collection only in this increment; their snapshot/delta continuity must be implemented and tested according to each venue's own protocol before claiming synchronized books.
+
+
+## Binance Spot synchronized L2 collector (implementation increment)
+
+The L2 runner writes two separate files:
+
+- `websocket_orderbook_events.jsonl`: raw normalized events, useful for diagnosis only; **not a synchronized order book**.
+- `binance_synchronized_orderbook_views.jsonl`: emitted only after a public REST depth snapshot has been aligned with buffered Binance Spot diff-depth updates and the resulting book passes sequence continuity, non-crossed-book, and freshness checks.
+
+The Binance synchronizer uses a bounded pre-snapshot/recovery buffer (default 2,000 events), REST snapshot limit 1,000, sequence-gap invalidation, buffer-overflow invalidation, reconnect invalidation, and exponential retry backoff. A gap, overflow, or disconnect invalidates and clears the book and requests a new snapshot. If a snapshot cannot be obtained, the synchronized output remains unavailable rather than presenting a plausible book. The collector reconnects with bounded backoff. This is an observational data artifact and is not connected to signal generation or order execution.
+
+OKX and Coinbase continue to be raw event collection only in this increment; their snapshot/delta continuity must be implemented and tested according to each venue's own protocol before claiming synchronized books. Parse failures are rejected instead of silently dropping malformed price levels, but operational telemetry for those rejected messages still needs to be surfaced through the service health API.
+
+
+The collector health JSON reports the *current* synchronized-book eligibility, age in milliseconds and reason (including stale state). Consumers must re-evaluate this health/freshness on each read; the last line in `binance_synchronized_orderbook_views.jsonl` is a historical observation and must never be assumed fresh indefinitely.
