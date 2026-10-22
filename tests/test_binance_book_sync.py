@@ -77,6 +77,15 @@ class BinanceSpotBookSynchronizerTests(unittest.TestCase):
         self.assertEqual(self.sync.health()["buffer_overflows"], 1)
         self.assertEqual(self.emitted, [])
 
+    def test_connection_loss_invalidates_and_requires_resnapshot(self):
+        self.sync.install_snapshot((100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),)))
+        self.sync.on_event(self.event(101, 101))
+        self.assertEqual(self.sync.book.status, BookStatus.SYNCED)
+        self.sync.connection_lost()
+        self.assertEqual(self.sync.book.status, BookStatus.INVALID)
+        self.assertEqual(self.sync.book.reason, "connection_lost")
+        self.assertFalse(self.sync.book.snapshot(2_000_000).eligible)
+
     def test_invalid_snapshot_does_not_enable_book(self):
         self.assertFalse(self.sync.install_snapshot((
             -1, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),)
