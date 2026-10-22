@@ -141,8 +141,16 @@ class PublicL2WebSocketCollector:
             channel = arg.get("channel") if isinstance(arg, dict) else None
             if channel not in {"books", "books5", "bbo-tbt"}:
                 return []
-            action = str(payload.get("action", "snapshot")).lower()
-            event_type = "delta" if action == "update" else "snapshot"
+            action = payload.get("action", "snapshot")
+            if not isinstance(action, str) or action.lower() not in {"snapshot", "update"}:
+                raise ValueError("invalid_okx_action")
+            # OKX books5 and bbo-tbt publish complete top-of-book snapshots
+            # on every push, including messages whose action is "update".
+            # Only incremental channels such as books should emit deltas.
+            if channel in {"books5", "bbo-tbt"}:
+                event_type = "snapshot"
+            else:
+                event_type = "delta" if action.lower() == "update" else "snapshot"
             items = payload.get("data", [])
             if not isinstance(items, list):
                 raise ValueError("invalid_okx_data")
