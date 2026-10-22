@@ -115,6 +115,11 @@ jobs:
           if (-not (Test-Path $engine)) { throw "Installed engine EXE missing." }
           if (-not (Test-Path $configPath)) { throw "Installed local config missing." }
           if (-not (Test-Path $uninstaller)) { throw "Installed uninstaller missing." }
+          foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
+            if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
+              throw "Scheduled task was not installed: $taskName"
+            }
+          }
 
           $config = Get-Content $configPath -Raw | ConvertFrom-Json
           $config.mode = "PAPER"
