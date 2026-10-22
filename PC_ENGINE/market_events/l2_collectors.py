@@ -159,16 +159,31 @@ class PublicL2WebSocketCollector:
                 ))
 
         elif venue == "coinbase":
-            if payload.get("channel") != "level2":
+            # The subscription is named "level2", while current Advanced Trade
+            # market-data envelopes identify the returned channel as "l2_data".
+            if payload.get("channel") not in {"level2", "l2_data"}:
                 return []
+            sequence = payload.get("sequence_num")
+            if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
+                raise ValueError("invalid_coinbase_sequence")
             items = payload.get("events", [])
             if not isinstance(items, list):
                 raise ValueError("invalid_coinbase_events")
+            expected_product = symbol.replace("/", "-").upper()
             for item in items:
                 if not isinstance(item, dict):
                     raise ValueError("invalid_coinbase_item")
-                event_type = "snapshot" if str(item.get("type", "")).lower() == "snapshot" else "delta"
-                ts = _iso_ms(item.get("event_time"))
+                product_id = item.get("product_id")
+                if not isinstance(product_id, str) or product_id.upper() != expected_product:
+                    raise ValueError("coinbase_product_mismatch")
+                raw_type = str(item.get("type", "")).lower()
+                if raw_type == "snapshot":
+                    event_type = "snapshot"
+                elif raw_type == "update":
+                    event_type = "delta"
+                else:
+                    raise ValueError("invalid_coinbase_event_type")
+                ts = _iso_ms(item.get("event_time") or payload.get("timestamp"))
                 bids: list[OrderBookLevel] = []
                 asks: list[OrderBookLevel] = []
                 updates = item.get("updates", [])
@@ -192,7 +207,7 @@ class PublicL2WebSocketCollector:
                         raise ValueError("invalid_coinbase_side")
                 events.append(self._event(
                     venue=venue, symbol=symbol, event_type=event_type,
-                    sequence=None, sequence_start=None, exchange_ts_ms=ts, receive_ns=receive_ns,
+                    sequence=sequence, sequence_start=None, exchange_ts_ms=ts, receive_ns=receive_ns,
                     bids=tuple(bids), asks=tuple(asks),
                 ))
 
