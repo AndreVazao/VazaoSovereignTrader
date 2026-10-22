@@ -106,8 +106,11 @@ def assess_synchronized_depth_edge(
 
     if left.venue not in venue_costs_bps or right.venue not in venue_costs_bps:
         return _reject("missing_venue_cost_assumption", left, right)
-    left_cost = _finite_non_negative(f"{left.venue}_cost_bps", venue_costs_bps[left.venue])
-    right_cost = _finite_non_negative(f"{right.venue}_cost_bps", venue_costs_bps[right.venue])
+    try:
+        left_cost = _finite_non_negative(f"{left.venue}_cost_bps", venue_costs_bps[left.venue])
+        right_cost = _finite_non_negative(f"{right.venue}_cost_bps", venue_costs_bps[right.venue])
+    except (TypeError, OverflowError) as exc:
+        raise ValueError("venue cost assumptions must be numeric") from exc
     total_cost = left_cost + right_cost + latency_penalty
     if not math.isfinite(total_cost):
         raise ValueError("combined cost assumptions must be finite")
@@ -120,7 +123,9 @@ def assess_synchronized_depth_edge(
     for buy, sell, entry, exit_price in candidates:
         gross = (exit_price - entry) / entry * 10_000.0
         net = gross - total_cost
-        is_eligible = math.isfinite(net) and net > min_net
+        if not math.isfinite(gross) or not math.isfinite(net):
+            return _reject("non_finite_edge_calculation", left, right)
+        is_eligible = net > min_net
         assessments.append(DepthEdgeAssessment(
             eligible=is_eligible,
             reason="net_edge_above_threshold" if is_eligible else "net_edge_below_threshold",
