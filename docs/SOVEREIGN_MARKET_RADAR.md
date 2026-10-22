@@ -523,3 +523,8 @@ Fonte oficial: [OKX API changelog — depreciação de checksum dos canais de or
 ### Cobertura da migração OKX — coletor de top-of-book
 
 A migração para TLS 443 aplica-se a todos os consumidores públicos do endpoint, não apenas ao radar principal. O coletor secundário `PC_ENGINE/market_events/websocket_collectors.py`, usado por `run_top_of_book_collector.py`, também usa agora `wss://ws.okx.com/ws/v5/public`. O teste `test_default_okx_public_endpoint_uses_tls_443` protege a configuração gerada por `default_public_configs`. Esta correção não valida conectividade real nem muda a subscrição de canais.
+
+
+### Cobertura da migração OKX — coletor L2
+
+A varredura transversal identificou ainda um terceiro consumidor independente do endpoint OKX: PC_ENGINE/market_events/l2_collectors.py, usado por PC_ENGINE/tools/run_l2_market_data_collector.py. O endpoint L2 também foi migrado para wss://ws.okx.com/ws/v5/public e o teste test_default_okx_l2_endpoint_uses_tls_443 verifica a configuração gerada por default_l2_configs. A alteração de endpoint não implementa sincronização de livro nem valida conectividade live; a continuidade do book permanece uma limitação separada que requer snapshot/sequence handling e testes de recuperação antes de alimentar sinais.
