@@ -120,3 +120,53 @@ def test_latency_edge_rejects_negative_exchange_lead_time():
         follower_move_bps=1.0,
     )
     assert result.eligible is False
+
+
+def test_invalid_timing_observation_does_not_pollute_statistical_history():
+    detector = LatencyEdgeDetector(
+        min_samples=2,
+        min_lead_bps=0.1,
+        fee_bps=0,
+        spread_bps=0,
+        slippage_bps=0,
+        execution_latency_ms=0,
+    )
+    detector.observe(
+        symbol="BTC/USDT",
+        leader="binance",
+        follower="okx",
+        direction="UP",
+        lead_ms=25,
+        leader_move_bps=8.0,
+        follower_move_bps=1.0,
+    )
+    rejected = detector.observe(
+        symbol="BTC/USDT",
+        leader="binance",
+        follower="okx",
+        direction="UP",
+        lead_ms=-1,
+        leader_move_bps=8.0,
+        follower_move_bps=1.0,
+    )
+
+    assert rejected.eligible is False
+    assert rejected.sample_count == 1
+    assert len(detector.history("BTC/USDT", "binance", "okx", "UP")) == 1
+
+
+def test_nonfinite_move_observation_is_ineligible_and_not_recorded():
+    detector = LatencyEdgeDetector(min_samples=1, fee_bps=0, spread_bps=0, slippage_bps=0)
+    result = detector.observe(
+        symbol="BTC/USDT",
+        leader="binance",
+        follower="okx",
+        direction="UP",
+        lead_ms=25,
+        leader_move_bps=float("nan"),
+        follower_move_bps=1.0,
+    )
+
+    assert result.eligible is False
+    assert result.sample_count == 0
+    assert len(detector.history("BTC/USDT", "binance", "okx", "UP")) == 0
