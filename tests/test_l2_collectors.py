@@ -31,6 +31,19 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].sequence, 12)
         self.assertEqual(events[0].bids[0].quantity, 2.0)
 
+    def test_binance_rejects_malformed_sequence_and_non_finite_level(self) -> None:
+        payloads = (
+            {"e": "depthUpdate", "E": 1, "U": -1, "u": 2, "b": [], "a": []},
+            {"e": "depthUpdate", "E": 1, "U": 3, "u": 2, "b": [], "a": []},
+            {"e": "depthUpdate", "E": 1, "U": 1, "u": 1, "b": [["nan", "1"]], "a": []},
+            {"e": "depthUpdate", "E": 1, "U": 1, "u": 1, "b": [["100", "inf"]], "a": []},
+            {"e": "depthUpdate", "E": 1, "U": "1", "u": 1, "b": [], "a": []},
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValueError):
+                    self.collector("binance")._parse(json.dumps(payload), 9000)
+
     def test_okx_snapshot(self) -> None:
         events = self.collector("okx")._parse(json.dumps({
             "arg": {"channel": "books5"}, "action": "snapshot",
@@ -53,3 +66,11 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].event_type, "delta")
         self.assertEqual(len(events[0].bids), 1)
         self.assertEqual(len(events[0].asks), 1)
+
+    def test_coinbase_unknown_side_is_rejected_not_silently_dropped(self) -> None:
+        with self.assertRaises(ValueError):
+            self.collector("coinbase")._parse(json.dumps({
+                "channel": "level2",
+                "events": [{"type": "update", "updates": [
+                    {"side": "MIDDLE", "price_level": "100", "new_quantity": "1"}]}],
+            }), 9000)
