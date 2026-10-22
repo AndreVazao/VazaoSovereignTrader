@@ -105,6 +105,9 @@ class WebSocketMarketRadar:
         self._last_connection_error: dict[str, str] = {}
         self._reconnects: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
         self._errors: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
+        # Message parsing/dispatch errors are separate from connection failures.
+        self._message_errors: dict[str, int] = {exchange: 0 for exchange in self.exchanges}
+        self._last_message_error: dict[str, str] = {}
         self._persistence_errors = 0
 
     @staticmethod
@@ -134,6 +137,8 @@ class WebSocketMarketRadar:
                 "last_connection_error": dict(self._last_connection_error),
                 "reconnects": dict(self._reconnects),
                 "errors": dict(self._errors),
+                "message_errors": dict(self._message_errors),
+                "last_message_error": dict(self._last_message_error),
                 "persistence_errors": self._persistence_errors,
                 "last_event_age_ms": {
                     exchange: max(0, now - int(row["local_ts_ms"]))
@@ -394,6 +399,12 @@ class WebSocketMarketRadar:
             return 1.0
         return min(max(1.0, float(current_delay)) * 2.0, max_delay_seconds)
 
+    def _record_message_error(self, exchange: str, error: Exception) -> None:
+        """Expose parser/dispatch failures without storing payloads or raw exception text."""
+        with self._lock:
+            self._message_errors[exchange] = self._message_errors.get(exchange, 0) + 1
+            self._last_message_error[exchange] = type(error).__name__
+
     def _run_with_reconnect(self, url: str, parser: Callable[[dict, int], list[MarketEvent]],
                             exchange: str, on_open: Callable[[websocket.WebSocketApp], None] | None = None) -> None:
         delay = 1.0
@@ -405,7 +416,8 @@ class WebSocketMarketRadar:
                 try:
                     for event in parser(json.loads(raw), receive_ts):
                         self._emit(event)
-                except Exception:
+                except Exception as exc:
+                    self._record_message_error(exchange, exc)
                     return
 
             connected_at: float | None = None
