@@ -202,3 +202,26 @@ These are engineering judgments, not measured reliability or performance.
 3. Evaluate the residual-edge detector against timestamped, chronological, out-of-sample observations; include fees, spread, slippage, latency, funding, inventory and failure costs.
 4. Validate actual Windows PC configuration and physical Android startup when devices are accessible; do not infer device readiness from hosted CI.
 5. Keep Vercel deployment and manual review as explicit external gates until they produce fresh successful evidence.
+
+
+## Current-main update — 2026-10-22, after PRs #455–#457
+
+- Current main includes PR #455, merged as `741d60f88fe3715f3ad447894b8c09ec0a0dd3fb`: invalid/stale lead-lag timing and non-finite move observations are excluded from statistical history. This prevents rejected samples from satisfying `min_samples` or contaminating later ratios; it does not establish profitable edge.
+- PR #456 merged the architecture contract `docs/ANDROID_ADB_HEADLESS_VIRTUALIZATION.md`. It separates the headless Trader service, existing read-only ADB/PAPER telemetry adapter, optional on-demand scrcpy mirror for manual physical-phone interaction, and an optional Android Emulator that remains stopped by default.
+- PR #457 merged as `dbbb4280a61fbd5984563c581020a20637399334`. Added:
+  - `scripts/android_emulator_headless.ps1`: list/start/status/stop for an already-created AVD; no SDK installation, AVD creation, ADB TCP exposure or Windows autostart.
+  - `scripts/android_phone_mirror.ps1`: on-demand scrcpy session for the physical phone, explicit serial selection when multiple devices are attached, bounded 1280-pixel / 30-FPS / 4-Mbit defaults and no audio.
+  - Windows CI PowerShell syntax parsing for both scripts.
+- Exact-head Windows EXE workflow run `39764626283` passed on PR head `210cc32c26fc5f9f440642dad0fe446a213c935e`: both the EXE smoke job and installer smoke job passed. This verifies syntax and existing packaging lifecycle on a hosted Windows runner; it does not verify SDK discovery, scrcpy compatibility, AVD lifecycle, USB driver/device authorization or resource usage on the user's PC.
+- Snyk reported no manifest changes. Vercel deployment was rate-limited by the daily quota; that is not a source/test failure, but it is not a successful new deployment either.
+- Existing `PC_ENGINE/execution/android_adb_paper_surface.py` remains read-only observation/PAPER feedback. The new scrcpy helper is manual interactive control, not an autonomous exchange agent. No tap automation, credential capture, MFA bypass, order submission, transfer or REAL activation was added.
+- Resource policy: the Trader engine and market-data collector do not depend on Android. The emulator is optional and must remain stopped unless explicitly started. Headless mode means no emulator window, not zero CPU/RAM use. The physical phone remains the preferred route for exchange apps and sessions already present there; emulator compatibility is app-specific.
+- Physical PC/phone/emulator validation is still **NOT VERIFIED**. No readiness percentage for Android should be raised solely because these scripts or CI exist.
+
+### Additional Android acceptance gates
+
+1. On the actual Windows PC, confirm Android SDK/ADB/scrcpy installation and PowerShell script behavior; test no device, unauthorized device, one device and multiple devices.
+2. Open scrcpy only on operator request, manually authenticate to required exchange apps, then close the window and verify it releases resources. Never record tokens or screenshots containing secrets.
+3. Create one disposable test AVD manually, then test list/start/status/stop and measure CPU/RAM while stopped, booting and idle. Do not import production exchange sessions into the AVD.
+4. Confirm that disconnecting the phone or stopping the emulator cannot stop/restart the Trader, change PAPER/REAL mode or grant any execution permission.
+5. Keep all app login/MFA and exchange actions manual. Do not automate financial side effects through screen coordinates or UI taps.
