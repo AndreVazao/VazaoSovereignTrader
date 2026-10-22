@@ -76,6 +76,7 @@ class BinanceSpotBookSynchronizer:
         self._need_snapshot = False
         self._buffer_overflow = False
         self._closed = False
+        self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._snapshot_attempts = 0
         self._snapshot_errors = 0
@@ -158,6 +159,15 @@ class BinanceSpotBookSynchronizer:
             self._emit(view)
         return self.book.status != BookStatus.INVALID
 
+    def connection_lost(self) -> None:
+        """Fail closed after a WebSocket disconnect and request a fresh snapshot."""
+        with self._condition:
+            if self._closed:
+                return
+            self._buffer.clear()
+            self.book.invalidate("connection_lost")
+            self._schedule_snapshot_locked()
+
     def health(self) -> dict[str, int | str | None | bool]:
         with self._condition:
             return {
@@ -177,6 +187,7 @@ class BinanceSpotBookSynchronizer:
     def stop(self) -> None:
         with self._condition:
             self._closed = True
+            self._stop_event.set()
             self._condition.notify_all()
             thread = self._thread
         if thread is not None and thread is not threading.current_thread():
@@ -203,8 +214,8 @@ class BinanceSpotBookSynchronizer:
                     self._snapshot_errors += 1
                     self.book.invalidate("snapshot_fetch_" + type(exc).__name__)
                     self._need_snapshot = True
-                    if self._condition.wait(timeout=retry_seconds) and self._closed:
-                        return
+                if self._stop_event.wait(retry_seconds):
+                    return
                 retry_seconds = min(30.0, retry_seconds * 2.0)
                 continue
             applied = self.install_snapshot(snapshot)
@@ -214,9 +225,9 @@ class BinanceSpotBookSynchronizer:
                 with self._condition:
                     if self._closed:
                         return
-                    if self._need_snapshot:
-                        if self._condition.wait(timeout=retry_seconds) and self._closed:
-                            return
+                    should_retry = self._need_snapshot
+                if should_retry and self._stop_event.wait(retry_seconds):
+                    return
                 retry_seconds = min(30.0, retry_seconds * 2.0)
 
     def _emit(self, view: BookSnapshot) -> None:
