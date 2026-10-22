@@ -491,6 +491,14 @@ class WebSocketMarketRadar:
         return number
 
     @staticmethod
+    def _parse_trade_side(value: object) -> str | None:
+        """Normalize only explicit venue BUY/SELL sides; unknown sides are unsafe."""
+        if not isinstance(value, str):
+            return None
+        side = value.strip().upper()
+        return side if side in {"BUY", "SELL"} else None
+
+    @staticmethod
     def _parse_positive_timestamp_ms(value: object) -> int | None:
         """Return a valid positive venue timestamp; never substitute local receive time."""
         if value is None or isinstance(value, bool):
@@ -503,7 +511,7 @@ class WebSocketMarketRadar:
 
     def _parse_binance(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         data = payload.get("data", payload)
-        if data.get("e") != "trade":
+        if data.get("e") != "trade" or not isinstance(data.get("m"), bool):
             return []
         symbol = self._to_symbol(data.get("s", ""))
         timestamp = self._parse_positive_timestamp_ms(data.get("T"))
@@ -513,7 +521,8 @@ class WebSocketMarketRadar:
         quantity = self._parse_finite_number(data.get("q"))
         if price is None or quantity is None:
             return []
-        return [self._make_event("binance", symbol, price, quantity, "SELL" if bool(data.get("m")) else "BUY", timestamp, receive_ts, data.get("t"))]
+        side = "SELL" if data["m"] else "BUY"
+        return [self._make_event("binance", symbol, price, quantity, side, timestamp, receive_ts, data.get("t"))]
 
     def _parse_coinbase(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
         if payload.get("channel") != "market_trades":
@@ -528,9 +537,10 @@ class WebSocketMarketRadar:
                         continue
                     price = self._parse_finite_number(trade.get("price"))
                     quantity = self._parse_finite_number(trade.get("size"))
-                    if price is None or quantity is None:
+                    side = self._parse_trade_side(trade.get("side"))
+                    if price is None or quantity is None or side is None:
                         continue
-                    events.append(self._make_event("coinbase", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts, trade.get("trade_id")))
+                    events.append(self._make_event("coinbase", symbol, price, quantity, side, timestamp, receive_ts, trade.get("trade_id")))
         return events
 
     def _parse_okx(self, payload: dict, receive_ts: int) -> list[MarketEvent]:
@@ -545,9 +555,10 @@ class WebSocketMarketRadar:
                     continue
                 price = self._parse_finite_number(trade.get("px"))
                 quantity = self._parse_finite_number(trade.get("sz"))
-                if price is None or quantity is None:
+                side = self._parse_trade_side(trade.get("side"))
+                if price is None or quantity is None or side is None:
                     continue
-                events.append(self._make_event("okx", symbol, price, quantity, str(trade.get("side", "")).upper(), timestamp, receive_ts, trade.get("tradeId")))
+                events.append(self._make_event("okx", symbol, price, quantity, side, timestamp, receive_ts, trade.get("tradeId")))
         return events
 
     def _to_symbol(self, symbol: str) -> str | None:

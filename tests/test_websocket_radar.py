@@ -24,6 +24,38 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertEqual(events[0].exchange_ts_ms, 1234567890)
         self.assertIsNone(events[0].price_before)
 
+    def test_trade_parsers_reject_missing_or_invalid_side(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar.symbols = ["BTC/USDT", "BTC/USD"]
+        radar._last_price = {}
+
+        # Binance must provide its boolean maker flag; missing/malformed flags
+        # must not silently turn an unknown aggressor side into BUY.
+        self.assertEqual(radar._parse_binance({
+            "data": {"e": "trade", "s": "BTCUSDT", "p": "100", "q": "1",
+                     "T": 1234567890}
+        }, 1234567990), [])
+        self.assertEqual(radar._parse_binance({
+            "data": {"e": "trade", "s": "BTCUSDT", "p": "100", "q": "1",
+                     "T": 1234567890, "m": "false"}
+        }, 1234567990), [])
+
+        coinbase = radar._parse_coinbase({
+            "channel": "market_trades",
+            "events": [{"trades": [{
+                "product_id": "BTC-USD", "price": "100", "size": "1",
+                "side": "", "time": "2026-10-21T12:00:00Z",
+            }]}],
+        }, 1234567990)
+        self.assertEqual(coinbase, [])
+
+        okx = radar._parse_okx({
+            "arg": {"channel": "trades"},
+            "data": [{"instId": "BTC-USDT", "px": "100", "sz": "1",
+                      "side": "unknown", "ts": "1234567890"}],
+        }, 1234567990)
+        self.assertEqual(okx, [])
+
     def test_venue_trade_ids_are_preserved_for_deduplication(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar.symbols = ["BTC/USDT", "BTC/USD"]
