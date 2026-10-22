@@ -170,3 +170,24 @@ def test_nonfinite_move_observation_is_ineligible_and_not_recorded():
     assert result.eligible is False
     assert result.sample_count == 0
     assert len(detector.history("BTC/USDT", "binance", "okx", "UP")) == 0
+
+def test_latency_edge_rejects_unsafe_configuration_values():
+    import pytest
+
+    invalid_settings = (
+        {"min_lead_bps": -0.1},
+        {"min_lead_bps": float("nan")},
+        {"fee_bps": -1.0},
+        {"spread_bps": float("inf")},
+        {"slippage_bps": -0.5},
+        {"latency_decay_bps_per_100ms": -0.1},
+        {"max_lead_ms": -1},
+        {"min_samples": 0},
+        {"execution_latency_ms": -1},
+        {"min_same_direction_ratio": 1.01},
+        {"min_persistence_ratio": -0.01},
+        {"history_size": 0},
+    )
+    for settings in invalid_settings:
+        with pytest.raises(ValueError):
+            LatencyEdgeDetector(**settings)
