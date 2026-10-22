@@ -432,3 +432,11 @@ A recolha contínua grava websocket_events.jsonl, websocket_lead_lag.jsonl, webs
 A configuração de exemplo cobre BTC, ETH, BNB, SOL e DOGE nos streams públicos Binance, Coinbase e OKX. A camada REST continua disponível para snapshots OHLCV e recuperação; WebSocket é usado para a recolha de baixa latência observacional.
 
 Nenhum destes processos autoriza execução REAL.
+
+
+## Validação do lado agressor nos streams de trades
+
+- Os adaptadores WebSocket de Binance, Coinbase e OKX só emitem eventos quando o lado agressor é conhecido e válido.
+- Binance requer o campo booleano nativo `m`; ausência ou tipo inesperado não é interpretado silenciosamente como BUY. Coinbase e OKX aceitam apenas BUY/SELL após normalização.
+- Eventos sem lado válido são descartados antes de afetar contadores, matching lead/lag, callbacks ou persistência. Isto evita contaminar análises de fluxo com payloads incompletos ou malformados.
+- A validação é deliberadamente conservadora e observacional/PAPER; não muda execução nem afirma vantagem negociável.
