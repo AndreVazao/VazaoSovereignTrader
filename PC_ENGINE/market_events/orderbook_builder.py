@@ -73,14 +73,21 @@ class OrderBookBuilder:
         if snapshot.event_type != "snapshot":
             return None
         self._load_snapshot(snapshot)
-        ordered = sorted(
-            (event for event in buffered_deltas if event.venue == self.venue and event.symbol == self.symbol),
-            key=lambda event: event.sequence if event.sequence is not None else -1,
-        )
+        matching_deltas = [
+            event for event in buffered_deltas
+            if event.venue == self.venue and event.symbol == self.symbol
+        ]
+        if any(
+            event.event_type != "delta"
+            or not self._sequence_fields_valid(event, snapshot=False)
+            or not self._levels_valid(event.bids, event.asks)
+            for event in matching_deltas
+        ):
+            self._invalidate()
+            return None
+        ordered = sorted(matching_deltas, key=lambda event: event.sequence)
         bridged = False
         for event in ordered:
-            if event.sequence is None:
-                continue
             if event.sequence <= (self._sequence or -1):
                 continue
             expected_next = (self._sequence or 0) + 1
