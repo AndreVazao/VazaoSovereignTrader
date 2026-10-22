@@ -48,3 +48,10 @@ The adapter uses bounded subprocess timeouts and `shell=False`. It distinguishes
 - Runtime instantiation, probing, automatic restarts, and background polling are not enabled automatically.
 - A successful ADB probe does not prove the APK is authenticated, its UI is usable, an exchange works, or a strategy is profitable.
 - Automated tests mock ADB subprocesses. Physical Android/emulator and OEM-specific validation remains outstanding until performed on an authorized local device.
+
+
+## Optional headless Android Emulator
+
+The read-only ADB adapter above already supports observing a physical device or emulator once it is connected and explicitly probed. For emulator lifecycle, see `docs/ANDROID_ADB_HEADLESS_VIRTUALIZATION.md` and the optional `scripts/android_emulator_headless.ps1` helper. The helper operates only on an AVD already created by the operator; it is not part of engine startup, does not create accounts or install exchange apps, and must not be treated as a clone of the physical phone.
+
+The emulator is stopped by default. Prefer the physical phone for existing exchange app sessions. Emulator compatibility is app-specific and must be verified manually.
