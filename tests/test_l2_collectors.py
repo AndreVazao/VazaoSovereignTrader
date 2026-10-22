@@ -77,6 +77,27 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].sequence, 44)
         self.assertEqual(events[0].asks[0].quantity, 4.0)
 
+    def test_okx_books5_update_is_still_a_full_snapshot(self) -> None:
+        events = self.collector("okx")._parse(json.dumps({
+            "arg": {"channel": "books5"},
+            "action": "update",
+            "data": [{"ts": "1235", "seqId": 45, "prevSeqId": 44,
+                      "bids": [["100.1", "1", "0", "1"]],
+                      "asks": [["100.3", "2", "0", "1"]]}],
+        }), 9000)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "snapshot")
+        self.assertEqual(events[0].sequence, 45)
+        self.assertEqual(events[0].sequence_start, 45)
+
+    def test_okx_rejects_unknown_action(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid_okx_action"):
+            self.collector("okx")._parse(json.dumps({
+                "arg": {"channel": "books"},
+                "action": "partial",
+                "data": [],
+            }), 9000)
+
     def test_coinbase_l2_data_envelope_preserves_sequence_and_timestamp(self) -> None:
         collector = PublicL2WebSocketCollector(
             L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
