@@ -52,6 +52,17 @@ def main() -> None:
         payload["status"] = view.status.value
         append_jsonl(synchronized_output, payload)
 
+    configs = []
+    requested_venues = set(args.venues)
+    for symbol in args.symbols:
+        configs.extend(config for config in default_l2_configs(symbol) if config.venue in requested_venues)
+    configured_pairs = {(config.symbol, config.venue) for config in configs}
+    unconfigured_pairs = [
+        {"symbol": symbol, "venue": venue, "reason": "no_safe_default_mapping"}
+        for symbol in args.symbols for venue in args.venues
+        if (symbol, venue) not in configured_pairs
+    ]
+
     def write_health() -> None:
         while not stop.is_set():
             snapshot = {
@@ -59,6 +70,7 @@ def main() -> None:
                 "updated_at_ms": time.time_ns() // 1_000_000,
                 "paper_only": True,
                 "orders_submitted": False,
+                "unconfigured_pairs": unconfigured_pairs,
                 "collectors": [collector.health_snapshot() for collector in collectors],
             }
             try:
@@ -70,10 +82,6 @@ def main() -> None:
                 pass
             if stop.wait(5.0):
                 break
-
-    configs = []
-    for symbol in args.symbols:
-        configs.extend(config for config in default_l2_configs(symbol) if config.venue in set(args.venues))
 
     for config in configs:
         collector = PublicL2WebSocketCollector(
@@ -97,6 +105,8 @@ def main() -> None:
         "status": "RUNNING",
         "symbols": args.symbols,
         "venues": args.venues,
+        "configured_pairs": [{"symbol": symbol, "venue": venue} for symbol, venue in sorted(configured_pairs)],
+        "unconfigured_pairs": unconfigured_pairs,
         "raw_output": str(output),
         "binance_synchronized_output": str(synchronized_output),
         "health_output": str(health_output),
