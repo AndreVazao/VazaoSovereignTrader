@@ -535,8 +535,8 @@
     "simultaneous_execution": true,
     "max_parallel_orders": 4,
     "require_all_prerequisites": true,
-    "allow_real": true,
-    "auto_promote_real": true,
+    "allow_real": false,
+    "auto_promote_real": false,
     "capital_allocation": {
       "mode": "DYNAMIC_EFFICIENCY",
       "max_total_exposure_pct": 0.35,
