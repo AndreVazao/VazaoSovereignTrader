@@ -111,7 +111,11 @@ def build_chat_cockpit(app):
         col.add_widget(_label(title, size=17, bold=True, size_hint_y=None, height=dp(25)))
         col.add_widget(_label(subtitle, size=11, color=MUTED))
         bar.add_widget(col)
-        bar.add_widget(app.status)
+        # app.status is the canonical model label; never reparent one Kivy widget
+        # into multiple lazily-created page headers.
+        status_label = _label(app.status.text, size=12, color=MUTED, size_hint_x=None, width=dp(90))
+        app.status.bind(text=lambda _instance, value, target=status_label: setattr(target, "text", value))
+        bar.add_widget(status_label)
         return bar
 
     def chat_page():
@@ -126,6 +130,7 @@ def build_chat_cockpit(app):
         history = BoxLayout(orientation="vertical", spacing=dp(10), padding=[dp(4), dp(8)], size_hint_y=None)
         history.bind(minimum_height=history.setter("height"))
         app.chat_history_box = history
+        app._chat_scroll = scroll
         scroll.add_widget(history)
         page.add_widget(scroll)
 

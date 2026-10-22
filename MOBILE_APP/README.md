@@ -57,3 +57,10 @@ Endpoints de diagnóstico disponíveis no PC:
 - /readiness/timeline
 
 A autenticação continua a usar VST_LOCAL_TOKEN e o acesso remoto recomendado é Tailscale.
+
+
+## Startup diagnostics and mobile release gate
+
+The current cockpit keeps a canonical status model separate from the per-page status labels, avoiding Kivy widget re-parenting when navigating between lazily-created pages. The chat scroll view is explicitly retained for auto-scroll. If cockpit construction raises a Python exception, the app now shows a small diagnostic screen instead of silently closing; it records the exception class and traceback frames in the app's private `startup_error.log` when storage is available. The log is local-only and is not sent to the PC. The diagnostic screen includes a retry action.
+
+The Android workflow now runs source syntax/structure checks before Buildozer. These checks and a successful APK build do **not** prove that the APK launches on a physical phone; the user-reported immediate crash still requires a fresh APK plus Android launch/logcat smoke test before installation is considered ready.

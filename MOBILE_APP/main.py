@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from pathlib import Path
 
 import urllib.error
@@ -45,6 +46,13 @@ REAL_PHRASE = "EU ACEITO O RISCO"
 class MobileCockpit(App):
     """Remote cockpit. Exchange credentials never live in this app."""
     def build(self):
+        try:
+            return self._build_cockpit()
+        except Exception as exc:
+            self._record_startup_error(exc)
+            return self._startup_error_view(type(exc).__name__)
+
+    def _build_cockpit(self):
         self.lang = self._load_lang("pt")
         self.lan_url, self.tailscale_url = self._load_connection_config()
         self.pc_url = self.lan_url or self.tailscale_url or ""
@@ -67,6 +75,53 @@ class MobileCockpit(App):
         self._bind_android_activity()
         Clock.schedule_interval(self.heartbeat, 10)
         return root
+
+    def _record_startup_error(self, exc):
+        """Write local diagnostic frames only; never transmit startup diagnostics."""
+        try:
+            path = Path(self.user_data_dir) / "startup_error.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            frames = "".join(traceback.format_tb(exc.__traceback__))
+            path.write_text(
+                f"exception_type={type(exc).__name__}\\n{frames}",
+                encoding="utf-8",
+            )
+            self._startup_error_path = str(path)
+        except Exception:
+            self._startup_error_path = ""
+
+    def _startup_error_view(self, error_type):
+        root = BoxLayout(orientation="vertical", padding=20, spacing=12)
+        root.add_widget(Label(
+            text="O Sovereign Trader não conseguiu iniciar o cockpit.",
+            size_hint_y=None, height=70, halign="center", valign="middle",
+        ))
+        root.add_widget(Label(
+            text=f"Tipo de erro: {error_type}",
+            size_hint_y=None, height=42, halign="center", valign="middle",
+        ))
+        diagnostic_path = getattr(self, "_startup_error_path", "")
+        detail = (
+            "Diagnóstico local guardado em startup_error.log, sem dados de autenticação."
+            if diagnostic_path
+            else "Não foi possível guardar o diagnóstico local; o ecrã mantém o tipo de erro."
+        )
+        root.add_widget(Label(text=detail, halign="center", valign="middle"))
+        retry = Button(text="TENTAR INICIAR NOVAMENTE", size_hint_y=None, height=48)
+        retry.bind(on_release=lambda *_: Clock.schedule_once(lambda *_: self._retry_startup(), 0))
+        root.add_widget(retry)
+        return root
+
+    def _retry_startup(self):
+        try:
+            new_root = self._build_cockpit()
+        except Exception as exc:
+            self._record_startup_error(exc)
+            self.root.clear_widgets()
+            self.root.add_widget(self._startup_error_view(type(exc).__name__))
+            return
+        self.root.clear_widgets()
+        self.root.add_widget(new_root)
 
     def _append_chat_message(self, role, text):
         history = getattr(self, "chat_history_box", None)

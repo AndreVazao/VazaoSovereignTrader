@@ -25,8 +25,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Run endpoint-selection unit tests
-        run: python -m unittest MOBILE_APP.test_endpoint_selection -v
+      - name: Run mobile startup and endpoint contract tests
+        run: python -m unittest MOBILE_APP.test_startup_contract MOBILE_APP.test_endpoint_selection -v
+      - name: Compile all mobile Python sources
+        run: python -m compileall -q MOBILE_APP
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
