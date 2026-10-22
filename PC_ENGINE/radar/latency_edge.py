@@ -57,6 +57,32 @@ class LatencyEdgeDetector:
         self.slippage_bps = float(slippage_bps)
         self.execution_latency_ms = int(execution_latency_ms)
         self.latency_decay_bps_per_100ms = float(latency_decay_bps_per_100ms)
+
+        non_negative_settings = {
+            "min_lead_bps": self.min_lead_bps,
+            "fee_bps": self.fee_bps,
+            "spread_bps": self.spread_bps,
+            "slippage_bps": self.slippage_bps,
+            "latency_decay_bps_per_100ms": self.latency_decay_bps_per_100ms,
+        }
+        for name, value in non_negative_settings.items():
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and non-negative")
+        if self.max_lead_ms < 0:
+            raise ValueError("max_lead_ms must be non-negative")
+        if self.min_samples < 1:
+            raise ValueError("min_samples must be positive")
+        if self.execution_latency_ms < 0:
+            raise ValueError("execution_latency_ms must be non-negative")
+        for name, value in (
+            ("min_same_direction_ratio", self.min_same_direction_ratio),
+            ("min_persistence_ratio", self.min_persistence_ratio),
+        ):
+            if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be between 0 and 1")
+        if history_size < 1:
+            raise ValueError("history_size must be positive")
+
         self._history: dict[tuple[str, str, str, str], deque[tuple[int, float, float]]] = defaultdict(
             lambda: deque(maxlen=history_size)
         )
