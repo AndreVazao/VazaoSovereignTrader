@@ -104,7 +104,9 @@ class L2MicrostructureReplay:
                 ))
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 continue
-        events.sort(key=lambda event: (L2MicrostructureReplay._time(event), event.local_receive_ns))
+        # Apply sequence-numbered updates in local arrival order. Exchange timestamps
+        # can be skewed across events and must not reorder one venue's book history.
+        events.sort(key=lambda event: event.local_receive_ns)
         return events
 
     @staticmethod
