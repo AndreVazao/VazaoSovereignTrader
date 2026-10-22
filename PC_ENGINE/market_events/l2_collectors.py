@@ -198,6 +198,28 @@ class PublicL2WebSocketCollector:
 
         return events
 
+    def process_message(self, message: str) -> None:
+        """Parse and dispatch one message while keeping telemetry non-sensitive."""
+        receive_ns = time.monotonic_ns()
+        try:
+            events = self._parse(message, receive_ns)
+        except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
+            with self._health_lock:
+                self._parse_errors += 1
+                self._last_parse_error = type(exc).__name__
+            return
+        for event in events:
+            if self._stop.is_set():
+                continue
+            if self._sync is not None:
+                self._sync.on_event(event)
+            try:
+                self.on_event(event)
+            except Exception as exc:
+                with self._health_lock:
+                    self._raw_callback_errors += 1
+                    self._last_raw_callback_error = type(exc).__name__
+
     def run_forever(self) -> None:
         if self._sync is not None:
             self._sync.start()
@@ -207,25 +229,7 @@ class PublicL2WebSocketCollector:
                 opened = threading.Event()
 
                 def on_message(_ws: websocket.WebSocketApp, message: str) -> None:
-                    receive_ns = time.monotonic_ns()
-                    try:
-                        events = self._parse(message, receive_ns)
-                    except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
-                        with self._health_lock:
-                            self._parse_errors += 1
-                            self._last_parse_error = type(exc).__name__
-                        return
-                    for event in events:
-                        if self._stop.is_set():
-                            continue
-                        if self._sync is not None:
-                            self._sync.on_event(event)
-                        try:
-                            self.on_event(event)
-                        except Exception as exc:
-                            with self._health_lock:
-                                self._raw_callback_errors += 1
-                                self._last_raw_callback_error = type(exc).__name__
+                    self.process_message(message)
 
                 def on_open(ws: websocket.WebSocketApp) -> None:
                     opened.set()
