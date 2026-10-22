@@ -91,6 +91,10 @@ class L2TemporalExecutableReplay:
 
     @staticmethod
     def _time(event: OrderBookEvent) -> float:
+        # All venue collectors share this process's monotonic clock. Use observed
+        # local arrival for causal replay; exchange clocks can be skewed across venues.
+        if event.local_receive_ns > 0:
+            return event.local_receive_ns / 1_000_000.0
         if event.exchange_ts_ms is not None:
             return float(event.exchange_ts_ms)
         if event.provider_ts_ms is not None:
@@ -122,7 +126,10 @@ class L2TemporalExecutableReplay:
                 ))
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 continue
-        result.sort(key=lambda e: (L2TemporalExecutableReplay._time(e), e.local_receive_ns))
+        # Reconstruct each venue in local arrival order so exchange-clock skew cannot
+        # reorder sequence-numbered deltas. Cross-venue event-time ordering happens
+        # after reconstruction, when building the replay timeline.
+        result.sort(key=lambda e: e.local_receive_ns)
         return result
 
     @staticmethod

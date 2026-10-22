@@ -41,11 +41,46 @@ class OrderBookBuilderTests(unittest.TestCase):
         self.assertEqual(book.bids[0].quantity, 1)
         self.assertEqual(book.asks[0].quantity, 2)
 
+    def test_snapshot_does_not_apply_delta_range_semantics(self) -> None:
+        builder = OrderBookBuilder("test", "BTC/USDT")
+        snapshot = self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),))
+        snapshot = OrderBookEvent(**{**snapshot.__dict__, "sequence_start": 11})
+        book = builder.apply(snapshot)
+        self.assertIsNotNone(book)
+        self.assertTrue(builder.initialized)
+
     def test_sequence_gap_stales_book(self) -> None:
         builder = OrderBookBuilder("test", "BTC/USDT")
         builder.apply(self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),)))
         self.assertIsNone(builder.apply(self.event("delta", 12, bids=(OrderBookLevel(101, 1),))))
         self.assertTrue(builder.stale)
+
+    def test_unsequenced_delta_invalidates_book(self) -> None:
+        builder = OrderBookBuilder("test", "BTC/USDT")
+        builder.apply(self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),)))
+        delta = self.event("delta", 11, bids=(OrderBookLevel(101, 1),))
+        delta = OrderBookEvent(**{**delta.__dict__, "sequence": None, "sequence_start": None})
+        self.assertIsNone(builder.apply(delta))
+        self.assertTrue(builder.stale)
+        self.assertFalse(builder.initialized)
+
+    def test_non_finite_snapshot_invalidates_book(self) -> None:
+        builder = OrderBookBuilder("test", "BTC/USDT")
+        book = builder.apply(self.event(
+            "snapshot", 10, bids=(OrderBookLevel(float("nan"), 1),)
+        ))
+        self.assertIsNone(book)
+        self.assertTrue(builder.stale)
+        self.assertFalse(builder.initialized)
+
+    def test_non_finite_delta_invalidates_book(self) -> None:
+        builder = OrderBookBuilder("test", "BTC/USDT")
+        builder.apply(self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),)))
+        self.assertIsNone(builder.apply(self.event(
+            "delta", 11, bids=(OrderBookLevel(float("inf"), 1),)
+        )))
+        self.assertTrue(builder.stale)
+        self.assertFalse(builder.initialized)
 
     def test_old_sequence_stales_book(self) -> None:
         builder = OrderBookBuilder("test", "BTC/USDT")

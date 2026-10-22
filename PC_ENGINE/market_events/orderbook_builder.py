@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 from .orderbook import OrderBookEvent, OrderBookLevel
 
@@ -48,16 +49,22 @@ class OrderBookBuilder:
         if event.venue != self.venue or event.symbol != self.symbol:
             return None
         if event.event_type == "snapshot":
+            if not self._sequence_fields_valid(event, snapshot=True) or not self._levels_valid(event.bids, event.asks):
+                self._invalidate()
+                return None
             self._load_snapshot(event)
             return self.snapshot()
         if event.event_type != "delta" or not self.initialized:
             return None
+        if not self._sequence_fields_valid(event, snapshot=False) or not self._levels_valid(event.bids, event.asks):
+            self._invalidate()
+            return None
         if not self._sequence_is_contiguous(event):
-            self.stale = True
+            self._invalidate()
             return None
         self._apply_levels(self._bids, event.bids)
         self._apply_levels(self._asks, event.asks)
-        self._sequence = event.sequence if event.sequence is not None else self._sequence
+        self._sequence = event.sequence
         return self.snapshot()
 
     def bootstrap(self, snapshot: OrderBookEvent, buffered_deltas: list[OrderBookEvent]) -> ReconstructedBook | None:
@@ -72,15 +79,25 @@ class OrderBookBuilder:
             return None
         if snapshot.event_type != "snapshot":
             return None
+        if not self._sequence_fields_valid(snapshot, snapshot=True) or not self._levels_valid(snapshot.bids, snapshot.asks):
+            self._invalidate()
+            return None
         self._load_snapshot(snapshot)
-        ordered = sorted(
-            (event for event in buffered_deltas if event.venue == self.venue and event.symbol == self.symbol),
-            key=lambda event: event.sequence if event.sequence is not None else -1,
-        )
+        matching_deltas = [
+            event for event in buffered_deltas
+            if event.venue == self.venue and event.symbol == self.symbol
+        ]
+        if any(
+            event.event_type != "delta"
+            or not self._sequence_fields_valid(event, snapshot=False)
+            or not self._levels_valid(event.bids, event.asks)
+            for event in matching_deltas
+        ):
+            self._invalidate()
+            return None
+        ordered = sorted(matching_deltas, key=lambda event: event.sequence)
         bridged = False
         for event in ordered:
-            if event.sequence is None:
-                continue
             if event.sequence <= (self._sequence or -1):
                 continue
             expected_next = (self._sequence or 0) + 1
@@ -110,9 +127,44 @@ class OrderBookBuilder:
         self._initialized = True
         self.stale = False
 
+    @staticmethod
+    def _sequence_fields_valid(event: OrderBookEvent, *, snapshot: bool) -> bool:
+        def valid_sequence(value: int | None) -> bool:
+            return value is None or (
+                isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            )
+
+        if not valid_sequence(event.sequence) or not valid_sequence(event.sequence_start):
+            return False
+        if not snapshot and event.sequence is None:
+            return False
+        if not snapshot and event.sequence is not None and event.sequence_start is not None:
+            if event.sequence_start > event.sequence:
+                return False
+        return True
+
+    @staticmethod
+    def _levels_valid(*sides: tuple[OrderBookLevel, ...]) -> bool:
+        for levels in sides:
+            for level in levels:
+                try:
+                    price, quantity = float(level.price), float(level.quantity)
+                except (TypeError, ValueError, OverflowError):
+                    return False
+                if not isfinite(price) or price <= 0 or not isfinite(quantity) or quantity < 0:
+                    return False
+        return True
+
+    def _invalidate(self) -> None:
+        self._initialized = False
+        self.stale = True
+        self._sequence = None
+        self._bids.clear()
+        self._asks.clear()
+
     def _sequence_is_contiguous(self, event: OrderBookEvent) -> bool:
         if event.sequence is None or self._sequence is None:
-            return True
+            return False
         if event.sequence <= self._sequence:
             return False
         if event.sequence_start is not None:

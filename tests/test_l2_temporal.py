@@ -21,6 +21,26 @@ def row(event_id, venue, seq, ts, bid, ask, event_type="snapshot"):
 
 
 class L2TemporalReplayTests(unittest.TestCase):
+    def test_loader_preserves_arrival_order_when_exchange_clock_is_out_of_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "events.jsonl"
+            snapshot = row("s1", "venue", 10, 2000, 100.0, 101.0)
+            delta = row("d2", "venue", 11, 1000, 100.0, 101.0, event_type="delta")
+            snapshot["local_receive_ns"] = 1_000
+            delta["local_receive_ns"] = 2_000
+            source.write_text("\n".join(json.dumps(x) for x in (snapshot, delta)), encoding="utf-8")
+            loaded = L2TemporalExecutableReplay._load(str(source))
+            self.assertEqual([event.event_id for event in loaded], ["s1", "d2"])
+            self.assertLess(L2TemporalExecutableReplay._time(loaded[0]), L2TemporalExecutableReplay._time(loaded[1]))
+
+            # A skewed exchange timestamp must not make a valid delta appear
+            # before its snapshot during sequence reconstruction.
+            from PC_ENGINE.market_events.orderbook_builder import OrderBookBuilder
+            builder = OrderBookBuilder("venue", "BTC/USDT")
+            self.assertIsNotNone(builder.apply(loaded[0]))
+            self.assertIsNotNone(builder.apply(loaded[1]))
+            self.assertFalse(builder.stale)
+
     def test_replay_executes_signal_through_depth(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "events.jsonl"
