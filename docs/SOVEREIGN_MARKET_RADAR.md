@@ -497,8 +497,8 @@ Esta secção regista evidência pública para uma futura implementação; **nã
 Fonte oficial: [Binance Spot WebSocket Streams — Diff. Depth Stream / How to manage a local order book correctly](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly).
 
 - O stream incremental fornece `U` (primeiro update ID) e `u` (último update ID); o snapshot REST fornece `lastUpdateId`.
-- Na inicialização, abrir o WebSocket e bufferizar eventos antes de pedir o snapshot; descartar eventos cujo `u <= lastUpdateId). O primeiro evento aplicado tem de cobrir o próximo ID do snapshot: `U <= lastUpdateId + 1 <= u`. Se não cobrir, repetir a sincronização em vez de declarar o livro válido.
-- Depois de sincronizado, ignorar eventos antigos/duplicados com `u <= local_update_id). Se `U > local_update_id + 1`, há uma lacuna segundo o contrato documentado: invalidar o livro e reconstruir a partir de novo snapshot + buffer. Só aplicar deltas compatíveis com a sequência.
+- Na inicialização, abrir o WebSocket e bufferizar eventos antes de pedir o snapshot; descartar eventos cujo `u <= lastUpdateId`. O primeiro evento aplicado tem de cobrir o próximo ID do snapshot: `U <= lastUpdateId + 1 <= u`. Se não cobrir, repetir a sincronização em vez de declarar o livro válido.
+- Depois de sincronizado, ignorar eventos antigos/duplicados com `u <= local_update_id`. Se `U > local_update_id + 1`, há uma lacuna segundo o contrato documentado: invalidar o livro e reconstruir a partir de novo snapshot + buffer. Só aplicar deltas compatíveis com a sequência.
 - Quantidade zero remove o nível; quantidade não-zero substitui a quantidade do preço, não é incremento. O snapshot tem limite de níveis; profundidade fora do snapshot pode ser desconhecida até ser atualizada.
 - Não reutilizar trade IDs nem timestamps como substitutos dos update IDs de depth.
 
