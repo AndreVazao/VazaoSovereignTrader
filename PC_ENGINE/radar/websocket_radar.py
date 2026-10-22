@@ -115,6 +115,21 @@ class WebSocketMarketRadar:
         base, quote = symbol.upper().split("/")
         return base, quote
 
+    def _symbols_for_exchange(self, exchange: str) -> list[str]:
+        """Return symbols with a safe default product mapping for this venue.
+
+        Coinbase is only auto-mapped for USD-quoted products. USDT and USD are
+        different quote assets and must not be compared as the same market.
+        """
+        if exchange.lower() != "coinbase":
+            return list(self.symbols)
+        return [
+            symbol for symbol in self.symbols
+            if len(symbol.split("/", 1)) == 2
+            and symbol.split("/", 1)[0]
+            and symbol.split("/", 1)[1].upper() == "USD"
+        ]
+
     @staticmethod
     def _now_ms() -> int:
         return time.time_ns() // 1_000_000
@@ -127,6 +142,13 @@ class WebSocketMarketRadar:
                 "running": any(thread.is_alive() for thread in self._threads),
                 "symbols": list(self.symbols),
                 "exchanges": list(self.exchanges),
+                "unconfigured_symbols_by_exchange": {
+                    exchange: [
+                        symbol for symbol in self.symbols
+                        if symbol not in self._symbols_for_exchange(exchange)
+                    ]
+                    for exchange in self.exchanges
+                },
                 "events_total": self._events_total,
                 "events_by_exchange": dict(self._events_by_exchange),
                 "last_event": last,
@@ -173,6 +195,8 @@ class WebSocketMarketRadar:
                 return
             self._stop.clear()
             for exchange in self.exchanges:
+                if not self._symbols_for_exchange(exchange):
+                    continue
                 target = getattr(self, f"_run_{exchange}", None)
                 if target is None:
                     continue
@@ -380,7 +404,7 @@ class WebSocketMarketRadar:
 
     def _run_coinbase(self) -> None:
         def on_open(ws: websocket.WebSocketApp) -> None:
-            products = [f"{self.normalize_symbol(s)[0]}-{self.normalize_symbol(s)[1]}" for s in self.symbols]
+            products = [f"{self.normalize_symbol(s)[0]}-{self.normalize_symbol(s)[1]}" for s in self._symbols_for_exchange("coinbase")]
             ws.send(json.dumps({"type": "subscribe", "product_ids": products, "channel": "market_trades"}))
         self._run_with_reconnect(self.ENDPOINTS["coinbase"], self._parse_coinbase, "coinbase", on_open)
 
