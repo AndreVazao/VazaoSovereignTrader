@@ -41,6 +41,14 @@ class OrderBookBuilderTests(unittest.TestCase):
         self.assertEqual(book.bids[0].quantity, 1)
         self.assertEqual(book.asks[0].quantity, 2)
 
+    def test_snapshot_does_not_apply_delta_range_semantics(self) -> None:
+        builder = OrderBookBuilder("test", "BTC/USDT")
+        snapshot = self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),))
+        snapshot = OrderBookEvent(**{**snapshot.__dict__, "sequence_start": 11})
+        book = builder.apply(snapshot)
+        self.assertIsNotNone(book)
+        self.assertTrue(builder.initialized)
+
     def test_sequence_gap_stales_book(self) -> None:
         builder = OrderBookBuilder("test", "BTC/USDT")
         builder.apply(self.event("snapshot", 10, bids=(OrderBookLevel(100, 1),)))
