@@ -177,12 +177,19 @@ def main() -> None:
             now = time.monotonic()
             if now >= next_health_heartbeat:
                 # Refresh liveness independently of slower learning/study cycles.
-                write_health(
-                    "RUNNING",
-                    radar=radar.snapshot(),
-                    hot_path=hot_path.snapshot(),
-                    hot_path_outcomes=outcome_tracker.snapshot(),
-                )
+                try:
+                    write_health(
+                        "RUNNING",
+                        radar=radar.snapshot(),
+                        hot_path=hot_path.snapshot(),
+                        hot_path_outcomes=outcome_tracker.snapshot(),
+                    )
+                except OSError as exc:
+                    # A health-file write failure must not stop public data collection.
+                    print(json.dumps({
+                        "service": "market_data_collector",
+                        "health_heartbeat_error": type(exc).__name__,
+                    }), flush=True)
                 next_health_heartbeat = now + _health_heartbeat_interval_seconds(radar_cfg)
             if now >= next_learning:
                 stats = learner.learn()
