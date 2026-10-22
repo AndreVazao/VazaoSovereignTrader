@@ -518,3 +518,8 @@ Fonte oficial: [OKX API changelog — depreciação de checksum dos canais de or
 4. Buffer limitado em memória, backoff limitado e sem bloquear a recolha atual de trades.
 5. PAPER/observação exclusivamente. Não enviar ordens nem interpretar continuidade de dados como prova de lucro.
 6. Só depois de o contrato protocolar e testes estarem aprovados, ligar a camada de book ao radar de sinais. A ausência de sequência/checksum/snapshot documentado significa “continuidade desconhecida”, nunca “sem gaps”.
+
+
+### Cobertura da migração OKX — coletor de top-of-book
+
+A migração para TLS 443 aplica-se a todos os consumidores públicos do endpoint, não apenas ao radar principal. O coletor secundário `PC_ENGINE/market_events/websocket_collectors.py`, usado por `run_top_of_book_collector.py`, também usa agora `wss://ws.okx.com/ws/v5/public`. O teste `test_default_okx_public_endpoint_uses_tls_443` protege a configuração gerada por `default_public_configs`. Esta correção não valida conectividade real nem muda a subscrição de canais.
