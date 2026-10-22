@@ -94,3 +94,28 @@ The Android bridge must never become a dependency of market-data collection, ris
 ## Current limitation
 
 This document records the intended design only. It does not claim that ADB, scrcpy or an Android Emulator is installed or working on the user's PC, and it does not claim that the exchange apps support emulators. Validate these items on the target PC and phone before enabling the bridge by default.
+
+
+## Optional Windows headless-emulator helper
+
+The repository includes `scripts/android_emulator_headless.ps1` for the lifecycle of an AVD that has already been created in Android Studio. It is not part of Windows startup and does not install the SDK or create an AVD.
+
+Run from the repository root in PowerShell:
+
+```powershell
+# List configured virtual devices
+.\scripts\android_emulator_headless.ps1 -Action list
+
+# Start one AVD without a GUI window, audio, or boot animation
+.\scripts\android_emulator_headless.ps1 -Action start -AvdName "VST_Test"
+
+# Check whether that AVD's emulator process is running
+.\scripts\android_emulator_headless.ps1 -Action status -AvdName "VST_Test"
+
+# Stop only that named AVD; stopping requires explicit confirmation
+.\scripts\android_emulator_headless.ps1 -Action stop -AvdName "VST_Test" -ConfirmStop
+```
+
+The script resolves the SDK from `ANDROID_SDK_ROOT`, `ANDROID_HOME`, or the standard per-user Windows SDK directory. It never enables ADB over TCP, installs an app, logs into an exchange, or starts the emulator automatically. Headless means no emulator window; it does **not** mean zero CPU/RAM use. A successful process start is not proof the Android guest has completed booting; use the existing read-only ADB bridge to observe it after startup.
+
+This helper has been reviewed as source in GitHub but has not been executed on the target Windows PC. Treat it as unverified until PowerShell syntax, SDK discovery, AVD start/status/stop, ADB visibility and resource usage pass on that machine.
