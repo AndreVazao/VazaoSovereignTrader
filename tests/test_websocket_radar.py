@@ -152,8 +152,6 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertNotIn("sensitive raw payload detail", str(snapshot))
 
     def test_message_callback_records_decode_and_parser_failures(self) -> None:
-        import threading
-
         cases = [
             ("{malformed-json", None, "JSONDecodeError"),
             ('{"data":{}}', ValueError("sensitive parser detail"), "ValueError"),
@@ -182,22 +180,20 @@ class WebSocketRadarTests(unittest.TestCase):
                     ["BTC/USDT"], exchanges=["binance"], data_dir=tmp,
                 )
                 holder["radar"] = radar
-                parser_patch = patch.object(
-                    radar, "_parse_binance",
-                    side_effect=parser_error if parser_error is not None else None,
-                )
-                with parser_patch, patch(
+                with patch(
                     "PC_ENGINE.radar.websocket_radar.websocket.WebSocketApp",
                     MessageWebSocketApp,
                 ):
                     if parser_error is None:
-                        # Keep the real parser for malformed JSON; json.loads fails first.
-                        parser_patch.stop()
+                        radar.start()
                     else:
-                        parser_patch.start()
-                    radar.start()
-                    for worker in list(radar._threads):
-                        worker.join(timeout=2)
+                        with patch.object(radar, "_parse_binance", side_effect=parser_error):
+                            radar.start()
+                            for worker in list(radar._threads):
+                                worker.join(timeout=2)
+                    if parser_error is None:
+                        for worker in list(radar._threads):
+                            worker.join(timeout=2)
                     snapshot = radar.snapshot()
                     radar.stop()
 
