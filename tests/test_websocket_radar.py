@@ -137,6 +137,20 @@ class WebSocketRadarTests(unittest.TestCase):
         ]}
         self.assertEqual(radar._parse_okx(payload, 1234567990), [])
 
+    def test_message_processing_errors_are_counted_without_raw_exception_text(self) -> None:
+        radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
+        radar._lock = __import__("threading").RLock()
+        radar._message_errors = {"binance": 0}
+        radar._last_message_error = {}
+
+        radar._record_message_error("binance", ValueError("sensitive raw payload detail"))
+        snapshot = {"message_errors": dict(radar._message_errors),
+                    "last_message_error": dict(radar._last_message_error)}
+
+        self.assertEqual(snapshot["message_errors"]["binance"], 1)
+        self.assertEqual(snapshot["last_message_error"]["binance"], "ValueError")
+        self.assertNotIn("sensitive raw payload detail", str(snapshot))
+
     def test_snapshot_reports_no_trade_yet_without_claiming_disconnect(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar.symbols = ["BTC/USDT"]
@@ -153,6 +167,8 @@ class WebSocketRadarTests(unittest.TestCase):
         radar._events_by_exchange = {}
         radar._reconnects = {"binance": 0, "okx": 0}
         radar._errors = {"binance": 0, "okx": 0}
+        radar._message_errors = {"binance": 0, "okx": 0}
+        radar._last_message_error = {}
         radar._persistence_errors = 0
         snapshot = radar.snapshot()
         self.assertEqual(snapshot["trade_freshness"]["binance"], "no_trade_yet")
@@ -176,6 +192,8 @@ class WebSocketRadarTests(unittest.TestCase):
         radar._events_by_exchange = {"binance": 1}
         radar._reconnects = {"binance": 0}
         radar._errors = {"binance": 0}
+        radar._message_errors = {"binance": 0}
+        radar._last_message_error = {}
         radar._persistence_errors = 0
         snapshot = radar.snapshot()
         self.assertEqual(snapshot["trade_freshness"]["binance"], "no_recent_trade")
