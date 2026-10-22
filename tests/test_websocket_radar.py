@@ -9,6 +9,19 @@ from PC_ENGINE.radar.websocket_radar import MarketEvent, WebSocketMarketRadar
 
 
 class WebSocketRadarTests(unittest.TestCase):
+    def test_coinbase_default_mapping_excludes_non_usd_quotes(self) -> None:
+        with tempfile.TemporaryDirectory() as data_dir:
+            radar = WebSocketMarketRadar(
+                symbols=["BTC/USDT", "BTC/USD"],
+                exchanges=["coinbase"],
+                data_dir=data_dir,
+            )
+            self.assertEqual(radar._symbols_for_exchange("coinbase"), ["BTC/USD"])
+            self.assertEqual(
+                radar.snapshot()["unconfigured_symbols_by_exchange"]["coinbase"],
+                ["BTC/USDT"],
+            )
+
     def test_okx_public_websocket_uses_supported_default_tls_port(self) -> None:
         # OKX announced that public-internet WebSocket port 8443 will be
         # discontinued on 2026-10-31; wss without an explicit port uses 443.
