@@ -152,8 +152,8 @@ class OperatorAssistantGateway:
                 "status": "NOT_CONNECTED",
                 "reply": (
                     f"O contexto selecionado é {self.DEPARTMENTS[department]}, mas ainda não existe "
-                    "um handler de leitura ligado a este departamento. Não vou fingir que uma equipa "
-                    "autónoma respondeu. Os pedidos de investigação usam a fila comum."
+                    "um agente conversacional independente ligado nem um handler de leitura para este departamento. "
+                    "Não vou fingir que uma equipa autónoma respondeu. Os pedidos de investigação usam a fila comum."
                 ),
                 "paper_only": True,
                 "execution_authorized": False,
@@ -215,7 +215,7 @@ class OperatorAssistantGateway:
             reply = (
                 f"Saúde operacional: {len(data['venues'])} venues observadas; "
                 f"GREEN {data['counts']['GREEN']}, YELLOW {data['counts']['YELLOW']}, RED {data['counts']['RED']}. "
-                "Isto mede recência/amostras, não rentabilidade nem autorização de execução."
+                "Isto não é uma avaliação de rentabilidade nem uma autorização de execução."
             )
         elif department == "research":
             data.update({key: int(payload.get(key, 0) or 0) for key in ("pending", "active", "completed", "discarded")})
