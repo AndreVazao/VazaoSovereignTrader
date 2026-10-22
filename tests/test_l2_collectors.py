@@ -17,6 +17,12 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(okx.url, "wss://ws.okx.com/ws/v5/public")
         self.assertNotIn(":8443", okx.url)
 
+    def test_default_configs_do_not_equate_usdt_with_coinbase_usd(self) -> None:
+        usdt_venues = {config.venue for config in default_l2_configs("BTC/USDT")}
+        usd_venues = {config.venue for config in default_l2_configs("BTC/USD")}
+        self.assertNotIn("coinbase", usdt_venues)
+        self.assertIn("coinbase", usd_venues)
+
     def collector(self, venue: str) -> PublicL2WebSocketCollector:
         return PublicL2WebSocketCollector(
             L2WebSocketConfig(venue, "BTC/USDT", "wss://example"), lambda _: None)
