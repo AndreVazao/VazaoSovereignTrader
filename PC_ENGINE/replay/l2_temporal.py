@@ -122,7 +122,10 @@ class L2TemporalExecutableReplay:
                 ))
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 continue
-        result.sort(key=lambda e: (L2TemporalExecutableReplay._time(e), e.local_receive_ns))
+        # Reconstruct each venue in local arrival order so exchange-clock skew cannot
+        # reorder sequence-numbered deltas. Cross-venue event-time ordering happens
+        # after reconstruction, when building the replay timeline.
+        result.sort(key=lambda e: e.local_receive_ns)
         return result
 
     @staticmethod
