@@ -225,3 +225,23 @@ These are engineering judgments, not measured reliability or performance.
 3. Create one disposable test AVD manually, then test list/start/status/stop and measure CPU/RAM while stopped, booting and idle. Do not import production exchange sessions into the AVD.
 4. Confirm that disconnecting the phone or stopping the emulator cannot stop/restart the Trader, change PAPER/REAL mode or grant any execution permission.
 5. Keep all app login/MFA and exchange actions manual. Do not automate financial side effects through screen coordinates or UI taps.
+
+## Current-main addendum — 2026-10-22 (supersedes earlier checkpoint where it conflicts)
+
+- Current main reviewed for this addendum: 29f93b642df6f2949693e688f06ff4aea4ca2140. The earlier checkpoint line naming 5cd14a69d707e2cb935e7d9da621aa6888901068 is historical and is not the latest main SHA.
+- PR #438 is merged. Exact-head Python run 39745494853 and Windows EXE/installer run 39745494861 passed on PR head 77ef30ce6e10324dad160e34123aff752aa951e7. This improves confidence in the CI release workflow only; it does not certify the user's local Windows installation.
+- PR #439 removed trade_real from DEFAULT_OWNER_SCOPES. Missing/empty scopes are least-privilege by default in source. Existing local config and previously issued tokens remain uninspected and are not automatically revoked.
+- PR #442 (Coinbase Advanced Trade L2 envelope parser) is merged. The current parser requires sequence_num, checks product_id, handles the l2_data envelope and rejects unknown event types. A merged parser is not equivalent to a synchronized Coinbase book; no end-to-end Coinbase synchronization claim is made.
+- Current source contains a Binance Spot synchronizer in PC_ENGINE/market_events/binance_book_sync.py with bounded buffering, REST snapshot acquisition, buffered diff-depth replay, sequence-gap/overflow/disconnect invalidation, reconnect backoff and explicit ineligible-state emission. The source and tests still do not prove that synchronized views are wired into the temporal-edge calculator or execution path.
+- OKX books/books5/bbo-tbt semantics remain venue-specific. Do not use the generic builder as proof of protocol correctness until deterministic tests cover snapshot/update behavior, seqId/prevSeqId continuity, reconnect, stale views and explicit invalidation. Coinbase needs its own sequence and snapshot/recovery acceptance tests.
+- A new reference study is tracked in docs/OPEN_SOURCE_TRADING_ARCHITECTURE_STUDY_2026-10-22.md. It records patterns from Freqtrade, Hummingbot, CCXT, NautilusTrader and official venue docs, including license cautions. No source code was copied and no new dependency was added by that study.
+- Previous readiness percentages are rough engineering estimates, not measured reliability, and should not be interpreted as release certification. Windows CI smoke is now verified, but actual PC readiness, Android physical startup/logcat, Tailscale/LAN failover, cross-venue instrument equivalence and profitable net edge remain NOT VERIFIED or BLOCKED.
+- Operational posture remains PAPER/read-only. No REAL order, transfer, withdrawal, or activation was performed.
+
+### Acceptance gates that remain
+
+1. Verify the actual Windows PC's effective mode, owner scopes, REAL flags, token sources, bind address/firewall, scheduled tasks, and health/log output without exposing secrets.
+2. Verify APK startup on the physical Android device, including crash/logcat, status-bar-safe layout, authentication, reconnect, token revocation, and LAN/Tailscale transitions.
+3. Keep any venue's depth feed ineligible for depth-based signals until its own protocol contract, bootstrap, gap recovery, stale invalidation and reconnection tests pass.
+4. Show explicit code/test evidence that eligible synchronized views feed the research calculation, with canonical instrument identity and net edge after fees, spread, slippage, funding, latency, inventory and fill assumptions.
+5. Keep independent office agents, durable department conversations, browser E2E and multi-device learned-knowledge sharing marked incomplete until runtime evidence exists.
