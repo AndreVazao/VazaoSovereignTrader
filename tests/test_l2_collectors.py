@@ -77,22 +77,42 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].sequence, 44)
         self.assertEqual(events[0].asks[0].quantity, 4.0)
 
-    def test_coinbase_level2(self) -> None:
-        events = self.collector("coinbase")._parse(json.dumps({
-            "channel": "level2",
-            "events": [{"type": "update", "event_time": "2026-01-01T00:00:00.000Z",
+    def test_coinbase_l2_data_envelope_preserves_sequence_and_timestamp(self) -> None:
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
+        events = collector._parse(json.dumps({
+            "channel": "l2_data",
+            "sequence_num": 42,
+            "timestamp": "2026-01-01T00:00:00.000Z",
+            "events": [{"type": "update", "product_id": "BTC-USD",
                         "updates": [
                             {"side": "bid", "price_level": "100.0", "new_quantity": "2.0"},
                             {"side": "offer", "price_level": "100.2", "new_quantity": "1.0"}]}],
         }), 9000)
         self.assertEqual(events[0].event_type, "delta")
+        self.assertEqual(events[0].sequence, 42)
+        self.assertEqual(events[0].exchange_ts_ms, 1767225600000)
         self.assertEqual(len(events[0].bids), 1)
         self.assertEqual(len(events[0].asks), 1)
 
+    def test_coinbase_rejects_missing_sequence_and_mismatched_product(self) -> None:
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
+        event = {"type": "update", "product_id": "BTC-USD", "updates": []}
+        with self.assertRaisesRegex(ValueError, "invalid_coinbase_sequence"):
+            collector._parse(json.dumps({"channel": "l2_data", "events": [event]}), 9000)
+        with self.assertRaisesRegex(ValueError, "coinbase_product_mismatch"):
+            collector._parse(json.dumps({
+                "channel": "l2_data", "sequence_num": 43,
+                "events": [{"type": "update", "product_id": "ETH-USD", "updates": []}],
+            }), 9000)
+
     def test_coinbase_unknown_side_is_rejected_not_silently_dropped(self) -> None:
-        with self.assertRaises(ValueError):
-            self.collector("coinbase")._parse(json.dumps({
-                "channel": "level2",
-                "events": [{"type": "update", "updates": [
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
+        with self.assertRaisesRegex(ValueError, "invalid_coinbase_side"):
+            collector._parse(json.dumps({
+                "channel": "l2_data", "sequence_num": 44,
+                "events": [{"type": "update", "product_id": "BTC-USD", "updates": [
                     {"side": "MIDDLE", "price_level": "100", "new_quantity": "1"}]}],
             }), 9000)
