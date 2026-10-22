@@ -6,7 +6,19 @@ from PC_ENGINE.radar.depth_edge import (
 )
 
 
-def book(venue, bid, ask, *, age=20.0, eligible=True, status="SYNCED", instrument="spot:BTC/USDT"):
+def book(
+    venue,
+    bid,
+    ask,
+    *,
+    age=20.0,
+    eligible=True,
+    status="SYNCED",
+    instrument="spot:BTC/USDT",
+    observation_time_ns=None,
+):
+    if observation_time_ns is None:
+        observation_time_ns = 1_000_000_000 if venue == "binance" else 1_050_000_000
     return SynchronizedBookView(
         venue=venue,
         instrument_id=instrument,
@@ -15,6 +27,7 @@ def book(venue, bid, ask, *, age=20.0, eligible=True, status="SYNCED", instrumen
         age_ms=age,
         best_bid=bid,
         best_ask=ask,
+        observation_time_ns=observation_time_ns,
     )
 
 
@@ -31,6 +44,7 @@ def test_assesses_positive_net_edge_after_both_venue_costs():
     assert result.buy_venue == "binance"
     assert result.sell_venue == "coinbase"
     assert result.net_edge_bps == pytest.approx((101.0 - 100.1) / 100.1 * 10_000 - 6.0)
+    assert result.observation_skew_ms == pytest.approx(50.0)
     assert result.paper_only is True
     assert result.execution_allowed is False
 
@@ -58,17 +72,64 @@ def test_rejects_different_canonical_instruments():
 )
 def test_rejects_unusable_book_views(changes, reason):
     left = book("binance", 100, 100.1)
-    values = {"bid": left.best_bid, "ask": left.best_ask, "age": left.age_ms,
-              "eligible": left.eligible, "status": left.status}
+    values = {
+        "bid": left.best_bid,
+        "ask": left.best_ask,
+        "age": left.age_ms,
+        "eligible": left.eligible,
+        "status": left.status,
+        "observation_time_ns": left.observation_time_ns,
+    }
     values.update(changes)
-    left = book("binance", values["bid"], values["ask"], age=values["age"],
-                eligible=values["eligible"], status=values["status"])
+    left = book(
+        "binance",
+        values["bid"],
+        values["ask"],
+        age=values["age"],
+        eligible=values["eligible"],
+        status=values["status"],
+        observation_time_ns=values["observation_time_ns"],
+    )
     result = assess_synchronized_depth_edge(
-        left, book("coinbase", 101, 101.1),
+        left,
+        book("coinbase", 101, 101.1),
         venue_costs_bps={"binance": 1, "coinbase": 1},
     )
     assert result.eligible is False
     assert result.reason == reason
+
+
+def test_rejects_books_observed_too_far_apart_even_if_both_are_fresh():
+    result = assess_synchronized_depth_edge(
+        book("binance", 100, 100.1, age=10, observation_time_ns=1_000_000_000),
+        book("coinbase", 101, 101.1, age=10, observation_time_ns=1_500_000_001),
+        venue_costs_bps={"binance": 1, "coinbase": 1},
+        max_observation_skew_ms=100,
+    )
+    assert result.eligible is False
+    assert result.reason == "observation_time_skew"
+    assert result.observation_skew_ms == pytest.approx(500.000001)
+    assert result.execution_allowed is False
+
+
+def test_rejects_missing_observation_timestamp():
+    missing = SynchronizedBookView(
+        venue="binance",
+        instrument_id="spot:BTC/USDT",
+        status="SYNCED",
+        eligible=True,
+        age_ms=10,
+        best_bid=100,
+        best_ask=100.1,
+        observation_time_ns=None,
+    )
+    result = assess_synchronized_depth_edge(
+        missing,
+        book("coinbase", 101, 101.1),
+        venue_costs_bps={"binance": 1, "coinbase": 1},
+    )
+    assert result.eligible is False
+    assert result.reason == "missing_or_invalid_observation_timestamp"
 
 
 def test_costs_can_remove_apparent_gross_edge():
