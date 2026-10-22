@@ -100,11 +100,13 @@ class MobileCockpit(App):
             text=f"Tipo de erro: {error_type}",
             size_hint_y=None, height=42, halign="center", valign="middle",
         ))
-        root.add_widget(Label(
-            text=("Foi guardado um diagnóstico local sem dados de autenticação. "
-                  "Se o erro persistir, envia o ficheiro startup_error.log para análise."),
-            halign="center", valign="middle",
-        ))
+        diagnostic_path = getattr(self, "_startup_error_path", "")
+        detail = (
+            "Diagnóstico local guardado em startup_error.log, sem dados de autenticação."
+            if diagnostic_path
+            else "Não foi possível guardar o diagnóstico local; o ecrã mantém o tipo de erro."
+        )
+        root.add_widget(Label(text=detail, halign="center", valign="middle"))
         retry = Button(text="TENTAR INICIAR NOVAMENTE", size_hint_y=None, height=48)
         retry.bind(on_release=lambda *_: Clock.schedule_once(lambda *_: self._retry_startup(), 0))
         root.add_widget(retry)
