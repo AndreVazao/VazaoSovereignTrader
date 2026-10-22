@@ -112,7 +112,14 @@ class LatencyEdgeDetector:
             if relevant else 0.0
         )
 
-        gross_edge_bps = abs(leader_move_bps)
+        # Only the move still missing on the follower is a candidate edge.
+        # Counting the leader's entire move double-counts movement already
+        # reflected in the follower and systematically overstates opportunity.
+        gross_edge_bps = (
+            max(0.0, abs(leader_move_bps) - abs(follower_move_bps))
+            if same_direction
+            else 0.0
+        )
         latency_decay = (
             self.execution_latency_ms / 100.0
         ) * self.latency_decay_bps_per_100ms
@@ -121,11 +128,8 @@ class LatencyEdgeDetector:
         )
 
         eligible = (
-            lead_ms <= self.max_lead_ms
-            and receive_lead_ms >= 0
-            and receive_lead_ms <= self.max_lead_ms
-            and receive_lead_ms >= 0
-            and receive_lead_ms <= self.max_lead_ms
+            0 <= lead_ms <= self.max_lead_ms
+            and 0 <= receive_lead_ms <= self.max_lead_ms
             and gross_edge_bps >= self.min_lead_bps
             and len(relevant) >= self.min_samples
             and same_ratio >= self.min_same_direction_ratio
