@@ -31,6 +31,7 @@ class L2MicrostructureReplayTests(unittest.TestCase):
             source.write_text("\n".join(json.dumps(x) for x in (snapshot, delta)), encoding="utf-8")
             loaded = L2MicrostructureReplay._load(str(source))
             self.assertEqual([event.event_id for event in loaded], ["s1", "d2"])
+            self.assertLess(L2MicrostructureReplay._time(loaded[0]), L2MicrostructureReplay._time(loaded[1]))
 
     def test_replay_uses_reconstructed_depth(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
