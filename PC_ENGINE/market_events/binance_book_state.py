@@ -32,7 +32,7 @@ class BinanceSpotDepthBook:
     """
 
     def __init__(self, symbol: str, max_age_ms: float = 1000.0, max_levels: int = 5000):
-        if not symbol or max_age_ms <= 0 or max_levels < 1:
+        if not symbol or not isfinite(max_age_ms) or max_age_ms <= 0 or max_levels < 1:
             raise ValueError("invalid book configuration")
         self.symbol = symbol
         self.max_age_ms = max_age_ms
@@ -69,7 +69,7 @@ class BinanceSpotDepthBook:
 
     def install_snapshot(self, update_id: int, bids: tuple[OrderBookLevel, ...],
                          asks: tuple[OrderBookLevel, ...]) -> bool:
-        if update_id < 0:
+        if not isinstance(update_id, int) or isinstance(update_id, bool) or update_id < 0:
             self.invalidate("invalid_snapshot_id")
             return False
         try:
@@ -95,6 +95,13 @@ class BinanceSpotDepthBook:
         if self.status == BookStatus.INVALID:
             return False
         start, end = event.sequence_start, event.sequence
+        if (
+            not isinstance(start, int) or isinstance(start, bool)
+            or not isinstance(end, int) or isinstance(end, bool)
+            or start < 0 or end < 0 or start > end
+        ):
+            self.invalidate("invalid_sequence_range")
+            return False
         if end <= self.update_id:
             return False
         if start > self.update_id + 1:
@@ -133,8 +140,14 @@ class BinanceSpotDepthBook:
     def snapshot(self, now_ns: int) -> BookSnapshot:
         age_ms = None if self.last_update_ns is None else max(0, now_ns - self.last_update_ns) / 1_000_000
         fresh = age_ms is not None and age_ms <= self.max_age_ms
-        eligible = self.status == BookStatus.SYNCED and fresh and bool(self.bids) and bool(self.asks)
-        reason = self.reason if self.reason else ("stale" if not fresh else None)
+        crossed = bool(self.bids and self.asks) and max(self.bids) >= min(self.asks)
+        eligible = (
+            self.status == BookStatus.SYNCED and fresh and bool(self.bids)
+            and bool(self.asks) and not crossed
+        )
+        reason = self.reason if self.reason else (
+            "stale" if not fresh else "crossed_book" if crossed else None
+        )
         return BookSnapshot(
             self.status, self.update_id,
             tuple(OrderBookLevel(p, q) for p, q in sorted(self.bids.items(), reverse=True)),
