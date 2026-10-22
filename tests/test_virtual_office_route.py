@@ -232,8 +232,10 @@ def test_assistant_message_returns_selected_department_context(tmp_path, monkeyp
     payload = response.get_json()
     assert payload["department"] == "radar"
     assert payload["department_label"] == "Market Radar"
-    assert payload["intent"] == "DEPARTMENT_NOT_CONNECTED"
-    assert "agente conversacional independente" in payload["reply"]
+    assert payload["intent"] == "DEPARTMENT_STATUS"
+    assert payload["data"]["status"] == "NOT_STARTED"
+    assert payload["data"]["stale"] is True
+    assert payload["execution_authorized"] is False
 
 
 def test_assistant_message_uses_department_read_handler(tmp_path, monkeypatch):
