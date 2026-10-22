@@ -234,3 +234,22 @@ def test_assistant_message_returns_selected_department_context(tmp_path, monkeyp
     assert payload["department_label"] == "Market Radar"
     assert payload["intent"] == "DEPARTMENT_NOT_CONNECTED"
     assert "agente conversacional independente" in payload["reply"]
+
+
+def test_assistant_message_uses_department_read_handler(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "office-department-reader-token")
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/assistant/message",
+        headers={"X-Token": "office-department-reader-token"},
+        json={"message": "Qual é o estado?", "department": "markets"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["intent"] == "DEPARTMENT_STATUS"
+    assert payload["department"] == "markets"
+    assert isinstance(payload["data"]["venues"], list)
+    assert "Saúde operacional" in payload["reply"]
+    assert payload["execution_authorized"] is False
