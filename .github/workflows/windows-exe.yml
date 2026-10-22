@@ -135,6 +135,21 @@ jobs:
           $config.autonomous_execution.auto_promote_real = $false
           $config | ConvertTo-Json -Depth 50 | Set-Content $configPath -Encoding utf8
 
+          function Stop-SmokeEngineProcesses {
+            $imageName = [System.IO.Path]::GetFileName($engine)
+            $running = Get-CimInstance Win32_Process | Where-Object {
+              $_.Name -eq $imageName -and $_.ExecutablePath -and $_.ExecutablePath -ieq $engine
+            }
+            foreach ($item in $running) {
+              Stop-Process -Id $item.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+            Start-Sleep -Seconds 2
+            $remaining = Get-CimInstance Win32_Process | Where-Object {
+              $_.Name -eq $imageName -and $_.ExecutablePath -and $_.ExecutablePath -ieq $engine
+            }
+            if ($remaining) { throw "Installed engine process tree did not stop before uninstall." }
+          }
+
           $proc = $null
           try {
             $proc = Start-Process -FilePath $engine -WorkingDirectory $testDir -PassThru -WindowStyle Hidden
@@ -152,8 +167,9 @@ jobs:
           } finally {
             if ($proc) {
               $proc.Refresh()
-              if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+              if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
             }
+            Stop-SmokeEngineProcesses
           }
 
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
