@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
+import math
 import time
 from typing import Iterable
 
@@ -81,8 +82,10 @@ class LatencyEdgeDetector:
         key = (symbol.upper(), leader.lower(), follower.lower(), direction.upper())
         history = self._history[key]
 
+        numeric_valid = math.isfinite(leader_move_bps) and math.isfinite(follower_move_bps)
         same_direction = (
-            leader_move_bps != 0
+            numeric_valid
+            and leader_move_bps != 0
             and follower_move_bps != 0
             and leader_move_bps * follower_move_bps > 0
         )
@@ -90,7 +93,15 @@ class LatencyEdgeDetector:
             abs(follower_move_bps) >= abs(leader_move_bps) * 0.25
             and same_direction
         )
-        history.append((lead_ms, leader_move_bps, follower_move_bps))
+        # Invalid/stale timing must not count toward the statistical history:
+        # otherwise a rejected observation can still satisfy min_samples and
+        # inflate direction/persistence ratios for later valid observations.
+        timing_valid = (
+            0 <= lead_ms <= self.max_lead_ms
+            and 0 <= receive_lead_ms <= self.max_lead_ms
+        )
+        if timing_valid and numeric_valid:
+            history.append((lead_ms, leader_move_bps, follower_move_bps))
 
         relevant = list(history)
         same_ratio = (
@@ -128,8 +139,8 @@ class LatencyEdgeDetector:
         )
 
         eligible = (
-            0 <= lead_ms <= self.max_lead_ms
-            and 0 <= receive_lead_ms <= self.max_lead_ms
+            timing_valid
+            and numeric_valid
             and gross_edge_bps >= self.min_lead_bps
             and len(relevant) >= self.min_samples
             and same_ratio >= self.min_same_direction_ratio
