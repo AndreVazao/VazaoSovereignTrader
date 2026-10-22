@@ -113,3 +113,24 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 - Virtual office / cockpit: 65% (read-only handlers and session context exist; independent agents and E2E do not).
 - Android APK: 35% (debug APK build passes; physical launch unverified).
 - Windows installer/current PC: 40% (CI smoke added in PR #438; local PC state unverified).
+
+
+## Current-main checkpoint after PR #438 (2026-10-22)
+
+- Current product main at checkpoint: `5cd14a69d707e2cb935e7d9da621aa6888901068` (PR #438 merged).
+- PR #438: https://github.com/AndreVazao/VazaoSovereignTrader/pull/438 — merged after review of the diff and successful exact-head CI.
+- Python workflow run `39745494853`: completed successfully on PR head `77ef30ce6e10324dad160e34123aff752aa951e7`.
+- Windows EXE workflow run `39745494861`: both `build-exe` and `build-installer` jobs completed successfully on that exact head. The installer smoke checks silent install, installed files/config, both scheduled tasks, PAPER launch with loopback-only health probe, process stop, silent uninstall and scheduled-task cleanup.
+- This is hosted Windows-runner evidence only. It does not establish that the user's PC has the same effective private config, environment, firewall, scheduled tasks or a healthy installed runtime.
+- PR #439 separately removed `trade_real` from `DEFAULT_OWNER_SCOPES`; absent/empty owner scopes now remain least-privilege by default. The example owner scopes were also cleaned in #438. Existing local config and previously issued tokens were not inspected or revoked by these changes.
+- The installer workflow now looks for the versioned Inno Setup output (`VazaoSovereignTrader-Setup-*.exe`) and requires exactly one candidate, avoiding the previous mismatch between versioned build output and an unversioned expected filename.
+- The current-main source includes Binance Spot book synchronization work beyond the earlier baseline described above: REST snapshot acquisition, buffering/replay of diff-depth events, sequence-gap/overflow/disconnect invalidation, reconnect backoff, and a separately emitted synchronized-view artifact/health record. Treat this as observational only; it is not evidence that the book is connected to the temporal-edge calculator or execution path. OKX/Coinbase protocol-specific synchronized books and cross-venue edge-after-cost proof remain blockers.
+- The historical percentages above are rough engineering estimates, not measured reliability. In particular, Windows CI release-smoke confidence has improved, but **actual PC readiness remains unverified**; Android physical launch/logcat remains unverified.
+- Operational posture remains PAPER/read-only. No live order, transfer, withdrawal, or REAL activation was performed.
+
+### Next acceptance gates
+1. On the actual Windows PC, inspect effective mode, owner scopes, REAL flags, token sources, bind address/firewall, scheduled tasks and health/log output without copying secrets into GitHub or chat.
+2. On a physical Android device, capture launch/logcat evidence and verify status-bar-safe layout, authentication, reconnect, revocation and LAN/Tailscale transitions; never replay a mutating request on failover.
+3. Before depth-based edge evaluation, add protocol-contract tests and explicit wiring evidence for Binance synchronized views; implement separate OKX/Coinbase synchronization or keep those venues ineligible for depth signals.
+4. Prove normalized instrument identity and net edge after fees, spread, slippage, funding, latency, inventory and failure costs using chronological out-of-sample PAPER/shadow evaluation.
+5. Keep independent office agents, persistent department conversations and browser E2E labelled incomplete until runtime evidence exists.
