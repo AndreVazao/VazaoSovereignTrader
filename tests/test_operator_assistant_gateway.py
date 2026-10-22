@@ -140,3 +140,41 @@ def test_unknown_department_is_rejected(tmp_path):
         assert str(exc) == "assistant_department_invalid"
     else:
         raise AssertionError("unknown department accepted")
+
+
+def test_department_read_handler_returns_live_backend_summary_without_agent_claim(tmp_path):
+    gateway = OperatorAssistantGateway(
+        Engine(),
+        TraderResearchInbox(tmp_path),
+        department_readers={
+            "markets": lambda: {
+                "counts": {"GREEN": 1, "YELLOW": 2, "RED": 0},
+                "venues": [
+                    {"exchange": "binance", "status": "GREEN", "label": "OK", "age_ms": 10, "sample_count": 12},
+                    {"exchange": "okx", "status": "YELLOW", "label": "TEST", "age_ms": 100, "sample_count": 1},
+                    {"exchange": "coinbase", "status": "YELLOW", "label": "TEST", "age_ms": 200, "sample_count": 1},
+                ],
+                "paper_only": True,
+            }
+        },
+    )
+    result = gateway.handle("Qual é o estado?", Principal("read_private_state"), department="markets")
+    assert result["intent"] == "DEPARTMENT_STATUS"
+    assert result["department"] == "markets"
+    assert result["data"]["counts"] == {"GREEN": 1, "YELLOW": 2, "RED": 0}
+    assert "não é rentabilidade" in result["reply"]
+    assert result["execution_authorized"] is False
+
+
+def test_department_reader_failure_is_sanitized(tmp_path):
+    def failing_reader():
+        raise OSError("sensitive local path")
+
+    gateway = OperatorAssistantGateway(
+        Engine(), TraderResearchInbox(tmp_path), department_readers={"audit": failing_reader}
+    )
+    result = gateway.handle("Mostra o estado", Principal("read_private_state"), department="audit")
+    assert result["status"] == "UNAVAILABLE"
+    assert "OSError" in result["reply"]
+    assert "sensitive local path" not in result["reply"]
+    assert result["execution_authorized"] is False
