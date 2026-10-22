@@ -163,3 +163,6 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 4. On the actual Windows PC, verify effective mode, owner scopes, REAL flags, token sources, bind address/firewall, scheduled tasks and health/log output without exposing secrets.
 5. On physical Android, verify launch/logcat, status-bar-safe layout, authentication, reconnect, revocation, and LAN/Tailscale transitions; failover must not replay mutating requests.
 6. Continue labelling independent autonomous office agents, persistent per-department conversations and browser E2E as incomplete until implementation and evidence exist.
+
+
+- Follow-up merged after this audit's initial draft: PR #446 (`38614b7`) classifies every OKX `books5` and `bbo-tbt` push as a full snapshot even when the envelope action is `update`, while retaining action-based deltas for `books` and rejecting unknown actions. Exact-head Python tests and Windows EXE workflow passed on `ead9c38e662daf42f647e765f077e139a3e600a8`; Vercel remained blocked by deployment quota. This is parser correctness, not a complete OKX synchronized book.
