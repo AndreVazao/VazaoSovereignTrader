@@ -80,7 +80,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     const token=document.getElementById("vstApiToken").value.trim();
     if(!token){currentToken="";setBadge("DESLIGADO");state("Ligação bloqueada","Introduz o token; não foi enviado nada.");busy=false;return}
     const base=window.location.origin;
-    if(!/^https?:\/\//i.test(base)||base==="null"){state("Ligação bloqueada","Abre /virtual-office através do servidor do PC.");busy=false;return}
+    if(!/^https?:\/\//i.test(base)||base==="null"){currentToken="";setBadge("SEM LIGAÇÃO");state("Ligação bloqueada","Abre /virtual-office através do servidor do PC.");busy=false;return}
     currentToken=token;
     state("A verificar autenticação","A testar resumo leve autenticado…");
     const endpoints=[
