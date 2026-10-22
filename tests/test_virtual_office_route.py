@@ -216,3 +216,21 @@ def test_assistant_message_rejects_unknown_department(tmp_path, monkeypatch):
 
     assert response.status_code == 400
     assert response.get_json()["error"] == "assistant_department_invalid"
+
+
+def test_assistant_message_returns_selected_department_context(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "office-department-test-token")
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/assistant/message",
+        headers={"X-Token": "office-department-test-token"},
+        json={"message": "Olá", "department": "radar"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["department"] == "radar"
+    assert payload["department_label"] == "Market Radar"
+    assert payload["intent"] == "DEPARTMENT_NOT_CONNECTED"
+    assert "agente conversacional independente" in payload["reply"]
