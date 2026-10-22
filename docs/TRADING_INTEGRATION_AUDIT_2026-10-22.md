@@ -195,3 +195,12 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 | Cross-PC learned knowledge | 40% | Design/partial implementation only; provenance, validation, conflict resolution and end-to-end sync acceptance remain incomplete. |
 
 **Release posture:** PAPER / read-only only. No REAL orders, transfers or withdrawals. A synchronized book is a data-quality prerequisite, not proof of an exploitable or profitable edge.
+
+
+## Addendum — temporal-edge overstatement fix (2026-10-22)
+
+- PR #452 merged as `072a2e67bc772f73ccc4f6aa4fe14a1f15d1b92c`: https://github.com/AndreVazao/VazaoSovereignTrader/pull/452.
+- The detector now estimates gross residual movement as the leader's absolute move minus the follower's absolute move, floored at zero and only for same-direction movement. This avoids counting movement already reflected in the follower as a fresh opportunity. Negative exchange-lead time is rejected, and duplicated receive-lead checks were removed.
+- Exact-head Python tests and Windows EXE workflow both passed on PR head `49f569170f2fb17e8953f3e50116b15eb5b29ad4`. Vercel deployment remained rate-limited; no successful fresh web deployment is claimed.
+- This remains a heuristic. Repeated calls with synthetic inputs and configured fee/spread/slippage assumptions do not prove independent samples, calibrated lead-lag causality, executable liquidity, funding/inventory cost, or realized profitability. Before any trading eligibility, use timestamped chronological observations, prevent overlapping/double-counted samples, normalize equivalent instruments, include all venue-specific costs and execution latency, and validate out-of-sample in PAPER/shadow mode.
+- Readiness for the temporal-edge *calculation* improves modestly, but end-to-end temporal-arbitrage readiness remains blocked by order-book synchronization wiring, real-feed evidence, cost calibration and out-of-sample results.
