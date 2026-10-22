@@ -3,10 +3,20 @@ from __future__ import annotations
 import json
 import unittest
 
-from PC_ENGINE.market_events.websocket_collectors import PublicWebSocketCollector, WebSocketMarketConfig
+from PC_ENGINE.market_events.websocket_collectors import (
+    PublicWebSocketCollector,
+    WebSocketMarketConfig,
+    default_public_configs,
+)
 
 
 class WebSocketCollectorTests(unittest.TestCase):
+    def test_default_okx_public_endpoint_uses_tls_443(self) -> None:
+        configs = default_public_configs("BTC/USDT")
+        okx = next(config for config in configs if config.venue == "okx")
+        self.assertEqual(okx.url, "wss://ws.okx.com/ws/v5/public")
+        self.assertNotIn(":8443", okx.url)
+
     def test_binance_book_ticker_normalizes(self) -> None:
         collector = PublicWebSocketCollector(
             WebSocketMarketConfig("binance", "BTC/USDT", "wss://example"), lambda _: None)
