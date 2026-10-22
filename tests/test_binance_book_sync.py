@@ -77,6 +77,15 @@ class BinanceSpotBookSynchronizerTests(unittest.TestCase):
         self.assertEqual(self.sync.health()["buffer_overflows"], 1)
         self.assertEqual(self.emitted, [])
 
+    def test_health_reports_current_staleness_not_historical_eligibility(self):
+        self.sync.install_snapshot((100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),)))
+        self.sync.on_event(self.event(101, 101, receive_ns=1_000_000))
+        health = self.sync.health()
+        self.assertEqual(health["state"], BookStatus.SYNCED.value)
+        self.assertFalse(health["eligible"])
+        self.assertEqual(health["view_reason"], "stale")
+        self.assertGreater(health["age_ms"], 1000)
+
     def test_connection_loss_invalidates_and_requires_resnapshot(self):
         self.sync.install_snapshot((100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),)))
         self.sync.on_event(self.event(101, 101))
