@@ -125,16 +125,19 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
   function appendChatMessage(label,message,kind){const box=document.createElement("div");box.className=kind==="user"?"msg user":"msg";const meta=document.createElement("small");meta.textContent=label;const body=document.createElement("div");body.textContent=message;box.append(meta,body);return box}
   function addChatMessage(label,message,kind,department=selectedDepartment){
     if(!conversationHistory[department])conversationHistory[department]=[];
-    conversationHistory[department].push({label,message,kind});
-    if(department!==selectedDepartment)return;
-    const messages=document.getElementById("messages");messages.append(appendChatMessage(label,message,kind));messages.scrollTop=messages.scrollHeight;
+    const record={label,message,kind,department,element:null};
+    conversationHistory[department].push(record);
+    if(department!==selectedDepartment)return record;
+    record.element=appendChatMessage(label,message,kind);
+    const messages=document.getElementById("messages");messages.append(record.element);messages.scrollTop=messages.scrollHeight;
+    return record;
   }
   function renderConversation(department){
     selectedDepartment=allowedDepartments.has(department)?department:"brain";
     const messages=document.getElementById("messages");messages.replaceChildren();
     const history=conversationHistory[selectedDepartment]||[];
     if(!history.length){const label=selectedDepartment==="brain"?"CEO / Receção":"Departamento selecionado";const note=selectedDepartment==="brain"?"Conversa com o gateway do motor.":"O contexto deste departamento está selecionado, mas ainda não existe agente autónomo independente ligado.";messages.append(appendChatMessage(label,note,"system"))}
-    else history.forEach(item=>messages.append(appendChatMessage(item.label,item.message,item.kind)));
+    else history.forEach(item=>{item.element=appendChatMessage(item.label,item.message,item.kind);messages.append(item.element)});
   }
   window.addEventListener("vst-department-change",event=>{renderConversation(String(event.detail&&event.detail.department||"brain"))});
   let chatBusy=false;
@@ -147,9 +150,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     if(!currentToken){addChatMessage("MOTOR · NÃO ENVIADO","Para enviar esta mensagem ao cérebro, liga primeiro o cockpit com um token autorizado. Nenhum pedido foi enviado.","system");return}
     if(chatBusy){addChatMessage("MOTOR","Já estou a processar um pedido. Aguarda pela resposta antes de enviar outro.","system");return}
     chatBusy=true;
-    addChatMessage("SOVEREIGN TRADER · A PROCESSAR","Pedido enviado ao gateway autenticado. A resposta do servidor vai aparecer aqui.","system");
-    const messages=document.getElementById("messages");
-    const pending=messages.lastElementChild;
+    const pendingRecord=addChatMessage("SOVEREIGN TRADER · A PROCESSAR","Pedido enviado ao gateway autenticado. A resposta do servidor vai aparecer aqui.","system",selectedDepartment);
     try{
       const response=await boundedFetch(window.location.origin+"/assistant/message",{
         method:"POST",headers:{"X-Token":currentToken,"Accept":"application/json","Content-Type":"application/json"},
@@ -159,17 +160,22 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
       if(response.status===401||response.status===403){
         currentToken="";document.getElementById("vstApiToken").value="";setBadge("ACESSO RECUSADO");
         state("Acesso recusado","Token ou permissões insuficientes.");
-        pending.querySelector("div").textContent=String(data.error||"O servidor recusou o pedido. Volta a autenticar-te.");
+        pendingRecord.label="SOVEREIGN TRADER · ACESSO RECUSADO";
+        pendingRecord.message=String(data.error||"O servidor recusou o pedido. Volta a autenticar-te.");
+        if(pendingRecord.department===selectedDepartment&&pendingRecord.element){pendingRecord.element.querySelector("small").textContent=pendingRecord.label;pendingRecord.element.querySelector("div").textContent=pendingRecord.message}
       }else{
         const reply=String(data.reply||data.error||("O servidor respondeu HTTP "+response.status));
-        pending.querySelector("small").textContent="SOVEREIGN TRADER · "+String(data.status||"RESPOSTA")+(data.department_label?" · "+String(data.department_label):"");
-        pending.querySelector("div").textContent=reply;
-        if(data.intent)pending.querySelector("div").textContent+="\nIntenção: "+data.intent;
-        if(data.paper_only===true)pending.querySelector("div").textContent+="\nModo protegido: PAPER/read-only.";
-        if(data.execution_authorized===false)pending.querySelector("div").textContent+="\nExecução autorizada: não.";
+        pendingRecord.label="SOVEREIGN TRADER · "+String(data.status||"RESPOSTA")+(data.department_label?" · "+String(data.department_label):"");
+        pendingRecord.message=reply;
+        if(data.intent)pendingRecord.message+="\nIntenção: "+data.intent;
+        if(data.paper_only===true)pendingRecord.message+="\nModo protegido: PAPER/read-only.";
+        if(data.execution_authorized===false)pendingRecord.message+="\nExecução autorizada: não.";
+        if(pendingRecord.department===selectedDepartment&&pendingRecord.element){pendingRecord.element.querySelector("small").textContent=pendingRecord.label;pendingRecord.element.querySelector("div").textContent=pendingRecord.message}
       }
     }catch(error){
-      pending.querySelector("div").textContent="Falha de ligação. Não assumas que o pedido foi processado; consulta o estado antes de o repetir. "+String(error.message||error).slice(0,120);
+      pendingRecord.message="Falha de ligação. Não assumas que o pedido foi processado; consulta o estado antes de o repetir. "+String(error.message||error).slice(0,120);
+      pendingRecord.label="SOVEREIGN TRADER · RESULTADO NÃO CONFIRMADO";
+      if(pendingRecord.department===selectedDepartment&&pendingRecord.element){pendingRecord.element.querySelector("small").textContent=pendingRecord.label;pendingRecord.element.querySelector("div").textContent=pendingRecord.message}
     }finally{chatBusy=false}
   });
   document.getElementById("vstConnect").addEventListener("click",connect);
