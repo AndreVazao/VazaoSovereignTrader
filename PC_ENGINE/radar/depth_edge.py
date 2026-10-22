@@ -87,19 +87,21 @@ def assess_synchronized_depth_edge(
     for view in (left, right):
         if view.status != "SYNCED" or view.eligible is not True:
             return _reject("book_not_synchronized", left, right)
-        if view.age_ms is None or not math.isfinite(float(view.age_ms)) or view.age_ms < 0:
+        try:
+            age = float(view.age_ms)
+        except (TypeError, ValueError, OverflowError):
             return _reject("invalid_book_age", left, right)
-        if view.age_ms > max_age:
+        if not math.isfinite(age) or age < 0:
+            return _reject("invalid_book_age", left, right)
+        if age > max_age:
             return _reject("stale_book", left, right)
         if view.best_bid is None or view.best_ask is None:
             return _reject("missing_top_of_book", left, right)
-        if (
-            not math.isfinite(float(view.best_bid))
-            or not math.isfinite(float(view.best_ask))
-            or view.best_bid <= 0
-            or view.best_ask <= 0
-            or view.best_bid >= view.best_ask
-        ):
+        try:
+            bid, ask = float(view.best_bid), float(view.best_ask)
+        except (TypeError, ValueError, OverflowError):
+            return _reject("invalid_or_crossed_book", left, right)
+        if not math.isfinite(bid) or not math.isfinite(ask) or bid <= 0 or ask <= 0 or bid >= ask:
             return _reject("invalid_or_crossed_book", left, right)
 
     if left.venue not in venue_costs_bps or right.venue not in venue_costs_bps:
@@ -107,6 +109,8 @@ def assess_synchronized_depth_edge(
     left_cost = _finite_non_negative(f"{left.venue}_cost_bps", venue_costs_bps[left.venue])
     right_cost = _finite_non_negative(f"{right.venue}_cost_bps", venue_costs_bps[right.venue])
     total_cost = left_cost + right_cost + latency_penalty
+    if not math.isfinite(total_cost):
+        raise ValueError("combined cost assumptions must be finite")
 
     candidates = (
         (left, right, float(left.best_ask), float(right.best_bid)),
