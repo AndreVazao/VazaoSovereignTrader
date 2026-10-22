@@ -94,7 +94,7 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         "radar": read_market_data_health_for_assistant,
         "research": research.snapshot,
         "paper": lambda: build_runtime_evidence_scorecard(engine.config),
-        "risk": readiness.scorecard,
+        "risk": lambda: readiness.scorecard() if callable(getattr(readiness, "scorecard", None)) else {"status": "UNAVAILABLE", "reason": "readiness_scorecard_unavailable"},
         "recovery": read_recovery_for_assistant,
         "audit": read_evidence_ledger_summary_for_assistant,
         "human": human_bridge.snapshot,
