@@ -227,12 +227,14 @@ class PublicL2WebSocketCollector:
         try:
             while not self._stop.is_set():
                 opened = threading.Event()
+                opened_at: list[float] = []
 
                 def on_message(_ws: websocket.WebSocketApp, message: str) -> None:
                     self.process_message(message)
 
                 def on_open(ws: websocket.WebSocketApp) -> None:
                     opened.set()
+                    opened_at[:] = [time.monotonic()]
                     self._connected.set()
                     product = self.config.symbol.replace("/", "-").upper()
                     if self.config.venue == "binance":
@@ -266,7 +268,8 @@ class PublicL2WebSocketCollector:
                     break
                 if self._sync is not None:
                     self._sync.connection_lost()
-                if opened.is_set():
+                stable_seconds = time.monotonic() - opened_at[0] if opened_at else 0.0
+                if stable_seconds >= 30.0:
                     retry_seconds = 1.0
                 if self._stop.wait(retry_seconds):
                     break
