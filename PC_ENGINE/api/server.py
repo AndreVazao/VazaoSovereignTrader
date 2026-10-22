@@ -53,7 +53,53 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         )
         human_watchdog = HumanBridgeWatchdog(human_bridge, human_cfg)
     research = TraderResearchInbox(engine.config.get("research", {}).get("data_dir", "PC_ENGINE/data/research"))
-    assistant = OperatorAssistantGateway(engine, research)
+
+    def read_market_data_health_for_assistant() -> dict:
+        radar_cfg = engine.config.get("radar", {})
+        data_dir = resolve_config_path(radar_cfg.get("data_dir", "PC_ENGINE/data/radar"))
+        health_path = data_dir / "market_data_health.json"
+        if not health_path.exists():
+            return {"status": "NOT_STARTED", "ok": False, "stale": True}
+        try:
+            payload = json.loads(health_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return {"status": "INVALID", "ok": False, "stale": True}
+            now_ms = __import__("time").time_ns() // 1_000_000
+            timestamp_ms = int(payload.get("timestamp_ms", now_ms))
+            age_ms = max(0, now_ms - timestamp_ms)
+            stale = age_ms > int(radar_cfg.get("health_stale_seconds", 30)) * 1000
+            return {
+                "status": str(payload.get("status", "UNKNOWN")),
+                "ok": payload.get("status") == "RUNNING" and not stale,
+                "stale": stale,
+                "health_age_ms": age_ms,
+                "timestamp_ms": timestamp_ms,
+            }
+        except (OSError, ValueError, TypeError, OverflowError):
+            return {"status": "INVALID", "ok": False, "stale": True}
+
+    def read_recovery_for_assistant() -> dict:
+        recovery = getattr(engine, "recovery", None)
+        diagnostics = getattr(recovery, "diagnostics", None)
+        return diagnostics() if callable(diagnostics) else {"status": "UNAVAILABLE", "reason": "recovery_diagnostics_unavailable"}
+
+    def read_evidence_ledger_summary_for_assistant() -> dict:
+        evidence_cfg = engine.config.get("evidence", {})
+        ledger_path = evidence_cfg.get("ledger_path", "PC_ENGINE/data/radar/evidence_ledger.jsonl")
+        records = EvidenceLedger.load(ledger_path)
+        return asdict(EvidenceLedger.summarize(records))
+
+    department_readers = {
+        "markets": lambda: build_venue_health(engine.config),
+        "radar": read_market_data_health_for_assistant,
+        "research": research.snapshot,
+        "paper": lambda: build_runtime_evidence_scorecard(engine.config),
+        "risk": readiness.scorecard,
+        "recovery": read_recovery_for_assistant,
+        "audit": read_evidence_ledger_summary_for_assistant,
+        "human": human_bridge.snapshot,
+    }
+    assistant = OperatorAssistantGateway(engine, research, department_readers=department_readers)
     surface_runtime = ExecutionSurfaceRuntimeManager(engine.config)
     exchange_cfg = dict(engine.config.get("operator_exchange", {}))
     operator_exchange = OperatorExchange(
