@@ -246,3 +246,15 @@ These are engineering judgments, not measured reliability or performance.
 3. Keep any venue's depth feed ineligible for depth-based signals until its own protocol contract, bootstrap, gap recovery, stale invalidation and reconnection tests pass.
 4. Show explicit code/test evidence that eligible synchronized views feed the research calculation, with canonical instrument identity and net edge after fees, spread, slippage, funding, latency, inventory and fill assumptions.
 5. Keep independent office agents, durable department conversations, browser E2E and multi-device learned-knowledge sharing marked incomplete until runtime evidence exists.
+
+
+## Addendum — radar configuration hardening (2026-10-22)
+
+- Latest main checkpoint for this addendum: `d0122fffb5d5e8904ce7b60959f938e0cfd60147`, after PR #463.
+- PR #463: https://github.com/AndreVazao/VazaoSovereignTrader/pull/463 — merged after review of the exact diff and successful Python and Windows EXE/installer workflows on head `258bf364a14a77dc6919630531ca29dae9c79efd`.
+- The latency-edge research detector now rejects negative or non-finite lead thresholds and cost assumptions, invalid timing/sample limits, out-of-range persistence/direction ratios, and non-positive history capacity at construction. Regression tests cover representative invalid values.
+- Vercel deployment status on that PR head was rate-limited by the account's deployment quota. This is not a Python or Windows test failure, but it also is not a successful deployment. No source change should be described as deployed because of this check.
+- The detector remains research/PAPER only and uses observed trade-feed timing plus configured cost assumptions. It does not establish synchronized L2-based edge, universal instrument equivalence, actual fill probability, or profitability.
+- Binance synchronized-book code is present, including REST snapshot bootstrap, bounded buffering/replay, sequence-gap and disconnect invalidation, retry/backoff, and explicit health/view callbacks. Its current source contract says raw events are diagnostic and no signals/orders are produced by the synchronizer. A separate wiring review is still required before claiming its book view feeds the temporal-edge calculation.
+- The Windows build smoke is verified in hosted CI only. The actual PC configuration, physical Android startup, Tailscale/LAN transitions, and all real-world operational behavior remain NOT VERIFIED.
+- Safety posture remains PAPER/read-only. No real order, transfer, withdrawal, or REAL activation was performed.
