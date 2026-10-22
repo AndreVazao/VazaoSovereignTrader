@@ -440,3 +440,8 @@ Nenhum destes processos autoriza execução REAL.
 - Binance requer o campo booleano nativo `m`; ausência ou tipo inesperado não é interpretado silenciosamente como BUY. Coinbase e OKX aceitam apenas BUY/SELL após normalização.
 - Eventos sem lado válido são descartados antes de afetar contadores, matching lead/lag, callbacks ou persistência. Isto evita contaminar análises de fluxo com payloads incompletos ou malformados.
 - A validação é deliberadamente conservadora e observacional/PAPER; não muda execução nem afirma vantagem negociável.
+
+
+## Telemetria de erros de processamento de mensagens
+
+O snapshot do radar distingue erros de ligação de erros ocorridos ao descodificar JSON, executar o parser ou despachar eventos. `message_errors` conta falhas de processamento por exchange e `last_message_error` regista apenas a classe da exceção; o payload bruto, a mensagem da exceção e URLs não são guardados. Estas métricas ajudam a distinguir uma ligação viva com mensagens problemáticas de uma falha de conexão. Payloads válidos que o parser rejeita deliberadamente como não relevantes/inválidos não são exceções e não incrementam este contador.
