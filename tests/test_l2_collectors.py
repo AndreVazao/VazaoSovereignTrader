@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
+from PC_ENGINE.market_events.orderbook_builder import OrderBookBuilder
 from PC_ENGINE.market_events.l2_collectors import (
     L2WebSocketConfig,
     PublicL2WebSocketCollector,
@@ -141,6 +142,34 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].event_type, "delta")
         self.assertEqual(len(events[0].bids), 1)
         self.assertEqual(len(events[0].asks), 1)
+
+    def test_coinbase_atomic_envelope_applies_as_one_contiguous_book_update(self) -> None:
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
+        snapshot = collector._parse(json.dumps({
+            "channel": "l2_data", "sequence_num": 41,
+            "events": [{"type": "snapshot", "product_id": "BTC-USD", "updates": [
+                {"side": "bid", "price_level": "100.0", "new_quantity": "2.0"},
+                {"side": "offer", "price_level": "101.0", "new_quantity": "3.0"},
+            ]}],
+        }), 9000)
+        delta = collector._parse(json.dumps({
+            "channel": "l2_data", "sequence_num": 42,
+            "events": [
+                {"type": "update", "product_id": "BTC-USD", "updates": [
+                    {"side": "bid", "price_level": "100.0", "new_quantity": "4.0"}]},
+                {"type": "update", "product_id": "BTC-USD", "updates": [
+                    {"side": "offer", "price_level": "101.0", "new_quantity": "0"}]},
+            ],
+        }), 10000)
+        builder = OrderBookBuilder("coinbase", "BTC/USD")
+        self.assertIsNotNone(builder.apply(snapshot[0]))
+        rebuilt = builder.apply(delta[0])
+        self.assertIsNotNone(rebuilt)
+        self.assertFalse(builder.stale)
+        self.assertEqual(rebuilt.sequence, 42)
+        self.assertEqual(rebuilt.bids[0].quantity, 4.0)
+        self.assertEqual(rebuilt.asks, ())
 
     def test_coinbase_envelope_rejects_mixed_snapshot_and_update_items(self) -> None:
         collector = PublicL2WebSocketCollector(
