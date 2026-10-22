@@ -49,9 +49,11 @@ def fetch_binance_spot_snapshot(symbol: str, timeout_seconds: float = 5.0) -> Sn
 class BinanceSpotBookSynchronizer:
     """Bounded WS-buffer + REST-snapshot replay + sequence-gap recovery.
 
-    The output callback receives only freshness-eligible synchronized views.
-    Raw events may still be stored separately for diagnosis, but must not be
-    treated as a synchronized book. No signals or orders are produced here.
+    The output callback receives synchronized views and explicit invalidation
+    snapshots (eligible=False) when a gap, overflow, disconnect, or snapshot
+    failure is detected. Consumers must still enforce the view's freshness
+    limit at read time because no new WebSocket event may arrive to announce
+    staleness. Raw events are diagnostic only; no signals or orders are produced.
     """
 
     def __init__(
@@ -110,8 +112,8 @@ class BinanceSpotBookSynchronizer:
                         self._sequence_gaps += 1
                     self._buffer.clear()
                     self._schedule_snapshot_locked()
-                    return
-                if accepted:
+                    view = self.book.snapshot(event.local_receive_ns)
+                elif accepted:
                     view = self.book.snapshot(event.local_receive_ns)
             else:
                 if len(self._buffer) >= self.max_buffer_events:
@@ -120,16 +122,20 @@ class BinanceSpotBookSynchronizer:
                     self._buffer_overflows += 1
                     self.book.invalidate("buffer_overflow")
                     self._schedule_snapshot_locked()
-                    return
-                self._buffer.append(event)
-                self._condition.notify_all()
-        if view is not None and view.eligible:
+                    view = self.book.snapshot(event.local_receive_ns)
+                else:
+                    self._buffer.append(event)
+                    self._condition.notify_all()
+        # Persist both eligible books and explicit ineligible states so a
+        # consumer can clear its last known good view after a discontinuity.
+        if view is not None:
             self._emit(view)
 
     def install_snapshot(self, snapshot: SnapshotPayload) -> bool:
         """Install and replay buffered events; exposed for deterministic tests."""
         update_id, bids, asks = snapshot
         view: BookSnapshot | None = None
+        applied = False
         with self._condition:
             if self._closed:
                 return False
@@ -138,26 +144,30 @@ class BinanceSpotBookSynchronizer:
                 self._buffer.clear()
                 self.book.invalidate("buffer_overflow")
                 self._schedule_snapshot_locked()
-                return False
-            if not self.book.install_snapshot(update_id, bids, asks):
+                view = self.book.snapshot(time.monotonic_ns())
+            elif not self.book.install_snapshot(update_id, bids, asks):
                 self._buffer.clear()
                 self._schedule_snapshot_locked()
-                return False
-            buffered = list(self._buffer)
-            self._buffer.clear()
-            for event in buffered:
-                self.book.apply_delta(event)
-                if self.book.status == BookStatus.INVALID:
-                    if self.book.reason == "sequence_gap":
-                        self._sequence_gaps += 1
-                    self._buffer.clear()
-                    self._schedule_snapshot_locked()
-                    return False
-            if self.book.status == BookStatus.SYNCED:
                 view = self.book.snapshot(time.monotonic_ns())
-        if view is not None and view.eligible:
+            else:
+                buffered = list(self._buffer)
+                self._buffer.clear()
+                for event in buffered:
+                    self.book.apply_delta(event)
+                    if self.book.status == BookStatus.INVALID:
+                        if self.book.reason == "sequence_gap":
+                            self._sequence_gaps += 1
+                        self._buffer.clear()
+                        self._schedule_snapshot_locked()
+                        view = self.book.snapshot(event.local_receive_ns)
+                        break
+                else:
+                    applied = self.book.status != BookStatus.INVALID
+                    if self.book.status == BookStatus.SYNCED:
+                        view = self.book.snapshot(time.monotonic_ns())
+        if view is not None:
             self._emit(view)
-        return self.book.status != BookStatus.INVALID
+        return applied
 
     def connection_lost(self) -> None:
         """Fail closed after a WebSocket disconnect and request a fresh snapshot."""
@@ -167,6 +177,8 @@ class BinanceSpotBookSynchronizer:
             self._buffer.clear()
             self.book.invalidate("connection_lost")
             self._schedule_snapshot_locked()
+            view = self.book.snapshot(time.monotonic_ns())
+        self._emit(view)
 
     def health(self) -> dict[str, int | str | None | bool]:
         with self._condition:
@@ -218,6 +230,8 @@ class BinanceSpotBookSynchronizer:
                     self._snapshot_errors += 1
                     self.book.invalidate("snapshot_fetch_" + type(exc).__name__)
                     self._need_snapshot = True
+                    view = self.book.snapshot(time.monotonic_ns())
+                self._emit(view)
                 if self._stop_event.wait(retry_seconds):
                     return
                 retry_seconds = min(30.0, retry_seconds * 2.0)
