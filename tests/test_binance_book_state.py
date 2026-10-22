@@ -27,11 +27,16 @@ class BinanceSpotDepthBookTests(unittest.TestCase):
     def book(self, max_age_ms=1000):
         return BinanceSpotDepthBook("BTC/USDT", max_age_ms=max_age_ms, max_levels=5)
 
+    def install_valid_snapshot(self, book, update_id=100, bids=((100.0, 2.0),), asks=((101.0, 3.0),)):
+        return book.install_snapshot(
+            update_id,
+            tuple(OrderBookLevel(*level) for level in bids),
+            tuple(OrderBookLevel(*level) for level in asks),
+        )
+
     def test_snapshot_alone_is_not_eligible_until_contiguous_delta(self):
         book = self.book()
-        self.assertTrue(book.install_snapshot(
-            100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),)
-        ))
+        self.assertTrue(self.install_valid_snapshot(book))
         self.assertFalse(book.snapshot(now_ns=10_000_000).eligible)
         self.assertTrue(book.apply_delta(self.event(
             101, 103, bids=((100.0, 4.0),), asks=((101.0, 0.0), (102.0, 1.0))
@@ -45,7 +50,7 @@ class BinanceSpotDepthBookTests(unittest.TestCase):
 
     def test_old_or_duplicate_delta_is_ignored(self):
         book = self.book()
-        book.install_snapshot(100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),))
+        self.install_valid_snapshot(book)
         self.assertTrue(book.apply_delta(self.event(99, 101, receive_ns=5_000_000)))
         self.assertEqual(book.update_id, 101)
         self.assertFalse(book.apply_delta(self.event(100, 101, bids=((100.0, 9.0),))))
@@ -54,7 +59,7 @@ class BinanceSpotDepthBookTests(unittest.TestCase):
 
     def test_sequence_gap_invalidates_and_clears_book(self):
         book = self.book()
-        book.install_snapshot(100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),))
+        self.install_valid_snapshot(book)
         self.assertTrue(book.apply_delta(self.event(101, 103)))
         self.assertFalse(book.apply_delta(self.event(105, 106)))
         view = book.snapshot(now_ns=20_000_000)
@@ -66,7 +71,7 @@ class BinanceSpotDepthBookTests(unittest.TestCase):
 
     def test_stale_book_is_not_eligible(self):
         book = self.book(max_age_ms=50)
-        book.install_snapshot(10, (OrderBookLevel(100.0, 1.0),), (OrderBookLevel(101.0, 1.0),))
+        self.install_valid_snapshot(book, update_id=10)
         book.apply_delta(self.event(11, 11, receive_ns=1_000_000))
         view = book.snapshot(now_ns=100_000_000)
         self.assertFalse(view.eligible)
@@ -78,11 +83,34 @@ class BinanceSpotDepthBookTests(unittest.TestCase):
             100, (OrderBookLevel(float("nan"), 1.0),), (OrderBookLevel(101.0, 1.0),)
         ))
         self.assertEqual(book.status, BookStatus.INVALID)
-        book.install_snapshot(100, (OrderBookLevel(100.0, 1.0),), (OrderBookLevel(101.0, 1.0),))
+        self.install_valid_snapshot(book)
         malformed = self.event(101, 101)
         malformed = OrderBookEvent(**{**malformed.__dict__, "sequence_start": None})
         self.assertFalse(book.apply_delta(malformed))
         self.assertEqual(book.status, BookStatus.INVALID)
+
+    def test_negative_or_reversed_sequence_range_invalidates(self):
+        for start, end in ((-1, 101), (101, -1), (103, 102)):
+            with self.subTest(start=start, end=end):
+                book = self.book()
+                self.install_valid_snapshot(book)
+                self.assertFalse(book.apply_delta(self.event(start, end)))
+                self.assertEqual(book.status, BookStatus.INVALID)
+                self.assertEqual(book.snapshot(now_ns=20_000_000).reason, "invalid_sequence_range")
+
+    def test_crossed_book_is_not_eligible(self):
+        book = self.book()
+        self.install_valid_snapshot(book, bids=((101.0, 2.0),), asks=((101.0, 3.0),))
+        self.assertTrue(book.apply_delta(self.event(101, 101)))
+        view = book.snapshot(now_ns=20_000_000)
+        self.assertFalse(view.eligible)
+        self.assertEqual(view.reason, "crossed_book")
+
+    def test_non_finite_age_configuration_is_rejected(self):
+        for age in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(age=age):
+                with self.assertRaises(ValueError):
+                    BinanceSpotDepthBook("BTC/USDT", max_age_ms=age)
 
 
 if __name__ == "__main__":
