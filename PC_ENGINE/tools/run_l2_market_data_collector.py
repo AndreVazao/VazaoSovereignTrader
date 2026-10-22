@@ -7,6 +7,7 @@ import threading
 from dataclasses import asdict
 from pathlib import Path
 
+from PC_ENGINE.market_events.binance_book_state import BookSnapshot
 from PC_ENGINE.market_events.l2_collectors import PublicL2WebSocketCollector, default_l2_configs
 
 
@@ -20,7 +21,9 @@ def main() -> None:
     data_dir = Path(args.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     output = data_dir / "websocket_orderbook_events.jsonl"
+    synchronized_output = data_dir / "binance_synchronized_orderbook_views.jsonl"
     stop = threading.Event()
+    write_lock = threading.Lock()
     collectors: list[PublicL2WebSocketCollector] = []
     threads: list[threading.Thread] = []
 
@@ -33,16 +36,29 @@ def main() -> None:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, shutdown)
 
+    def append_jsonl(path: Path, payload: dict) -> None:
+        line = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+        with write_lock:
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+
     def persist(event) -> None:
-        with output.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(event), ensure_ascii=False) + "\n")
+        append_jsonl(output, asdict(event))
+
+    def persist_book(view: BookSnapshot) -> None:
+        payload = asdict(view)
+        payload["status"] = view.status.value
+        append_jsonl(synchronized_output, payload)
 
     configs = []
     for symbol in args.symbols:
         configs.extend(config for config in default_l2_configs(symbol) if config.venue in set(args.venues))
 
     for config in configs:
-        collector = PublicL2WebSocketCollector(config, persist)
+        collector = PublicL2WebSocketCollector(
+            config, persist,
+            on_book=persist_book if config.venue == "binance" else None,
+        )
         collectors.append(collector)
         thread = threading.Thread(
             target=collector.run_forever,
@@ -57,8 +73,10 @@ def main() -> None:
         "status": "RUNNING",
         "symbols": args.symbols,
         "venues": args.venues,
-        "output": str(output),
+        "raw_output": str(output),
+        "binance_synchronized_output": str(synchronized_output),
         "paper_only": True,
+        "orders_submitted": False,
     }, ensure_ascii=False))
 
     try:
