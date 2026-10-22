@@ -75,7 +75,20 @@ class BinanceSpotBookSynchronizerTests(unittest.TestCase):
         self.assertEqual(self.sync.book.status, BookStatus.INVALID)
         self.assertEqual(self.sync.book.reason, "buffer_overflow")
         self.assertEqual(self.sync.health()["buffer_overflows"], 1)
-        self.assertEqual(self.emitted, [])
+        self.assertEqual(len(self.emitted), 1)
+        self.assertFalse(self.emitted[-1].eligible)
+        self.assertEqual(self.emitted[-1].reason, "buffer_overflow")
+
+    def test_gap_emits_invalidation_after_previously_eligible_view(self):
+        self.sync.install_snapshot((100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),)))
+        self.sync.on_event(self.event(101, 101, receive_ns=2_000_000))
+        self.assertTrue(self.emitted[-1].eligible)
+        self.sync.on_event(self.event(103, 103, receive_ns=3_000_000))
+        self.assertFalse(self.emitted[-1].eligible)
+        self.assertEqual(self.emitted[-1].status, BookStatus.INVALID)
+        self.assertEqual(self.emitted[-1].reason, "sequence_gap")
+        self.assertEqual(self.emitted[-1].bids, ())
+        self.assertEqual(self.emitted[-1].asks, ())
 
     def test_health_reports_current_staleness_not_historical_eligibility(self):
         self.sync.install_snapshot((100, (OrderBookLevel(100.0, 2.0),), (OrderBookLevel(101.0, 3.0),)))
@@ -94,6 +107,8 @@ class BinanceSpotBookSynchronizerTests(unittest.TestCase):
         self.assertEqual(self.sync.book.status, BookStatus.INVALID)
         self.assertEqual(self.sync.book.reason, "connection_lost")
         self.assertFalse(self.sync.book.snapshot(2_000_000).eligible)
+        self.assertFalse(self.emitted[-1].eligible)
+        self.assertEqual(self.emitted[-1].reason, "connection_lost")
 
     def test_invalid_snapshot_does_not_enable_book(self):
         self.assertFalse(self.sync.install_snapshot((
