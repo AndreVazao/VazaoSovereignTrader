@@ -85,3 +85,31 @@ This audit is complete as a static evidence checkpoint, not a production readine
 ## Follow-up after audit — safer example defaults
 
 The audit identified that the checked-in example enabled autonomous REAL promotion flags. The follow-up change keeps autonomous PAPER research enabled but sets `autonomous_execution.allow_real=false` and `autonomous_execution.auto_promote_real=false` in `PC_ENGINE/config/config.example.json`, with a regression test in `tests/test_fast_path_config.py`. This is defense-in-depth for new setups only: it does not edit or inspect a user's existing `config.local.json`, does not certify startup behavior on the target PC, and does not replace the separate human authorization and engine-side gates.
+
+
+## Follow-up after PRs #433–#437 (2026-10-22)
+
+### Evidence now present on main
+- Binance Spot depth has a fail-closed state machine plus a collector integration that fetches a public REST snapshot, buffers/replays WebSocket diff-depth updates, invalidates on sequence gaps/overflow/disconnect, reconnects with backoff, and emits a separate synchronized-view JSONL plus current health/freshness JSON. This remains observational and is **not** connected to edge/signal or order execution.
+- The office now reports truthful connection state, sends validated department context, maintains session-only per-department chat history, and calls read-only handlers for venue health, market-data health, research queue, PAPER evidence, readiness, recovery, evidence ledger and human-interaction counts. These are deterministic handlers, not independent autonomous agents. Durable conversation history and browser/device E2E are not yet proven.
+- Mobile startup contract/syntax tests and Buildozer APK build passed on PR #437 exact head. A local startup diagnostic fallback and Kivy status-widget re-parenting fix are merged. The reported immediate crash is not definitively diagnosed until the APK is launched on a physical Android device and logcat is inspected.
+
+### Current follow-up in PR #438
+- The example config removes `trade_real` from default owner scopes while preserving PAPER mode, `allow_real=false` and `auto_promote_real=false`.
+- The Windows EXE/installer workflow now runs on relevant pull requests and adds a real silent-install → installed EXE `/health` smoke → silent uninstall/task cleanup sequence. This workflow must pass before claiming the installer is validated.
+
+### Remaining release blockers
+1. Effective `config.local.json`, environment tokens, firewall, scheduled tasks and paths on the user's actual PC remain unverified. An example config or CI runner is not evidence of the local setup.
+2. Physical Android launch, authentication, reconnect, layout/status-bar behavior and logcat remain unverified; APK build success is not phone readiness.
+3. OKX and Coinbase do not yet have protocol-specific synchronized books. Their raw L2 JSONL must not be used as a book.
+4. Cross-exchange instrument equivalence, edge-after-fees/slippage/latency proof, and signal-to-execution/reconciliation integration remain incomplete.
+5. Independent department workers, server-persistent per-department history, browser E2E, Tailscale/LAN failover, and virtual-office hardware-adaptive rendering remain incomplete.
+6. Keep PAPER/read-only; no REAL execution or live trading claim until separate gates are tested.
+
+### Updated heuristic readiness estimates (not automated metrics)
+- Engine + public data collection: 78%.
+- Cross-exchange temporal edge: 48%.
+- Security / execution / reconciliation integration: 60%.
+- Virtual office / cockpit: 65% (read-only handlers and session context exist; independent agents and E2E do not).
+- Android APK: 35% (debug APK build passes; physical launch unverified).
+- Windows installer/current PC: 40% (CI smoke added in PR #438; local PC state unverified).

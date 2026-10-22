@@ -1,6 +1,15 @@
 name: Windows EXE
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "PC_ENGINE/**"
+      - "scripts/**"
+      - "installer/**"
+      - "tests/**"
+      - "requirements-pc.txt"
+      - ".github/workflows/windows-exe.yml"
   push:
     tags:
       - "pc-v*"
@@ -87,13 +96,94 @@ jobs:
       - name: Build one-click installer
         shell: pwsh
         run: .\scripts\build_windows_installer.ps1
-      - name: Installer smoke test
+      - name: Silent install, launch, health and uninstall smoke test
         shell: pwsh
         run: |
-          $installer = Join-Path $env:GITHUB_WORKSPACE "installer-output\VazaoSovereignTrader-Setup.exe"
-          if (-not (Test-Path $installer)) { throw "Installer artifact was not produced: $installer" }
-          Write-Host "Installer: $installer"
-          Write-Host "SHA256: $((Get-FileHash $installer -Algorithm SHA256).Hash)"
+          $installerCandidates = @(Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE "installer-output") -Filter "VazaoSovereignTrader-Setup-*.exe" -File)
+          if ($installerCandidates.Count -ne 1) {
+            throw "Expected exactly one versioned installer artifact; found $($installerCandidates.Count)."
+          }
+          $installer = $installerCandidates[0].FullName
+          Write-Host "Installer SHA256: $((Get-FileHash $installer -Algorithm SHA256).Hash)"
+
+          $testDir = Join-Path $env:RUNNER_TEMP "VST-Installer-Smoke"
+          if (Test-Path $testDir) { Remove-Item $testDir -Recurse -Force }
+          $installArgs = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=$testDir"
+          $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Silent installer failed with exit code $($install.ExitCode)." }
+
+          $engine = Join-Path $testDir "VazaoSovereignTrader.exe"
+          $configPath = Join-Path $testDir "config\config.local.json"
+          $uninstaller = Join-Path $testDir "unins000.exe"
+          if (-not (Test-Path $engine)) { throw "Installed engine EXE missing." }
+          if (-not (Test-Path $configPath)) { throw "Installed local config missing." }
+          if (-not (Test-Path $uninstaller)) { throw "Installed uninstaller missing." }
+          foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
+            if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
+              throw "Scheduled task was not installed: $taskName"
+            }
+          }
+
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $config.mode = "PAPER"
+          $config.server.host = "127.0.0.1"
+          $config.server.port = 18765
+          $config.radar.enabled = $false
+          $config.shared_intelligence.enabled = $false
+          $config.research.enabled = $false
+          $config.confluence.enabled = $false
+          $config.fast_path.enabled = $false
+          $config.fast_path.allow_real = $false
+          $config.autonomous_execution.allow_real = $false
+          $config.autonomous_execution.auto_promote_real = $false
+          $config | ConvertTo-Json -Depth 50 | Set-Content $configPath -Encoding utf8
+
+          function Stop-SmokeEngineProcesses {
+            $imageName = [System.IO.Path]::GetFileName($engine)
+            $running = Get-CimInstance Win32_Process | Where-Object {
+              $_.Name -eq $imageName -and $_.ExecutablePath -and $_.ExecutablePath -ieq $engine
+            }
+            foreach ($item in $running) {
+              Stop-Process -Id $item.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+            Start-Sleep -Seconds 2
+            $remaining = Get-CimInstance Win32_Process | Where-Object {
+              $_.Name -eq $imageName -and $_.ExecutablePath -and $_.ExecutablePath -ieq $engine
+            }
+            if ($remaining) { throw "Installed engine process tree did not stop before uninstall." }
+          }
+
+          $proc = $null
+          try {
+            $proc = Start-Process -FilePath $engine -WorkingDirectory $testDir -PassThru -WindowStyle Hidden
+            $ready = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              $proc.Refresh()
+              if ($proc.HasExited) { throw "Installed EXE exited before health check (exit code $($proc.ExitCode))." }
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18765/health -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch { }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $ready) { throw "Installed EXE health endpoint did not become ready." }
+          } finally {
+            if ($proc) {
+              $proc.Refresh()
+              if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+            }
+            Stop-SmokeEngineProcesses
+          }
+
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstaller failed with exit code $($uninstall.ExitCode)." }
+          if (Test-Path $engine) { throw "Engine EXE remained after uninstall." }
+          foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
+            if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+              throw "Scheduled task remained after uninstall: $taskName"
+            }
+          }
+          Write-Host "Silent install, PAPER launch/health and uninstall smoke passed."
       - uses: actions/upload-artifact@v4
         with:
           name: vazaosovereigntrader-windows-installer
