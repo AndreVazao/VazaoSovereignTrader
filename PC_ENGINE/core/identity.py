@@ -7,7 +7,6 @@ from typing import Iterable
 DEFAULT_OWNER_SCOPES = frozenset({
     "read_private_state",
     "trade_paper",
-    "trade_real",
     "manage_exchange_accounts",
     "manage_owner_settings",
     "read_shared_intelligence",

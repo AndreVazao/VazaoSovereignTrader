@@ -19,7 +19,8 @@ def test_local_token_derives_owner_without_request_owner_id():
     principal = auth.authenticate("secret", device_id="andre-pc")
     assert principal.owner_id == "andre"
     assert principal.device_id == "andre-pc"
-    assert principal.has("trade_real")
+    assert not principal.has("trade_real")
+    assert principal.has("trade_paper")
 
 
 def test_second_owner_token_selects_only_that_owner():
@@ -86,3 +87,39 @@ def test_scope_override_is_enforced():
     principal = auth.authenticate("secret")
     assert principal.has("read_private_state")
     assert not principal.has("trade_real")
+
+
+
+def test_empty_scope_list_does_not_grant_real_by_default():
+    config = {
+        "owner": {"id": "andre"},
+        "server": {"local_control_token_env": "VST_LOCAL_TOKEN"},
+        "identity": {
+            "owners": {
+                "andre": {"token_env": "ANDRE_TOKEN", "scopes": []}
+            }
+        },
+    }
+    auth = IdentityAuthenticator(config, _env({"ANDRE_TOKEN": "secret"}))
+    principal = auth.authenticate("secret")
+    assert principal.has("read_private_state")
+    assert principal.has("trade_paper")
+    assert not principal.has("trade_real")
+
+
+def test_real_scope_requires_explicit_owner_configuration():
+    config = {
+        "owner": {"id": "andre"},
+        "server": {"local_control_token_env": "VST_LOCAL_TOKEN"},
+        "identity": {
+            "owners": {
+                "andre": {
+                    "token_env": "ANDRE_TOKEN",
+                    "scopes": ["read_private_state", "trade_paper", "trade_real"],
+                }
+            }
+        },
+    }
+    auth = IdentityAuthenticator(config, _env({"ANDRE_TOKEN": "secret"}))
+    principal = auth.authenticate("secret")
+    assert principal.has("trade_real")
