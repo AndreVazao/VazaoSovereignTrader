@@ -144,3 +144,24 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 - Scope limit: this is parser hardening only. Coinbase's sequence number is now preserved in emitted observations, but a protocol-specific Coinbase synchronized-book state machine, gap/reconnect recovery, and integration into any temporal-edge calculator remain unproven. Do not enable Coinbase L2 for depth-based decisions based on this parser change alone.
 - Binance book invalidation notifications are present on main; live snapshot/delta continuity and wiring to the edge calculator still require evidence. OKX protocol-specific book synchronization also remains incomplete.
 - No live venue connection, private credential, physical device, live order or profitability test was performed in this review. PAPER/read-only remains the operating posture.
+
+
+## Consolidated release and order-book checkpoint — 2026-10-22
+
+### Verified CI evidence
+- PR #438 Windows EXE and installer smoke passed on exact head `77ef30ce6e10324dad160e34123aff752aa951e7`; Python workflow also passed. This verifies the hosted Windows runner path (silent install, PAPER launch/loopback health, stop/uninstall and scheduled-task cleanup), not the user's actual PC or private configuration.
+- PR #439 removed `trade_real` from default owner scopes. Missing/empty scopes should not grant REAL by default. Existing local config and previously issued tokens were not inspected or revoked.
+- PR #442 merged Coinbase Advanced Trade envelope parsing with sequence and product identity validation. Parser correctness only; no synchronized Coinbase book.
+- PR #446 merged OKX channel semantics: `books5` and `bbo-tbt` pushes are snapshots even when action is `update`; `books` remains action-based and unknown actions are rejected. Python and Windows EXE workflows passed on exact head `ead9c38e662daf42f647e765f077e139a3e600a8`. This is parser correctness only, not complete OKX synchronization.
+- Current main checkpoint at this update: `38614b7573941166826e6249adc167883b8c9aa6`.
+
+### Remaining blockers — do not infer readiness from CI alone
+1. **Binance:** state machine and collector have sequence validation, buffering/replay, invalidation and health artifacts. Still require a deterministic test proving the exact synchronized view consumed by the temporal-edge calculator, including freshness, gap invalidation and recovery. Until then, depth must remain ineligible for edge/execution decisions.
+2. **OKX/Coinbase:** implement and test separate venue-specific snapshot/sequence/gap/reconnect state machines. Do not apply Binance sequence semantics to other exchanges.
+3. **Edge quality:** normalized instrument identity and net edge must include fees, spread, slippage, funding, latency, inventory and failure costs; validate chronologically out of sample in PAPER/shadow mode.
+4. **Windows PC:** inspect effective config, owner scopes, REAL flags, token sources, bind address/firewall, scheduled tasks and health/log output locally without sharing secrets. Hosted smoke is not local certification.
+5. **Android/remote:** physical APK launch/logcat, status-bar-safe layout, authentication, reconnect/revocation, LAN/Tailscale transitions and non-replay of mutating requests on failover remain unverified.
+6. **Virtual office:** the read-only department handlers are deterministic service adapters, not independent autonomous LLM agents. Persistent per-department conversation, browser E2E and installed-device certification remain incomplete.
+
+### Readiness reporting
+Treat previous percentages as engineering estimates, not measured reliability. Windows packaging CI confidence is higher after #438, but actual PC readiness remains unverified. Android readiness and cross-device remote behavior remain unverified. Operating posture stays PAPER/read-only; no live order, transfer, withdrawal or REAL activation was performed.
