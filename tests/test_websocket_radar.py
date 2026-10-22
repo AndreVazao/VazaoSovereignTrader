@@ -151,6 +151,60 @@ class WebSocketRadarTests(unittest.TestCase):
         self.assertEqual(snapshot["last_message_error"]["binance"], "ValueError")
         self.assertNotIn("sensitive raw payload detail", str(snapshot))
 
+    def test_message_callback_records_decode_and_parser_failures(self) -> None:
+        import threading
+
+        cases = [
+            ("{malformed-json", None, "JSONDecodeError"),
+            ('{"data":{}}', ValueError("sensitive parser detail"), "ValueError"),
+        ]
+
+        for raw, parser_error, expected_error in cases:
+            with self.subTest(expected_error=expected_error), tempfile.TemporaryDirectory() as tmp:
+                holder = {}
+
+                class MessageWebSocketApp:
+                    def __init__(self, url, on_open=None, on_message=None):
+                        self.on_open = on_open
+                        self.on_message = on_message
+
+                    def run_forever(self, **kwargs):
+                        if self.on_open:
+                            self.on_open(self)
+                        if self.on_message:
+                            self.on_message(self, raw)
+                        holder["radar"]._stop.set()
+
+                    def close(self):
+                        pass
+
+                radar = WebSocketMarketRadar(
+                    ["BTC/USDT"], exchanges=["binance"], data_dir=tmp,
+                )
+                holder["radar"] = radar
+                parser_patch = patch.object(
+                    radar, "_parse_binance",
+                    side_effect=parser_error if parser_error is not None else None,
+                )
+                with parser_patch, patch(
+                    "PC_ENGINE.radar.websocket_radar.websocket.WebSocketApp",
+                    MessageWebSocketApp,
+                ):
+                    if parser_error is None:
+                        # Keep the real parser for malformed JSON; json.loads fails first.
+                        parser_patch.stop()
+                    else:
+                        parser_patch.start()
+                    radar.start()
+                    for worker in list(radar._threads):
+                        worker.join(timeout=2)
+                    snapshot = radar.snapshot()
+                    radar.stop()
+
+                self.assertEqual(snapshot["message_errors"]["binance"], 1)
+                self.assertEqual(snapshot["last_message_error"]["binance"], expected_error)
+                self.assertNotIn("sensitive parser detail", str(snapshot))
+
     def test_snapshot_reports_no_trade_yet_without_claiming_disconnect(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar.symbols = ["BTC/USDT"]
