@@ -10,9 +10,13 @@ def test_health_heartbeat_interval_defaults_to_ten_seconds():
 
 
 def test_health_heartbeat_interval_is_bounded():
-    assert _health_heartbeat_interval_seconds({"health_heartbeat_seconds": 1}) == 5.0
-    assert _health_heartbeat_interval_seconds({"health_heartbeat_seconds": 120}) == 60.0
-    assert _health_heartbeat_interval_seconds({"health_heartbeat_seconds": 15}) == 15.0
+    assert _health_heartbeat_interval_seconds({"health_heartbeat_seconds": 0.1}) == 1.0
+    assert _health_heartbeat_interval_seconds({"health_heartbeat_seconds": 120}) == 10.0
+    assert _health_heartbeat_interval_seconds({"health_heartbeat_seconds": 15}) == 10.0
+    assert _health_heartbeat_interval_seconds({
+        "health_heartbeat_seconds": 8,
+        "health_stale_seconds": 12,
+    }) == 4.0
 
 
 def test_health_heartbeat_interval_handles_invalid_values():
