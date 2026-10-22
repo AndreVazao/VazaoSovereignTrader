@@ -11,7 +11,8 @@ class SynchronizedBookView:
 
     instrument_id must be a canonical identity produced by a separately
     validated market-mapping layer (for example, spot BTC/USDT, not a raw
-    venue symbol). This module does not infer equivalence between instruments.
+    venue symbol). observation_time_ns must use the same monotonic clock
+    domain for both views. This module does not infer instrument equivalence.
     """
 
     venue: str
@@ -21,6 +22,7 @@ class SynchronizedBookView:
     age_ms: float | None
     best_bid: float | None
     best_ask: float | None
+    observation_time_ns: int | None = None
     sequence: int | str | None = None
 
 
@@ -35,6 +37,7 @@ class DepthEdgeAssessment:
     net_edge_bps: float | None = None
     buy_book_age_ms: float | None = None
     sell_book_age_ms: float | None = None
+    observation_skew_ms: float | None = None
     paper_only: bool = True
     execution_allowed: bool = False
 
@@ -46,14 +49,19 @@ def _finite_non_negative(name: str, value: float) -> float:
     return number
 
 
-def _reject(reason: str, left: SynchronizedBookView,
-            right: SynchronizedBookView) -> DepthEdgeAssessment:
+def _reject(
+    reason: str,
+    left: SynchronizedBookView,
+    right: SynchronizedBookView,
+    observation_skew_ms: float | None = None,
+) -> DepthEdgeAssessment:
     return DepthEdgeAssessment(
         eligible=False,
         reason=reason,
         instrument_id=left.instrument_id if left.instrument_id == right.instrument_id else None,
         buy_book_age_ms=left.age_ms,
         sell_book_age_ms=right.age_ms,
+        observation_skew_ms=observation_skew_ms,
     )
 
 
@@ -65,19 +73,25 @@ def assess_synchronized_depth_edge(
     latency_penalty_bps: float = 0.0,
     min_net_edge_bps: float = 0.0,
     max_age_ms: float = 250.0,
+    max_observation_skew_ms: float = 100.0,
 ) -> DepthEdgeAssessment:
     """Compare synchronized top-of-book views for PAPER research only.
 
     venue_costs_bps is the estimated fee plus slippage cost for one leg at
     each venue. The total cross-venue cost includes both legs plus latency.
-    This function does not fetch data, normalize symbols, estimate fill
-    probability, or authorize/submit orders.
+    Both views must have observation timestamps from the same monotonic clock
+    domain and be close enough in time to reduce false temporal edges. This
+    function does not fetch data, normalize symbols, estimate fill probability,
+    or authorize/submit orders.
     """
     latency_penalty = _finite_non_negative("latency_penalty_bps", latency_penalty_bps)
     min_net = _finite_non_negative("min_net_edge_bps", min_net_edge_bps)
     max_age = _finite_non_negative("max_age_ms", max_age_ms)
+    max_skew = _finite_non_negative("max_observation_skew_ms", max_observation_skew_ms)
     if max_age <= 0:
         raise ValueError("max_age_ms must be positive")
+    if max_skew <= 0:
+        raise ValueError("max_observation_skew_ms must be positive")
 
     if not left.venue.strip() or not right.venue.strip() or left.venue.lower() == right.venue.lower():
         return _reject("distinct_venues_required", left, right)
@@ -104,13 +118,21 @@ def assess_synchronized_depth_edge(
         if not math.isfinite(bid) or not math.isfinite(ask) or bid <= 0 or ask <= 0 or bid >= ask:
             return _reject("invalid_or_crossed_book", left, right)
 
+    left_time, right_time = left.observation_time_ns, right.observation_time_ns
+    for timestamp in (left_time, right_time):
+        if not isinstance(timestamp, int) or isinstance(timestamp, bool) or timestamp < 0:
+            return _reject("missing_or_invalid_observation_timestamp", left, right)
+    observation_skew_ms = abs(left_time - right_time) / 1_000_000.0
+    if observation_skew_ms > max_skew:
+        return _reject("observation_time_skew", left, right, observation_skew_ms)
+
     if left.venue not in venue_costs_bps or right.venue not in venue_costs_bps:
-        return _reject("missing_venue_cost_assumption", left, right)
+        return _reject("missing_venue_cost_assumption", left, right, observation_skew_ms)
     try:
         left_cost = _finite_non_negative(f"{left.venue}_cost_bps", venue_costs_bps[left.venue])
         right_cost = _finite_non_negative(f"{right.venue}_cost_bps", venue_costs_bps[right.venue])
-    except (TypeError, OverflowError) as exc:
-        raise ValueError("venue cost assumptions must be numeric") from exc
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("venue cost assumptions must be numeric, finite and non-negative") from exc
     total_cost = left_cost + right_cost + latency_penalty
     if not math.isfinite(total_cost):
         raise ValueError("combined cost assumptions must be finite")
@@ -124,7 +146,7 @@ def assess_synchronized_depth_edge(
         gross = (exit_price - entry) / entry * 10_000.0
         net = gross - total_cost
         if not math.isfinite(gross) or not math.isfinite(net):
-            return _reject("non_finite_edge_calculation", left, right)
+            return _reject("non_finite_edge_calculation", left, right, observation_skew_ms)
         is_eligible = net > min_net
         assessments.append(DepthEdgeAssessment(
             eligible=is_eligible,
@@ -136,6 +158,7 @@ def assess_synchronized_depth_edge(
             net_edge_bps=net,
             buy_book_age_ms=buy.age_ms,
             sell_book_age_ms=sell.age_ms,
+            observation_skew_ms=observation_skew_ms,
         ))
 
     best = max(assessments, key=lambda item: item.net_edge_bps if item.net_edge_bps is not None else -math.inf)
@@ -151,4 +174,5 @@ def assess_synchronized_depth_edge(
         net_edge_bps=best.net_edge_bps,
         buy_book_age_ms=best.buy_book_age_ms,
         sell_book_age_ms=best.sell_book_age_ms,
+        observation_skew_ms=best.observation_skew_ms,
     )
