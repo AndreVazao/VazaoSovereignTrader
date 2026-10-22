@@ -134,3 +134,12 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 3. Before depth-based edge evaluation, add protocol-contract tests and explicit wiring evidence for Binance synchronized views; implement separate OKX/Coinbase synchronization or keep those venues ineligible for depth signals.
 4. Prove normalized instrument identity and net edge after fees, spread, slippage, funding, latency, inventory and failure costs using chronological out-of-sample PAPER/shadow evaluation.
 5. Keep independent office agents, persistent department conversations and browser E2E labelled incomplete until runtime evidence exists.
+
+
+## Addendum — latest main and market-data changes (2026-10-22)
+
+- Latest main reviewed for this addendum: `29f93b642df6f2949693e688f06ff4aea4ca2140`.
+- The Binance Spot depth state machine now has explicit publication of book invalidation states and regression coverage (latest main commit message: `fix(market-data): publish Binance book invalidation states`). This improves observability when a book becomes unusable; it does not itself prove snapshot/delta continuity under live exchange traffic, nor does it authorize the book as an input to the edge calculator.
+- PR #442 is open, not merged, and proposes a Coinbase Advanced Trade L2 parser correction: handle inbound `l2_data` envelope, preserve `sequence_num`, validate `product_id`, and reject unsupported event forms. Until that PR is reviewed, CI-validated and merged, do not count this parser fix as part of main. Even after merge, parser correctness is not full Coinbase book synchronization.
+- PR #443's earlier documentation branch was closed because main advanced while it was open. This addendum is being submitted from a fresh branch based on the latest main to avoid stale-base ambiguity.
+- No live venue connection, private credential, physical device, live order or profitability test was performed during this source/CI review. Keep the system in PAPER/read-only.
