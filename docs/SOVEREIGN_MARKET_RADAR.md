@@ -528,3 +528,10 @@ A migração para TLS 443 aplica-se a todos os consumidores públicos do endpoin
 ### Cobertura da migração OKX — coletor L2
 
 A varredura transversal identificou ainda um terceiro consumidor independente do endpoint OKX: PC_ENGINE/market_events/l2_collectors.py, usado por PC_ENGINE/tools/run_l2_market_data_collector.py. O endpoint L2 também foi migrado para wss://ws.okx.com/ws/v5/public e o teste test_default_okx_l2_endpoint_uses_tls_443 verifica a configuração gerada por default_l2_configs. A alteração de endpoint não implementa sincronização de livro nem valida conectividade live; a continuidade do book permanece uma limitação separada que requer snapshot/sequence handling e testes de recuperação antes de alimentar sinais.
+
+
+### Binance Spot L2 — state-machine groundwork (2026-10-22)
+
+A pure, deterministic `BinanceSpotDepthBook` is implemented in `PC_ENGINE/market_events/binance_book_state.py` with states `UNINITIALIZED`, `SYNCED`, and `INVALID`. It accepts a caller-supplied REST snapshot, only accepts deltas whose Binance `U/u` range covers the next update ID, ignores old/duplicate updates, applies zero-quantity deletions, and invalidates/clears the book on sequence gaps or malformed levels. Negative/reversed sequence ranges and non-finite freshness configuration are rejected; crossed/locked books are not eligible. Regression coverage is in `tests/test_binance_book_state.py`.
+
+**This remains isolated groundwork, not a live synchronized book.** The live collector is not wired to this class. Bounded WebSocket buffering, REST snapshot acquisition, replay, reconnect/resync orchestration, and operational metrics remain required before this data can feed any signal. Do not treat the current raw L2 JSONL as a synchronized order book. OKX `books5` and Coinbase require their own protocol-specific contracts; do not reuse Binance `U/u` semantics.
