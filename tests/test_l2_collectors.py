@@ -44,6 +44,28 @@ class L2CollectorTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.collector("binance")._parse(json.dumps(payload), 9000)
 
+    def test_malformed_message_is_counted_without_raw_payload(self) -> None:
+        collector = self.collector("binance")
+        collector.process_message('{"e":"depthUpdate","U":-1,"u":2,"b":[],"a":[]}')
+        health = collector.health_snapshot()
+        self.assertEqual(health["parse_errors"], 1)
+        self.assertEqual(health["last_parse_error"], "ValueError")
+        self.assertNotIn("depthUpdate", str(health))
+
+    def test_raw_persistence_error_does_not_escape_message_callback(self) -> None:
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("binance", "BTC/USDT", "wss://example"),
+            lambda _event: (_ for _ in ()).throw(OSError("private path detail")),
+        )
+        collector.process_message(json.dumps({
+            "e": "depthUpdate", "E": 1, "U": 1, "u": 1,
+            "b": [["100", "1"]], "a": [["101", "1"]],
+        }))
+        health = collector.health_snapshot()
+        self.assertEqual(health["raw_callback_errors"], 1)
+        self.assertEqual(health["last_raw_callback_error"], "OSError")
+        self.assertNotIn("private path detail", str(health))
+
     def test_okx_snapshot(self) -> None:
         events = self.collector("okx")._parse(json.dumps({
             "arg": {"channel": "books5"}, "action": "snapshot",
