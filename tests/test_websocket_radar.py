@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -111,6 +112,11 @@ class WebSocketRadarTests(unittest.TestCase):
         radar._threads = []
         radar._lock = __import__("threading").RLock()
         radar._last_event = {}
+        radar._connection_state = {"binance": "never_connected", "okx": "never_connected"}
+        radar._last_connected_ts_ms = {}
+        radar._last_disconnected_ts_ms = {}
+        radar._last_message_ts_ms = {}
+        radar._last_connection_error = {}
         radar._events_total = 0
         radar._events_by_exchange = {}
         radar._reconnects = {"binance": 0, "okx": 0}
@@ -118,6 +124,8 @@ class WebSocketRadarTests(unittest.TestCase):
         radar._persistence_errors = 0
         snapshot = radar.snapshot()
         self.assertEqual(snapshot["trade_freshness"]["binance"], "no_trade_yet")
+        self.assertEqual(snapshot["connection_state"]["binance"], "never_connected")
+        self.assertEqual(snapshot["last_message_ts_ms"], {})
         self.assertFalse(snapshot["worker_alive"]["binance"])
 
     def test_snapshot_marks_old_trade_as_no_recent_trade(self) -> None:
@@ -127,6 +135,11 @@ class WebSocketRadarTests(unittest.TestCase):
         radar._threads = []
         radar._lock = __import__("threading").RLock()
         radar._last_event = {"binance": {"local_ts_ms": 1, "symbol": "BTC/USDT", "price": 100.0}}
+        radar._connection_state = {"binance": "never_connected"}
+        radar._last_connected_ts_ms = {}
+        radar._last_disconnected_ts_ms = {}
+        radar._last_message_ts_ms = {}
+        radar._last_connection_error = {}
         radar._events_total = 1
         radar._events_by_exchange = {"binance": 1}
         radar._reconnects = {"binance": 0}
@@ -181,6 +194,7 @@ class WebSocketRadarTests(unittest.TestCase):
         import threading
 
         created = threading.Event()
+        opened = threading.Event()
         closed = threading.Event()
 
         class FakeWebSocketApp:
@@ -191,6 +205,14 @@ class WebSocketRadarTests(unittest.TestCase):
                 created.set()
 
             def run_forever(self, **kwargs):
+                if self.on_open:
+                    self.on_open(self)
+                if self.on_message:
+                    self.on_message(self, json.dumps({
+                        "data": {"e": "trade", "s": "BTCUSDT", "p": "100",
+                                 "q": "1", "T": 1761048000000, "m": False, "t": 1}
+                    }))
+                opened.set()
                 closed.wait(timeout=5)
 
             def close(self):
@@ -201,9 +223,48 @@ class WebSocketRadarTests(unittest.TestCase):
             with patch("PC_ENGINE.radar.websocket_radar.websocket.WebSocketApp", FakeWebSocketApp):
                 radar.start()
                 self.assertTrue(created.wait(timeout=1))
+                self.assertTrue(opened.wait(timeout=1))
+                connected = radar.snapshot()
+                self.assertEqual(connected["connection_state"]["binance"], "connected")
+                self.assertIn("binance", connected["last_message_ts_ms"])
+                self.assertIn("binance", connected["last_connected_ts_ms"])
                 radar.stop()
-                self.assertFalse(radar.snapshot()["running"])
+                stopped = radar.snapshot()
+                self.assertFalse(stopped["running"])
+                self.assertEqual(stopped["connection_state"]["binance"], "stopped")
+                self.assertIn("binance", stopped["last_disconnected_ts_ms"])
                 self.assertEqual(radar._threads, [])
+
+    def test_failed_connect_is_not_reported_as_disconnected(self) -> None:
+        import threading
+
+        attempted = threading.Event()
+        holder = {}
+
+        class FailingConnectWebSocketApp:
+            def __init__(self, url, on_open=None, on_message=None):
+                pass
+
+            def run_forever(self, **kwargs):
+                attempted.set()
+                holder["radar"]._stop.set()
+                raise RuntimeError("simulated connection failure")
+
+            def close(self):
+                pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = WebSocketMarketRadar(["BTC/USDT"], exchanges=["binance"], data_dir=tmp)
+            holder["radar"] = radar
+            with patch("PC_ENGINE.radar.websocket_radar.websocket.WebSocketApp", FailingConnectWebSocketApp):
+                radar.start()
+                self.assertTrue(attempted.wait(timeout=1))
+                radar._threads[0].join(timeout=1)
+                snapshot = radar.snapshot()
+
+            self.assertEqual(snapshot["connection_state"]["binance"], "stopped")
+            self.assertEqual(snapshot["last_connection_error"]["binance"], "RuntimeError")
+            self.assertNotIn("binance", snapshot["last_disconnected_ts_ms"])
 
     def test_start_during_shutdown_does_not_restart_workers(self) -> None:
         import threading
