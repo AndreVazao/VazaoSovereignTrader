@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import signal
 import threading
 import time
@@ -23,6 +24,21 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def _resolve_path(raw: str | Path) -> Path:
     path = Path(raw)
     return path if path.is_absolute() else REPO_ROOT / path
+
+
+def _health_heartbeat_interval_seconds(radar_cfg: dict) -> float:
+    """Keep the health heartbeat comfortably inside the API stale threshold."""
+    try:
+        configured = float(radar_cfg.get("health_heartbeat_seconds", 10.0))
+        stale_after = float(radar_cfg.get("health_stale_seconds", 30.0))
+    except (TypeError, ValueError):
+        return 10.0
+    if not math.isfinite(configured) or not math.isfinite(stale_after) or stale_after <= 0:
+        return 10.0
+    # Keep at least two heartbeat opportunities inside the stale window, with
+    # sensible bounds to avoid either rapid disk churn or a very slow heartbeat.
+    upper_bound = min(20.0, max(1.0, stale_after / 3.0))
+    return min(upper_bound, max(1.0, configured))
 
 
 def _outcomes_path(radar_cfg: dict, data_dir: Path) -> Path:
@@ -155,9 +171,26 @@ def main() -> None:
     study_minutes = float(args.study_minutes if args.study_minutes is not None else study_cfg.get("interval_minutes", 15))
     next_learning = 0.0
     next_study = 0.0
+    next_health_heartbeat = time.monotonic() + _health_heartbeat_interval_seconds(radar_cfg)
     try:
         while not stop.is_set():
             now = time.monotonic()
+            if now >= next_health_heartbeat:
+                # Refresh liveness independently of slower learning/study cycles.
+                try:
+                    write_health(
+                        "RUNNING",
+                        radar=radar.snapshot(),
+                        hot_path=hot_path.snapshot(),
+                        hot_path_outcomes=outcome_tracker.snapshot(),
+                    )
+                except OSError as exc:
+                    # A health-file write failure must not stop public data collection.
+                    print(json.dumps({
+                        "service": "market_data_collector",
+                        "health_heartbeat_error": type(exc).__name__,
+                    }), flush=True)
+                next_health_heartbeat = now + _health_heartbeat_interval_seconds(radar_cfg)
             if now >= next_learning:
                 stats = learner.learn()
                 calibration = write_hot_path_calibration(
