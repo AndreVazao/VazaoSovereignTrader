@@ -122,6 +122,39 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(len(events[0].bids), 1)
         self.assertEqual(len(events[0].asks), 1)
 
+    def test_coinbase_envelope_with_multiple_items_emits_one_atomic_sequence(self) -> None:
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
+        events = collector._parse(json.dumps({
+            "channel": "l2_data",
+            "sequence_num": 42,
+            "timestamp": "2026-01-01T00:00:00.000Z",
+            "events": [
+                {"type": "update", "product_id": "BTC-USD", "updates": [
+                    {"side": "bid", "price_level": "100.0", "new_quantity": "2.0"}]},
+                {"type": "update", "product_id": "BTC-USD", "updates": [
+                    {"side": "offer", "price_level": "100.2", "new_quantity": "1.0"}]},
+            ],
+        }), 9000)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].sequence, 42)
+        self.assertEqual(events[0].event_type, "delta")
+        self.assertEqual(len(events[0].bids), 1)
+        self.assertEqual(len(events[0].asks), 1)
+
+    def test_coinbase_envelope_rejects_mixed_snapshot_and_update_items(self) -> None:
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
+        with self.assertRaisesRegex(ValueError, "mixed_coinbase_event_types"):
+            collector._parse(json.dumps({
+                "channel": "l2_data",
+                "sequence_num": 42,
+                "events": [
+                    {"type": "snapshot", "product_id": "BTC-USD", "updates": []},
+                    {"type": "update", "product_id": "BTC-USD", "updates": []},
+                ],
+            }), 9000)
+
     def test_coinbase_rejects_missing_sequence_and_mismatched_product(self) -> None:
         collector = PublicL2WebSocketCollector(
             L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"), lambda _: None)
