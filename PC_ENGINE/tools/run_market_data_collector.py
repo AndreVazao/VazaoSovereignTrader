@@ -30,11 +30,15 @@ def _health_heartbeat_interval_seconds(radar_cfg: dict) -> float:
     """Keep the health heartbeat comfortably inside the API stale threshold."""
     try:
         configured = float(radar_cfg.get("health_heartbeat_seconds", 10.0))
+        stale_after = float(radar_cfg.get("health_stale_seconds", 30.0))
     except (TypeError, ValueError):
         return 10.0
-    if not math.isfinite(configured):
+    if not math.isfinite(configured) or not math.isfinite(stale_after) or stale_after <= 0:
         return 10.0
-    return min(60.0, max(5.0, configured))
+    # Keep at least two heartbeat opportunities inside the stale window, with
+    # sensible bounds to avoid either rapid disk churn or a very slow heartbeat.
+    upper_bound = min(20.0, max(1.0, stale_after / 3.0))
+    return min(upper_bound, max(1.0, configured))
 
 
 def _outcomes_path(radar_cfg: dict, data_dir: Path) -> Path:
