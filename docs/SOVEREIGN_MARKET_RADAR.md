@@ -547,3 +547,15 @@ The L2 runner now writes two separate files:
 The Binance synchronizer uses a bounded pre-snapshot/recovery buffer (default 2,000 events), REST snapshot limit 1,000, sequence-gap invalidation, buffer-overflow invalidation, and retry backoff. A gap or overflow invalidates and clears the book and requests a new snapshot. If a snapshot cannot be obtained, the output remains unavailable rather than presenting a plausible book. This is still an observational data artifact and is not connected to signal generation or order execution.
 
 OKX and Coinbase continue to be raw event collection only in this increment; their snapshot/delta continuity must be implemented and tested according to each venue's own protocol before claiming synchronized books.
+
+
+## Binance Spot synchronized L2 collector (implementation increment)
+
+The L2 runner writes two separate files:
+
+- `websocket_orderbook_events.jsonl`: raw normalized events, useful for diagnosis only; **not a synchronized order book**.
+- `binance_synchronized_orderbook_views.jsonl`: emitted only after a public REST depth snapshot has been aligned with buffered Binance Spot diff-depth updates and the resulting book passes sequence continuity, non-crossed-book, and freshness checks.
+
+The Binance synchronizer uses a bounded pre-snapshot/recovery buffer (default 2,000 events), REST snapshot limit 1,000, sequence-gap invalidation, buffer-overflow invalidation, reconnect invalidation, and exponential retry backoff. A gap, overflow, or disconnect invalidates and clears the book and requests a new snapshot. If a snapshot cannot be obtained, the synchronized output remains unavailable rather than presenting a plausible book. The collector reconnects with bounded backoff. This is an observational data artifact and is not connected to signal generation or order execution.
+
+OKX and Coinbase continue to be raw event collection only in this increment; their snapshot/delta continuity must be implemented and tested according to each venue's own protocol before claiming synchronized books. Parse failures are rejected instead of silently dropping malformed price levels, but operational telemetry for those rejected messages still needs to be surfaced through the service health API.
