@@ -62,7 +62,7 @@ class WebSocketMarketRadar:
     ENDPOINTS = {
         "binance": "wss://stream.binance.com:9443/stream?streams={streams}",
         "coinbase": "wss://advanced-trade-ws.coinbase.com",
-        "okx": "wss://ws.okx.com:8443/ws/v5/public",
+        "okx": "wss://ws.okx.com/ws/v5/public",
     }
 
     def __init__(self, symbols: list[str], exchanges: list[str] | None = None,

@@ -9,6 +9,14 @@ from PC_ENGINE.radar.websocket_radar import MarketEvent, WebSocketMarketRadar
 
 
 class WebSocketRadarTests(unittest.TestCase):
+    def test_okx_public_websocket_uses_supported_default_tls_port(self) -> None:
+        # OKX announced that public-internet WebSocket port 8443 will be
+        # discontinued on 2026-10-31; wss without an explicit port uses 443.
+        self.assertEqual(
+            WebSocketMarketRadar.ENDPOINTS["okx"],
+            "wss://ws.okx.com/ws/v5/public",
+        )
+
     def test_binance_trade_is_normalized(self) -> None:
         radar = WebSocketMarketRadar.__new__(WebSocketMarketRadar)
         radar.symbols = ["BTC/USDT"]

@@ -480,3 +480,9 @@ Esta leitura não copia código, não adiciona dependências e não reutiliza fi
 - testes unitários determinísticos e de concorrência para os caminhos alterados;
 - nenhuma alegação de recuperação sem perdas sem prova do protocolo oficial;
 - nenhuma ordem REAL, credencial ou acesso privado introduzido por esta camada de observação.
+
+## Migração de endpoint WebSocket OKX — outubro de 2026
+
+A documentação oficial da OKX anuncia que as ligações WebSocket pela Internet pública na porta `8443` deixarão de ser aceites a **31 de outubro de 2026**. A migração indicada é remover `:8443`; o host e o caminho mantêm-se, e `wss://` usa a porta TLS predefinida 443. Fonte oficial e data: https://my.okx.com/docs-v5/log_en/ (secção “WebSocket port 8443 discontinuation”, atualização de 16 de outubro de 2026).
+
+O endpoint público do SMR foi atualizado para `wss://ws.okx.com/ws/v5/public` antes do prazo. Um teste fixa este endpoint para evitar reintroduzir a porta que vai ser descontinuada. A alteração é apenas de conectividade de feed público; não envolve autenticação, canais privados, ordens ou execução REAL.
