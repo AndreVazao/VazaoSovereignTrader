@@ -318,9 +318,18 @@ def _iso_ms(value: str | None) -> int | None:
 
 
 def default_l2_configs(symbol: str) -> list[L2WebSocketConfig]:
+    """Build only safe default venue mappings for the requested quote asset.
+
+    BTC/USDT is not interchangeable with Coinbase BTC/USD. Do not manufacture
+    a Coinbase product ID for a different quote asset; explicit venue-specific
+    product mapping must be supplied by a later, validated configuration path.
+    """
     stream = symbol.replace("/", "").lower()
-    return [
+    configs = [
         L2WebSocketConfig("binance", symbol, f"wss://stream.binance.com:9443/ws/{stream}@depth@100ms"),
         L2WebSocketConfig("okx", symbol, "wss://ws.okx.com/ws/v5/public"),
-        L2WebSocketConfig("coinbase", symbol, "wss://advanced-trade-ws.coinbase.com"),
     ]
+    parts = symbol.split("/", 1)
+    if len(parts) == 2 and parts[0] and parts[1].upper() == "USD":
+        configs.append(L2WebSocketConfig("coinbase", symbol, "wss://advanced-trade-ws.coinbase.com"))
+    return configs
