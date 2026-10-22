@@ -486,3 +486,35 @@ Esta leitura não copia código, não adiciona dependências e não reutiliza fi
 A documentação oficial da OKX anuncia que as ligações WebSocket pela Internet pública na porta `8443` deixarão de ser aceites a **31 de outubro de 2026**. A migração indicada é remover `:8443`; o host e o caminho mantêm-se, e `wss://` usa a porta TLS predefinida 443. Fonte oficial e data: https://my.okx.com/docs-v5/log_en/ (secção “WebSocket port 8443 discontinuation”, atualização de 16 de outubro de 2026).
 
 O endpoint público do SMR foi atualizado para `wss://ws.okx.com/ws/v5/public` antes do prazo. Um teste fixa este endpoint para evitar reintroduzir a porta que vai ser descontinuada. A alteração é apenas de conectividade de feed público; não envolve autenticação, canais privados, ordens ou execução REAL.
+
+
+## Investigação protocolar — continuidade de order book (2026-10-22)
+
+Esta secção regista evidência pública para uma futura implementação; **não afirma que o SMR já mantém um order book local sincronizado**. O coletor WebSocket atual trata trades públicos. A lógica de book deve ser uma camada isolada, com estado explicitamente `UNINITIALIZED`, `SYNCED` ou `INVALID`; um livro inválido nunca pode alimentar sinais de oportunidade.
+
+### Binance Spot — diff-depth + snapshot REST
+
+Fonte oficial: [Binance Spot WebSocket Streams — Diff. Depth Stream / How to manage a local order book correctly](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly).
+
+- O stream incremental fornece `U` (primeiro update ID) e `u` (último update ID); o snapshot REST fornece `lastUpdateId`.
+- Na inicialização, abrir o WebSocket e bufferizar eventos antes de pedir o snapshot; descartar eventos cujo `u <= lastUpdateId`. O primeiro evento aplicado tem de cobrir o próximo ID do snapshot: `U <= lastUpdateId + 1 <= u`. Se não cobrir, repetir a sincronização em vez de declarar o livro válido.
+- Depois de sincronizado, ignorar eventos antigos/duplicados com `u <= local_update_id`. Se `U > local_update_id + 1`, há uma lacuna segundo o contrato documentado: invalidar o livro e reconstruir a partir de novo snapshot + buffer. Só aplicar deltas compatíveis com a sequência.
+- Quantidade zero remove o nível; quantidade não-zero substitui a quantidade do preço, não é incremento. O snapshot tem limite de níveis; profundidade fora do snapshot pode ser desconhecida até ser atualizada.
+- Não reutilizar trade IDs nem timestamps como substitutos dos update IDs de depth.
+
+### OKX — canais de order book com sequência
+
+Fonte oficial: [OKX API changelog — depreciação de checksum dos canais de order book](https://app.okx.com/docs-v5/log_en/#2026-06-23).
+
+- Desde a alteração de 2026-06-23, os campos `checksum` dos canais `books`, `books-l2-tbt` e `books50-l2-tbt` continuam presentes mas ficam fixos em `0`; não são uma verificação de integridade válida.
+- A OKX indica `seqId` / `prevSeqId` para verificar continuidade. O consumidor deve seguir o contrato exato do canal escolhido, distinguir mensagens `snapshot` de `update` e invalidar/reconstruir o estado quando a relação de sequência não for satisfeita.
+- Não generalizar automaticamente este contrato a `books5`, `bbo-tbt` ou canais novos como `books-rpi`: as capacidades/campos diferem. Antes de implementar um adapter, confirmar o schema e a semântica atuais do canal específico na documentação oficial completa.
+
+### Critérios de aceitação antes de qualquer uso em sinais
+
+1. Testes determinísticos para snapshot inicial, evento antigo/duplicado, update contíguo, gap, sequência inválida, reconnect e recuperação; nenhuma rede real nos testes.
+2. Um livro só é elegível quando está sincronizado e fresco; estado `INVALID` ou stale retira-o imediatamente do cálculo de edge.
+3. Contadores por exchange/símbolo para resync, gaps, mensagens ignoradas, último update ID/seqId e idade do último update; não persistir payloads brutos nem segredos.
+4. Buffer limitado em memória, backoff limitado e sem bloquear a recolha atual de trades.
+5. PAPER/observação exclusivamente. Não enviar ordens nem interpretar continuidade de dados como prova de lucro.
+6. Só depois de o contrato protocolar e testes estarem aprovados, ligar a camada de book ao radar de sinais. A ausência de sequência/checksum/snapshot documentado significa “continuidade desconhecida”, nunca “sem gaps”.
