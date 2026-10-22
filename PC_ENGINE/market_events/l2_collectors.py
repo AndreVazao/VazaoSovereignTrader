@@ -36,11 +36,36 @@ class PublicL2WebSocketCollector:
         self._stop = threading.Event()
         self._socket: websocket.WebSocketApp | None = None
         self._sync: BinanceSpotBookSynchronizer | None = None
+        self._health_lock = threading.Lock()
+        self._connected = threading.Event()
+        self._parse_errors = 0
+        self._last_parse_error: str | None = None
+        self._raw_callback_errors = 0
+        self._last_raw_callback_error: str | None = None
+        self._ws_errors = 0
+        self._last_ws_error: str | None = None
         if config.venue == "binance" and on_book is not None:
             kwargs = {"on_book": on_book}
             if snapshot_fetcher is not None:
                 kwargs["snapshot_fetcher"] = snapshot_fetcher
             self._sync = BinanceSpotBookSynchronizer(config.symbol, **kwargs)
+
+    def health_snapshot(self) -> dict:
+        with self._health_lock:
+            health = {
+                "venue": self.config.venue,
+                "symbol": self.config.symbol,
+                "connected": self._connected.is_set(),
+                "parse_errors": self._parse_errors,
+                "last_parse_error": self._last_parse_error,
+                "raw_callback_errors": self._raw_callback_errors,
+                "last_raw_callback_error": self._last_raw_callback_error,
+                "websocket_errors": self._ws_errors,
+                "last_websocket_error": self._last_ws_error,
+            }
+        if self._sync is not None:
+            health["synchronizer"] = self._sync.health()
+        return health
 
     @staticmethod
     def _levels(rows: list | tuple | None) -> tuple[OrderBookLevel, ...]:
@@ -184,17 +209,27 @@ class PublicL2WebSocketCollector:
                 def on_message(_ws: websocket.WebSocketApp, message: str) -> None:
                     receive_ns = time.monotonic_ns()
                     try:
-                        for event in self._parse(message, receive_ns):
-                            if self._stop.is_set():
-                                continue
-                            self.on_event(event)
-                            if self._sync is not None:
-                                self._sync.on_event(event)
-                    except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError):
+                        events = self._parse(message, receive_ns)
+                    except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
+                        with self._health_lock:
+                            self._parse_errors += 1
+                            self._last_parse_error = type(exc).__name__
                         return
+                    for event in events:
+                        if self._stop.is_set():
+                            continue
+                        if self._sync is not None:
+                            self._sync.on_event(event)
+                        try:
+                            self.on_event(event)
+                        except Exception as exc:
+                            with self._health_lock:
+                                self._raw_callback_errors += 1
+                                self._last_raw_callback_error = type(exc).__name__
 
                 def on_open(ws: websocket.WebSocketApp) -> None:
                     opened.set()
+                    self._connected.set()
                     product = self.config.symbol.replace("/", "-").upper()
                     if self.config.venue == "binance":
                         return
@@ -203,14 +238,26 @@ class PublicL2WebSocketCollector:
                     elif self.config.venue == "coinbase":
                         ws.send(json.dumps({"type": "subscribe", "product_ids": [product], "channel": "level2"}))
 
+                def on_error(_ws: websocket.WebSocketApp, error: Exception) -> None:
+                    with self._health_lock:
+                        self._ws_errors += 1
+                        self._last_ws_error = type(error).__name__
+
+                def on_close(_ws: websocket.WebSocketApp, _status_code: int | None, _message: str | None) -> None:
+                    self._connected.clear()
+
                 self._socket = websocket.WebSocketApp(
                     self.config.url, on_open=on_open, on_message=on_message,
+                    on_error=on_error, on_close=on_close,
                 )
                 try:
                     self._socket.run_forever()
-                except Exception:
-                    # Reconnect below; never mark an interrupted book as usable.
-                    pass
+                except Exception as exc:
+                    with self._health_lock:
+                        self._ws_errors += 1
+                        self._last_ws_error = type(exc).__name__
+                finally:
+                    self._connected.clear()
                 if self._stop.is_set():
                     break
                 if self._sync is not None:
