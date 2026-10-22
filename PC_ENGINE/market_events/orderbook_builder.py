@@ -138,7 +138,7 @@ class OrderBookBuilder:
             return False
         if not snapshot and event.sequence is None:
             return False
-        if event.sequence is not None and event.sequence_start is not None:
+        if not snapshot and event.sequence is not None and event.sequence_start is not None:
             if event.sequence_start > event.sequence:
                 return False
         return True
