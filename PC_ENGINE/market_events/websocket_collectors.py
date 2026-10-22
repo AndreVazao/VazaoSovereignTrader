@@ -192,6 +192,6 @@ def default_public_configs(symbol: str) -> list[WebSocketMarketConfig]:
     stream = symbol.replace("/", "").lower()
     return [
         WebSocketMarketConfig("binance", symbol, f"wss://stream.binance.com:9443/ws/{stream}@bookTicker"),
-        WebSocketMarketConfig("okx", symbol, "wss://ws.okx.com:8443/ws/v5/public"),
+        WebSocketMarketConfig("okx", symbol, "wss://ws.okx.com/ws/v5/public"),
         WebSocketMarketConfig("coinbase", symbol, "wss://advanced-trade-ws.coinbase.com"),
     ]
