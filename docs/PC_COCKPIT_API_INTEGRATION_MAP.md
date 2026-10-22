@@ -80,3 +80,10 @@ The office now sends a validated `department` key with `POST /assistant/message`
 This is **context routing, not nine independent agents**. The current `OperatorAssistantGateway` remains a shared deterministic gateway. Status and permitted PAPER controls still target the existing engine boundary. Research requests include the selected department label in the shared research inbox. For other department-specific natural-language requests, the gateway explicitly returns `DEPARTMENT_NOT_CONNECTED` until a real department worker/API is implemented. The office must not imply that a separate chief/agent has answered when none is wired.
 
 The header connection badge now distinguishes the initial demonstration state from authenticated backend connection, refused access and disconnection. Successful authentication clears the static demo messages in the active conversation; the token remains only in page memory. Department conversation history is session-only and is not represented as durable server history.
+
+
+## Read-only department handlers (2026-10-22)
+
+The authenticated assistant gateway now accepts a validated department context and can call existing read-only services for: `markets` (venue health), `radar` (market-data health with current stale calculation), `research` (queue counts), `paper` (evidence scorecard), `risk` (readiness stability scorecard), `recovery` (recovery diagnostics), `audit` (evidence-ledger summary), and `human` (pending human-interaction counts). These handlers are invoked on explicit chat requests; there is no background polling loop per department.
+
+This is a **read-only specialist tool layer**, not independent LLM/agent workers. It returns bounded summaries, avoids exposing raw exception messages, and keeps `paper_only=true` / `execution_authorized=false`. Research commands are still routed into the shared research inbox with a department label. The `brain`/CEO context continues to use the existing engine status and protected control paths. The office must continue to label independent department workers as not yet implemented.
