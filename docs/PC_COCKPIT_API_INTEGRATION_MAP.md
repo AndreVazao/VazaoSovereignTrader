@@ -71,3 +71,12 @@ The current gateway is a deterministic command router, not an unconstrained LLM:
 - a request without an implemented intent returns a bounded informational response.
 
 The browser displays the gateway's response and execution flags. On a transport error it warns that the outcome is unknown and tells the operator to check state before retrying; it does not automatically replay a mutation. This first pass has no streaming, rich typed rendering, automatic reconnect, or browser end-to-end test yet. Treat the HTML as a prototype until those tests and packaging checks exist.
+
+
+## Department context in the Virtual Office (2026-10-22)
+
+The office now sends a validated `department` key with `POST /assistant/message` and keeps separate in-memory conversation histories for the selected department for the current browser session. Supported keys: `brain`, `markets`, `radar`, `research`, `paper`, `risk`, `recovery`, `audit`, `human`. Unknown keys are rejected by the gateway; the UI never treats the department name as authorization or execution scope.
+
+This is **context routing, not nine independent agents**. The current `OperatorAssistantGateway` remains a shared deterministic gateway. Status and permitted PAPER controls still target the existing engine boundary. Research requests include the selected department label in the shared research inbox. For other department-specific natural-language requests, the gateway explicitly returns `DEPARTMENT_NOT_CONNECTED` until a real department worker/API is implemented. The office must not imply that a separate chief/agent has answered when none is wired.
+
+The header connection badge now distinguishes the initial demonstration state from authenticated backend connection, refused access and disconnection. Successful authentication clears the static demo messages in the active conversation; the token remains only in page memory. Department conversation history is session-only and is not represented as durable server history.

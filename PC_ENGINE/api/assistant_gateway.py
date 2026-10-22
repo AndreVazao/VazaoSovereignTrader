@@ -37,7 +37,28 @@ class OperatorAssistantGateway:
     def _has_url(message: str) -> bool:
         return bool(re.search(r"https?://\S+", message, re.I))
 
-    def handle(self, message: str, principal: Any) -> dict[str, Any]:
+    DEPARTMENTS = {
+        "brain": "Cérebro / CEO",
+        "markets": "Exchanges",
+        "radar": "Market Radar",
+        "research": "Investigação",
+        "paper": "Laboratório PAPER",
+        "risk": "Controlo de risco",
+        "recovery": "Recuperação",
+        "audit": "Auditoria",
+        "human": "Intervenção humana",
+    }
+
+    def handle(self, message: str, principal: Any, department: str = "brain") -> dict[str, Any]:
+        department = str(department or "brain").strip().lower()
+        if department not in self.DEPARTMENTS:
+            raise ValueError("assistant_department_invalid")
+        result = self._handle(message, principal, department)
+        result["department"] = department
+        result["department_label"] = self.DEPARTMENTS[department]
+        return result
+
+    def _handle(self, message: str, principal: Any, department: str) -> dict[str, Any]:
         text = self._clean(message)
         if not text:
             raise ValueError("assistant_message_required")
@@ -104,7 +125,8 @@ class OperatorAssistantGateway:
 
         if self._RESEARCH_RE.search(text) or self._has_url(text):
             self._require(principal, "submit_research")
-            item = self.research.submit(text)
+            routed_text = text if department == "brain" else f"[Departamento solicitado: {self.DEPARTMENTS[department]}] {text}"
+            item = self.research.submit(routed_text)
             return {
                 "ok": True,
                 "intent": "RESEARCH",
@@ -114,6 +136,21 @@ class OperatorAssistantGateway:
                     "O worker vai analisar as fontes públicas permitidas e medir a hipótese contra os dados próprios."
                 ),
                 "request": asdict(item),
+                "paper_only": True,
+                "execution_authorized": False,
+            }
+
+        if department != "brain":
+            return {
+                "ok": True,
+                "intent": "DEPARTMENT_NOT_CONNECTED",
+                "status": "NOT_CONNECTED",
+                "reply": (
+                    f"O contexto selecionado é {self.DEPARTMENTS[department]}, mas ainda não existe "
+                    "um agente conversacional independente ligado a este departamento. Não vou fingir "
+                    "que uma equipa autónoma respondeu. Posso consultar o estado partilhado ou encaminhar "
+                    "um pedido de investigação para a fila comum."
+                ),
                 "paper_only": True,
                 "execution_authorized": False,
             }

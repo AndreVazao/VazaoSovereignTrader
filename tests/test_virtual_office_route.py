@@ -60,6 +60,12 @@ def test_virtual_office_runtime_summary_uses_authenticated_backend_data(tmp_path
     assert '/observer/summary' in html
     assert '["Saúde dos dados de mercado","/market-data-health"]' in html
     assert "activeRequests=new Set()" in html
+    assert 'id="vstConnectionBadge"' in html
+    assert "DEMONSTRAÇÃO · NÃO LIGADO" in html
+    assert "PROTÓTIPO · SEM LIGAÇÃO AO MOTOR" not in html
+    assert "vst-department-change" in html
+    assert 'body:JSON.stringify({message,department:selectedDepartment})' in html
+    assert "conversationHistory=Object.create(null)" in html
 
 
 def test_observer_summary_requires_authentication(tmp_path, monkeypatch):
@@ -196,3 +202,35 @@ def test_observer_timing_returns_bounded_authenticated_metrics(tmp_path, monkeyp
     assert payload["metrics"]["observer_lock_hold"]["max_ns"] >= 200
     assert payload["metrics"]["observer_lock_wait"]["sample_count"] <= 512
     assert payload["metrics"]["observer_lock_hold"]["sample_count"] <= 512
+
+
+def test_assistant_message_rejects_unknown_department(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "office-department-test-token")
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/assistant/message",
+        headers={"X-Token": "office-department-test-token"},
+        json={"message": "Olá", "department": "unknown-agent"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "assistant_department_invalid"
+
+
+def test_assistant_message_returns_selected_department_context(tmp_path, monkeypatch):
+    monkeypatch.setenv("VST_LOCAL_TOKEN", "office-department-test-token")
+    client = _app(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/assistant/message",
+        headers={"X-Token": "office-department-test-token"},
+        json={"message": "Olá", "department": "radar"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["department"] == "radar"
+    assert payload["department_label"] == "Market Radar"
+    assert payload["intent"] == "DEPARTMENT_NOT_CONNECTED"
+    assert "agente conversacional independente" in payload["reply"]

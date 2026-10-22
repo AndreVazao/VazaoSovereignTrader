@@ -689,7 +689,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         principal = require_scope("read_private_state")
         payload = request.get_json(silent=True) or {}
         try:
-            result = assistant.handle(str(payload.get("message", "")), principal)
+            result = assistant.handle(
+                str(payload.get("message", "")),
+                principal,
+                department=str(payload.get("department", "brain")),
+            )
         except PermissionError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 403
         except ValueError as exc:
