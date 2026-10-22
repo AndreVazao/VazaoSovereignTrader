@@ -166,3 +166,32 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 
 
 - Follow-up merged after this audit's initial draft: PR #446 (`38614b7`) classifies every OKX `books5` and `bbo-tbt` push as a full snapshot even when the envelope action is `update`, while retaining action-based deltas for `books` and rejecting unknown actions. Exact-head Python tests and Windows EXE workflow passed on `ead9c38e662daf42f647e765f077e139a3e600a8`; Vercel remained blocked by deployment quota. This is parser correctness, not a complete OKX synchronized book.
+
+
+## Addendum — re-audit after Coinbase L2 parser fix (2026-10-22)
+
+- Latest reviewed main: `29f93b642df6f2949693e688f06ff4aea4ca2140`. The earlier checkpoint above is historical; it is not the latest main SHA.
+- PR #442 merged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/442. The Coinbase Advanced Trade parser now accepts the inbound `l2_data` envelope, validates/preserves `sequence_num`, checks `product_id` against the configured symbol, uses the envelope timestamp as fallback, and rejects unknown event types. Focused parser regressions were added.
+- Important limit: Coinbase sequence numbers are now parsed, but this does **not** create a Coinbase synchronized order-book state machine. Its event model currently has no `sequence_start`; no Coinbase snapshot/delta continuity, gap invalidation, reconnect bootstrap, or freshness-gated synchronized view has been proven. Coinbase L2 must remain telemetry/diagnostic only, not an eligible depth signal.
+- Binance has a separate `BinanceSpotBookSynchronizer` with bounded WS buffering, REST snapshot fetch, buffered delta replay, sequence-gap and buffer-overflow invalidation, disconnect invalidation, health counters, and callback emission of both eligible and invalid views. Tests cover replay, old buffered events, sequence gaps, overflow, stale health, and connection loss. The collector instantiates this synchronizer only when an `on_book` callback is supplied. Source/tests do not establish that the production temporal-edge calculator consumes this callback or rechecks age at decision time; that wiring is still a blocker.
+- The standalone `l2_bootstrap.py` / `OrderBookBuilder` path also exists. Do not treat the existence of both bootstrap and synchronizer abstractions as proof that a single authoritative book is wired end-to-end.
+- PR #443 was opened against a main branch that advanced after its content was drafted, then closed without merging. Its proposed addendum is not part of main. This addendum supersedes its outdated “latest main” checkpoint.
+- Vercel deployment checks are currently rate-limited by the free-tier daily deployment quota. This is not evidence of a Python/Windows test failure; web deployment must be checked again after the quota window resets. Do not claim a fresh Vercel deployment succeeded.
+- Manual CodeRabbit review is not automatic for this repository. A green “review skipped” status is not a code review; require explicit manual diff inspection and CI results.
+
+### Updated readiness estimates (engineering judgment, not measured reliability)
+
+| Area | Estimate | What the estimate means |
+|---|---:|---|
+| Core engine / PAPER guardrails | 75% | Substantial code and automated coverage; target-PC configuration and failure/restart tests remain unverified. |
+| Windows EXE + installer | 75% | Hosted Windows smoke passed; local PC install and effective configuration remain unverified. |
+| Binance Spot synchronized L2 | 65% | Synchronizer and recovery tests exist; production consumer wiring and decision-time freshness enforcement remain unproven. |
+| Coinbase L2 | 30% | Envelope/sequence parser corrected; no synchronized book continuity/recovery implementation. |
+| OKX L2 | 25% | Parsing/endpoint work exists; protocol-specific sequence/snapshot synchronization not established. |
+| Temporal edge after full costs | 30% | Economic comparison, normalized instrument equivalence, realistic latency and out-of-sample net-edge proof remain incomplete. |
+| Virtual office / cockpit | 60% | UI and bounded read handlers exist; browser E2E, durable conversations and genuinely independent department agents remain incomplete. |
+| Android APK | 45% | Build/UI work exists; physical startup, crash/logcat and authentication/network transitions are unverified. |
+| Remote LAN/Tailscale | 50% | Architecture and parts exist; end-to-end device authentication, reconnect/revocation and failover tests remain incomplete. |
+| Cross-PC learned knowledge | 40% | Design/partial implementation only; provenance, validation, conflict resolution and end-to-end sync acceptance remain incomplete. |
+
+**Release posture:** PAPER / read-only only. No REAL orders, transfers or withdrawals. A synchronized book is a data-quality prerequisite, not proof of an exploitable or profitable edge.
