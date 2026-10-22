@@ -176,31 +176,50 @@ class PublicL2WebSocketCollector:
     def run_forever(self) -> None:
         if self._sync is not None:
             self._sync.start()
-
-        def on_message(_ws: websocket.WebSocketApp, message: str) -> None:
-            receive_ns = time.monotonic_ns()
-            try:
-                for event in self._parse(message, receive_ns):
-                    if self._stop.is_set():
-                        continue
-                    self.on_event(event)
-                    if self._sync is not None:
-                        self._sync.on_event(event)
-            except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError):
-                return
-
-        def on_open(ws: websocket.WebSocketApp) -> None:
-            product = self.config.symbol.replace("/", "-").upper()
-            if self.config.venue == "binance":
-                return
-            if self.config.venue == "okx":
-                ws.send(json.dumps({"op": "subscribe", "args": [{"channel": "books5", "instId": product}]}))
-            elif self.config.venue == "coinbase":
-                ws.send(json.dumps({"type": "subscribe", "product_ids": [product], "channel": "level2"}))
-
-        self._socket = websocket.WebSocketApp(self.config.url, on_open=on_open, on_message=on_message)
+        retry_seconds = 1.0
         try:
-            self._socket.run_forever()
+            while not self._stop.is_set():
+                opened = threading.Event()
+
+                def on_message(_ws: websocket.WebSocketApp, message: str) -> None:
+                    receive_ns = time.monotonic_ns()
+                    try:
+                        for event in self._parse(message, receive_ns):
+                            if self._stop.is_set():
+                                continue
+                            self.on_event(event)
+                            if self._sync is not None:
+                                self._sync.on_event(event)
+                    except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError):
+                        return
+
+                def on_open(ws: websocket.WebSocketApp) -> None:
+                    opened.set()
+                    product = self.config.symbol.replace("/", "-").upper()
+                    if self.config.venue == "binance":
+                        return
+                    if self.config.venue == "okx":
+                        ws.send(json.dumps({"op": "subscribe", "args": [{"channel": "books5", "instId": product}]}))
+                    elif self.config.venue == "coinbase":
+                        ws.send(json.dumps({"type": "subscribe", "product_ids": [product], "channel": "level2"}))
+
+                self._socket = websocket.WebSocketApp(
+                    self.config.url, on_open=on_open, on_message=on_message,
+                )
+                try:
+                    self._socket.run_forever()
+                except Exception:
+                    # Reconnect below; never mark an interrupted book as usable.
+                    pass
+                if self._stop.is_set():
+                    break
+                if self._sync is not None:
+                    self._sync.connection_lost()
+                if opened.is_set():
+                    retry_seconds = 1.0
+                if self._stop.wait(retry_seconds):
+                    break
+                retry_seconds = min(30.0, retry_seconds * 2.0)
         finally:
             if self._sync is not None:
                 self._sync.stop()
