@@ -82,8 +82,10 @@ class LatencyEdgeDetector:
         key = (symbol.upper(), leader.lower(), follower.lower(), direction.upper())
         history = self._history[key]
 
+        numeric_valid = math.isfinite(leader_move_bps) and math.isfinite(follower_move_bps)
         same_direction = (
-            leader_move_bps != 0
+            numeric_valid
+            and leader_move_bps != 0
             and follower_move_bps != 0
             and leader_move_bps * follower_move_bps > 0
         )
@@ -98,7 +100,6 @@ class LatencyEdgeDetector:
             0 <= lead_ms <= self.max_lead_ms
             and 0 <= receive_lead_ms <= self.max_lead_ms
         )
-        numeric_valid = math.isfinite(leader_move_bps) and math.isfinite(follower_move_bps)
         if timing_valid and numeric_valid:
             history.append((lead_ms, leader_move_bps, follower_move_bps))
 
