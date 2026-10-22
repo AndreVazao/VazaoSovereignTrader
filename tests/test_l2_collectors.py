@@ -3,10 +3,20 @@ from __future__ import annotations
 import json
 import unittest
 
-from PC_ENGINE.market_events.l2_collectors import L2WebSocketConfig, PublicL2WebSocketCollector
+from PC_ENGINE.market_events.l2_collectors import (
+    L2WebSocketConfig,
+    PublicL2WebSocketCollector,
+    default_l2_configs,
+)
 
 
 class L2CollectorTests(unittest.TestCase):
+    def test_default_okx_l2_endpoint_uses_tls_443(self) -> None:
+        configs = default_l2_configs("BTC/USDT")
+        okx = next(config for config in configs if config.venue == "okx")
+        self.assertEqual(okx.url, "wss://ws.okx.com/ws/v5/public")
+        self.assertNotIn(":8443", okx.url)
+
     def collector(self, venue: str) -> PublicL2WebSocketCollector:
         return PublicL2WebSocketCollector(
             L2WebSocketConfig(venue, "BTC/USDT", "wss://example"), lambda _: None)

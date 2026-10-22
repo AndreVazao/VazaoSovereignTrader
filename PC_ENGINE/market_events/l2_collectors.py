@@ -169,6 +169,6 @@ def default_l2_configs(symbol: str) -> list[L2WebSocketConfig]:
     stream = symbol.replace("/", "").lower()
     return [
         L2WebSocketConfig("binance", symbol, f"wss://stream.binance.com:9443/ws/{stream}@depth@100ms"),
-        L2WebSocketConfig("okx", symbol, "wss://ws.okx.com:8443/ws/v5/public"),
+        L2WebSocketConfig("okx", symbol, "wss://ws.okx.com/ws/v5/public"),
         L2WebSocketConfig("coinbase", symbol, "wss://advanced-trade-ws.coinbase.com"),
     ]
