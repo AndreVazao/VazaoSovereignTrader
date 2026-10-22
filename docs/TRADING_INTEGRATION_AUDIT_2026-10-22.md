@@ -165,3 +165,40 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 
 ### Readiness reporting
 Treat previous percentages as engineering estimates, not measured reliability. Windows packaging CI confidence is higher after #438, but actual PC readiness remains unverified. Android readiness and cross-device remote behavior remain unverified. Operating posture stays PAPER/read-only; no live order, transfer, withdrawal or REAL activation was performed.
+
+
+## Current-main update — 2026-10-22, after PRs #438, #442 and #452
+
+- Checkpoint: product main contained the residual-edge correction from PR #452 at `072a2e67bc772f73ccc4f6aa4fe14a1f15d1b92c` when this update branch was created.
+- **Windows packaging:** PR #438 merged after exact-head Python and Windows EXE/installer smoke passed. Hosted tests cover silent installation, PAPER startup with loopback health check, stopping, uninstallation and scheduled-task cleanup. This does not certify the user's PC, local configuration, firewall, existing tokens or real installed runtime.
+- **Least privilege:** PR #439 removed `trade_real` from default owner scopes. This does not inspect or revoke previously issued tokens and does not rewrite a user's private local configuration.
+- **Coinbase parser:** PR #442 merged handling for Advanced Trade `l2_data`, required `sequence_num`, product-id validation, timestamp fallback and rejection of unknown event types. This is parser correctness only: Coinbase has no proven synchronized-book bootstrap, sequence-gap invalidation, reconnect recovery or freshness-gated book view yet.
+- **Binance synchronized book:** the source includes bounded WS buffering, REST snapshot acquisition, buffered delta replay, sequence-gap/overflow/disconnect invalidation, health counters and callbacks for eligible/invalid views; tests cover replay, gaps, overflow, stale state and connection loss. However, the collector creates this synchronizer only if an `on_book` callback is provided. No end-to-end evidence yet proves the production temporal-edge detector consumes this callback and enforces freshness at decision time.
+- **Temporal-edge correction:** PR #452 merged and exact-head Python run `39756888443` plus Windows EXE workflow passed on `49f569170f2fb17e8953f3e50116b15eb5b29ad4`. Gross edge now represents only the unmatched same-direction leader/follower move, floored at zero; negative lead time is rejected. This reduces one known overstatement but remains a heuristic, not proof of causal lead-lag, executable liquidity or realized profit.
+- **CI caveat:** Vercel reports the free-tier daily deployment quota limit on recent PRs. Treat that as a blocked web deployment, not as a Python/Windows test failure and not as a successful deployment. CodeRabbit reports review skipped/manual review required for this repository; that status is not an independent review.
+- **Current operational posture:** PAPER/read-only. No REAL order, transfer, withdrawal or REAL activation was performed.
+
+### Readiness estimates at this checkpoint
+
+These are engineering judgments, not measured reliability or performance.
+
+| Area | Estimate | Remaining critical proof |
+|---|---:|---|
+| Core engine / PAPER controls | 75% | Target-PC startup, restart/network-loss and effective-config audit |
+| Windows EXE / installer | 75% | Local PC install, health, firewall, scheduled-task and token audit |
+| Binance synchronized L2 | 65% | Production callback wiring and decision-time freshness tests |
+| Coinbase synchronized L2 | 30% | Snapshot/delta sequence contract, gap invalidation and reconnect recovery |
+| OKX synchronized L2 | 25% | Protocol-specific snapshot/sequence continuity and recovery |
+| Temporal edge after all costs | 30% | Instrument equivalence, real timestamped observations, calibrated costs, non-overlapping samples and chronological out-of-sample PAPER/shadow evidence |
+| Virtual office / cockpit | 60% | Browser E2E, persistent department conversations and independent agents |
+| Android APK | 45% | Physical launch/logcat, crash investigation, layout and auth/network transition tests |
+| LAN/Tailscale remote access | 50% | End-to-end auth, revocation, reconnect and safe failover tests |
+| Cross-PC learned knowledge | 40% | Provenance, validation, conflict resolution and end-to-end sync acceptance |
+
+### Next acceptance gates
+
+1. Trace the Binance `on_book` callback from collector construction to the temporal-edge consumer; add an integration test proving invalid/stale books cannot yield eligible signals.
+2. Keep Coinbase and OKX depth signals ineligible until their protocol-specific synchronized-book and recovery tests exist.
+3. Evaluate the residual-edge detector against timestamped, chronological, out-of-sample observations; include fees, spread, slippage, latency, funding, inventory and failure costs.
+4. Validate actual Windows PC configuration and physical Android startup when devices are accessible; do not infer device readiness from hosted CI.
+5. Keep Vercel deployment and manual review as explicit external gates until they produce fresh successful evidence.
