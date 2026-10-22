@@ -99,8 +99,11 @@ jobs:
       - name: Silent install, launch, health and uninstall smoke test
         shell: pwsh
         run: |
-          $installer = Join-Path $env:GITHUB_WORKSPACE "installer-output\VazaoSovereignTrader-Setup.exe"
-          if (-not (Test-Path $installer)) { throw "Installer artifact was not produced: $installer" }
+          $installerCandidates = @(Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE "installer-output") -Filter "VazaoSovereignTrader-Setup-*.exe" -File)
+          if ($installerCandidates.Count -ne 1) {
+            throw "Expected exactly one versioned installer artifact; found $($installerCandidates.Count)."
+          }
+          $installer = $installerCandidates[0].FullName
           Write-Host "Installer SHA256: $((Get-FileHash $installer -Algorithm SHA256).Hash)"
 
           $testDir = Join-Path $env:RUNNER_TEMP "VST-Installer-Smoke"
