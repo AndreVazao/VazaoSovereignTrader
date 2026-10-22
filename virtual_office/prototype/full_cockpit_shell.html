@@ -78,7 +78,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
   async function connect(){
     if(busy)return;busy=true;
     const token=document.getElementById("vstApiToken").value.trim();
-    if(!token){state("Ligação bloqueada","Introduz o token; não foi enviado nada.");busy=false;return}
+    if(!token){currentToken="";setBadge("DESLIGADO");state("Ligação bloqueada","Introduz o token; não foi enviado nada.");busy=false;return}
     const base=window.location.origin;
     if(!/^https?:\/\//i.test(base)||base==="null"){state("Ligação bloqueada","Abre /virtual-office através do servidor do PC.");busy=false;return}
     currentToken=token;
@@ -162,7 +162,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
         pending.querySelector("div").textContent=String(data.error||"O servidor recusou o pedido. Volta a autenticar-te.");
       }else{
         const reply=String(data.reply||data.error||("O servidor respondeu HTTP "+response.status));
-        pending.querySelector("small").textContent="SOVEREIGN TRADER · "+String(data.status||"RESPOSTA");
+        pending.querySelector("small").textContent="SOVEREIGN TRADER · "+String(data.status||"RESPOSTA")+(data.department_label?" · "+String(data.department_label):"");
         pending.querySelector("div").textContent=reply;
         if(data.intent)pending.querySelector("div").textContent+="\nIntenção: "+data.intent;
         if(data.paper_only===true)pending.querySelector("div").textContent+="\nModo protegido: PAPER/read-only.";
