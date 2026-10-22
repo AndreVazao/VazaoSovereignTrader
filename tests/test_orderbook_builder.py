@@ -89,5 +89,55 @@ class OrderBookBuilderTests(unittest.TestCase):
         self.assertTrue(builder.stale)
 
 
+    def test_monotonic_sequence_snapshot_and_delta_supports_coinbase_contract(self) -> None:
+        builder = OrderBookBuilder("coinbase", "BTC/USD")
+        snapshot = self.event(
+            "snapshot", 42,
+            bids=(OrderBookLevel(100, 1),),
+            asks=(OrderBookLevel(101, 1),),
+        )
+        snapshot = OrderBookEvent(**{
+            **snapshot.__dict__,
+            "venue": "coinbase",
+            "symbol": "BTC/USD",
+            "sequence_start": None,
+        })
+        self.assertIsNotNone(builder.apply(snapshot))
+
+        delta = self.event("delta", 43, bids=(OrderBookLevel(100, 2),))
+        delta = OrderBookEvent(**{
+            **delta.__dict__,
+            "venue": "coinbase",
+            "symbol": "BTC/USD",
+            "sequence_start": None,
+        })
+        book = builder.apply(delta)
+        self.assertIsNotNone(book)
+        self.assertEqual(book.sequence, 43)
+        self.assertEqual(book.bids[0].quantity, 2)
+
+    def test_monotonic_sequence_gap_invalidates_coinbase_style_book(self) -> None:
+        builder = OrderBookBuilder("coinbase", "BTC/USD")
+        snapshot = self.event("snapshot", 42, bids=(OrderBookLevel(100, 1),))
+        snapshot = OrderBookEvent(**{
+            **snapshot.__dict__,
+            "venue": "coinbase",
+            "symbol": "BTC/USD",
+            "sequence_start": None,
+        })
+        self.assertIsNotNone(builder.apply(snapshot))
+
+        gap = self.event("delta", 44, bids=(OrderBookLevel(100, 2),))
+        gap = OrderBookEvent(**{
+            **gap.__dict__,
+            "venue": "coinbase",
+            "symbol": "BTC/USD",
+            "sequence_start": None,
+        })
+        self.assertIsNone(builder.apply(gap))
+        self.assertTrue(builder.stale)
+        self.assertFalse(builder.initialized)
+
+
 if __name__ == "__main__":
     unittest.main()
