@@ -143,3 +143,23 @@ The audit identified that the checked-in example enabled autonomous REAL promoti
 - PR #442 is open, not merged, and proposes a Coinbase Advanced Trade L2 parser correction: handle inbound `l2_data` envelope, preserve `sequence_num`, validate `product_id`, and reject unsupported event forms. Until that PR is reviewed, CI-validated and merged, do not count this parser fix as part of main. Even after merge, parser correctness is not full Coinbase book synchronization.
 - PR #443's earlier documentation branch was closed because main advanced while it was open. This addendum is being submitted from a fresh branch based on the latest main to avoid stale-base ambiguity.
 - No live venue connection, private credential, physical device, live order or profitability test was performed during this source/CI review. Keep the system in PAPER/read-only.
+
+
+## Addendum — latest main and market-data changes (2026-10-22)
+
+- Main checkpoint reviewed: `29f93b642df6f2949693e688f06ff4aea4ca2140`. Main has moved since the earlier PR #438 checkpoint, so use this addendum as the more recent status.
+- Binance Spot synchronization code is fail-closed and exposes explicit book status/eligibility. The implementation checks update sequence ranges, rejects gaps and malformed levels, removes zero-quantity levels, and invalidates stale/invalid state. The runtime collector handles snapshot acquisition, buffered deltas/replay, overflow/disconnect invalidation, reconnect backoff, and publishes a separate synchronized-view artifact/health record.
+- Recent main commit `29f93b6` publishes Binance book invalidation states so downstream observers can see invalidation rather than silently retaining a prior healthy view. This improves observability, but does not prove the synchronized view is wired into temporal-edge scoring or execution. Do not treat the feed as trade-eligible until that wiring is explicit and tested end-to-end.
+- PR #442 addresses a Coinbase Advanced Trade parser contract: inbound `l2_data` envelope, `sequence_num`, configured `product_id` validation, envelope timestamp fallback, and unknown-event rejection. It remains a parser/telemetry improvement only; it does not establish a synchronized Coinbase book.
+- The previous documentation PR #443 was closed unmerged after the base branch advanced; the audit changes are being consolidated in this branch to avoid leaving a stale duplicate PR open.
+- Vercel reported deployment rate limiting on the audit branch. This is an external deployment quota status, not a Python test failure; the audit is documentation-only and does not require a Vercel deployment for runtime correctness.
+- Readiness must remain separated into (a) code/CI evidence and (b) actual device/runtime evidence. Hosted Windows installer smoke passed on the exact PR #438 head; user PC effective configuration and runtime are still unverified. Android physical launch/logcat and end-to-end LAN/Tailscale behavior are also unverified.
+- Trading posture remains PAPER/read-only. No live order, transfer, withdrawal, or REAL activation was performed.
+
+### Updated acceptance gates
+1. Keep Binance depth ineligible for any edge/execution path until a deterministic integration test proves the exact synchronized-view consumer, freshness rejection, sequence-gap invalidation and recovery.
+2. Complete Coinbase and OKX protocol-specific book synchronization and tests before comparing their depth; never apply Binance sequence rules to other venues.
+3. Validate normalized instrument identity and calculate net edge after fees, spread, slippage, funding, latency, inventory and failure costs with chronological out-of-sample PAPER/shadow evaluation.
+4. On the actual Windows PC, verify effective mode, owner scopes, REAL flags, token sources, bind address/firewall, scheduled tasks and health/log output without exposing secrets.
+5. On physical Android, verify launch/logcat, status-bar-safe layout, authentication, reconnect, revocation, and LAN/Tailscale transitions; failover must not replay mutating requests.
+6. Continue labelling independent autonomous office agents, persistent per-department conversations and browser E2E as incomplete until implementation and evidence exist.
