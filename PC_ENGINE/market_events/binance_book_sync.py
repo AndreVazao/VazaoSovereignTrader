@@ -170,10 +170,14 @@ class BinanceSpotBookSynchronizer:
 
     def health(self) -> dict[str, int | str | None | bool]:
         with self._condition:
+            current_view = self.book.snapshot(time.monotonic_ns())
             return {
                 "symbol": self.symbol,
                 "state": self.book.status.value,
                 "update_id": self.book.update_id,
+                "eligible": current_view.eligible,
+                "age_ms": current_view.age_ms,
+                "view_reason": current_view.reason,
                 "buffered_events": len(self._buffer),
                 "snapshot_attempts": self._snapshot_attempts,
                 "snapshot_errors": self._snapshot_errors,
