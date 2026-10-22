@@ -97,3 +97,14 @@ def test_rejects_missing_cost_assumptions_and_invalid_configuration():
             book("coinbase", 101, 101.1),
             venue_costs_bps={"binance": 1, "coinbase": float("inf")},
         )
+
+
+def test_rejects_non_finite_derived_edge_math():
+    result = assess_synchronized_depth_edge(
+        book("binance", 1e-300, 1.1e-300),
+        book("coinbase", 1e300, 1.1e300),
+        venue_costs_bps={"binance": 1, "coinbase": 1},
+    )
+    assert result.eligible is False
+    assert result.reason == "non_finite_edge_calculation"
+    assert result.net_edge_bps is None
