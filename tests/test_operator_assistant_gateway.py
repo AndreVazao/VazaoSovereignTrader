@@ -99,15 +99,20 @@ def test_status_is_read_only(tmp_path):
     assert engine.calls == []
 
 def test_department_context_is_validated_and_attached_to_response(tmp_path):
-    gateway = OperatorAssistantGateway(Engine(), TraderResearchInbox(tmp_path))
+    gateway = OperatorAssistantGateway(
+        Engine(),
+        TraderResearchInbox(tmp_path),
+        department_readers={"risk": lambda: {"status": "READY", "pass_ratio": 0.9}},
+    )
     result = gateway.handle(
         "Qual é o estado?",
         Principal("read_private_state"),
         department="risk",
     )
-    assert result["intent"] == "STATUS"
+    assert result["intent"] == "DEPARTMENT_STATUS"
     assert result["department"] == "risk"
     assert result["department_label"] == "Controlo de risco"
+    assert result["data"]["pass_ratio"] == 0.9
 
 
 def test_unconnected_department_does_not_fake_an_independent_agent(tmp_path):
@@ -162,7 +167,7 @@ def test_department_read_handler_returns_live_backend_summary_without_agent_clai
     assert result["intent"] == "DEPARTMENT_STATUS"
     assert result["department"] == "markets"
     assert result["data"]["counts"] == {"GREEN": 1, "YELLOW": 2, "RED": 0}
-    assert "não é rentabilidade" in result["reply"]
+    assert "não é uma avaliação de rentabilidade" in result["reply"]
     assert result["execution_authorized"] is False
 
 
