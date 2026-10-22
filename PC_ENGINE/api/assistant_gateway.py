@@ -242,6 +242,7 @@ class OperatorAssistantGateway:
             allowed = (
                 "status", "state", "ok", "stale", "health_age_ms", "timestamp_ms",
                 "score", "ready", "passed", "failed", "samples", "sample_count",
+                "pass_ratio", "min_pass_ratio", "recent_pass_ratio", "total", "count",
                 "reason", "recovery_state", "safe_mode", "unresolved", "pending",
                 "eligible", "eligible_records", "rejected_records",
             )
