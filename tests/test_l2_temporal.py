@@ -31,6 +31,7 @@ class L2TemporalReplayTests(unittest.TestCase):
             source.write_text("\n".join(json.dumps(x) for x in (snapshot, delta)), encoding="utf-8")
             loaded = L2TemporalExecutableReplay._load(str(source))
             self.assertEqual([event.event_id for event in loaded], ["s1", "d2"])
+            self.assertLess(L2TemporalExecutableReplay._time(loaded[0]), L2TemporalExecutableReplay._time(loaded[1]))
 
             # A skewed exchange timestamp must not make a valid delta appear
             # before its snapshot during sequence reconstruction.
