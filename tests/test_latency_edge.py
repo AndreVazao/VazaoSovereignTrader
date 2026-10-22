@@ -26,8 +26,10 @@ def test_latency_edge_requires_statistical_history_and_positive_net_edge():
     assert result.sample_count == 3
     assert result.same_direction_ratio == 1.0
     assert result.persistence_ratio == 1.0
-    assert result.net_expected_edge_bps == 4.0
-    assert result.eligible is True
+    # Only 1 bps of the leader's 6 bps move remains unmatched by the follower.
+    # The 2 bps cost assumption therefore makes this candidate unprofitable.
+    assert result.net_expected_edge_bps == -1.0
+    assert result.eligible is False
 
 
 def test_latency_edge_rejects_stale_or_unprofitable_leads():
@@ -77,4 +79,44 @@ def test_latency_edge_tracks_directional_persistence():
         )
 
     assert result.same_direction_ratio == 0.75
+    assert result.eligible is False
+
+
+
+def test_latency_edge_uses_only_unmatched_follower_move_as_gross_edge():
+    detector = LatencyEdgeDetector(
+        min_samples=3,
+        min_lead_bps=2.0,
+        fee_bps=1.0,
+        spread_bps=0.5,
+        slippage_bps=0.5,
+        execution_latency_ms=0,
+    )
+    for _ in range(3):
+        result = detector.observe(
+            symbol="BTC/USDT",
+            leader="binance",
+            follower="okx",
+            direction="UP",
+            lead_ms=25,
+            leader_move_bps=8.0,
+            follower_move_bps=2.0,
+        )
+
+    assert result.lead_bps == 6.0
+    assert result.net_expected_edge_bps == 4.0
+    assert result.eligible is True
+
+
+def test_latency_edge_rejects_negative_exchange_lead_time():
+    detector = LatencyEdgeDetector(min_samples=1, min_lead_bps=0.1)
+    result = detector.observe(
+        symbol="BTC/USDT",
+        leader="binance",
+        follower="okx",
+        direction="UP",
+        lead_ms=-1,
+        leader_move_bps=8.0,
+        follower_move_bps=1.0,
+    )
     assert result.eligible is False
