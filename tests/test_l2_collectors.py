@@ -127,14 +127,28 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].sequence, 45)
         self.assertEqual(events[0].sequence_start, 45)
 
-    def test_okx_books_empty_equal_sequence_heartbeat_is_ignored(self) -> None:
+    def test_okx_books_empty_equal_sequence_heartbeat_is_preserved(self) -> None:
         events = self.collector("okx")._parse(json.dumps({
             "arg": {"instId": "BTC-USDT", "channel": "books"},
             "action": "update",
             "data": [{"ts": "1235", "seqId": 44, "prevSeqId": 44,
                       "bids": [], "asks": []}],
         }), 9000)
-        self.assertEqual(events, [])
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "heartbeat")
+        self.assertEqual(events[0].sequence, 44)
+        self.assertEqual(events[0].bids, ())
+        self.assertEqual(events[0].asks, ())
+
+    def test_okx_empty_data_is_rejected_and_invalidates_previous_view(self) -> None:
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("okx", "BTC/USDT", "wss://example"),
+            lambda _: None, on_book=lambda _view: None)
+        with self.assertRaisesRegex(ValueError, "empty_okx_data"):
+            collector._parse(json.dumps({
+                "arg": {"channel": "books", "instId": "BTC-USDT"},
+                "action": "update", "data": [],
+            }), 9000)
 
     def test_okx_books_equal_sequence_with_depth_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid_okx_heartbeat"):
