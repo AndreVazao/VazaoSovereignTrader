@@ -153,6 +153,10 @@ class PublicL2WebSocketCollector:
             channel = arg.get("channel") if isinstance(arg, dict) else None
             if channel not in {"books", "books5", "bbo-tbt"}:
                 return []
+            expected_instrument = symbol.replace("/", "-").upper()
+            instrument = arg.get("instId") if isinstance(arg, dict) else None
+            if not isinstance(instrument, str) or instrument.upper() != expected_instrument:
+                raise ValueError("okx_instrument_mismatch")
             action = payload.get("action", "snapshot")
             if not isinstance(action, str) or action.lower() not in {"snapshot", "update"}:
                 raise ValueError("invalid_okx_action")
