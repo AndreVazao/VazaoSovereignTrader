@@ -21,7 +21,7 @@ class CanonicalInstrumentMapping:
     instrument_id: str
 
     def __post_init__(self) -> None:
-        if not self.venue.strip() or not self.symbol.strip() or not self.instrument_id.strip():
+        if not all(isinstance(value, str) and value.strip() for value in (self.venue, self.symbol, self.instrument_id)):
             raise ValueError("mapping_fields_must_be_non_empty")
 
 
@@ -40,7 +40,11 @@ def to_synchronized_book_view(
     """
     if not isinstance(now_ns, int) or isinstance(now_ns, bool) or now_ns < 0:
         raise ValueError("invalid_monotonic_now")
-    if not math.isfinite(max_age_ms) or max_age_ms <= 0:
+    try:
+        max_age = float(max_age_ms)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("max_age_ms_must_be_finite_and_positive") from exc
+    if not math.isfinite(max_age) or max_age <= 0:
         raise ValueError("max_age_ms_must_be_finite_and_positive")
 
     raw_venue = getattr(book, "venue", mapping.venue)
@@ -63,7 +67,7 @@ def to_synchronized_book_view(
         return _invalid(mapping)
 
     age_ms = (now_ns - observation_ns) / 1_000_000.0
-    if not math.isfinite(age_ms) or age_ms > max_age_ms:
+    if not math.isfinite(age_ms) or age_ms > max_age:
         return SynchronizedBookView(
             venue=mapping.venue,
             instrument_id=mapping.instrument_id,
