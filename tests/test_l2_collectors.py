@@ -140,15 +140,27 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].bids, ())
         self.assertEqual(events[0].asks, ())
 
-    def test_okx_empty_data_is_rejected_and_invalidates_previous_view(self) -> None:
+    def test_okx_empty_data_invalidates_previous_eligible_view(self) -> None:
+        views = []
         collector = PublicL2WebSocketCollector(
             L2WebSocketConfig("okx", "BTC/USDT", "wss://example"),
-            lambda _: None, on_book=lambda _view: None)
-        with self.assertRaisesRegex(ValueError, "empty_okx_data"):
-            collector._parse(json.dumps({
-                "arg": {"channel": "books", "instId": "BTC-USDT"},
-                "action": "update", "data": [],
-            }), 9000)
+            lambda _: None, on_book=views.append)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "snapshot",
+            "data": [{"ts": "1234", "seqId": 41, "prevSeqId": -1,
+                      "bids": [["100", "2", "0", "1"]],
+                      "asks": [["101", "3", "0", "1"]]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "update", "data": [],
+        }))
+        self.assertFalse(views[-1].eligible)
+        self.assertEqual(views[-1].reason, "parse_error")
+        self.assertEqual(views[-1].bids, ())
+        self.assertEqual(collector.health_snapshot()["parse_errors"], 1)
 
     def test_okx_books_equal_sequence_with_depth_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid_okx_heartbeat"):
