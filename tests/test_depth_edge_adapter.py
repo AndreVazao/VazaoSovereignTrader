@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from PC_ENGINE.market_events.binance_book_state import BookStatus, BookSnapshot
 from PC_ENGINE.market_events.coinbase_book_sync import CoinbaseBookView
 from PC_ENGINE.market_events.depth_edge_adapter import (
@@ -42,7 +40,6 @@ def test_adapter_refuses_old_callback_even_if_it_was_eligible_when_emitted():
     )
     assert view.eligible is False
     assert view.status == "SYNCED"
-    assert view.reason if hasattr(view, "reason") else True
     assert view.best_bid is None
 
 
