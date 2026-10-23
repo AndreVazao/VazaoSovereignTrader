@@ -324,3 +324,12 @@ These are engineering judgments, not measured reliability or performance.
 3. Implement a protocol-correct OKX book synchronizer or keep OKX depth ineligible for edge calculations.
 4. Add an explicit eligibility contract at the edge-calculation boundary requiring equivalent instruments, synchronized/fresh books from both venues, calibrated timing, and costs (fees, spread, slippage, funding, latency, inventory and failure costs). Default deny if any field is missing or stale.
 5. Keep hosted Windows CI success separate from actual Windows-PC configuration/startup validation and Android physical-device crash/layout/authentication validation.
+
+
+## Checkpoint: Coinbase L2 parser landed (2026-10-23)
+
+- PR #442 is merged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/442
+- The parser now accepts the Advanced Trade `l2_data` response envelope (while allowing the subscription-style `level2` label), validates and preserves `sequence_num`, checks each event's `product_id` against the configured market, uses the envelope timestamp when event time is absent, and rejects unknown event types.
+- Parser tests cover sequence/timestamp preservation, missing sequence, mismatched product and invalid side. This closes a concrete parser-contract gap; it does **not** establish a Coinbase order-book state machine. The envelope sequence number alone is not a substitute for a protocol-specific snapshot/delta continuity contract.
+- Audit priority: keep Coinbase depth ineligible for cross-venue edge decisions until tests demonstrate initial snapshot semantics, valid update continuity, duplicate/out-of-order handling, gap invalidation, reconnect/resnapshot recovery, and clearing any stale previously eligible view.
+- PR #443 was closed unmerged because the main branch advanced while the documentation work was underway. No source change from that PR is part of main; this addendum is being reapplied from a fresh branch based on current main.
