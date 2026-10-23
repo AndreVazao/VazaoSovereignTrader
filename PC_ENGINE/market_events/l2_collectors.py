@@ -12,6 +12,7 @@ import websocket
 
 from .binance_book_sync import BinanceSpotBookSynchronizer
 from .coinbase_book_sync import CoinbaseL2BookSynchronizer
+from .okx_book_sync import OKXBooksSynchronizer
 from .orderbook import OrderBookEvent, OrderBookLevel
 
 
@@ -38,6 +39,7 @@ class PublicL2WebSocketCollector:
         self._socket: websocket.WebSocketApp | None = None
         self._sync: BinanceSpotBookSynchronizer | None = None
         self._coinbase_sync: CoinbaseL2BookSynchronizer | None = None
+        self._okx_sync: OKXBooksSynchronizer | None = None
         self._health_lock = threading.Lock()
         self._connected = threading.Event()
         self._parse_errors = 0
@@ -53,6 +55,8 @@ class PublicL2WebSocketCollector:
             self._sync = BinanceSpotBookSynchronizer(config.symbol, **kwargs)
         elif config.venue == "coinbase" and on_book is not None:
             self._coinbase_sync = CoinbaseL2BookSynchronizer(config.symbol, on_book)
+        elif config.venue == "okx" and on_book is not None:
+            self._okx_sync = OKXBooksSynchronizer(config.symbol, on_book)
 
     def health_snapshot(self) -> dict:
         with self._health_lock:
@@ -71,6 +75,8 @@ class PublicL2WebSocketCollector:
             health["synchronizer"] = self._sync.health()
         if self._coinbase_sync is not None:
             health["synchronizer"] = self._coinbase_sync.health()
+        if self._okx_sync is not None:
+            health["synchronizer"] = self._okx_sync.health()
         return health
 
     @staticmethod
@@ -282,6 +288,8 @@ class PublicL2WebSocketCollector:
                 self._sync.invalidate("parse_error")
             if self._coinbase_sync is not None:
                 self._coinbase_sync.invalidate("parse_error")
+            if self._okx_sync is not None:
+                self._okx_sync.invalidate("parse_error")
             with self._health_lock:
                 self._parse_errors += 1
                 self._last_parse_error = type(exc).__name__
@@ -293,6 +301,8 @@ class PublicL2WebSocketCollector:
                 self._sync.on_event(event)
             if self._coinbase_sync is not None:
                 self._coinbase_sync.on_event(event)
+            if self._okx_sync is not None:
+                self._okx_sync.on_event(event)
             try:
                 self.on_event(event)
             except Exception as exc:
@@ -318,7 +328,9 @@ class PublicL2WebSocketCollector:
                     if self.config.venue == "binance":
                         return
                     if self.config.venue == "okx":
-                        ws.send(json.dumps({"op": "subscribe", "args": [{"channel": "books5", "instId": product}]}))
+                        # Use the incremental channel so sequence continuity is
+                        # explicit; books5 snapshots alone cannot prove a gap-free stream.
+                        ws.send(json.dumps({"op": "subscribe", "args": [{"channel": "books", "instId": product}]}))
                     elif self.config.venue == "coinbase":
                         ws.send(json.dumps({"type": "subscribe", "product_ids": [product], "channel": "level2"}))
 
@@ -348,6 +360,8 @@ class PublicL2WebSocketCollector:
                     self._sync.connection_lost()
                 if self._coinbase_sync is not None:
                     self._coinbase_sync.connection_lost()
+                if self._okx_sync is not None:
+                    self._okx_sync.connection_lost()
                 stable_seconds = time.monotonic() - opened_at[0] if opened_at else 0.0
                 if stable_seconds >= 30.0:
                     retry_seconds = 1.0
@@ -366,6 +380,8 @@ class PublicL2WebSocketCollector:
             self._sync.stop()
         if self._coinbase_sync is not None:
             self._coinbase_sync.connection_lost()
+        if self._okx_sync is not None:
+            self._okx_sync.connection_lost()
 
 
 def _iso_ms(value: str | None) -> int | None:
