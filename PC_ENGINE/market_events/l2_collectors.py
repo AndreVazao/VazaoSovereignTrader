@@ -11,6 +11,7 @@ from typing import Callable
 import websocket
 
 from .binance_book_sync import BinanceSpotBookSynchronizer
+from .coinbase_book_sync import CoinbaseL2BookSynchronizer
 from .orderbook import OrderBookEvent, OrderBookLevel
 
 
@@ -22,7 +23,7 @@ class L2WebSocketConfig:
 
 
 class PublicL2WebSocketCollector:
-    """Public L2 collector; Binance additionally emits a synchronized book view."""
+    """Public L2 collector; Binance and Coinbase can emit synchronized book views."""
 
     def __init__(
         self,
@@ -36,6 +37,7 @@ class PublicL2WebSocketCollector:
         self._stop = threading.Event()
         self._socket: websocket.WebSocketApp | None = None
         self._sync: BinanceSpotBookSynchronizer | None = None
+        self._coinbase_sync: CoinbaseL2BookSynchronizer | None = None
         self._health_lock = threading.Lock()
         self._connected = threading.Event()
         self._parse_errors = 0
@@ -49,6 +51,8 @@ class PublicL2WebSocketCollector:
             if snapshot_fetcher is not None:
                 kwargs["snapshot_fetcher"] = snapshot_fetcher
             self._sync = BinanceSpotBookSynchronizer(config.symbol, **kwargs)
+        elif config.venue == "coinbase" and on_book is not None:
+            self._coinbase_sync = CoinbaseL2BookSynchronizer(config.symbol, on_book)
 
     def health_snapshot(self) -> dict:
         with self._health_lock:
@@ -65,6 +69,8 @@ class PublicL2WebSocketCollector:
             }
         if self._sync is not None:
             health["synchronizer"] = self._sync.health()
+        if self._coinbase_sync is not None:
+            health["synchronizer"] = self._coinbase_sync.health()
         return health
 
     @staticmethod
@@ -251,6 +257,8 @@ class PublicL2WebSocketCollector:
                 continue
             if self._sync is not None:
                 self._sync.on_event(event)
+            if self._coinbase_sync is not None:
+                self._coinbase_sync.on_event(event)
             try:
                 self.on_event(event)
             except Exception as exc:
@@ -304,6 +312,8 @@ class PublicL2WebSocketCollector:
                     break
                 if self._sync is not None:
                     self._sync.connection_lost()
+                if self._coinbase_sync is not None:
+                    self._coinbase_sync.connection_lost()
                 stable_seconds = time.monotonic() - opened_at[0] if opened_at else 0.0
                 if stable_seconds >= 30.0:
                     retry_seconds = 1.0
@@ -320,6 +330,8 @@ class PublicL2WebSocketCollector:
             self._socket.close()
         if self._sync is not None:
             self._sync.stop()
+        if self._coinbase_sync is not None:
+            self._coinbase_sync.connection_lost()
 
 
 def _iso_ms(value: str | None) -> int | None:
