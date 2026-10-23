@@ -86,16 +86,43 @@ class OKXBooksSynchronizer:
                         self._reason = None
                         self._events_accepted += 1
                         view = self._view_locked(event.local_receive_ns)
-            elif event.event_type == "snapshot":
-                rebuilt = self._builder.apply(event)
-                if rebuilt is None:
-                    self._reset_locked("invalid_snapshot")
+            elif event.event_type == "heartbeat":
+                current = self._builder.snapshot().sequence
+                if (
+                    not self._builder.initialized
+                    or current is None
+                    or event.sequence is None
+                    or event.sequence != current
+                ):
+                    self._reset_locked("heartbeat_sequence_mismatch")
                     self._sequence_errors += 1
                 else:
+                    # A protocol heartbeat proves stream liveness, not a book
+                    # mutation. Refresh age only for the exact synchronized sequence.
                     self._last_update_ns = event.local_receive_ns
                     self._reason = None
-                    self._events_accepted += 1
                 view = self._view_locked(event.local_receive_ns)
+            elif event.event_type == "snapshot":
+                current = self._builder.snapshot().sequence
+                if (
+                    self._builder.initialized
+                    and current is not None
+                    and event.sequence is not None
+                    and event.sequence < current
+                ):
+                    self._reset_locked("stale_snapshot")
+                    self._sequence_errors += 1
+                    view = self._view_locked(event.local_receive_ns)
+                else:
+                    rebuilt = self._builder.apply(event)
+                    if rebuilt is None:
+                        self._reset_locked("invalid_snapshot")
+                        self._sequence_errors += 1
+                    else:
+                        self._last_update_ns = event.local_receive_ns
+                        self._reason = None
+                        self._events_accepted += 1
+                    view = self._view_locked(event.local_receive_ns)
             else:
                 self._reset_locked("invalid_event_type")
                 self._sequence_errors += 1
