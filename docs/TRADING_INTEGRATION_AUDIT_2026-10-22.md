@@ -354,3 +354,21 @@ These are engineering judgments, not measured reliability or performance.
 4. Build a normalized cross-venue observation record with instrument identity, venue sequence, exchange/local receive timestamps, freshness, spread/depth, and rejection reason. Keep signal calculation separate from order execution.
 5. Demonstrate edge-after-costs only with chronological PAPER/shadow observations and venue-specific fees, slippage, funding, latency, liquidity, inventory and failure costs.
 6. Validate installer on the actual Windows PC and the APK on a physical Android device before describing either as user-ready.
+
+
+## Addendum — 2026-10-23, OKX incremental heartbeat parser
+
+- Main now includes PR #479 at `b8e4c7a188c3976cb177a21067dd646de01b19e9`: https://github.com/AndreVazao/VazaoSovereignTrader/pull/479
+- The OKX `books` incremental parser validates sequence fields as integers (rejecting booleans and invalid ranges), ignores the documented empty heartbeat where `seqId == prevSeqId`, and rejects same-sequence updates that carry depth changes.
+- Added deterministic regressions for valid heartbeat, inconsistent same-sequence depth, and boolean sequence IDs. Exact-head checks passed: Python `test`, Windows `build-exe`, Windows `build-installer`; Snyk and Vercel checks also reported success.
+- This is parser hardening only. It does **not** implement a complete OKX book state/recovery machine and does not enable OKX for depth-based temporal-edge decisions. Keep OKX ineligible until channel-specific snapshot/update state, sequence continuity, disconnect/gap invalidation, fresh resnapshot recovery, and health telemetry are covered by tests.
+- The previous open documentation PR #443 was closed without merge because main had advanced; its intended audit content is represented by the later merged audit PR #478. No duplicate PR should be reopened.
+- Current release-smoke evidence remains hosted CI only. User's local Windows config/runtime, physical Android APK launch/logcat, office browser E2E, and independent autonomous department workers remain unverified/incomplete.
+- Safety posture remains PAPER/observation only; no REAL activation, live order, transfer or withdrawal was performed.
+
+### Updated next gates
+1. Implement and test an OKX protocol-specific synchronized-book state machine with heartbeat handling and fail-closed recovery.
+2. Add recorded/protocol-derived Coinbase fixtures for snapshot, update sequencing, duplicates/out-of-order events, gaps, reconnect/resnapshot and recovery; verify invalidation telemetry for Coinbase and Binance.
+3. Keep venue book eligibility explicit and false by default until each venue's state machine is synchronized and fresh.
+4. Build the normalized cross-venue observation and temporal-edge pipeline only after instrument equivalence is established; validate net edge chronologically in PAPER/shadow after fees, spread, slippage, funding, latency, liquidity, inventory and failure costs.
+5. Validate installer on the actual Windows PC and APK on physical Android; test auth, status-bar layout, reconnect, revocation, LAN/Tailscale failover without replaying mutating requests.
