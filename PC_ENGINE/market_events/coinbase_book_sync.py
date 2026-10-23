@@ -21,6 +21,7 @@ class CoinbaseBookView:
     age_ms: float | None
     eligible: bool
     reason: str | None
+    observation_time_ns: int | None = None
 
 
 BookCallback = Callable[[CoinbaseBookView], None]
@@ -129,6 +130,7 @@ class CoinbaseL2BookSynchronizer:
             age_ms=age_ms,
             eligible=eligible,
             reason=reason,
+            observation_time_ns=self._last_update_ns,
         )
 
     def _emit(self, view: CoinbaseBookView) -> None:
