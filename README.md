@@ -1,5 +1,9 @@
 # VST — Vazão Sovereign Trader
 
+<p align="center">
+  <img src="assets/branding/vst-logo.svg" alt="VST — Vazão Sovereign Trader, identidade visual azul e dourada com gráficos de mercado" width="560" />
+</p>
+
 **VST** é a sigla curta oficial usada nas interfaces do Vazão Sovereign Trader.
 
 ### Identidade oficial da marca
