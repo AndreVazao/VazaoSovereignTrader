@@ -93,7 +93,7 @@ class MobileCockpit(App):
     def _startup_error_view(self, error_type):
         root = BoxLayout(orientation="vertical", padding=20, spacing=12)
         root.add_widget(Label(
-            text="O Sovereign Trader não conseguiu iniciar o cockpit.",
+            text="O VST (Vazão Sovereign Trader) não conseguiu iniciar o cockpit.",
             size_hint_y=None, height=70, halign="center", valign="middle",
         ))
         root.add_widget(Label(
@@ -127,7 +127,7 @@ class MobileCockpit(App):
         history = getattr(self, "chat_history_box", None)
         if history is None:
             return
-        title = "Tu" if role == "user" else "Sovereign"
+        title = "Tu" if role == "user" else "VST"
         fill = (0.08, 0.10, 0.14, 1) if role == "user" else (0.06, 0.11, 0.12, 1)
         card = Surface(orientation="vertical", padding=10, spacing=3, size_hint_y=None, height=74, fill=fill, radius=15)
         card.add_widget(Label(text=title, color=(0.50, 0.78, 1, 1), font_size=11, bold=True, halign="left", size_hint_y=None, height=20))
@@ -166,7 +166,7 @@ class MobileCockpit(App):
             intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-PT")
-            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Fala com o Sovereign Trader")
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Fala com o VST")
             activity.startActivityForResult(intent, 4201)
         except Exception as exc:
             self.status.text = f"Voz indisponível: {exc}"
