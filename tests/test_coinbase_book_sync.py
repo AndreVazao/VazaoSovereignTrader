@@ -151,5 +151,22 @@ class CoinbaseL2BookSynchronizerTests(unittest.TestCase):
         self.assertEqual(view.asks, ())
 
 
+    def test_monotonic_clock_regression_fails_closed(self) -> None:
+        self.sync.on_event(self.event(
+            "snapshot", 41, 100_000_000,
+            bids=(OrderBookLevel(100, 2),),
+            asks=(OrderBookLevel(101, 3),),
+        ))
+        self.assertTrue(self.views[-1].eligible)
+
+        # A caller with a regressed monotonic timestamp must not turn a
+        # future observation into an age-zero eligible book.
+        view = self.sync.snapshot(99_000_000)
+        self.assertEqual(view.status, "SYNCED")
+        self.assertFalse(view.eligible)
+        self.assertIsNone(view.age_ms)
+        self.assertEqual(view.reason, "clock_regression")
+
+
 if __name__ == "__main__":
     unittest.main()
