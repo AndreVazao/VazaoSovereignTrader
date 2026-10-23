@@ -22,6 +22,7 @@ class BookSnapshot:
     age_ms: float | None
     eligible: bool
     reason: str | None
+    observation_time_ns: int | None = None
 
 
 class BinanceSpotDepthBook:
@@ -152,5 +153,5 @@ class BinanceSpotDepthBook:
             self.status, self.update_id,
             tuple(OrderBookLevel(p, q) for p, q in sorted(self.bids.items(), reverse=True)),
             tuple(OrderBookLevel(p, q) for p, q in sorted(self.asks.items())),
-            age_ms, eligible, reason,
+            age_ms, eligible, reason, self.last_update_ns,
         )

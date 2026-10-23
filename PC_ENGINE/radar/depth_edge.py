@@ -24,6 +24,7 @@ class SynchronizedBookView:
     best_ask: float | None
     observation_time_ns: int | None = None
     sequence: int | str | None = None
+    price_unit: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,12 @@ def assess_synchronized_depth_edge(
         return _reject("distinct_venues_required", left, right)
     if not left.instrument_id.strip() or left.instrument_id != right.instrument_id:
         return _reject("instrument_mismatch", left, right)
+    if (
+        not isinstance(left.price_unit, str) or not left.price_unit.strip()
+        or not isinstance(right.price_unit, str) or not right.price_unit.strip()
+        or left.price_unit.upper() != right.price_unit.upper()
+    ):
+        return _reject("price_unit_mismatch", left, right)
 
     for view in (left, right):
         if view.status != "SYNCED" or view.eligible is not True:
