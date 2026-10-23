@@ -16,6 +16,7 @@ def book(
     status="SYNCED",
     instrument="spot:BTC/USDT",
     observation_time_ns=None,
+    price_unit="USDT",
 ):
     if observation_time_ns is None:
         observation_time_ns = 1_000_000_000 if venue == "binance" else 1_050_000_000
@@ -28,6 +29,7 @@ def book(
         best_bid=bid,
         best_ask=ask,
         observation_time_ns=observation_time_ns,
+        price_unit=price_unit,
     )
 
 
@@ -47,6 +49,17 @@ def test_assesses_positive_net_edge_after_both_venue_costs():
     assert result.observation_skew_ms == pytest.approx(50.0)
     assert result.paper_only is True
     assert result.execution_allowed is False
+
+
+
+def test_rejects_different_price_units_even_with_same_canonical_id():
+    result = assess_synchronized_depth_edge(
+        book("binance", 100, 100.1, price_unit="USDT"),
+        book("coinbase", 101, 101.1, price_unit="USD"),
+        venue_costs_bps={"binance": 1, "coinbase": 1},
+    )
+    assert result.eligible is False
+    assert result.reason == "price_unit_mismatch"
 
 
 def test_rejects_different_canonical_instruments():
@@ -122,6 +135,7 @@ def test_rejects_missing_observation_timestamp():
         best_bid=100,
         best_ask=100.1,
         observation_time_ns=None,
+        price_unit="USDT",
     )
     result = assess_synchronized_depth_edge(
         missing,
