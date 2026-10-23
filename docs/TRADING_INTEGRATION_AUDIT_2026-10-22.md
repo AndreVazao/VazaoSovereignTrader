@@ -286,3 +286,23 @@ These are engineering judgments, not measured reliability or performance.
 - No verified cross-venue normalized instrument/contract identity, fee/slippage-adjusted temporal edge, or safe execution wiring was established by this source review. Coinbase parser correctness does not mean Coinbase depth is trade-eligible.
 - PR #443 was closed without merging because its audit snapshot was based on a stale checkpoint. This addendum supersedes that stale documentation snapshot; no code was lost or rolled back.
 - Safety remains PAPER/read-only. No exchange credentials, live orders, transfers, or REAL activation were used.
+
+
+## Addendum — PAPER edge adapter and quote-unit guard (2026-10-23)
+
+- Current main after PR #471: `fd513d7399d2267e85594da6f3c2e0e4dc70ab8d`.
+- PR #471 merged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/471.
+- Exact reviewed PR head: `7590721986abac644abfe00378b5c69066501061`. Python workflow `39935284846` passed. Windows workflow `39935284602` passed, including EXE smoke and installer silent-install, PAPER launch/loopback health, uninstall and scheduled-task cleanup. Snyk and Vercel passed. CodeRabbit indicated manual review required; the diff was manually inspected.
+- Binance and Coinbase synchronized views now expose the monotonic observation timestamp used to recompute age at adaptation time. The typed adapter rejects stale/future observations, mismatched venue/symbol, missing sides, non-finite levels and crossed books.
+- Review found that equal canonical IDs alone could let BTC/USDT and BTC/USD prices be compared directly. The edge assessor now requires explicit matching `price_unit` metadata and rejects missing or different units. No implicit USD/USDT conversion exists. Same quote unit is necessary but **not sufficient**: the mapping layer must also validate base asset, spot vs derivative, settlement asset, contract multiplier and instrument equivalence.
+- The edge adapter and assessment remain research/PAPER primitives. No production call site connecting synchronized venue books to a continuously running radar signal, and no order-path wiring, was verified. Do not interpret an eligible PAPER assessment as an executable opportunity or evidence of profitability.
+- OKX still lacks a verified protocol-specific synchronization/recovery state machine in this audit. Cross-venue FX conversion, depth-aware fill probability, market impact, inventory, transfer/withdrawal costs and chronological out-of-sample PAPER/shadow validation remain incomplete.
+- Release CI is green on hosted Windows, but the user's actual PC configuration/runtime and physical Android APK startup/logcat are still unverified.
+- Safety posture remains PAPER/read-only. No credentials, live orders, transfers, withdrawals or REAL activation were used.
+
+### Next gates after PR #471
+1. Implement/verify OKX sequence-aware book synchronization and recovery, or mark its depth feed ineligible.
+2. Build a validated instrument metadata registry; refuse quote-unit conversions unless a timestamped FX conversion source and its own freshness/error budget are explicit.
+3. Wire only validated synchronized views into radar's PAPER-only assessment, with a clear provenance trail and no path to execution.
+4. Add depth-aware liquidity/fill/market-impact assumptions and chronological out-of-sample evaluation before making any performance claim.
+5. Perform real-PC install/config audit and physical Android launch/authentication/network-transition tests when the devices are accessible.
