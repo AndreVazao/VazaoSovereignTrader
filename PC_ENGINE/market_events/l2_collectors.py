@@ -167,9 +167,11 @@ class PublicL2WebSocketCollector:
                 event_type = "snapshot"
             else:
                 event_type = "delta" if action.lower() == "update" else "snapshot"
-            items = payload.get("data", [])
+            items = payload.get("data")
             if not isinstance(items, list):
                 raise ValueError("invalid_okx_data")
+            if not items:
+                raise ValueError("empty_okx_data")
             for item in items:
                 if not isinstance(item, dict):
                     raise ValueError("invalid_okx_item")
@@ -200,6 +202,12 @@ class PublicL2WebSocketCollector:
                         # must not be treated as a sequence gap.
                         if bids or asks:
                             raise ValueError("invalid_okx_heartbeat")
+                        events.append(self._event(
+                            venue=venue, symbol=symbol, event_type="heartbeat",
+                            sequence=sequence, sequence_start=sequence_start,
+                            exchange_ts_ms=ts, receive_ns=receive_ns,
+                            bids=(), asks=(),
+                        ))
                         continue
                     if sequence < raw_previous:
                         raise ValueError("invalid_okx_sequence_range")
