@@ -306,3 +306,21 @@ These are engineering judgments, not measured reliability or performance.
 3. Wire only validated synchronized views into radar's PAPER-only assessment, with a clear provenance trail and no path to execution.
 4. Add depth-aware liquidity/fill/market-impact assumptions and chronological out-of-sample evaluation before making any performance claim.
 5. Perform real-PC install/config audit and physical Android launch/authentication/network-transition tests when the devices are accessible.
+
+
+## Current-main addendum — Coinbase L2 and audit freshness (2026-10-23)
+
+- This addendum supersedes older rows above where they describe Binance synchronization as not yet implemented. Current main now contains `PC_ENGINE/market_events/binance_book_sync.py` and `PC_ENGINE/market_events/binance_book_state.py`: bounded WebSocket buffering, REST snapshot acquisition, buffered delta replay, sequence-gap and overflow invalidation, reconnect snapshot scheduling, explicit ineligible-state callbacks and freshness-gated book snapshots. This is synchronization groundwork with tests, not proof that the temporal-edge calculator consumes these views.
+- PR #442 is merged: `PC_ENGINE/market_events/l2_collectors.py` now accepts Coinbase Advanced Trade `l2_data` envelopes (subscription channel remains `level2`), validates/preserves envelope `sequence_num`, validates `product_id`, recognizes explicit snapshot/update event types and falls back to envelope timestamp. This fixes event parsing but alone does not make a book synchronized.
+- Current main also has `PC_ENGINE/market_events/coinbase_book_sync.py`, using the initial stream snapshot, sequence-aware `OrderBookBuilder`, freshness/empty-side/crossed-book checks, and fail-closed reset on connection loss. This is reconstruction/observation only; it is not authorization to trade Coinbase depth.
+- OKX remains a separate blocker for a synchronized depth book. Parsing `books5` / `bbo-tbt` snapshots must not be confused with incremental `books` continuity. No claim is made here that OKX has an integrated sequence/checksum recovery state machine.
+- PR #443's documentation-only branch was closed without merge after main advanced during the work; the current audit must be merged from a fresh branch based on current main to avoid stale checkpoint claims.
+- No hosted CI status is counted as a green code suite unless the exact current head's workflow result is confirmed. Vercel's deployment-rate limit is a deployment constraint, not a Python test failure and not evidence of runtime correctness.
+- Current safety posture remains PAPER/read-only. No exchange order, transfer, withdrawal or REAL activation was performed.
+
+### Revised gates, in priority order
+1. Add/verify contract tests for Coinbase snapshot -> contiguous updates -> duplicate/out-of-order handling -> sequence gap -> reconnect invalidation -> fresh snapshot recovery, including callback persistence of invalid states.
+2. Verify the Binance synchronized-view consumer wiring end to end; a fresh/stale/gapped book must never leave a previously eligible persisted view available to downstream readers.
+3. Implement a protocol-correct OKX book synchronizer or keep OKX depth ineligible for edge calculations.
+4. Add an explicit eligibility contract at the edge-calculation boundary requiring equivalent instruments, synchronized/fresh books from both venues, calibrated timing, and costs (fees, spread, slippage, funding, latency, inventory and failure costs). Default deny if any field is missing or stale.
+5. Keep hosted Windows CI success separate from actual Windows-PC configuration/startup validation and Android physical-device crash/layout/authentication validation.
