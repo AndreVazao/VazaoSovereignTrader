@@ -22,7 +22,6 @@ def _coinbase_view(*, timestamp=1_000_000_000, eligible=True, bids=None, asks=No
         eligible=eligible,
         reason=None,
         observation_time_ns=timestamp,
-        price_unit="USD" if symbol.endswith("/USD") else "USDT",
     )
 
 
