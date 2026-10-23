@@ -12,13 +12,14 @@ Data: 2026-10-23
 
 ## Ficheiro vetorial
 - Fonte escalável: `assets/branding/vst-logo.svg`.
+- Variante compacta de monograma para ícone: `assets/branding/vst-app-icon.svg`.
 - O README usa o SVG diretamente, evitando artefactos de rasterização.
 - O SVG é a versão vetorial inicial para revisão visual e integração posterior em interfaces.
 - A imagem conceptual gerada durante a exploração visual é uma pré-visualização criativa; o SVG é a fonte versionada nesta branch.
 
 ## Utilização
 - Adequado para README, ecrã de boas-vindas, página “Sobre” e materiais de marca em fundo escuro.
-- Para ícone de aplicação, criar derivados simplificados e rasterizados (PNG/ICO/Android adaptive icon) a partir do vetor, pois os detalhes e as legendas pequenas não são legíveis em dimensões reduzidas.
+- A variante compacta `vst-app-icon.svg` serve de base visual para ícones; gerar também os formatos rasterizados PNG/ICO e Android adaptive icon no processo de empacotamento, pois as lojas e sistemas podem exigir dimensões/formats específicos.
 - Manter uma variante compacta sem legendas para favicon e ícone do programa.
 - Não usar o gráfico decorativo como feed, sinal, previsão ou prova de desempenho real.
 - Não afirmar rentabilidade ou desempenho com base no desenho.
