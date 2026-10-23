@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -85,7 +86,7 @@ class CoinbaseL2BookSynchronizer:
 
     def health(self, now_ns: int | None = None) -> dict[str, int | str | bool | float | None]:
         with self._lock:
-            view = self._view_locked(now_ns if now_ns is not None else __import__("time").monotonic_ns())
+            view = self._view_locked(now_ns if now_ns is not None else time.monotonic_ns())
             return {
                 "venue": "coinbase",
                 "symbol": self.symbol,
