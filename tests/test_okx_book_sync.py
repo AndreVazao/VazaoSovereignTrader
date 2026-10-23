@@ -119,6 +119,40 @@ class OKXBooksSynchronizerTests(unittest.TestCase):
         self.assertIsNone(regressed.age_ms)
         self.assertEqual(regressed.reason, "clock_regression")
 
+    def test_matching_heartbeat_refreshes_freshness_without_mutating_book(self) -> None:
+        self.seed()
+        self.sync.on_event(self.event("heartbeat", 41, 900_000_000))
+        view = self.views[-1]
+        self.assertTrue(view.eligible)
+        self.assertEqual(view.sequence, 41)
+        self.assertEqual(view.bids[0].quantity, 2)
+        self.assertEqual(view.observation_time_ns, 900_000_000)
+
+    def test_mismatched_heartbeat_invalidates_book(self) -> None:
+        self.seed()
+        self.sync.on_event(self.event("heartbeat", 40, 20_000_000))
+        view = self.views[-1]
+        self.assertFalse(view.eligible)
+        self.assertEqual(view.reason, "heartbeat_sequence_mismatch")
+        self.assertEqual(view.bids, ())
+
+    def test_older_snapshot_cannot_replace_newer_book(self) -> None:
+        self.sync.on_event(self.event(
+            "snapshot", 50, 10_000_000,
+            bids=(OrderBookLevel(100, 2),),
+            asks=(OrderBookLevel(101, 3),),
+        ))
+        self.assertTrue(self.views[-1].eligible)
+        self.sync.on_event(self.event(
+            "snapshot", 49, 20_000_000,
+            bids=(OrderBookLevel(99, 9),),
+            asks=(OrderBookLevel(102, 9),),
+        ))
+        view = self.views[-1]
+        self.assertFalse(view.eligible)
+        self.assertEqual(view.reason, "stale_snapshot")
+        self.assertEqual(view.bids, ())
+
     def test_crossed_book_is_not_eligible(self) -> None:
         self.sync.on_event(self.event(
             "snapshot", 41, 10_000_000,
