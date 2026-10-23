@@ -315,6 +315,10 @@ class PublicL2WebSocketCollector:
                 self._coinbase_sync.on_event(event)
             if self._okx_sync is not None:
                 self._okx_sync.on_event(event)
+            # Heartbeats refresh synchronizer liveness but are control frames,
+            # not book mutations; do not send them to normalized event storage.
+            if event.event_type == "heartbeat":
+                continue
             try:
                 self.on_event(event)
             except Exception as exc:
