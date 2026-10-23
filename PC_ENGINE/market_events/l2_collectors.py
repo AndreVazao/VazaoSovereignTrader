@@ -178,6 +178,16 @@ class PublicL2WebSocketCollector:
             if not isinstance(items, list):
                 raise ValueError("invalid_coinbase_events")
             expected_product = symbol.replace("/", "-").upper()
+            # sequence_num belongs to the envelope, not each item inside it.
+            # Emit one atomic normalized event per envelope so a multi-item
+            # message cannot be mistaken for duplicate sequence numbers by the
+            # downstream sequence-aware book builder.
+            if not items:
+                return []
+            bids: list[OrderBookLevel] = []
+            asks: list[OrderBookLevel] = []
+            event_types: set[str] = set()
+            timestamps: set[int] = set()
             for item in items:
                 if not isinstance(item, dict):
                     raise ValueError("invalid_coinbase_item")
@@ -186,14 +196,14 @@ class PublicL2WebSocketCollector:
                     raise ValueError("coinbase_product_mismatch")
                 raw_type = str(item.get("type", "")).lower()
                 if raw_type == "snapshot":
-                    event_type = "snapshot"
+                    event_types.add("snapshot")
                 elif raw_type == "update":
-                    event_type = "delta"
+                    event_types.add("delta")
                 else:
                     raise ValueError("invalid_coinbase_event_type")
                 ts = _iso_ms(item.get("event_time") or payload.get("timestamp"))
-                bids: list[OrderBookLevel] = []
-                asks: list[OrderBookLevel] = []
+                if ts is not None:
+                    timestamps.add(ts)
                 updates = item.get("updates", [])
                 if not isinstance(updates, list):
                     raise ValueError("invalid_coinbase_updates")
@@ -213,11 +223,16 @@ class PublicL2WebSocketCollector:
                         asks.append(level)
                     else:
                         raise ValueError("invalid_coinbase_side")
-                events.append(self._event(
-                    venue=venue, symbol=symbol, event_type=event_type,
-                    sequence=sequence, sequence_start=None, exchange_ts_ms=ts, receive_ns=receive_ns,
-                    bids=tuple(bids), asks=tuple(asks),
-                ))
+            if len(event_types) != 1:
+                raise ValueError("mixed_coinbase_event_types")
+            if len(timestamps) > 1:
+                raise ValueError("mixed_coinbase_timestamps")
+            events.append(self._event(
+                venue=venue, symbol=symbol, event_type=next(iter(event_types)),
+                sequence=sequence, sequence_start=None,
+                exchange_ts_ms=next(iter(timestamps), None), receive_ns=receive_ns,
+                bids=tuple(bids), asks=tuple(asks),
+            ))
 
         return events
 
