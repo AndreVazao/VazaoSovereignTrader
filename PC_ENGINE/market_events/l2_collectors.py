@@ -164,12 +164,40 @@ class PublicL2WebSocketCollector:
                 if not isinstance(item, dict):
                     raise ValueError("invalid_okx_item")
                 ts = int(item["ts"]) if item.get("ts") else None
-                sequence = int(item["seqId"]) if item.get("seqId") is not None else None
-                sequence_start = int(item["prevSeqId"]) + 1 if item.get("prevSeqId") is not None else None
+                raw_sequence = item.get("seqId")
+                raw_previous = item.get("prevSeqId")
+                if (
+                    not isinstance(raw_sequence, int) or isinstance(raw_sequence, bool)
+                    or raw_sequence < 0
+                ):
+                    raise ValueError("invalid_okx_sequence")
+                if raw_previous is not None and (
+                    not isinstance(raw_previous, int) or isinstance(raw_previous, bool)
+                    or raw_previous < -1
+                ):
+                    raise ValueError("invalid_okx_previous_sequence")
+                sequence = raw_sequence
+                sequence_start = raw_previous + 1 if raw_previous is not None else None
+                bids = self._levels(item.get("bids"))
+                asks = self._levels(item.get("asks"))
+
+                if channel == "books" and action.lower() == "update":
+                    if raw_previous is None or raw_previous < 0:
+                        raise ValueError("invalid_okx_sequence")
+                    if sequence == raw_previous:
+                        # OKX uses an empty update with seqId == prevSeqId as a
+                        # connection heartbeat. It carries no book change and
+                        # must not be treated as a sequence gap.
+                        if bids or asks:
+                            raise ValueError("invalid_okx_heartbeat")
+                        continue
+                    if sequence < raw_previous:
+                        raise ValueError("invalid_okx_sequence_range")
+
                 events.append(self._event(
                     venue=venue, symbol=symbol, event_type=event_type,
                     sequence=sequence, sequence_start=sequence_start, exchange_ts_ms=ts, receive_ns=receive_ns,
-                    bids=self._levels(item.get("bids")), asks=self._levels(item.get("asks")),
+                    bids=bids, asks=asks,
                 ))
 
         elif venue == "coinbase":
