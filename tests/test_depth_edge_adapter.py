@@ -10,10 +10,10 @@ from PC_ENGINE.market_events.orderbook import OrderBookLevel
 from PC_ENGINE.radar.depth_edge import assess_synchronized_depth_edge
 
 
-def _coinbase_view(*, timestamp=1_000_000_000, eligible=True, bids=None, asks=None):
+def _coinbase_view(*, timestamp=1_000_000_000, eligible=True, bids=None, asks=None, symbol="BTC/USD"):
     return CoinbaseBookView(
         venue="coinbase",
-        symbol="BTC/USD",
+        symbol=symbol,
         status="SYNCED",
         sequence=42,
         bids=tuple((OrderBookLevel(100, 1),) if bids is None else bids),
@@ -22,11 +22,12 @@ def _coinbase_view(*, timestamp=1_000_000_000, eligible=True, bids=None, asks=No
         eligible=eligible,
         reason=None,
         observation_time_ns=timestamp,
+        price_unit="USD" if symbol.endswith("/USD") else "USDT",
     )
 
 
 def test_adapter_recomputes_age_from_shared_monotonic_timestamp():
-    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD")
+    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD", "USD")
     view = to_synchronized_book_view(mapping, _coinbase_view(), now_ns=1_100_000_000)
     assert view.eligible is True
     assert view.age_ms == 100.0
@@ -73,15 +74,15 @@ def test_adapter_supports_binance_snapshot_and_depth_edge_assessment():
         bids=(OrderBookLevel(100, 2),), asks=(OrderBookLevel(100.1, 2),),
         age_ms=100.0, eligible=True, reason=None, observation_time_ns=1_000_000_000,
     )
-    right = _coinbase_view(timestamp=1_050_000_000,
+    right = _coinbase_view(timestamp=1_050_000_000, symbol="BTC/USDT",
                            bids=(OrderBookLevel(101, 2),),
                            asks=(OrderBookLevel(101.1, 2),))
     left_view = to_synchronized_book_view(
-        CanonicalInstrumentMapping("binance", "BTC/USDT", "spot:BTC/USDT"),
+        CanonicalInstrumentMapping("binance", "BTC/USDT", "spot:BTC/USDT", "USDT"),
         left, now_ns=now_ns,
     )
     right_view = to_synchronized_book_view(
-        CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USDT"),
+        CanonicalInstrumentMapping("coinbase", "BTC/USDT", "spot:BTC/USDT", "USDT"),
         right, now_ns=now_ns,
     )
     # Canonical identity must be provided by an independently validated map;
