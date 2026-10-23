@@ -72,14 +72,17 @@ class CoinbaseL2BookSynchronizer:
             view = self._view_locked(event.local_receive_ns)
         self._emit(view)
 
-    def connection_lost(self) -> None:
+    def invalidate(self, reason: str = "invalid_message") -> None:
+        """Clear the last eligible view when an incoming depth message is untrustworthy."""
         with self._lock:
-            # Replace the builder to discard all levels and sequence state.
             self._builder = OrderBookBuilder("coinbase", self.symbol)
             self._last_update_ns = None
-            self._reason = "connection_lost"
+            self._reason = reason
             view = self._view_locked(0)
         self._emit(view)
+
+    def connection_lost(self) -> None:
+        self.invalidate("connection_lost")
 
     def snapshot(self, now_ns: int) -> CoinbaseBookView:
         """Re-evaluate freshness at read time, even if no new WS event arrives."""

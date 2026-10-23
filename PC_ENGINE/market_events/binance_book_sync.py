@@ -169,16 +169,20 @@ class BinanceSpotBookSynchronizer:
             self._emit(view)
         return applied
 
-    def connection_lost(self) -> None:
-        """Fail closed after a WebSocket disconnect and request a fresh snapshot."""
+    def invalidate(self, reason: str = "invalid_message") -> None:
+        """Fail closed after an untrustworthy depth message and request a fresh snapshot."""
         with self._condition:
             if self._closed:
                 return
             self._buffer.clear()
-            self.book.invalidate("connection_lost")
+            self.book.invalidate(reason)
             self._schedule_snapshot_locked()
             view = self.book.snapshot(time.monotonic_ns())
         self._emit(view)
+
+    def connection_lost(self) -> None:
+        """Fail closed after a WebSocket disconnect and request a fresh snapshot."""
+        self.invalidate("connection_lost")
 
     def health(self) -> dict[str, int | str | None | bool]:
         with self._condition:

@@ -51,6 +51,36 @@ class L2CollectorTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.collector("binance")._parse(json.dumps(payload), 9000)
 
+    def test_coinbase_malformed_depth_message_clears_previous_eligible_book(self) -> None:
+        views = []
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"),
+            lambda _event: None,
+            on_book=views.append,
+        )
+        collector.process_message(json.dumps({
+            "channel": "l2_data",
+            "sequence_num": 41,
+            "events": [{"type": "snapshot", "product_id": "BTC-USD", "updates": [
+                {"side": "bid", "price_level": "100", "new_quantity": "2"},
+                {"side": "offer", "price_level": "101", "new_quantity": "3"},
+            ]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+
+        # A depth envelope without a valid sequence is not safely ignorable:
+        # the previous book must become ineligible immediately.
+        collector.process_message(json.dumps({
+            "channel": "l2_data",
+            "sequence_num": "invalid",
+            "events": [{"type": "update", "product_id": "BTC-USD", "updates": []}],
+        }))
+        self.assertFalse(views[-1].eligible)
+        self.assertEqual(views[-1].reason, "parse_error")
+        self.assertEqual(views[-1].bids, ())
+        self.assertEqual(views[-1].asks, ())
+        self.assertEqual(collector.health_snapshot()["parse_errors"], 1)
+
     def test_malformed_message_is_counted_without_raw_payload(self) -> None:
         collector = self.collector("binance")
         collector.process_message('{"e":"depthUpdate","U":-1,"u":2,"b":[],"a":[]}')
