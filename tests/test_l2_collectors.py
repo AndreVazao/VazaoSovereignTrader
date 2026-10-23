@@ -205,3 +205,25 @@ class L2CollectorTests(unittest.TestCase):
                 "events": [{"type": "update", "product_id": "BTC-USD", "updates": [
                     {"side": "MIDDLE", "price_level": "100", "new_quantity": "1"}]}],
             }), 9000)
+
+
+    def test_coinbase_collector_emits_synchronized_views_and_disconnect_invalidates(self) -> None:
+        views = []
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("coinbase", "BTC/USD", "wss://example"),
+            lambda _: None,
+            on_book=views.append,
+        )
+        collector.process_message(json.dumps({
+            "channel": "l2_data", "sequence_num": 41,
+            "events": [{"type": "snapshot", "product_id": "BTC-USD", "updates": [
+                {"side": "bid", "price_level": "100", "new_quantity": "2"},
+                {"side": "offer", "price_level": "101", "new_quantity": "3"},
+            ]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        self.assertEqual(views[-1].sequence, 41)
+        collector._coinbase_sync.connection_lost()
+        self.assertFalse(views[-1].eligible)
+        self.assertEqual(views[-1].reason, "connection_lost")
+        self.assertEqual(views[-1].bids, ())
