@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from math import isfinite
 from dataclasses import dataclass
 from typing import Callable
 
@@ -41,7 +42,7 @@ class CoinbaseL2BookSynchronizer:
         *,
         max_age_ms: float = 1000.0,
     ) -> None:
-        if not symbol or max_age_ms <= 0:
+        if not symbol or not isfinite(max_age_ms) or max_age_ms <= 0:
             raise ValueError("invalid_book_configuration")
         self.symbol = symbol
         self.on_book = on_book
