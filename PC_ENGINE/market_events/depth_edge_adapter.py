@@ -79,6 +79,7 @@ def to_synchronized_book_view(
             best_ask=None,
             observation_time_ns=observation_ns,
             sequence=getattr(book, "sequence", getattr(book, "update_id", None)),
+            price_unit=mapping.price_unit,
         )
 
     bids = getattr(book, "bids", ())
