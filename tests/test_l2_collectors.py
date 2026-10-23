@@ -105,7 +105,7 @@ class L2CollectorTests(unittest.TestCase):
 
     def test_okx_snapshot(self) -> None:
         events = self.collector("okx")._parse(json.dumps({
-            "arg": {"channel": "books5"}, "action": "snapshot",
+            "arg": {"instId": "BTC-USDT", "channel": "books5"}, "action": "snapshot",
             "data": [{"ts": "1234", "seqId": 44,
                       "bids": [["100.0", "2", "0", "3"]],
                       "asks": [["100.2", "4", "0", "2"]]}],
@@ -116,7 +116,7 @@ class L2CollectorTests(unittest.TestCase):
 
     def test_okx_books5_update_is_still_a_full_snapshot(self) -> None:
         events = self.collector("okx")._parse(json.dumps({
-            "arg": {"channel": "books5"},
+            "arg": {"instId": "BTC-USDT", "channel": "books5"},
             "action": "update",
             "data": [{"ts": "1235", "seqId": 45, "prevSeqId": 44,
                       "bids": [["100.1", "1", "0", "1"]],
@@ -127,19 +127,69 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].sequence, 45)
         self.assertEqual(events[0].sequence_start, 45)
 
-    def test_okx_books_empty_equal_sequence_heartbeat_is_ignored(self) -> None:
+    def test_okx_books_empty_equal_sequence_heartbeat_is_preserved(self) -> None:
         events = self.collector("okx")._parse(json.dumps({
-            "arg": {"channel": "books"},
+            "arg": {"instId": "BTC-USDT", "channel": "books"},
             "action": "update",
             "data": [{"ts": "1235", "seqId": 44, "prevSeqId": 44,
                       "bids": [], "asks": []}],
         }), 9000)
-        self.assertEqual(events, [])
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "heartbeat")
+        self.assertEqual(events[0].sequence, 44)
+        self.assertEqual(events[0].bids, ())
+        self.assertEqual(events[0].asks, ())
+
+    def test_okx_matching_heartbeat_refreshes_live_book(self) -> None:
+        views = []
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("okx", "BTC/USDT", "wss://example"),
+            lambda _: None, on_book=views.append)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "snapshot",
+            "data": [{"ts": "1234", "seqId": 41, "prevSeqId": -1,
+                      "bids": [["100", "2", "0", "1"]],
+                      "asks": [["101", "3", "0", "1"]]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "update",
+            "data": [{"ts": "1235", "seqId": 41, "prevSeqId": 41,
+                      "bids": [], "asks": []}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        self.assertEqual(views[-1].sequence, 41)
+        self.assertEqual(views[-1].bids[0].quantity, 2)
+        self.assertEqual(collector.health_snapshot()["synchronizer"]["sequence"], 41)
+
+    def test_okx_empty_data_invalidates_previous_eligible_view(self) -> None:
+        views = []
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("okx", "BTC/USDT", "wss://example"),
+            lambda _: None, on_book=views.append)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "snapshot",
+            "data": [{"ts": "1234", "seqId": 41, "prevSeqId": -1,
+                      "bids": [["100", "2", "0", "1"]],
+                      "asks": [["101", "3", "0", "1"]]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "update", "data": [],
+        }))
+        self.assertFalse(views[-1].eligible)
+        self.assertEqual(views[-1].reason, "parse_error")
+        self.assertEqual(views[-1].bids, ())
+        self.assertEqual(collector.health_snapshot()["parse_errors"], 1)
 
     def test_okx_books_equal_sequence_with_depth_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid_okx_heartbeat"):
             self.collector("okx")._parse(json.dumps({
-                "arg": {"channel": "books"},
+                "arg": {"instId": "BTC-USDT", "channel": "books"},
                 "action": "update",
                 "data": [{"ts": "1235", "seqId": 44, "prevSeqId": 44,
                           "bids": [["100.0", "2", "0", "3"]], "asks": []}],
@@ -148,7 +198,7 @@ class L2CollectorTests(unittest.TestCase):
     def test_okx_rejects_boolean_sequence(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid_okx_sequence"):
             self.collector("okx")._parse(json.dumps({
-                "arg": {"channel": "books"},
+                "arg": {"instId": "BTC-USDT", "channel": "books"},
                 "action": "update",
                 "data": [{"ts": "1235", "seqId": True, "prevSeqId": 44,
                           "bids": [], "asks": []}],
@@ -157,7 +207,7 @@ class L2CollectorTests(unittest.TestCase):
     def test_okx_rejects_unknown_action(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid_okx_action"):
             self.collector("okx")._parse(json.dumps({
-                "arg": {"channel": "books"},
+                "arg": {"instId": "BTC-USDT", "channel": "books"},
                 "action": "partial",
                 "data": [],
             }), 9000)
@@ -283,4 +333,70 @@ class L2CollectorTests(unittest.TestCase):
         collector._coinbase_sync.connection_lost()
         self.assertFalse(views[-1].eligible)
         self.assertEqual(views[-1].reason, "connection_lost")
+        self.assertEqual(views[-1].bids, ())
+
+
+    def test_okx_books_parser_ignores_empty_equal_sequence_heartbeat(self) -> None:
+        collector = self.collector("okx")
+        events = collector._parse(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "update",
+            "data": [{"ts": "1235", "seqId": 44, "prevSeqId": 44, "bids": [], "asks": []}],
+        }), 9000)
+        self.assertEqual(events, [])
+
+    def test_okx_book_collector_reconstructs_and_invalidates_on_gap(self) -> None:
+        views = []
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("okx", "BTC/USDT", "wss://example"),
+            lambda _: None,
+            on_book=views.append,
+        )
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "snapshot",
+            "data": [{"ts": "1234", "seqId": 41, "prevSeqId": -1,
+                      "bids": [["100", "2", "0", "1"]], "asks": [["101", "3", "0", "1"]]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        self.assertEqual(views[-1].sequence, 41)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "update",
+            "data": [{"ts": "1235", "seqId": 42, "prevSeqId": 41,
+                      "bids": [["100", "4", "0", "1"]], "asks": []}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        self.assertEqual(views[-1].bids[0].quantity, 4)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "update",
+            "data": [{"ts": "1236", "seqId": 44, "prevSeqId": 43,
+                      "bids": [["100", "5", "0", "1"]], "asks": []}],
+        }))
+        self.assertFalse(views[-1].eligible)
+        self.assertEqual(views[-1].reason, "sequence_gap")
+        self.assertEqual(views[-1].bids, ())
+
+    def test_okx_instrument_mismatch_invalidates_previous_view(self) -> None:
+        views = []
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("okx", "BTC/USDT", "wss://example"),
+            lambda _: None,
+            on_book=views.append,
+        )
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "snapshot",
+            "data": [{"ts": "1234", "seqId": 41, "prevSeqId": -1,
+                      "bids": [["100", "2", "0", "1"]], "asks": [["101", "3", "0", "1"]]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "ETH-USDT"},
+            "action": "update",
+            "data": [{"ts": "1235", "seqId": 42, "prevSeqId": 41, "bids": [], "asks": []}],
+        }))
+        self.assertFalse(views[-1].eligible)
+        self.assertEqual(views[-1].reason, "parse_error")
         self.assertEqual(views[-1].bids, ())
