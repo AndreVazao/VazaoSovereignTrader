@@ -2,6 +2,14 @@
 
 **VST** é a sigla curta oficial usada nas interfaces do Vazão Sovereign Trader.
 
+### Identidade oficial da marca
+
+- **VST** é a sigla oficial e preferida nas interfaces, títulos, navegação e comunicação curta.
+- Nome completo: **Vazão Sovereign Trader**.
+- No logótipo do escritório virtual, as três letras devem alinhar verticalmente com os respetivos nomes: **V / Vazão**, **S / Sovereign**, **T / Trader**.
+- Em referências técnicas, usar “VST (Vazão Sovereign Trader)” na primeira ocorrência; depois, “VST”. Não alterar o nome do repositório GitHub nem identificadores técnicos por causa desta mudança de marca.
+
+
 Sistema privado, local-first, para trading automatizado com controlo de risco.
 
 ## Filosofia
