@@ -1,4 +1,6 @@
-# VazaoSovereignTrader
+# VST — Vazão Sovereign Trader
+
+**VST** é a sigla curta oficial usada nas interfaces do Vazão Sovereign Trader.
 
 Sistema privado, local-first, para trading automatizado com controlo de risco.
 

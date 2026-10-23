@@ -120,7 +120,7 @@ def build_chat_cockpit(app):
 
     def chat_page():
         page = BoxLayout(orientation="vertical", spacing=dp(8))
-        page.add_widget(header("Sovereign Assistant", "O teu cockpit conversacional — PAPER por defeito"))
+        page.add_widget(header("VST", "Vazão Sovereign Trader · cockpit conversacional — PAPER por defeito"))
         card = Surface(orientation="vertical", padding=dp(16), spacing=dp(5), size_hint_y=None, height=dp(78), fill=(0.055, 0.065, 0.090, 1))
         card.add_widget(_label("Como posso ajudar?", size=19, bold=True, size_hint_y=None, height=dp(32)))
         card.add_widget(_label("Envia uma ordem de trabalho, cola um link, pergunta pelo estado ou fala comigo.", size=12, color=MUTED))
