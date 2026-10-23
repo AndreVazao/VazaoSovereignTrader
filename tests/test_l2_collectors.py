@@ -140,6 +140,30 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(events[0].bids, ())
         self.assertEqual(events[0].asks, ())
 
+    def test_okx_matching_heartbeat_refreshes_live_book(self) -> None:
+        views = []
+        collector = PublicL2WebSocketCollector(
+            L2WebSocketConfig("okx", "BTC/USDT", "wss://example"),
+            lambda _: None, on_book=views.append)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "snapshot",
+            "data": [{"ts": "1234", "seqId": 41, "prevSeqId": -1,
+                      "bids": [["100", "2", "0", "1"]],
+                      "asks": [["101", "3", "0", "1"]]}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        collector.process_message(json.dumps({
+            "arg": {"channel": "books", "instId": "BTC-USDT"},
+            "action": "update",
+            "data": [{"ts": "1235", "seqId": 41, "prevSeqId": 41,
+                      "bids": [], "asks": []}],
+        }))
+        self.assertTrue(views[-1].eligible)
+        self.assertEqual(views[-1].sequence, 41)
+        self.assertEqual(views[-1].bids[0].quantity, 2)
+        self.assertEqual(collector.health_snapshot()["synchronizer"]["sequence"], 41)
+
     def test_okx_empty_data_invalidates_previous_eligible_view(self) -> None:
         views = []
         collector = PublicL2WebSocketCollector(
