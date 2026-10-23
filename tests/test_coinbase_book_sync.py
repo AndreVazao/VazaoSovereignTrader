@@ -109,5 +109,47 @@ class CoinbaseL2BookSynchronizerTests(unittest.TestCase):
         self.assertEqual(self.views[-1].reason, "crossed_book")
 
 
+    def test_duplicate_sequence_fails_closed_and_clears_previous_book(self) -> None:
+        self.sync.on_event(self.event(
+            "snapshot", 41, 10_000_000,
+            bids=(OrderBookLevel(100, 2),),
+            asks=(OrderBookLevel(101, 3),),
+        ))
+        self.sync.on_event(self.event(
+            "delta", 42, 20_000_000,
+            bids=(OrderBookLevel(100, 4),),
+        ))
+        self.assertTrue(self.views[-1].eligible)
+
+        # Replaying the same sequence must not leave the last eligible view live.
+        self.sync.on_event(self.event(
+            "delta", 42, 30_000_000,
+            bids=(OrderBookLevel(100, 5),),
+        ))
+        view = self.views[-1]
+        self.assertEqual(view.status, "INVALID")
+        self.assertFalse(view.eligible)
+        self.assertEqual(view.reason, "invalid_sequence_or_book")
+        self.assertEqual(view.bids, ())
+        self.assertEqual(view.asks, ())
+
+    def test_out_of_order_sequence_fails_closed_and_clears_previous_book(self) -> None:
+        self.sync.on_event(self.event(
+            "snapshot", 41, 10_000_000,
+            bids=(OrderBookLevel(100, 2),),
+            asks=(OrderBookLevel(101, 3),),
+        ))
+        self.sync.on_event(self.event(
+            "delta", 43, 20_000_000,
+            bids=(OrderBookLevel(100, 4),),
+        ))
+        view = self.views[-1]
+        self.assertEqual(view.status, "INVALID")
+        self.assertFalse(view.eligible)
+        self.assertEqual(view.reason, "invalid_sequence_or_book")
+        self.assertEqual(view.bids, ())
+        self.assertEqual(view.asks, ())
+
+
 if __name__ == "__main__":
     unittest.main()
