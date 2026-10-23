@@ -23,6 +23,7 @@ def main() -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     output = data_dir / "websocket_orderbook_events.jsonl"
     synchronized_output = data_dir / "binance_synchronized_orderbook_views.jsonl"
+    coinbase_synchronized_output = data_dir / "coinbase_synchronized_orderbook_views.jsonl"
     health_output = data_dir / "l2_collector_health.json"
     stop = threading.Event()
     write_lock = threading.Lock()
@@ -47,10 +48,12 @@ def main() -> None:
     def persist(event) -> None:
         append_jsonl(output, asdict(event))
 
-    def persist_book(view: BookSnapshot) -> None:
+    def persist_book(view) -> None:
         payload = asdict(view)
-        payload["status"] = view.status.value
-        append_jsonl(synchronized_output, payload)
+        if hasattr(view.status, "value"):
+            payload["status"] = view.status.value
+        target = coinbase_synchronized_output if payload.get("venue") == "coinbase" else synchronized_output
+        append_jsonl(target, payload)
 
     configs = []
     requested_venues = set(args.venues)
@@ -86,7 +89,7 @@ def main() -> None:
     for config in configs:
         collector = PublicL2WebSocketCollector(
             config, persist,
-            on_book=persist_book if config.venue == "binance" else None,
+            on_book=persist_book if config.venue in {"binance", "coinbase"} else None,
         )
         collectors.append(collector)
         thread = threading.Thread(
@@ -109,6 +112,7 @@ def main() -> None:
         "unconfigured_pairs": unconfigured_pairs,
         "raw_output": str(output),
         "binance_synchronized_output": str(synchronized_output),
+        "coinbase_synchronized_output": str(coinbase_synchronized_output),
         "health_output": str(health_output),
         "paper_only": True,
         "orders_submitted": False,
