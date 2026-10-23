@@ -19,9 +19,10 @@ class CanonicalInstrumentMapping:
     venue: str
     symbol: str
     instrument_id: str
+    price_unit: str
 
     def __post_init__(self) -> None:
-        if not all(isinstance(value, str) and value.strip() for value in (self.venue, self.symbol, self.instrument_id)):
+        if not all(isinstance(value, str) and value.strip() for value in (self.venue, self.symbol, self.instrument_id, self.price_unit)):
             raise ValueError("mapping_fields_must_be_non_empty")
 
 
@@ -111,6 +112,7 @@ def to_synchronized_book_view(
         best_ask=best_ask,
         observation_time_ns=observation_ns,
         sequence=getattr(book, "sequence", getattr(book, "update_id", None)),
+        price_unit=mapping.price_unit,
     )
 
 
@@ -129,4 +131,5 @@ def _invalid(
         best_bid=None,
         best_ask=None,
         observation_time_ns=observation_ns,
+        price_unit=mapping.price_unit,
     )
