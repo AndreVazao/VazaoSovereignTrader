@@ -35,7 +35,7 @@ def test_adapter_recomputes_age_from_shared_monotonic_timestamp():
 
 
 def test_adapter_refuses_old_callback_even_if_it_was_eligible_when_emitted():
-    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD")
+    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD", "USD")
     view = to_synchronized_book_view(
         mapping, _coinbase_view(), now_ns=2_000_000_000, max_age_ms=250,
     )
@@ -45,7 +45,7 @@ def test_adapter_refuses_old_callback_even_if_it_was_eligible_when_emitted():
 
 
 def test_adapter_refuses_symbol_or_venue_mapping_mismatch():
-    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD")
+    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD", "USD")
     wrong = _coinbase_view()
     wrong = CoinbaseBookView(
         venue="coinbase", symbol="ETH/USD", status="SYNCED", sequence=42,
@@ -58,7 +58,7 @@ def test_adapter_refuses_symbol_or_venue_mapping_mismatch():
 
 
 def test_adapter_rejects_crossed_or_one_sided_book():
-    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD")
+    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD", "USD")
     crossed = _coinbase_view(
         bids=(OrderBookLevel(102, 1),), asks=(OrderBookLevel(101, 1),),
     )
@@ -96,8 +96,34 @@ def test_adapter_supports_binance_snapshot_and_depth_edge_assessment():
     assert assessment.observation_skew_ms == 50.0
 
 
+
+def test_adapter_preserves_distinct_quote_price_units_for_edge_rejection():
+    now_ns = 1_100_000_000
+    left = BookSnapshot(
+        status=BookStatus.SYNCED, update_id=100,
+        bids=(OrderBookLevel(100, 2),), asks=(OrderBookLevel(100.1, 2),),
+        age_ms=100.0, eligible=True, reason=None, observation_time_ns=1_000_000_000,
+    )
+    right = _coinbase_view(timestamp=1_050_000_000)
+    left_view = to_synchronized_book_view(
+        CanonicalInstrumentMapping("binance", "BTC/USDT", "same-id-misconfigured", "USDT"),
+        left, now_ns=now_ns,
+    )
+    right_view = to_synchronized_book_view(
+        CanonicalInstrumentMapping("coinbase", "BTC/USD", "same-id-misconfigured", "USD"),
+        right, now_ns=now_ns,
+    )
+    assessment = assess_synchronized_depth_edge(
+        left_view, right_view,
+        venue_costs_bps={"binance": 2, "coinbase": 2},
+        max_observation_skew_ms=100,
+    )
+    assert assessment.eligible is False
+    assert assessment.reason == "price_unit_mismatch"
+
+
 def test_adapter_validates_age_limit_and_monotonic_now():
-    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD")
+    mapping = CanonicalInstrumentMapping("coinbase", "BTC/USD", "spot:BTC/USD", "USD")
     import pytest
     with pytest.raises(ValueError):
         to_synchronized_book_view(mapping, _coinbase_view(), now_ns=1, max_age_ms=float("nan"))
