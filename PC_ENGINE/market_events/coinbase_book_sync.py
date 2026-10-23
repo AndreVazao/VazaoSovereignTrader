@@ -104,17 +104,25 @@ class CoinbaseL2BookSynchronizer:
 
     def _view_locked(self, now_ns: int) -> CoinbaseBookView:
         book = self._builder.snapshot()
+        clock_regressed = (
+            self._last_update_ns is not None and now_ns < self._last_update_ns
+        )
         age_ms = (
-            None if self._last_update_ns is None
-            else max(0, now_ns - self._last_update_ns) / 1_000_000
+            None if self._last_update_ns is None or clock_regressed
+            else (now_ns - self._last_update_ns) / 1_000_000
         )
         fresh = age_ms is not None and age_ms <= self.max_age_ms
         crossed = bool(book.bids and book.asks) and book.best_bid >= book.best_ask
         has_sides = bool(book.bids) and bool(book.asks)
-        eligible = self._builder.initialized and fresh and has_sides and not crossed
+        eligible = (
+            self._builder.initialized and fresh and has_sides and not crossed
+            and not clock_regressed
+        )
         reason = self._reason
         if reason is None:
-            if not fresh:
+            if clock_regressed:
+                reason = "clock_regression"
+            elif not fresh:
                 reason = "stale"
             elif not has_sides:
                 reason = "empty_side"
