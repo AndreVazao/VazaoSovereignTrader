@@ -248,6 +248,12 @@ class PublicL2WebSocketCollector:
         try:
             events = self._parse(message, receive_ns)
         except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
+            # A malformed depth message may conceal a sequence gap. Clear any
+            # previously eligible book immediately rather than waiting for TTL.
+            if self._sync is not None:
+                self._sync.invalidate("parse_error")
+            if self._coinbase_sync is not None:
+                self._coinbase_sync.invalidate("parse_error")
             with self._health_lock:
                 self._parse_errors += 1
                 self._last_parse_error = type(exc).__name__
