@@ -17,7 +17,7 @@
 
 ## Asset provenance and current limitation
 
-The repository already contains a hand-authored vector emblem at `assets/branding/vst-logo.svg`. The cockpit change in this branch uses that existing SVG. The newly supplied high-resolution raster artwork must be added as a separate canonical source asset before claiming pixel-identical icon distribution; do not overwrite or mislabel the vector asset as the supplied raster. Binary source asset upload and platform package rebuilds are not part of this documentation/UI change.
+The repository already contains a hand-authored vector emblem at `assets/branding/vst-logo.svg`. The cockpit change in this branch uses that existing SVG. The supplied raster artwork is present at repository root as `1792476724975.jpg` (408,588 bytes) and is now used as the virtual-office scene backdrop with a dark readability overlay. It should next be promoted to a descriptive canonical path under `assets/branding/` in a dedicated binary-safe move/commit. The SVG remains the current cockpit emblem/favicon; the raster has not yet been wired into the Windows executable icon, Android launcher icon, or packaged APK. Binary conversion and platform package rebuilds still require separate implementation and validation.
 
 ## Acceptance checklist
 
