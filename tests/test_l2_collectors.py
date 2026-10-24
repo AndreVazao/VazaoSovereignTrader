@@ -336,14 +336,19 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(views[-1].bids, ())
 
 
-    def test_okx_books_parser_ignores_empty_equal_sequence_heartbeat(self) -> None:
+    def test_okx_books_parser_emits_empty_equal_sequence_heartbeat(self) -> None:
         collector = self.collector("okx")
         events = collector._parse(json.dumps({
             "arg": {"channel": "books", "instId": "BTC-USDT"},
             "action": "update",
             "data": [{"ts": "1235", "seqId": 44, "prevSeqId": 44, "bids": [], "asks": []}],
         }), 9000)
-        self.assertEqual(events, [])
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "heartbeat")
+        self.assertEqual(events[0].sequence, 44)
+        self.assertIsNone(events[0].sequence_start)
+        self.assertEqual(events[0].bids, ())
+        self.assertEqual(events[0].asks, ())
 
     def test_okx_book_collector_reconstructs_and_invalidates_on_gap(self) -> None:
         views = []
