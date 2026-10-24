@@ -16,7 +16,11 @@ New-Item -ItemType Directory -Force -Path $build, (Join-Path $build "config"), (
 
 & $python -m pip install --upgrade pip
 & $python -m pip install -r requirements-pc.txt
-& $python -m pip install pyinstaller
+& $python -m pip install pyinstaller "Pillow==11.3.0"
+if ($LASTEXITCODE -ne 0) { throw "Windows packaging dependencies installation failed." }
+
+& $python scripts/prepare_windows_brand_icon.py
+if ($LASTEXITCODE -ne 0) { throw "Windows brand icon generation failed." }
 
 $browserBundle = Join-Path $build "ms-playwright"
 if (Test-Path $browserBundle) { Remove-Item $browserBundle -Recurse -Force }
@@ -26,10 +30,10 @@ $env:PLAYWRIGHT_BROWSERS_PATH = $browserBundle
 if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium installation failed." }
 
 
-& $python -m PyInstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --paths . --collect-all playwright PC_ENGINE/main.py
+& $python -m PyInstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --icon assets/branding/vst-approved-artwork.ico --paths . --collect-all playwright PC_ENGINE/main.py
 if ($LASTEXITCODE -ne 0) { throw "PC engine EXE build failed." }
 
-& $python -m PyInstaller --noconfirm --clean --onefile --console --name VazaoSovereignTrader-MarketData --paths . PC_ENGINE/tools/run_market_data_collector.py
+& $python -m PyInstaller --noconfirm --clean --onefile --console --name VazaoSovereignTrader-MarketData --icon assets/branding/vst-approved-artwork.ico --paths . PC_ENGINE/tools/run_market_data_collector.py
 if ($LASTEXITCODE -ne 0) { throw "Market-data collector EXE build failed." }
 
 Copy-Item (Join-Path $dist "VazaoSovereignTrader.exe") $build
