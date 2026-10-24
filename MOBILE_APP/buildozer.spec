@@ -6,6 +6,7 @@ source.dir = .
 source.include_exts = py,json,png,jpg,jpeg
 version = 0.4.0
 requirements = python3,kivy
+icon.filename = %(source.dir)s/vst-launcher-icon.png
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,RECORD_AUDIO
