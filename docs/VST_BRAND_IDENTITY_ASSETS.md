@@ -4,6 +4,8 @@
 
 - Product name: Vazão Sovereign Trader (VST).
 - Existing vector emblem: `assets/branding/vst-logo.svg`.
+- User-supplied raster artwork: `assets/branding/vst-approved-artwork.jpg` (canonical path; original source remains at repository root as `1792476724975.jpg`).
+- Android package copy: `MOBILE_APP/vst-approved-artwork.jpg`, kept byte-identical to the canonical raster.
 - The cockpit prototype uses this emblem in the upper-left brand slot and as its SVG favicon.
 - Keep the same emblem and blue/gold palette across the PC engine launcher, mobile APK, and digital-office executable. Runtime and trading logic must not depend on UI assets.
 
@@ -17,13 +19,14 @@
 
 ## Asset provenance and current limitation
 
-The repository already contains a hand-authored vector emblem at `assets/branding/vst-logo.svg`. The cockpit change in this branch uses that existing SVG. The newly supplied high-resolution raster artwork must be added as a separate canonical source asset before claiming pixel-identical icon distribution; do not overwrite or mislabel the vector asset as the supplied raster. Binary source asset upload and platform package rebuilds are not part of this documentation/UI change.
+The repository contains both the hand-authored vector emblem and the user's raster artwork as distinct assets. The virtual-office web prototype uses the raster as its background; the Android cockpit now includes the raster in its packaged source set and displays it above the VST wordmark when the asset exists. These changes do not yet configure Windows `.ico` resources or the Android launcher icon, and they do not prove that an APK or Windows installer has successfully built or been device-tested.
 
 ## Acceptance checklist
 
-- [ ] Approved high-resolution raster artwork committed to `assets/branding/` with source filename and format verified.
+- [x] Approved raster artwork committed to `assets/branding/vst-approved-artwork.jpg`; source retained at repository root.
 - [ ] Windows icon generated from the approved artwork; both Trader and digital-office executables show it in Explorer/taskbar.
 - [ ] APK launcher icon generated at required densities and verified on device.
-- [ ] Office header and CEO wall plaque use the same approved artwork.
+- [x] Android cockpit shows approved artwork in its sidebar; virtual-office web scene uses it as the background.
+- [ ] Add artwork as the company wall plaque in the CEO room.
 - [ ] Packaging/CI verifies assets exist and are included in each distributable.
 - [ ] No change to execution mode, exchange permissions, or trading risk controls.
