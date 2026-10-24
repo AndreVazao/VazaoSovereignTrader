@@ -62,6 +62,10 @@ class CoinbaseL2BookSynchronizer:
         with self._lock:
             rebuilt = self._builder.apply(event)
             if rebuilt is None:
+                # Some builder rejection paths (for example an unsupported
+                # event type) do not mutate the builder. Never retain its last
+                # good depth after any untrusted event: require a new snapshot.
+                self._builder = OrderBookBuilder("coinbase", self.symbol)
                 self._last_update_ns = None
                 self._reason = "invalid_sequence_or_book"
                 self._sequence_errors += 1
