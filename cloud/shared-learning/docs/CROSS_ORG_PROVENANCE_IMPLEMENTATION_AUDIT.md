@@ -130,3 +130,21 @@ All new tables have RLS enabled, no direct anon/authenticated grants, and servic
 - Before integration, add migration/schema tests for cross-organization foreign-key rejection, unique installation key fingerprints, role/state constraints, RLS/grants, and revocation behavior.
 - Route integration must validate the authenticated user's active membership and publishing role, resolve approved installation public key server-side, confirm agent/department belong to the same organization, verify the canonical payload digest and signature, and persist artifact + provenance atomically. A client-supplied public key is never trusted.
 - GET response compatibility must be handled deliberately: preserve the existing adapter contract or version it. Do not silently append fields to the current strict artifact payload. Until the adapter supports provenance, continue treating legacy artifacts as unattributed/unverified in the client.
+
+
+## Registry-backed publication and verified read endpoint added on this branch
+
+The current feature branch now includes:
+
+- `lib/verified-provenance.ts`: checks the authenticated user's active organization membership and publishing role, resolves an active organization, approved installation and matching active agent/department, checks the exact normalized public-payload digest, and verifies the signature against the installation public key from the server-side registry.
+- `POST /api/v1/artifacts`: keeps the legacy direct-artifact request shape for backward compatibility and labels it `legacy_unattributed`. A wrapped `{ artifact, provenance }` request must pass registry and signature verification. New provenance-backed uploads are stored ineligible first; eligibility is restored only after the verified provenance row exists. Conflicting provenance for an existing artifact is rejected.
+- `GET /api/v1/artifacts/provenance`: a separate read endpoint returns only verified, non-revoked provenance whose organization is active, installation approved, agent active, and artifact eligible/unexpired. It returns a minimal public envelope with readable display labels and immutable IDs, without exposing signatures, private owner fields, tokens or device secrets.
+- `tests/verified-provenance.test.ts`: tests publisher authorization, approved installation, digest mismatch and agent/department scope.
+
+### Still not complete
+
+- The PC adapter has not yet been changed to sign artifacts and call the wrapped POST contract or consume the provenance read endpoint.
+- There is no organization/installation enrollment API or controlled approval workflow yet. Registry records must be provisioned by an explicitly trusted server-side workflow; no self-service endpoint should activate an organization or installation by default.
+- The migration has not been applied to any Supabase environment.
+- The artifact row and provenance row are written in separate service-role calls rather than one database transaction. The new artifact remains ineligible if provenance persistence fails, but the next hardening step should move persistence into a single database RPC/transaction and test retry/concurrency behavior.
+- CI and preview deployment for the latest commit must be green before merge. No end-to-end cloud test has yet been performed.
