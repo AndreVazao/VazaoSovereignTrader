@@ -148,3 +148,10 @@ The current feature branch now includes:
 - The migration has not been applied to any Supabase environment.
 - The artifact row and provenance row are written in separate service-role calls rather than one database transaction. The new artifact remains ineligible if provenance persistence fails, but the next hardening step should move persistence into a single database RPC/transaction and test retry/concurrency behavior.
 - CI and preview deployment for the latest commit must be green before merge. No end-to-end cloud test has yet been performed.
+
+
+### Transactional persistence checkpoint
+
+Migration `202610270001_organization_scoped_provenance.sql` now includes `publish_verified_shared_learning_artifact`, a service-role-only SECURITY DEFINER function with a fixed search path. It revalidates current publishing membership and registry state inside the transaction, stores the artifact and verified provenance atomically, activates the artifact only after provenance is present, and rejects identity/signature conflicts for an existing artifact. The API now calls this RPC for wrapped, verified submissions; legacy submissions continue using the existing compatibility path.
+
+This is source-level implementation only. The migration is not deployed and the RPC has not been exercised against a live or disposable Supabase database.
