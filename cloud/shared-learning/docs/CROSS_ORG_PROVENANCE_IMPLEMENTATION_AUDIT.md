@@ -177,3 +177,8 @@ The registry migration now prevents in-place updates to an installation's enroll
 ### Registry key-fingerprint verification — 2026-10-27
 
 The API now derives a SHA-256 fingerprint from the enrolled public key's DER-encoded SubjectPublicKeyInfo and compares it with the server-side registry fingerprint before verifying a submitted signature. A mismatch or malformed registered key fails closed with a registry-integrity error. Tests now cover fingerprint mismatch and a suspended organization. Provisioning must use this exact fingerprint definition; the tests have been added but have not yet been executed in this environment.
+
+
+### Artifact-to-envelope consistency — 2026-10-27
+
+Registry verification now also requires the signed provenance producer_version to match the allow-listed public artifact's producer_version. This prevents an otherwise valid signed envelope from attributing the artifact to a different producer version. A negative test covers this mismatch; the test suite still needs to be executed.
