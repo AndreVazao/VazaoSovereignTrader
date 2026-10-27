@@ -64,7 +64,7 @@ export function canonicalProvenanceMessage(envelope: ProvenanceEnvelope): string
     payload_digest: envelope.payload_digest.toLowerCase(),
     created_at_ms: envelope.created_at_ms,
     producer_version: envelope.producer_version,
-    source_artifact_ids: [...envelope.source_artifact_ids].sort()
+    source_artifact_ids: [...envelope.source_artifact_ids]
   };
   return JSON.stringify(signed);
 }
