@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from dataclasses import dataclass
 
 from PC_ENGINE.market_events.orderbook_builder import OrderBookBuilder
 from PC_ENGINE.market_events.binance_book_state import BookSnapshot, BookStatus
@@ -14,6 +15,34 @@ from PC_ENGINE.market_events.l2_collectors import (
 
 
 class L2CollectorTests(unittest.TestCase):
+    def test_synchronized_book_payload_keeps_venue_identity_and_paths_fail_closed(self) -> None:
+        from pathlib import Path
+        from PC_ENGINE.tools.run_l2_market_data_collector import (
+            synchronized_book_path,
+            synchronized_book_payload,
+        )
+
+        @dataclass
+        class View:
+            status: str = "SYNCED"
+            eligible: bool = True
+
+        root = Path("data")
+        expected = {
+            "binance": "binance_synchronized_orderbook_views.jsonl",
+            "coinbase": "coinbase_synchronized_orderbook_views.jsonl",
+            "okx": "okx_synchronized_orderbook_views.jsonl",
+        }
+        for venue, filename in expected.items():
+            with self.subTest(venue=venue):
+                self.assertEqual(synchronized_book_path(root, venue).name, filename)
+                payload = synchronized_book_payload(venue, "BTC/USDT", View())
+                self.assertEqual(payload["venue"], venue)
+                self.assertEqual(payload["symbol"], "BTC/USDT")
+                self.assertEqual(payload["status"], "SYNCED")
+        with self.assertRaisesRegex(ValueError, "unsupported_synchronized_book_venue"):
+            synchronized_book_path(root, "unknown")
+
     def test_l2_runner_wires_synchronized_views_for_all_supported_venues(self) -> None:
         from PC_ENGINE.tools.run_l2_market_data_collector import build_collector
 
@@ -407,7 +436,7 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].event_type, "heartbeat")
         self.assertEqual(events[0].sequence, 44)
-        self.assertEqual(events[0].sequence_start, 44)
+        self.assertIsNone(events[0].sequence_start)
         self.assertEqual(events[0].bids, ())
         self.assertEqual(events[0].asks, ())
 
