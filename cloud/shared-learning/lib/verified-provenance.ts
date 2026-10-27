@@ -34,6 +34,10 @@ export async function verifyRegisteredProvenance(
   if (envelope.payload_digest.toLowerCase() !== payloadDigest) {
     return { ok: false, error: "provenance_payload_digest_mismatch", status: 400 };
   }
+  if (!publicPayload || typeof publicPayload !== "object" || Array.isArray(publicPayload) ||
+      (publicPayload as Record<string, unknown>).producer_version !== envelope.producer_version) {
+    return { ok: false, error: "provenance_producer_version_mismatch", status: 400 };
+  }
 
   const { data: organization, error: orgError } = await db
     .from("trader_organizations")
