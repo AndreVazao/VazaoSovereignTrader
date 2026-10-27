@@ -1362,3 +1362,14 @@ Review points before merge:
 - The `/health` probe is public and proves reachability only; the UI reports that authentication is not yet validated by this probe. Authenticated private-state probing remains follow-up work.
 - GitHub Actions run 39419467665 / run #45 passed endpoint-selection unit tests and built/uploaded the debug APK. This does not prove the APK launches on a physical phone; Android 16 startup/logcat validation remains pending.
 - Keep LAN/Tailscale addresses local to Android. Vercel must not proxy orders or LAN traffic; no public port-forward fallback. No exchange keys or trading execution logic were added.
+
+
+## Checkpoint 2026-10-27 — cross-organization provenance audit
+
+- PR #503 merged to `main` as `75fcc6d43c4207b18be830ac57a6a28021d2dd1a`; the exact pre-merge head had successful Python tests, PAPER smoke, Windows EXE workflow and reported security status.
+- New branch: `work/cross-org-learning-provenance-2026-10-27`; PR #504 is open for a source-backed audit of shared-learning provenance.
+- Audited `cloud/shared-learning/app/api/v1/artifacts/route.ts`, `lib/artifact.ts`, current migrations and `PC_ENGINE/core/vercel_shared_intelligence.py`.
+- Confirmed: Supabase Auth protects artifact POST/GET; POST uses the authenticated user as owner and an allow-listed payload; GET exposes eligible, unexpired public aggregate payloads across users. The adapter omits local owner/device provenance.
+- Gap: there is no verified organization/install/agent/department registry or end-to-end artifact provenance verification in the inspected migrations/API. Client-supplied IDs or display names must not be treated as identity proof.
+- Audit document: `cloud/shared-learning/docs/CROSS_ORG_PROVENANCE_IMPLEMENTATION_AUDIT.md`. It defines the safe phased implementation: registry and membership, approved installation identity, signed provenance/lineage, client integration, and negative/expiry/revocation/outage tests.
+- PR #504 checks were still pending at the last query; no merge performed. No production migrations applied, no cloud resources provisioned, no physical-device test, and no live trading side effects. Keep PAPER/read-only.
