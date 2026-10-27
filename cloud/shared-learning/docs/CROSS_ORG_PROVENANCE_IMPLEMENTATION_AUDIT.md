@@ -172,3 +172,8 @@ The TypeScript canonicalizer sorts object keys and uses ECMAScript JSON number s
 ### Installation signing-key immutability hardening — 2026-10-27
 
 The registry migration now prevents in-place updates to an installation's enrolled public key or key fingerprint. Key rotation must revoke the old installation and enroll a new installation/key pair, preserving an auditable identity boundary and reducing the risk of a key-change race between API-side signature verification and transactional publication. This trigger is part of the un-applied migration and still requires database-level tests for rejected key changes and allowed status/metadata updates.
+
+
+### Registry key-fingerprint verification — 2026-10-27
+
+The API now derives a SHA-256 fingerprint from the enrolled public key's DER-encoded SubjectPublicKeyInfo and compares it with the server-side registry fingerprint before verifying a submitted signature. A mismatch or malformed registered key fails closed with a registry-integrity error. Tests now cover fingerprint mismatch and a suspended organization. Provisioning must use this exact fingerprint definition; the tests have been added but have not yet been executed in this environment.
