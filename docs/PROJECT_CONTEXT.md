@@ -1373,3 +1373,15 @@ Review points before merge:
 - Gap: there is no verified organization/install/agent/department registry or end-to-end artifact provenance verification in the inspected migrations/API. Client-supplied IDs or display names must not be treated as identity proof.
 - Audit document: `cloud/shared-learning/docs/CROSS_ORG_PROVENANCE_IMPLEMENTATION_AUDIT.md`. It defines the safe phased implementation: registry and membership, approved installation identity, signed provenance/lineage, client integration, and negative/expiry/revocation/outage tests.
 - PR #504 checks were still pending at the last query; no merge performed. No production migrations applied, no cloud resources provisioned, no physical-device test, and no live trading side effects. Keep PAPER/read-only.
+
+
+## 2026-10-27 — registry-backed provenance implementation checkpoint
+
+- PR #503 is merged at `75fcc6d43c4207b18be830ac57a6a28021d2dd1a`.
+- PR #504 remains open on `work/cross-org-learning-provenance-2026-10-27`; current work extends the earlier audit/scaffold with a registry migration, server-side provenance authorization and a separate verified-read endpoint.
+- Added migration `cloud/shared-learning/supabase/migrations/202610270001_organization_scoped_provenance.sql` for organizations, memberships, installations/public keys, departments, agents and shared artifact provenance. It includes composite constraints to prevent cross-organization and mismatched agent/install/department references. Not applied to any live Supabase environment.
+- Added `lib/verified-provenance.ts` to verify active organization membership/publishing role, active organization, approved installation, active agent/department scope, exact public payload digest and signature against the registry public key.
+- `POST /api/v1/artifacts` now accepts an optional wrapper `{artifact, provenance}`. Legacy direct payloads remain accepted but explicitly return `legacy_unattributed`; wrapped payloads must verify. Provenance-backed artifacts are inserted ineligible and activated only after provenance persistence; conflicts are rejected.
+- Added `GET /api/v1/artifacts/provenance`, which returns only verified, non-revoked provenance for active organizations, approved installations, active agents and eligible/unexpired artifacts, with minimal public labels/IDs. The legacy GET response remains unchanged for adapter compatibility.
+- Added tests for provenance envelope integrity and registry-backed authorization in `tests/provenance.test.ts` and `tests/verified-provenance.test.ts`.
+- Remaining blockers: enrollment/approval API, PC adapter signing and consuming provenance endpoint, database-transactional atomic persistence, migration/schema integration tests, and successful CI/deployment checks on the final PR head. Keep PAPER/read-only; do not claim production rollout.
