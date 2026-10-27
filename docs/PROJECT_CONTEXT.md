@@ -1385,3 +1385,8 @@ Review points before merge:
 - Added `GET /api/v1/artifacts/provenance`, which returns only verified, non-revoked provenance for active organizations, approved installations, active agents and eligible/unexpired artifacts, with minimal public labels/IDs. The legacy GET response remains unchanged for adapter compatibility.
 - Added tests for provenance envelope integrity and registry-backed authorization in `tests/provenance.test.ts` and `tests/verified-provenance.test.ts`.
 - Remaining blockers: enrollment/approval API, PC adapter signing and consuming provenance endpoint, database-transactional atomic persistence, migration/schema integration tests, and successful CI/deployment checks on the final PR head. Keep PAPER/read-only; do not claim production rollout.
+
+
+- Follow-up on 2026-10-27: verified publication now calls service-role-only RPC `publish_verified_shared_learning_artifact` from `POST /api/v1/artifacts`. The SQL function rechecks membership/registry scope and atomically persists artifact + provenance, avoiding a public eligible artifact without its verified provenance. Still needs disposable-database integration/retry tests; not deployed.
+- Added separate `GET /api/v1/artifacts/provenance` response for verified/non-revoked contributions, with minimal organization/installation/agent/department labels and IDs. Legacy `GET /api/v1/artifacts` remains unchanged.
+- Latest changes are awaiting Vercel and Snyk status checks. No CI test run has been confirmed on the latest head; do not merge yet.
