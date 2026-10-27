@@ -5,6 +5,8 @@ from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.image import Image
+from pathlib import Path
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
@@ -74,6 +76,11 @@ def build_chat_cockpit(app):
     root = BoxLayout(orientation="horizontal", spacing=0)
     sidebar = Surface(orientation="vertical", size_hint_x=None, width=dp(78), padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
     root.add_widget(sidebar)
+
+    artwork_path = Path(__file__).resolve().parent / "vst-approved-artwork.jpg"
+    if artwork_path.is_file():
+        brand_artwork = Image(source=str(artwork_path), size_hint_y=None, height=dp(58), fit_mode="contain")
+        sidebar.add_widget(brand_artwork)
 
     logo = _label("VST", size=20, bold=True, halign="center", size_hint_y=None, height=dp(44))
     logo.color = ACCENT
