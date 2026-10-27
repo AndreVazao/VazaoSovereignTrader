@@ -81,26 +81,34 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             set -euo pipefail
-            APK="$(find MOBILE_APP/bin -maxdepth 1 -name '*.apk' -print -quit)"
-            test -n "$APK"
+            cd "$GITHUB_WORKSPACE"
+            EVIDENCE="$GITHUB_WORKSPACE/test-artifacts/android"
+            mkdir -p "$EVIDENCE"
+            APK="$(find "$GITHUB_WORKSPACE" -type f -path '*/bin/*.apk' -print -quit)"
+            if [ -z "$APK" ]; then
+              echo "No APK found under the workspace after the successful build step." | tee "$EVIDENCE/failure.txt"
+              find "$GITHUB_WORKSPACE/MOBILE_APP" -maxdepth 5 -type f -name '*.apk' -print > "$EVIDENCE/apk-search.txt" || true
+              exit 1
+            fi
+            echo "Installing emulator smoke-test APK: $APK"
+            PACKAGE="pt.andrevazao.vazaosovereigntrader"
+            # Keep diagnostic evidence even when Maestro or app startup fails.
+            trap 'adb logcat -d > "$EVIDENCE/logcat.txt" 2>/dev/null || true; adb exec-out screencap -p > "$EVIDENCE/vst-home.png" 2>/dev/null || true' EXIT
             adb install "$APK"
             adb logcat -c
             maestro test .maestro/android-startup-smoke.yaml
-            PACKAGE="pt.andrevazao.vazaosovereigntrader"
             adb shell monkey -p "$PACKAGE" 1
             sleep 8
             adb shell pidof "$PACKAGE"
-            mkdir -p test-artifacts/android
-            adb shell screencap -p /sdcard/vst-home.png
-            adb pull /sdcard/vst-home.png test-artifacts/android/vst-home.png
-            adb logcat -d > test-artifacts/android/logcat.txt
-            if grep -E "FATAL EXCEPTION|Process: ${PACKAGE}.*has died" test-artifacts/android/logcat.txt; then
-              echo "Android application crash detected in logcat."
+            adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
+            adb logcat -d > "$EVIDENCE/logcat.txt"
+            if grep -E "FATAL EXCEPTION|Process: ${PACKAGE}.*has died" "$EVIDENCE/logcat.txt"; then
+              echo "Android application crash detected in logcat." | tee "$EVIDENCE/failure.txt"
               exit 1
             fi
-            tesseract test-artifacts/android/vst-home.png stdout 2>/dev/null > test-artifacts/android/screen-ocr.txt
-            cat test-artifacts/android/screen-ocr.txt
-            grep -qi "Como posso ajudar" test-artifacts/android/screen-ocr.txt
+            tesseract "$EVIDENCE/vst-home.png" stdout 2>/dev/null > "$EVIDENCE/screen-ocr.txt"
+            cat "$EVIDENCE/screen-ocr.txt"
+            grep -qi "Como posso ajudar" "$EVIDENCE/screen-ocr.txt"
 
       - name: Upload Android UI smoke evidence
         if: always()
