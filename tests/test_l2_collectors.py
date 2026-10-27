@@ -419,7 +419,7 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].event_type, "heartbeat")
         self.assertEqual(events[0].sequence, 44)
-        self.assertEqual(events[0].sequence_start, 44)
+        self.assertIsNone(events[0].sequence_start)
         self.assertEqual(events[0].bids, ())
         self.assertEqual(events[0].asks, ())
 
