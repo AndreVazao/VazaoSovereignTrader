@@ -4,6 +4,8 @@ import json
 import unittest
 
 from PC_ENGINE.market_events.orderbook_builder import OrderBookBuilder
+from PC_ENGINE.market_events.binance_book_state import BookSnapshot, BookStatus
+from PC_ENGINE.market_events.orderbook import OrderBookLevel
 from PC_ENGINE.market_events.l2_collectors import (
     L2WebSocketConfig,
     PublicL2WebSocketCollector,
@@ -22,13 +24,34 @@ class L2CollectorTests(unittest.TestCase):
                     config for config in default_l2_configs(symbol)
                     if config.venue == venue
                 )
-                collector = build_collector(config, lambda _event: None, lambda _view: None)
+                collector = build_collector(config, lambda _event: None, lambda *_args: None)
                 self.assertIsNotNone(
                     collector._sync if venue == "binance"
                     else collector._coinbase_sync if venue == "coinbase"
                     else collector._okx_sync
                 )
                 collector.stop()
+
+
+    def test_synchronized_book_payload_always_includes_venue_and_symbol(self) -> None:
+        from PC_ENGINE.tools.run_l2_market_data_collector import synchronized_book_payload
+
+        view = BookSnapshot(
+            status=BookStatus.SYNCED,
+            update_id=123,
+            bids=(OrderBookLevel(100.0, 2.0),),
+            asks=(OrderBookLevel(101.0, 3.0),),
+            age_ms=1.5,
+            eligible=True,
+            reason=None,
+            observation_time_ns=123456789,
+        )
+        payload = synchronized_book_payload("binance", "ETH/USDT", view)
+        self.assertEqual(payload["venue"], "binance")
+        self.assertEqual(payload["symbol"], "ETH/USDT")
+        self.assertEqual(payload["status"], "SYNCED")
+        self.assertEqual(payload["update_id"], 123)
+        self.assertEqual(payload["observation_time_ns"], 123456789)
 
     def test_l2_runner_uses_separate_output_files_per_venue(self) -> None:
         from pathlib import Path
