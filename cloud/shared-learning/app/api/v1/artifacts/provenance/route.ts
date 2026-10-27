@@ -59,11 +59,11 @@ export async function GET(req: NextRequest) {
       return fail(503, "provenance_registry_unavailable");
     }
 
-    const artifactMap = new Map((artifacts.data ?? []).map((row) => [row.id, row]));
-    const organizationMap = new Map((organizations.data ?? []).map((row) => [row.id, row]));
-    const installationMap = new Map((installations.data ?? []).map((row) => [row.id, row]));
-    const agentMap = new Map((agents.data ?? []).map((row) => [row.id, row]));
-    const departmentMap = new Map((departments.data ?? []).map((row) => [row.id, row]));
+    const artifactMap = new Map((artifacts.data ?? []).map((row) => [row.id, row] as const));
+    const organizationMap = new Map((organizations.data ?? []).map((row) => [row.id, row] as const));
+    const installationMap = new Map((installations.data ?? []).map((row) => [row.id, row] as const));
+    const agentMap = new Map((agents.data ?? []).map((row) => [row.id, row] as const));
+    const departmentMap = new Map((departments.data ?? []).map((row) => [row.id, row] as const));
 
     const result = provenanceRows.flatMap((row) => {
       const artifact = artifactMap.get(row.artifact_row_id);
