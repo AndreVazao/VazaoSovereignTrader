@@ -1390,3 +1390,6 @@ Review points before merge:
 - Follow-up on 2026-10-27: verified publication now calls service-role-only RPC `publish_verified_shared_learning_artifact` from `POST /api/v1/artifacts`. The SQL function rechecks membership/registry scope and atomically persists artifact + provenance, avoiding a public eligible artifact without its verified provenance. Still needs disposable-database integration/retry tests; not deployed.
 - Added separate `GET /api/v1/artifacts/provenance` response for verified/non-revoked contributions, with minimal organization/installation/agent/department labels and IDs. Legacy `GET /api/v1/artifacts` remains unchanged.
 - Latest changes are awaiting Vercel and Snyk status checks. No CI test run has been confirmed on the latest head; do not merge yet.
+
+
+- 2026-10-27 digest hardening: public payload hashing now uses recursively key-sorted canonical JSON, the POST route uses the same digest helper, and the verified-provenance GET route rechecks the stored payload digest before returning contributor attribution. Added a test for property-order independence. Test execution and final preview checks are still pending.
