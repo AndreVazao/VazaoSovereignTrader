@@ -155,3 +155,10 @@ The current feature branch now includes:
 Migration `202610270001_organization_scoped_provenance.sql` now includes `publish_verified_shared_learning_artifact`, a service-role-only SECURITY DEFINER function with a fixed search path. It revalidates current publishing membership and registry state inside the transaction, stores the artifact and verified provenance atomically, activates the artifact only after provenance is present, and rejects identity/signature conflicts for an existing artifact. The API now calls this RPC for wrapped, verified submissions; legacy submissions continue using the existing compatibility path.
 
 This is source-level implementation only. The migration is not deployed and the RPC has not been exercised against a live or disposable Supabase database.
+
+
+### Canonical digest hardening — 2026-10-27
+
+The public payload digest now uses recursively key-sorted canonical JSON rather than ordinary property-order-dependent `JSON.stringify`. The artifact POST route uses the same helper, and the verified-provenance read route recomputes the stored payload digest before returning attribution. This closes a cross-client serialization mismatch risk and prevents a changed stored payload from being presented with stale provenance. A test now checks that reordering JSON object properties does not change the digest.
+
+This hardening is committed but has not yet been confirmed by a passing TypeScript test run or final preview checks.
