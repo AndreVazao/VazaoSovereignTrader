@@ -12,6 +12,44 @@ from PC_ENGINE.market_events.l2_collectors import (
 
 
 class L2CollectorTests(unittest.TestCase):
+    def test_l2_runner_wires_synchronized_views_for_all_supported_venues(self) -> None:
+        from PC_ENGINE.tools.run_l2_market_data_collector import build_collector
+
+        for venue in ("binance", "coinbase", "okx"):
+            with self.subTest(venue=venue):
+                symbol = "BTC/USD" if venue == "coinbase" else "BTC/USDT"
+                config = next(
+                    config for config in default_l2_configs(symbol)
+                    if config.venue == venue
+                )
+                collector = build_collector(config, lambda _event: None, lambda _view: None)
+                self.assertIsNotNone(
+                    collector._sync if venue == "binance"
+                    else collector._coinbase_sync if venue == "coinbase"
+                    else collector._okx_sync
+                )
+                collector.stop()
+
+    def test_l2_runner_uses_separate_output_files_per_venue(self) -> None:
+        from pathlib import Path
+        from PC_ENGINE.tools.run_l2_market_data_collector import synchronized_book_path
+
+        root = Path("some-data-dir")
+        self.assertEqual(
+            synchronized_book_path(root, "binance"),
+            root / "binance_synchronized_orderbook_views.jsonl",
+        )
+        self.assertEqual(
+            synchronized_book_path(root, "coinbase"),
+            root / "coinbase_synchronized_orderbook_views.jsonl",
+        )
+        self.assertEqual(
+            synchronized_book_path(root, "okx"),
+            root / "okx_synchronized_orderbook_views.jsonl",
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported_synchronized_book_venue"):
+            synchronized_book_path(root, "unknown")
+
     def test_default_okx_l2_endpoint_uses_tls_443(self) -> None:
         configs = default_l2_configs("BTC/USDT")
         okx = next(config for config in configs if config.venue == "okx")
@@ -336,14 +374,19 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(views[-1].bids, ())
 
 
-    def test_okx_books_parser_ignores_empty_equal_sequence_heartbeat(self) -> None:
+    def test_okx_books_parser_preserves_empty_equal_sequence_heartbeat(self) -> None:
         collector = self.collector("okx")
         events = collector._parse(json.dumps({
             "arg": {"channel": "books", "instId": "BTC-USDT"},
             "action": "update",
             "data": [{"ts": "1235", "seqId": 44, "prevSeqId": 44, "bids": [], "asks": []}],
         }), 9000)
-        self.assertEqual(events, [])
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "heartbeat")
+        self.assertEqual(events[0].sequence, 44)
+        self.assertEqual(events[0].sequence_start, 44)
+        self.assertEqual(events[0].bids, ())
+        self.assertEqual(events[0].asks, ())
 
     def test_okx_book_collector_reconstructs_and_invalidates_on_gap(self) -> None:
         views = []
