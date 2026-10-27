@@ -22,8 +22,11 @@ Deploy this directory as a separate Vercel project with Root Directory `cloud/sh
 - `DELETE /api/v1/devices?id=<uuid>`: revoke only a device belonging to the authenticated user.
 
 ## Database migrations
+Apply only after reviewing the target environment and validating the SQL against a disposable test database. The provenance migration is not yet validated against a live Supabase schema.
+
 1. `supabase/migrations/202609280001_shared_learning_artifacts.sql`
 2. `supabase/migrations/202609290001_identity_devices_vault_config.sql`
+3. `supabase/migrations/202610270001_organization_scoped_provenance.sql` — organization-scoped identity registry, immutable installation signing keys, verified provenance records, and the service-role-only atomic publication RPC.
 
 The second migration reserves the exact usernames `AndreVazao` (intended administrator) and `DiogoRocha` (member). These are reservations only, not live Auth accounts. No passwords are included in source control. See `docs/INITIAL_IDENTITY_AND_ONBOARDING.md`.
 
