@@ -1,8 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { publicPayload, validateArtifact } from "../../../../lib/artifact";
-import { parseProvenanceEnvelope } from "../../../../lib/provenance";
+import { digestPublicPayload, parseProvenanceEnvelope } from "../../../../lib/provenance";
 import { verifyRegisteredProvenance } from "../../../../lib/verified-provenance";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     const artifact = validateArtifact(artifactInput);
     const payload = publicPayload(artifact);
-    const digest = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+    const digest = digestPublicPayload(payload);
     const { db } = clients();
 
     let verified: Awaited<ReturnType<typeof verifyRegisteredProvenance>> | undefined;
