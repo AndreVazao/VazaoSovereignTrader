@@ -6,8 +6,8 @@
 - Existing vector emblem: `assets/branding/vst-logo.svg`.
 - User-supplied raster artwork: `assets/branding/vst-approved-artwork.jpg` (canonical path; original source remains at repository root as `1792476724975.jpg`).
 - Android package copy: `MOBILE_APP/vst-approved-artwork.jpg`, kept byte-identical to the canonical raster.
-- The cockpit prototype uses this emblem in the upper-left brand slot and as its SVG favicon.
-- Keep the same emblem and blue/gold palette across the PC engine launcher, mobile APK, and digital-office executable. Runtime and trading logic must not depend on UI assets.
+- The cockpit prototype uses the SVG emblem in the upper-left brand slot and as its favicon. The virtual-office prototype uses the approved raster as its scene backdrop with a dark readability overlay.
+- Keep the same emblem and blue/gold palette across PC, Android and digital-office interfaces. Branding must remain independent of runtime trading logic.
 
 ## Required distribution integration
 
@@ -17,16 +17,16 @@
 4. **Office interior:** add the emblem as the company wall plaque in the CEO room, with sufficient contrast and realistic scale; do not obscure navigation or department labels.
 5. **Quality gates:** build both Windows executables and APK, inspect packaged assets, run desktop smoke tests, and test launcher cropping/startup on a physical Android device.
 
-## Asset provenance and current limitation
+## Asset provenance and current status
 
-The repository contains both the hand-authored vector emblem and the user's raster artwork as distinct assets. The virtual-office web prototype uses the raster as its background; the Android cockpit now includes the raster in its packaged source set and displays it above the VST wordmark when the asset exists. These changes do not yet configure Windows `.ico` resources or the Android launcher icon, and they do not prove that an APK or Windows installer has successfully built or been device-tested.
+The repository contains both the hand-authored vector emblem and the user's raster artwork as distinct assets. The virtual-office web prototype uses the raster as its background; the Android cockpit packages the raster and displays it in its sidebar when available. The approved artwork is also staged for Windows icon generation and Android launcher artwork in dependent pull requests. Those changes do not by themselves prove that the final APK or Windows installer has been visually tested on physical devices.
 
 ## Acceptance checklist
 
 - [x] Approved raster artwork committed to `assets/branding/vst-approved-artwork.jpg`; source retained at repository root.
+- [x] Android cockpit packages the approved artwork; virtual-office web scene uses it as the background.
 - [ ] Windows icon generated from the approved artwork; both Trader and digital-office executables show it in Explorer/taskbar.
 - [ ] APK launcher icon generated at required densities and verified on device.
-- [x] Android cockpit shows approved artwork in its sidebar; virtual-office web scene uses it as the background.
-- [ ] Add artwork as the company wall plaque in the CEO room.
+- [ ] Office header and CEO wall plaque use the same approved artwork.
 - [ ] Packaging/CI verifies assets exist and are included in each distributable.
-- [ ] No change to execution mode, exchange permissions, or trading risk controls.
+- [ ] No change to execution mode, exchange permissions, credentials, or trading risk controls; PAPER/read-only remains unchanged.
