@@ -82,3 +82,12 @@ Not yet implemented/integrated:
 - real office event integration and physical two-host validation.
 
 The pure helper is not a network detector or authority grant. Automatic promotion must remain disabled until receiver-side fencing or a validated quorum mechanism is implemented and tested.
+
+
+## Deployment boundary: one PC now, multiple PCs later
+
+**Current deployment is single-PC.** All VST departments/modules run under one local CEO/supervisor on the same computer. Department-to-department coordination uses in-process calls, local events/queues and local memory/storage as implemented by the runtime. It must not attempt LAN, Tailscale, Vercel, HTTP, or other network communication merely to let local modules talk to one another. The pure connectivity policy in this PR is a future multi-PC policy component; it must not be wired into ordinary intra-process module messaging or treated as a reason to probe the network in single-PC mode.
+
+External communication is a separate boundary: the application may use explicitly configured network connections for exchanges, approved external services, remote phone/PC access, and—only when multi-PC deployment is enabled—authenticated peer coordination. Those external paths must not be used as an internal message bus for modules on the same PC.
+
+When multi-PC mode is deliberately configured in a future deployment, a host-level supervisor may use LAN first, an authenticated private overlay as fallback, and Vercel for rendezvous/reconciliation where appropriate. That future behavior is enabled only for registered remote installations; it does not change the local communication model within each PC. Configuration and observability must label **local module communication** and **remote host communication** separately.
