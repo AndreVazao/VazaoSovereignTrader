@@ -8,7 +8,6 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from PC_ENGINE.market_events.binance_book_state import BookSnapshot
 from PC_ENGINE.market_events.l2_collectors import L2WebSocketConfig, PublicL2WebSocketCollector, default_l2_configs
 
 
@@ -26,6 +25,22 @@ def synchronized_book_path(data_dir: Path, venue: str) -> Path:
     except KeyError as exc:
         raise ValueError("unsupported_synchronized_book_venue") from exc
     return data_dir / filename
+
+
+def persist_synchronized_book(view, outputs: dict[str, Path], append_jsonl) -> None:
+    """Persist a synchronized view to its venue-specific JSONL file.
+
+    Unknown venues fail closed rather than being silently attributed to a
+    different exchange's output file.
+    """
+    payload = asdict(view)
+    status = getattr(view, "status", None)
+    if hasattr(status, "value"):
+        payload["status"] = status.value
+    target = outputs.get(payload.get("venue"))
+    if target is None:
+        raise ValueError("unsupported_synchronized_book_venue")
+    append_jsonl(target, payload)
 
 
 def build_collector(config: L2WebSocketConfig, on_event, on_book) -> PublicL2WebSocketCollector:
@@ -70,13 +85,7 @@ def main() -> None:
         append_jsonl(output, asdict(event))
 
     def persist_book(view) -> None:
-        payload = asdict(view)
-        if hasattr(view.status, "value"):
-            payload["status"] = view.status.value
-        target = synchronized_outputs.get(payload.get("venue"))
-        if target is None:
-            raise ValueError("unsupported_synchronized_book_venue")
-        append_jsonl(target, payload)
+        persist_synchronized_book(view, synchronized_outputs, append_jsonl)
 
     configs = []
     requested_venues = set(args.venues)
