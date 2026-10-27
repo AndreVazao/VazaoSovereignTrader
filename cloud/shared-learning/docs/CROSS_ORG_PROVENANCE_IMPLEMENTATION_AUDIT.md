@@ -98,3 +98,14 @@ A name such as “Joana — organization João Pedro — installation JP-PC-01 �
 - Vercel deployment readiness does not prove database migration state or end-to-end identity enrollment.
 
 Until those blockers are closed and the tests pass, cross-organization shared learning may remain an authenticated aggregate artifact pool, but it must not be represented in the UI as fully attributable to a verified organization/agent.
+
+
+## Implementation checkpoint — provenance contract scaffold
+
+A pure, unit-testable provenance contract has now been added at `lib/provenance.ts`, with tests in `tests/provenance.test.ts`.
+
+It validates a strict envelope (immutable-ID-shaped UUIDs, payload digest, timestamps, bounded lineage and unknown-field rejection), defines deterministic signed bytes, calculates a SHA-256 digest of the public payload, and verifies a signature against a caller-supplied registered public key. RSA/EC-style SHA-256 signatures and Ed25519/Ed448 signatures are handled according to key type.
+
+**Important integration boundary:** this scaffold is not yet called by `app/api/v1/artifacts/route.ts`; that route still accepts the legacy artifact schema and does not verify registry-backed identities. A key supplied by the client must never be passed as the trusted key. The future route must first resolve an approved installation and its public key from server-owned registry records, verify organization membership and agent/department ownership, and bind the digest to the exact normalized public payload.
+
+The current branch has not demonstrated CI for these new tests yet. Do not merge or describe attribution as active until registry tables, route integration, database migration tests and end-to-end negative tests are complete.
