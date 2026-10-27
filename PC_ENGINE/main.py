@@ -35,7 +35,11 @@ def _server_host(config: dict) -> str:
     """Bind locally by default; remote access must be explicitly configured."""
     server = config.get("server", {})
     host = str(server.get("host", "127.0.0.1")).strip()
-    return host or "127.0.0.1"
+    if not host or host in {"0.0.0.0", "::", "[::]"}:
+        # Never bind every interface implicitly. Use a specific LAN/Tailscale
+        # address for approved remote clients, or keep the API on loopback.
+        return "127.0.0.1"
+    return host
 
 
 def main() -> None:
