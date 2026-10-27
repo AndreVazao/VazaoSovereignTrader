@@ -25,7 +25,7 @@ adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
 adb logcat -d > "$EVIDENCE/logcat.txt"
 # user_data_dir in the packaged app maps to the app-private files directory.
 # Capture the full traceback, while never reading connection/token files.
-if adb shell run-as "$PACKAGE" sh -c 'find /data/user/0/pt.andrevazao.vazaosovereigntrader/files -name startup_error.log -type f -print -exec cat {} \\;' > "$EVIDENCE/startup_error.txt" 2>/dev/null && [[ -s "$EVIDENCE/startup_error.txt" ]]; then
+if adb shell run-as "$PACKAGE" sh -c 'find /data/user/0/pt.andrevazao.vazaosovereigntrader -name startup_error.log -type f -print -exec cat {} +' > "$EVIDENCE/startup_error.txt" 2>/dev/null && [[ -s "$EVIDENCE/startup_error.txt" ]]; then
   echo "Startup diagnostic captured:"
   cat "$EVIDENCE/startup_error.txt"
 else
