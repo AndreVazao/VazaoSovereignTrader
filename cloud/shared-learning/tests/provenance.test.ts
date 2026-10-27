@@ -64,8 +64,9 @@ test("verifies signature only against the supplied registered public key", () =>
   assert.equal(verifyProvenanceSignature(envelope, other), false);
 });
 
-test("payload digest is stable for the same public JSON payload", () => {
-  const payload = { strategy_id: "ema_atr_v1", sample_count: 100 };
-  assert.equal(digestPublicPayload(payload), digestPublicPayload(payload));
-  assert.match(digestPublicPayload(payload), /^[a-f0-9]{64}$/);
+test("payload digest is canonical across object property order", () => {
+  const first = { strategy_id: "ema_atr_v1", sample_count: 100, nested: { z: 2, a: 1 } };
+  const reordered = { nested: { a: 1, z: 2 }, sample_count: 100, strategy_id: "ema_atr_v1" };
+  assert.equal(digestPublicPayload(first), digestPublicPayload(reordered));
+  assert.match(digestPublicPayload(first), /^[a-f0-9]{64}$/);
 });
