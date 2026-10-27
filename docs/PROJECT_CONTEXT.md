@@ -1393,3 +1393,6 @@ Review points before merge:
 
 
 - 2026-10-27 digest hardening: public payload hashing now uses recursively key-sorted canonical JSON, the POST route uses the same digest helper, and the verified-provenance GET route rechecks the stored payload digest before returning contributor attribution. Added a test for property-order independence. Test execution and final preview checks are still pending.
+
+
+- Additional release gate identified: TypeScript canonical JSON and Python `json.dumps(sort_keys=True)` do not guarantee identical float-number bytes. Before implementing adapter signing, define a cross-language canonicalization format (RFC 8785/JCS or schema-specific equivalent) and shared golden vectors. Do not enable signed publication before parity is proven.
