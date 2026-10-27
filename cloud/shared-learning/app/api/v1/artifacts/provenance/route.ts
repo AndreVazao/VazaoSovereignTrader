@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { digestPublicPayload } from "../../../../../lib/provenance";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,6 +73,7 @@ export async function GET(req: NextRequest) {
       const agent = agentMap.get(row.agent_id);
       const department = departmentMap.get(row.department_id);
       if (!artifact || !organization || !installation || !agent || !department ||
+          digestPublicPayload(artifact.public_payload) !== row.payload_digest ||
           installation.organization_id !== row.organization_id ||
           agent.organization_id !== row.organization_id ||
           agent.installation_id !== row.installation_id ||
