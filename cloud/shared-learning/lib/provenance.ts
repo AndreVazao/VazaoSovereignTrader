@@ -1,4 +1,4 @@
-import { createHash, verify as cryptoVerify } from "node:crypto";
+import { createHash, createPublicKey, verify as cryptoVerify } from "node:crypto";
 
 export const PROVENANCE_SCHEMA_VERSION = 1 as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -76,8 +76,10 @@ export function digestPublicPayload(payload: unknown): string {
 /** registeredPublicKey must come from the server-side approved installation registry, never from the envelope. */
 export function verifyProvenanceSignature(envelope: ProvenanceEnvelope, registeredPublicKey: string): boolean {
   try {
-    return cryptoVerify("sha256", Buffer.from(canonicalProvenanceMessage(envelope), "utf8"),
-      registeredPublicKey, Buffer.from(envelope.signature, "base64url"));
+    const key = createPublicKey(registeredPublicKey);
+    const algorithm = key.asymmetricKeyType === "ed25519" || key.asymmetricKeyType === "ed448" ? null : "sha256";
+    return cryptoVerify(algorithm, Buffer.from(canonicalProvenanceMessage(envelope), "utf8"),
+      key, Buffer.from(envelope.signature, "base64url"));
   } catch {
     return false;
   }
