@@ -1,3 +1,15 @@
+# CURRENT AUTHORITATIVE HANDOFF — 2026-10-27 (PR #504 provenance gate)
+
+- Live branch: `work/cross-org-learning-provenance-2026-10-27`; PR #504 remains OPEN and unmerged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/504.
+- Current head at this checkpoint: `482e7107a532ad2c4b976eda3a82c635ed2ed427`. GitHub Actions run #82 / ID `40580258249` completed SUCCESS on that exact SHA: npm install, npm tests, TypeScript check and production build all passed. See https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/40580258249.
+- Snyk/Vercel combined status endpoint did not yet return completed status entries for this SHA; verify PR checks live before any merge decision. PR reports mergeable=true, which is not equivalent to release readiness.
+- Latest docs-only change lists migration `202610270001_organization_scoped_provenance.sql` and explicitly warns that it is not validated against a disposable Supabase database.
+- Current scope: strict provenance envelope; registry-backed organization/member/installation/agent/department checks; public-key fingerprint check; immutable enrolled signing key; server-side signature/digest verification; service-role-only atomic publication RPC; verified provenance read endpoint; CI workflow. No cloud migration was applied, no deployment or real account provisioning occurred, and no financial execution occurred.
+- **Do not merge yet.** Remaining gates: (1) verify final Snyk/Vercel/required PR checks; (2) disposable Supabase migration/RPC/trigger integration tests; (3) trusted enrollment and approval flow; (4) Python adapter signing and verified-endpoint consumption; (5) shared cross-language canonicalization/golden vectors before signing from Python; (6) resolve and verify source-artifact lineage before treating lineage claims as trusted. Keep shared learning advisory only, PAPER/read-only, no orders/transfers/withdrawals.
+- Immediate next action: add a disposable-database migration test harness or, if no safe test database is available, add a local PostgreSQL/Supabase-compatible integration test workflow without touching production. Then implement lineage verification as a separate, tested increment.
+
+---
+
 # CURRENT AUTHORITATIVE HANDOFF — 2026-10-04 (private endpoint lease API merged; client contract documented)
 
 - PR #331 [private Tailscale address validation](https://github.com/AndreVazao/VazaoSovereignTrader/pull/331) merged at `44da885c3a839fae5669caa39dba4f35dfb80788`.
