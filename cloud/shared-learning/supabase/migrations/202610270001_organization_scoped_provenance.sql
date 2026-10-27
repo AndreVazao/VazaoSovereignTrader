@@ -241,3 +241,30 @@ revoke all on function public.publish_verified_shared_learning_artifact(
 grant execute on function public.publish_verified_shared_learning_artifact(
   uuid,text,jsonb,boolean,timestamptz,uuid,uuid,uuid,uuid,integer,text,text,jsonb,text,timestamptz
 ) to service_role;
+
+
+-- Installation signing keys are immutable after enrollment. Rotate by revoking the
+-- old installation and enrolling a new installation/key; this avoids an in-place
+-- key replacement racing with API-side signature verification.
+create or replace function public.prevent_trader_installation_key_mutation()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.public_key_pem is distinct from old.public_key_pem
+     or new.key_fingerprint is distinct from old.key_fingerprint then
+    raise exception 'installation_signing_key_immutable'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trader_installations_signing_key_immutable
+  on public.trader_installations;
+create trigger trader_installations_signing_key_immutable
+before update of public_key_pem, key_fingerprint
+on public.trader_installations
+for each row
+execute function public.prevent_trader_installation_key_mutation();
