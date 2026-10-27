@@ -25,11 +25,11 @@ adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
 adb logcat -d > "$EVIDENCE/logcat.txt"
 # user_data_dir in the packaged app maps to the app-private files directory.
 # Capture the full traceback, while never reading connection/token files.
-if adb shell run-as "$PACKAGE" cat files/startup_error.log > "$EVIDENCE/startup_error.txt" 2>/dev/null; then
+if adb shell run-as "$PACKAGE" sh -c 'find /data/user/0/pt.andrevazao.vazaosovereigntrader/files -name startup_error.log -type f -print -exec cat {} \\;' > "$EVIDENCE/startup_error.txt" 2>/dev/null && [[ -s "$EVIDENCE/startup_error.txt" ]]; then
   echo "Startup diagnostic captured:"
   cat "$EVIDENCE/startup_error.txt"
 else
-  echo "No app-local startup traceback was available." > "$EVIDENCE/startup_error.txt"
+  echo "No app-local startup traceback was available in the app-private files directory." > "$EVIDENCE/startup_error.txt"
 fi
 if grep -E "FATAL EXCEPTION|Process: ${PACKAGE}.*has died" "$EVIDENCE/logcat.txt"; then
   echo "Android application crash detected in logcat." | tee "$EVIDENCE/failure.txt"
