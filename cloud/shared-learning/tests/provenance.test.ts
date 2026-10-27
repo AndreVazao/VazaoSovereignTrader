@@ -21,7 +21,7 @@ function unsigned(payloadDigest = "a".repeat(64)) {
     payload_digest: payloadDigest,
     created_at_ms: now,
     producer_version: "0.1.0",
-    source_artifact_ids: ["source-001"],
+    source_artifact_ids: ["source-001", "source-002"],
     signature: "pending"
   };
 }
@@ -58,6 +58,8 @@ test("verifies signature only against the supplied registered public key", () =>
   assert.equal(verifyProvenanceSignature(envelope, publicKey), true);
   const tampered = { ...envelope, department_id: "523e4567-e89b-42d3-a456-426614174000" };
   assert.equal(verifyProvenanceSignature(tampered, publicKey), false);
+  const reordered = { ...envelope, source_artifact_ids: [...envelope.source_artifact_ids].reverse() };
+  assert.equal(verifyProvenanceSignature(reordered, publicKey), false);
   const other = generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "pem" }).toString();
   assert.equal(verifyProvenanceSignature(envelope, other), false);
 });
