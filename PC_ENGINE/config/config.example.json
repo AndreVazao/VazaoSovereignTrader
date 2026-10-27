@@ -8,7 +8,7 @@
     "notes": "Owner identity is the financial isolation boundary. Shared intelligence never grants access to another owner's capital, orders, balances, P&L, credentials or REAL authorization."
   },
   "server": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 8765,
     "local_control_token_env": "VST_LOCAL_TOKEN"
   },
