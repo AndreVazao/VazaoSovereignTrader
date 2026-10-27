@@ -23,11 +23,13 @@ sleep 8
 adb shell pidof "$PACKAGE"
 adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
 adb logcat -d > "$EVIDENCE/logcat.txt"
-# Preserve the app-local startup traceback in CI evidence without uploading secrets.
-adb shell run-as "$PACKAGE" sh -c 'find files -name startup_error.log -type f -exec cat {} \\;' > "$EVIDENCE/startup_error.txt" 2>/dev/null || true
-if [[ -s "$EVIDENCE/startup_error.txt" ]]; then
+# user_data_dir in the packaged app maps to the app-private files directory.
+# Capture the full traceback, while never reading connection/token files.
+if adb shell run-as "$PACKAGE" cat files/startup_error.log > "$EVIDENCE/startup_error.txt" 2>/dev/null; then
   echo "Startup diagnostic captured:"
   cat "$EVIDENCE/startup_error.txt"
+else
+  echo "No app-local startup traceback was available." > "$EVIDENCE/startup_error.txt"
 fi
 if grep -E "FATAL EXCEPTION|Process: ${PACKAGE}.*has died" "$EVIDENCE/logcat.txt"; then
   echo "Android application crash detected in logcat." | tee "$EVIDENCE/failure.txt"
@@ -36,4 +38,8 @@ fi
 
 tesseract "$EVIDENCE/vst-home.png" stdout 2>/dev/null > "$EVIDENCE/screen-ocr.txt"
 cat "$EVIDENCE/screen-ocr.txt"
+if grep -qi "Tipo de erro:" "$EVIDENCE/screen-ocr.txt"; then
+  echo "The app displayed its startup error fallback; inspect startup_error.txt." | tee "$EVIDENCE/failure.txt"
+  exit 1
+fi
 grep -qi "Como posso ajudar" "$EVIDENCE/screen-ocr.txt"
