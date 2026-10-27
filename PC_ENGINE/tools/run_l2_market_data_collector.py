@@ -9,7 +9,29 @@ from dataclasses import asdict
 from pathlib import Path
 
 from PC_ENGINE.market_events.binance_book_state import BookSnapshot
-from PC_ENGINE.market_events.l2_collectors import PublicL2WebSocketCollector, default_l2_configs
+from PC_ENGINE.market_events.l2_collectors import L2WebSocketConfig, PublicL2WebSocketCollector, default_l2_configs
+
+
+SYNCHRONIZED_BOOK_FILENAMES = {
+    "binance": "binance_synchronized_orderbook_views.jsonl",
+    "coinbase": "coinbase_synchronized_orderbook_views.jsonl",
+    "okx": "okx_synchronized_orderbook_views.jsonl",
+}
+
+
+def synchronized_book_path(data_dir: Path, venue: str) -> Path:
+    """Return the dedicated output path for a supported synchronized venue."""
+    try:
+        filename = SYNCHRONIZED_BOOK_FILENAMES[venue]
+    except KeyError as exc:
+        raise ValueError("unsupported_synchronized_book_venue") from exc
+    return data_dir / filename
+
+
+def build_collector(config: L2WebSocketConfig, on_event, on_book) -> PublicL2WebSocketCollector:
+    """Wire every supported venue to the synchronized-book callback."""
+    callback = on_book if config.venue in SYNCHRONIZED_BOOK_FILENAMES else None
+    return PublicL2WebSocketCollector(config, on_event, on_book=callback)
 
 
 def main() -> None:
@@ -22,8 +44,7 @@ def main() -> None:
     data_dir = Path(args.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     output = data_dir / "websocket_orderbook_events.jsonl"
-    synchronized_output = data_dir / "binance_synchronized_orderbook_views.jsonl"
-    coinbase_synchronized_output = data_dir / "coinbase_synchronized_orderbook_views.jsonl"
+    synchronized_outputs = {venue: synchronized_book_path(data_dir, venue) for venue in SYNCHRONIZED_BOOK_FILENAMES}
     health_output = data_dir / "l2_collector_health.json"
     stop = threading.Event()
     write_lock = threading.Lock()
@@ -52,7 +73,9 @@ def main() -> None:
         payload = asdict(view)
         if hasattr(view.status, "value"):
             payload["status"] = view.status.value
-        target = coinbase_synchronized_output if payload.get("venue") == "coinbase" else synchronized_output
+        target = synchronized_outputs.get(payload.get("venue"))
+        if target is None:
+            raise ValueError("unsupported_synchronized_book_venue")
         append_jsonl(target, payload)
 
     configs = []
@@ -87,10 +110,7 @@ def main() -> None:
                 break
 
     for config in configs:
-        collector = PublicL2WebSocketCollector(
-            config, persist,
-            on_book=persist_book if config.venue in {"binance", "coinbase"} else None,
-        )
+        collector = build_collector(config, persist, persist_book)
         collectors.append(collector)
         thread = threading.Thread(
             target=collector.run_forever,
@@ -111,8 +131,7 @@ def main() -> None:
         "configured_pairs": [{"symbol": symbol, "venue": venue} for symbol, venue in sorted(configured_pairs)],
         "unconfigured_pairs": unconfigured_pairs,
         "raw_output": str(output),
-        "binance_synchronized_output": str(synchronized_output),
-        "coinbase_synchronized_output": str(coinbase_synchronized_output),
+        "synchronized_book_outputs": {venue: str(path) for venue, path in synchronized_outputs.items()},
         "health_output": str(health_output),
         "paper_only": True,
         "orders_submitted": False,
