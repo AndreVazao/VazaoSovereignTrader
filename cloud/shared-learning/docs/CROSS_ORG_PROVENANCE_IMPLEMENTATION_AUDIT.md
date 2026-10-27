@@ -109,3 +109,24 @@ It validates a strict envelope (immutable-ID-shaped UUIDs, payload digest, times
 **Important integration boundary:** this scaffold is not yet called by `app/api/v1/artifacts/route.ts`; that route still accepts the legacy artifact schema and does not verify registry-backed identities. A key supplied by the client must never be passed as the trusted key. The future route must first resolve an approved installation and its public key from server-owned registry records, verify organization membership and agent/department ownership, and bind the digest to the exact normalized public payload.
 
 The current branch has not demonstrated CI for these new tests yet. Do not merge or describe attribution as active until registry tables, route integration, database migration tests and end-to-end negative tests are complete.
+
+
+## Database registry scaffold added on this branch
+
+Migration `supabase/migrations/202610270001_organization_scoped_provenance.sql` now defines server-mediated tables for:
+
+- `trader_organizations` and `trader_organization_memberships`
+- `trader_installations` with a public-key fingerprint, approval/revocation state, and organization-scoped uniqueness
+- `trader_departments` and `trader_agents`, with composite foreign keys preventing an agent or department from being attached to a different organization than its installation
+- `shared_learning_provenance`, linked to a stored artifact and the organization/install/agent/department identities, with signature, digest, lineage, verification and revocation state
+
+All new tables have RLS enabled, no direct anon/authenticated grants, and service-role-only grants, consistent with the existing server-mediated data model.
+
+### Migration safety and remaining work
+
+- The migration is only committed to the feature branch. It has **not** been applied to Supabase or production.
+- The migration deliberately creates no active organization, membership, installation, or agent; enrollment and approval must be explicit.
+- The existing artifact route and PC adapter are not yet wired to this registry. Therefore the schema alone does not establish verified provenance.
+- Before integration, add migration/schema tests for cross-organization foreign-key rejection, unique installation key fingerprints, role/state constraints, RLS/grants, and revocation behavior.
+- Route integration must validate the authenticated user's active membership and publishing role, resolve approved installation public key server-side, confirm agent/department belong to the same organization, verify the canonical payload digest and signature, and persist artifact + provenance atomically. A client-supplied public key is never trusted.
+- GET response compatibility must be handled deliberately: preserve the existing adapter contract or version it. Do not silently append fields to the current strict artifact payload. Until the adapter supports provenance, continue treating legacy artifacts as unattributed/unverified in the client.
