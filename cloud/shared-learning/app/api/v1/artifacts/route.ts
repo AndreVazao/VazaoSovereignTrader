@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     const digest = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
     const { db } = clients();
 
-    let verified: ReturnType<typeof verifyRegisteredProvenance> extends Promise<infer T> ? T : never;
+    let verified: Awaited<ReturnType<typeof verifyRegisteredProvenance>> | undefined;
     let envelope: ReturnType<typeof parseProvenanceEnvelope> | undefined;
     if (provenanceInput !== undefined) {
       try { envelope = parseProvenanceEnvelope(provenanceInput); }
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       owner_id: user.id,
       artifact_digest: digest,
       public_payload: payload,
-      eligible: artifact.eligible,
+      eligible: envelope ? false : artifact.eligible,
       expires_at: new Date(artifact.expires_at_ms).toISOString()
     }, { onConflict: "owner_id,artifact_digest", ignoreDuplicates: true });
     if (saveError) return fail(503, "storage_unavailable");
@@ -127,6 +127,10 @@ export async function POST(req: NextRequest) {
         });
         if (provenanceSaveError) return fail(503, "provenance_storage_unavailable");
       }
+      const { error: activateError } = await db.from("shared_learning_artifacts")
+        .update({ eligible: artifact.eligible, expires_at: new Date(artifact.expires_at_ms).toISOString() })
+        .eq("id", stored.id);
+      if (activateError) return fail(503, "provenance_storage_unavailable");
     }
 
     return NextResponse.json({
