@@ -77,60 +77,45 @@ export async function POST(req: NextRequest) {
       if (!verified.ok) return fail(verified.status, verified.error);
     }
 
-    const { error: saveError } = await db.from("shared_learning_artifacts").upsert({
-      owner_id: user.id,
-      artifact_digest: digest,
-      public_payload: payload,
-      eligible: envelope ? false : artifact.eligible,
-      expires_at: new Date(artifact.expires_at_ms).toISOString()
-    }, { onConflict: "owner_id,artifact_digest", ignoreDuplicates: true });
-    if (saveError) return fail(503, "storage_unavailable");
-
     if (envelope && verified && verified.ok) {
-      const { data: stored, error: lookupError } = await db.from("shared_learning_artifacts")
-        .select("id")
-        .eq("owner_id", user.id)
-        .eq("artifact_digest", digest)
-        .maybeSingle();
-      if (lookupError || !stored) return fail(503, "storage_unavailable");
-
-      const { data: existing, error: provenanceLookupError } = await db.from("shared_learning_provenance")
-        .select("organization_id,installation_id,agent_id,department_id,payload_digest,signature,verification_state")
-        .eq("artifact_row_id", stored.id)
-        .maybeSingle();
-      if (provenanceLookupError) return fail(503, "provenance_storage_unavailable");
-
-      if (existing) {
-        const sameIdentity = existing.organization_id === envelope.organization_id &&
-          existing.installation_id === envelope.installation_id &&
-          existing.agent_id === envelope.agent_id &&
-          existing.department_id === envelope.department_id &&
-          existing.payload_digest === verified.payloadDigest &&
-          existing.signature === envelope.signature &&
-          existing.verification_state === "verified";
-        if (!sameIdentity) return fail(409, "artifact_provenance_conflict");
-      } else {
-        const { error: provenanceSaveError } = await db.from("shared_learning_provenance").insert({
-          artifact_row_id: stored.id,
-          organization_id: envelope.organization_id,
-          installation_id: envelope.installation_id,
-          agent_id: envelope.agent_id,
-          department_id: envelope.department_id,
-          provenance_schema_version: envelope.schema_version,
-          payload_digest: verified.payloadDigest,
-          signature: envelope.signature,
-          source_artifact_ids: verified.sourceArtifactIds,
-          producer_version: verified.producerVersion,
-          contributed_at: verified.contributedAt,
-          verification_state: "verified",
-          verified_at: new Date().toISOString()
-        });
-        if (provenanceSaveError) return fail(503, "provenance_storage_unavailable");
+      const { data, error } = await db.rpc("publish_verified_shared_learning_artifact", {
+        p_owner_id: user.id,
+        p_artifact_digest: digest,
+        p_public_payload: payload,
+        p_eligible: artifact.eligible,
+        p_expires_at: new Date(artifact.expires_at_ms).toISOString(),
+        p_organization_id: envelope.organization_id,
+        p_installation_id: envelope.installation_id,
+        p_agent_id: envelope.agent_id,
+        p_department_id: envelope.department_id,
+        p_provenance_schema_version: envelope.schema_version,
+        p_payload_digest: verified.payloadDigest,
+        p_signature: envelope.signature,
+        p_source_artifact_ids: verified.sourceArtifactIds,
+        p_producer_version: verified.producerVersion,
+        p_contributed_at: verified.contributedAt
+      });
+      if (error) return fail(503, "provenance_storage_unavailable");
+      if (!data?.ok) {
+        const statusByError: Record<string, number> = {
+          organization_publish_forbidden: 403,
+          installation_not_approved: 403,
+          agent_department_scope_invalid: 403,
+          artifact_provenance_conflict: 409,
+          invalid_publication_payload: 400
+        };
+        const errorCode = typeof data?.error === "string" ? data.error : "provenance_storage_unavailable";
+        return fail(statusByError[errorCode] ?? 503, errorCode);
       }
-      const { error: activateError } = await db.from("shared_learning_artifacts")
-        .update({ eligible: artifact.eligible, expires_at: new Date(artifact.expires_at_ms).toISOString() })
-        .eq("id", stored.id);
-      if (activateError) return fail(503, "provenance_storage_unavailable");
+    } else {
+      const { error: saveError } = await db.from("shared_learning_artifacts").upsert({
+        owner_id: user.id,
+        artifact_digest: digest,
+        public_payload: payload,
+        eligible: artifact.eligible,
+        expires_at: new Date(artifact.expires_at_ms).toISOString()
+      }, { onConflict: "owner_id,artifact_digest", ignoreDuplicates: true });
+      if (saveError) return fail(503, "storage_unavailable");
     }
 
     return NextResponse.json({
