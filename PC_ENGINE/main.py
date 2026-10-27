@@ -31,6 +31,17 @@ def _should_auto_start_paper(config: dict, mode: str) -> bool:
     )
 
 
+def _server_host(config: dict) -> str:
+    """Bind locally by default; remote access must be explicitly configured."""
+    server = config.get("server", {})
+    host = str(server.get("host", "127.0.0.1")).strip()
+    if not host or host in {"0.0.0.0", "::", "[::]"}:
+        # Never bind every interface implicitly. Use a specific LAN/Tailscale
+        # address for approved remote clients, or keep the API on loopback.
+        return "127.0.0.1"
+    return host
+
+
 def main() -> None:
     config = load_config()
     mode = str(config.get("mode", "PAPER")).upper()
@@ -44,7 +55,7 @@ def main() -> None:
     startup_health = StartupHealth(engine.owner_context.private_path("startup"), config).run(engine.recovery)
     engine.state.operational["startup_health"] = startup_health
     app = create_app(engine, config.get("server", {}).get("local_control_token_env", "VST_LOCAL_TOKEN"))
-    host = config.get("server", {}).get("host", "0.0.0.0")
+    host = _server_host(config)
     port = int(config.get("server", {}).get("port", 8765))
     if _should_auto_start_paper(config, mode):
         engine.start()

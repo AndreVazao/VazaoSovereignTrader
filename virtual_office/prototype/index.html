@@ -22,7 +22,7 @@ button{font:inherit;color:inherit;cursor:pointer}.shell{max-width:1500px;margin:
 .panel{padding:18px}.panel h2{margin-bottom:6px}.panel .muted{color:var(--muted);font-size:12px}.selected{margin:18px 0;padding:14px;border:1px solid var(--line);border-radius:12px;background:#0b1420}.selected .kicker{font-size:10px;color:var(--cyan);letter-spacing:.15em;text-transform:uppercase}.selected h3{font-size:17px;margin:5px 0}.selected p{color:#b7c8d8;font-size:12px;margin:0}.facts{display:grid;gap:8px;margin-top:14px}.fact{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #1b2b3b;font-size:12px}.fact span{color:var(--muted)}.fact b{font-weight:600;text-align:right}.notice{margin-top:18px;padding:12px;border-left:2px solid var(--amber);background:#f4c96b0b;color:#c8d2df;font-size:11px}.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.controls button{border:1px solid var(--line);border-radius:9px;background:#142236;padding:9px 12px;font-size:12px}.controls button:hover{border-color:var(--cyan)}.foot{padding:18px 2px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 @media(max-width:900px){.layout{grid-template-columns:1fr}.scene{min-height:440px;padding:12px}.campus{height:350px;transform:rotateX(54deg) rotateZ(-34deg) scale(.84)}.panel{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.panel>h2,.panel>.muted,.selected,.notice,.controls{grid-column:1/-1}.selected{margin:14px 0}.facts{margin-top:4px}}
 @media(max-width:560px){.shell{padding:12px}.brand h1{font-size:17px}.stage-head{align-items:flex-start;flex-direction:column}.scene{min-height:330px}.campus{height:270px;transform:rotateX(54deg) rotateZ(-34deg) scale(.73)}.room{width:30%;height:27%}.r1,.r4{left:5%}.r2,.r5,.r7{left:36%}.r3,.r6{left:67%}.r7{width:30%;height:22%}.room .glyph{font-size:18px}.room b{font-size:8px}.room small{font-size:7px}.scene-caption{left:12px;bottom:10px;font-size:9px}.legend{display:none}.panel{display:block}.fact{font-size:12px}}
-@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
+.render-controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.render-controls label{font-size:11px;color:var(--muted)}.render-controls select{max-width:190px;background:#0b1420;color:#e9f3ff;border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit;font-size:11px}.render-controls small{flex-basis:100%;text-align:right;color:var(--muted);font-size:10px}.scene,.campus,.room,.floor,.cable{contain:layout paint}.room{will-change:auto}body[data-render-mode="pixel"] .campus{transform:rotateX(0) rotateZ(0) scale(.92);transform-style:flat;image-rendering:pixelated}body[data-render-mode="pixel"] .room{border-radius:0;box-shadow:4px 4px 0 #080e18;transition:none}body[data-render-mode="pixel"] .room:before{border-top-width:5px}body[data-render-mode="pixel"] .cable{filter:none;opacity:.45}body[data-render-mode="stick"] .campus{transform:none;transform-style:flat;height:390px}body[data-render-mode="stick"] .floor{background:transparent;border:1px dashed #42647a;box-shadow:none}body[data-render-mode="stick"] .floor:after{display:none}body[data-render-mode="stick"] .room{background:transparent;border:1px solid #7c9aad;box-shadow:none;border-radius:2px;transition:none}body[data-render-mode="stick"] .room:before,body[data-render-mode="stick"] .cable{display:none}body[data-render-mode="stick"] .room .glyph{font-size:16px}body[data-render-mode="stick"] .room .lamp{box-shadow:none}body[data-render-mode="compact"] .scene{min-height:260px;padding:8px}body[data-render-mode="compact"] .campus{transform:none;transform-style:flat;width:100%;height:240px}body[data-render-mode="compact"] .floor{inset:4px;background:#101a28;box-shadow:none}body[data-render-mode="compact"] .floor:after,body[data-render-mode="compact"] .cable,body[data-render-mode="compact"] .ceo-card img,body[data-render-mode="compact"] .legend{display:none}body[data-render-mode="compact"] .room{border-radius:4px;box-shadow:none;background:#142236;transition:none}body[data-render-mode="compact"] .room .glyph{font-size:14px}body[data-render-mode="compact"] .room small{display:none}body[data-render-mode="compact"] .scene-caption{max-width:85%;font-size:9px}@media(max-width:560px){.render-controls{justify-content:flex-start}.render-controls small{text-align:left}.render-controls select{max-width:100%}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
@@ -33,7 +33,7 @@ button{font:inherit;color:inherit;cursor:pointer}.shell{max-width:1500px;margin:
 </header>
 <main class="layout">
  <section class="stage" aria-label="Mapa interativo do escritório">
-  <div class="stage-head"><div><h2>Complexo operacional</h2><small>Seleciona uma sala para ver a sua função.</small></div><small>Perfil visual: Lite / 2.5D</small></div>
+  <div class="stage-head"><div><h2>Complexo operacional</h2><small>Seleciona uma sala para ver a sua função.</small></div><div class="render-controls"><label for="render-profile">Renderização</label><select id="render-profile" aria-label="Perfil de renderização"><option value="auto">Automática</option><option value="standard">2.5D leve</option><option value="pixel">Pixel / 8-bit</option><option value="stick">Palitinhos</option><option value="compact">Compacta</option><option value="hd" disabled>Alta definição 3D — renderer futuro</option></select><small id="render-status" role="status" aria-live="polite">A avaliar dispositivo…</small></div></div>
   <div class="scene">
    <div class="ceo-card"><img src="../../1792476724975.jpg" alt="Referência visual do CEO do VST"><div><strong>CEO · CÉREBRO</strong><small>Supervisão central do Trader</small><span class="ceo-status">DEMO · estado não ligado</span></div></div>
    <div class="campus" aria-label="Planta isométrica">
@@ -73,6 +73,57 @@ const rooms={
 const buttons=[...document.querySelectorAll("[data-room]")];
 function selectRoom(key){const r=rooms[key];if(!r)return;buttons.forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.room===key)));document.getElementById("detail-title").textContent=r.title;document.getElementById("detail-kicker").textContent=r.kicker;document.getElementById("detail-heading").textContent=r.heading;document.getElementById("detail-desc").textContent=r.desc;}
 buttons.forEach(b=>b.addEventListener("click",()=>selectRoom(b.dataset.room)));
+
+// Presentation-only adaptive renderer. This prototype never starts or controls the trading runtime.
+(function adaptiveRendering(){
+ const select=document.getElementById("render-profile");
+ const status=document.getElementById("render-status");
+ const order=["hd","standard","pixel","stick","compact"];
+ let manual=false, current="standard", slowWindows=0, fastSince=0, frameTimes=[], lastFrame=0, lastEval=0;
+ const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+ const memory=Number(navigator.deviceMemory||0), cores=Number(navigator.hardwareConcurrency||0);
+ function chooseInitial(){
+   if(reduced || (memory&&memory<=2) || (cores&&cores<=2)) return "stick";
+   if((memory&&memory<=4)||(cores&&cores<=4)||navigator.connection?.saveData) return "pixel";
+   return "standard";
+ }
+ function label(mode){return ({standard:"2.5D leve",pixel:"Pixel / 8-bit",stick:"Palitinhos",compact:"Compacta",hd:"Alta definição 3D"})[mode]||mode;}
+ function setMode(mode,reason){
+   if(mode==="hd") mode="standard"; // no real WebGL/3D renderer is shipped in this prototype
+   current=mode;document.body.dataset.renderMode=mode;
+   status.textContent=label(mode)+(reason?" · "+reason:"");
+ }
+ function degrade(reason){
+   const idx=order.indexOf(current);
+   const next=order[Math.min(order.length-1,Math.max(1,idx)+1)];
+   if(next!==current){manual=false;select.value="auto";setMode(next,reason+" · downgrade automático");}
+   slowWindows=0;fastSince=0;
+ }
+ select.addEventListener("change",()=>{
+   if(select.value==="auto"){manual=false;setMode(chooseInitial(),"automático");}
+   else {manual=true;setMode(select.value,"manual");}
+ });
+ setMode(chooseInitial(),"auto");
+ // Measure main-thread frame cadence. Drop visual fidelity automatically; never waits for server acknowledgement.
+ function frame(now){
+   if(document.hidden){lastFrame=now;requestAnimationFrame(frame);return;}
+   if(lastFrame)frameTimes.push(now-lastFrame);
+   lastFrame=now;
+   if(now-lastEval>=2500&&frameTimes.length>10){
+     const avg=frameTimes.reduce((a,b)=>a+b,0)/frameTimes.length;
+     frameTimes=[];lastEval=now;
+     const heap=performance.memory&&performance.memory.jsHeapSizeLimit>0
+       ?performance.memory.usedJSHeapSize/performance.memory.jsHeapSizeLimit:0;
+     const pressured=avg>34||(heap>0.80);
+     if(pressured){slowWindows++;fastSince=0;if(slowWindows>=2)degrade(heap>0.80?"memória alta":"frames lentos");}
+     else {slowWindows=0;if(!fastSince)fastSince=now;}
+   }
+   requestAnimationFrame(frame);
+ }
+ requestAnimationFrame(frame);
+ document.addEventListener("visibilitychange",()=>{if(document.hidden){frameTimes=[];lastFrame=0;}});
+ window.addEventListener("error",()=>{if(!manual)degrade("fallback de segurança");},{once:true});
+})();
 document.getElementById("overview").addEventListener("click",()=>{selectRoom("paper");document.querySelector(".scene").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"nearest"});});
 document.getElementById("reset").addEventListener("click",()=>selectRoom("paper"));
 </script>

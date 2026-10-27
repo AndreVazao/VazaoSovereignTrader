@@ -168,5 +168,33 @@ class CoinbaseL2BookSynchronizerTests(unittest.TestCase):
         self.assertEqual(view.reason, "clock_regression")
 
 
+    def test_unsupported_event_clears_last_good_book_and_requires_snapshot(self) -> None:
+        self.sync.on_event(self.event(
+            "snapshot", 41, 10_000_000,
+            bids=(OrderBookLevel(100, 2),),
+            asks=(OrderBookLevel(101, 3),),
+        ))
+        self.assertTrue(self.views[-1].eligible)
+
+        self.sync.on_event(self.event(
+            "heartbeat", 41, 20_000_000,
+            bids=(),
+            asks=(),
+        ))
+        view = self.views[-1]
+        self.assertEqual(view.status, "INVALID")
+        self.assertFalse(view.eligible)
+        self.assertEqual(view.reason, "invalid_sequence_or_book")
+        self.assertEqual(view.bids, ())
+        self.assertEqual(view.asks, ())
+
+        self.sync.on_event(self.event(
+            "delta", 42, 30_000_000,
+            bids=(OrderBookLevel(100, 4),),
+        ))
+        self.assertFalse(self.views[-1].eligible)
+        self.assertEqual(self.views[-1].bids, ())
+
+
 if __name__ == "__main__":
     unittest.main()

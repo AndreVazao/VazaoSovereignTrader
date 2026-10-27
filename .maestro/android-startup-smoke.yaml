@@ -1,0 +1,5 @@
+appId: pt.andrevazao.vazaosovereigntrader
+---
+- launchApp
+- waitForAnimationToEnd
+- takeScreenshot: vst-android-startup

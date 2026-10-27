@@ -54,13 +54,15 @@ class Surface(BoxLayout):
 
 
 def _label(text="", size=14, color=TEXT, bold=False, **kwargs):
+    # Callers may override alignment (e.g. centered sidebar logo). Set defaults
+    # in kwargs first so Label never receives duplicate halign/valign arguments.
+    kwargs.setdefault("halign", "left")
+    kwargs.setdefault("valign", "middle")
     return Label(
         text=text,
         color=color,
         font_size=dp(size),
         bold=bold,
-        halign="left",
-        valign="middle",
         **kwargs,
     )
 
