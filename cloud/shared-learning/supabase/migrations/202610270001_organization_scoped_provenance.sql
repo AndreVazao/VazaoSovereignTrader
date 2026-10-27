@@ -64,6 +64,7 @@ create table if not exists public.trader_agents (
   created_at timestamptz not null default now(),
   unique (installation_id, agent_key),
   unique (id, organization_id),
+  unique (id, organization_id, installation_id, department_id),
   foreign key (installation_id, organization_id)
     references public.trader_installations(id, organization_id) on delete cascade,
   foreign key (department_id, organization_id)
@@ -92,8 +93,8 @@ create table if not exists public.shared_learning_provenance (
   created_at timestamptz not null default now(),
   foreign key (installation_id, organization_id)
     references public.trader_installations(id, organization_id) on delete restrict,
-  foreign key (agent_id, organization_id)
-    references public.trader_agents(id, organization_id) on delete restrict,
+  foreign key (agent_id, organization_id, installation_id, department_id)
+    references public.trader_agents(id, organization_id, installation_id, department_id) on delete restrict,
   foreign key (department_id, organization_id)
     references public.trader_departments(id, organization_id) on delete restrict
 );
