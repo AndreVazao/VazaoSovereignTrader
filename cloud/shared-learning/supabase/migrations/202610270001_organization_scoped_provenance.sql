@@ -115,3 +115,129 @@ begin
     execute format('grant all on public.%I to service_role', t);
   end loop;
 end $$;
+
+
+-- Atomically persist a verified public artifact and its provenance. Signature verification
+-- is performed by the API against the approved installation key before this RPC; this
+-- function independently re-checks current membership and registry state in the transaction.
+create or replace function public.publish_verified_shared_learning_artifact(
+  p_owner_id uuid,
+  p_artifact_digest text,
+  p_public_payload jsonb,
+  p_eligible boolean,
+  p_expires_at timestamptz,
+  p_organization_id uuid,
+  p_installation_id uuid,
+  p_agent_id uuid,
+  p_department_id uuid,
+  p_provenance_schema_version integer,
+  p_payload_digest text,
+  p_signature text,
+  p_source_artifact_ids jsonb,
+  p_producer_version text,
+  p_contributed_at timestamptz
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_artifact_id uuid;
+  v_existing public.shared_learning_provenance%rowtype;
+begin
+  if p_artifact_digest !~ '^[a-f0-9]{64}$'
+     or p_payload_digest <> p_artifact_digest
+     or jsonb_typeof(p_public_payload) <> 'object'
+     or jsonb_typeof(p_source_artifact_ids) <> 'array'
+     or jsonb_array_length(p_source_artifact_ids) > 32
+     or p_expires_at <= now()
+     or p_provenance_schema_version <> 1 then
+    return jsonb_build_object('ok', false, 'error', 'invalid_publication_payload');
+  end if;
+
+  if not exists (
+    select 1 from public.trader_organizations o
+    join public.trader_organization_memberships m on m.organization_id = o.id
+    where o.id = p_organization_id and o.status = 'active'
+      and m.user_id = p_owner_id and m.status = 'active'
+      and m.role in ('owner','admin','publisher')
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'organization_publish_forbidden');
+  end if;
+
+  if not exists (
+    select 1 from public.trader_installations i
+    where i.id = p_installation_id and i.organization_id = p_organization_id
+      and i.status = 'approved'
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'installation_not_approved');
+  end if;
+
+  if not exists (
+    select 1 from public.trader_agents a
+    join public.trader_departments d
+      on d.id = a.department_id and d.organization_id = a.organization_id
+    where a.id = p_agent_id and a.organization_id = p_organization_id
+      and a.installation_id = p_installation_id and a.department_id = p_department_id
+      and a.status = 'active'
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'agent_department_scope_invalid');
+  end if;
+
+  insert into public.shared_learning_artifacts (
+    owner_id, artifact_digest, public_payload, eligible, expires_at
+  ) values (
+    p_owner_id, p_artifact_digest, p_public_payload, false, p_expires_at
+  )
+  on conflict (owner_id, artifact_digest) do nothing
+  returning id into v_artifact_id;
+
+  if v_artifact_id is null then
+    select id into v_artifact_id
+      from public.shared_learning_artifacts
+      where owner_id = p_owner_id and artifact_digest = p_artifact_digest
+      for update;
+  end if;
+
+  select * into v_existing
+    from public.shared_learning_provenance
+    where artifact_row_id = v_artifact_id
+    for update;
+
+  if found then
+    if v_existing.organization_id <> p_organization_id
+       or v_existing.installation_id <> p_installation_id
+       or v_existing.agent_id <> p_agent_id
+       or v_existing.department_id <> p_department_id
+       or v_existing.payload_digest <> p_payload_digest
+       or v_existing.signature <> p_signature
+       or v_existing.verification_state <> 'verified'
+       or v_existing.revoked_at is not null then
+      return jsonb_build_object('ok', false, 'error', 'artifact_provenance_conflict');
+    end if;
+  else
+    insert into public.shared_learning_provenance (
+      artifact_row_id, organization_id, installation_id, agent_id, department_id,
+      provenance_schema_version, payload_digest, signature, source_artifact_ids,
+      producer_version, contributed_at, verification_state, verified_at
+    ) values (
+      v_artifact_id, p_organization_id, p_installation_id, p_agent_id, p_department_id,
+      p_provenance_schema_version, p_payload_digest, p_signature, p_source_artifact_ids,
+      p_producer_version, p_contributed_at, 'verified', now()
+    );
+  end if;
+
+  update public.shared_learning_artifacts
+     set eligible = p_eligible, expires_at = p_expires_at
+   where id = v_artifact_id;
+
+  return jsonb_build_object('ok', true, 'artifact_row_id', v_artifact_id);
+end;
+$$;
+revoke all on function public.publish_verified_shared_learning_artifact(
+  uuid,text,jsonb,boolean,timestamptz,uuid,uuid,uuid,uuid,integer,text,text,jsonb,text,timestamptz
+) from public, anon, authenticated;
+grant execute on function public.publish_verified_shared_learning_artifact(
+  uuid,text,jsonb,boolean,timestamptz,uuid,uuid,uuid,uuid,integer,text,text,jsonb,text,timestamptz
+) to service_role;
