@@ -1,9 +1,19 @@
+import { createHash, createPublicKey } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type ProvenanceEnvelope,
   digestPublicPayload,
   verifyProvenanceSignature
 } from "./provenance";
+
+function registeredKeyFingerprint(publicKeyPem: string): string | null {
+  try {
+    const der = createPublicKey(publicKeyPem).export({ type: "spki", format: "der" });
+    return createHash("sha256").update(der).digest("hex");
+  } catch {
+    return null;
+  }
+}
 
 export type ProvenanceCheck =
   | { ok: true; payloadDigest: string; contributedAt: string; sourceArtifactIds: string[]; producerVersion: string }
@@ -49,7 +59,7 @@ export async function verifyRegisteredProvenance(
 
   const { data: installation, error: installationError } = await db
     .from("trader_installations")
-    .select("id,organization_id,public_key_pem,status")
+    .select("id,organization_id,public_key_pem,key_fingerprint,status")
     .eq("id", envelope.installation_id)
     .eq("organization_id", envelope.organization_id)
     .maybeSingle();
@@ -80,6 +90,10 @@ export async function verifyRegisteredProvenance(
   if (departmentError) return { ok: false, error: "provenance_registry_unavailable", status: 503 };
   if (!department) return { ok: false, error: "agent_department_scope_invalid", status: 403 };
 
+  const keyFingerprint = registeredKeyFingerprint(installation.public_key_pem);
+  if (!keyFingerprint || keyFingerprint !== installation.key_fingerprint) {
+    return { ok: false, error: "installation_key_fingerprint_mismatch", status: 503 };
+  }
   if (!verifyProvenanceSignature(envelope, installation.public_key_pem)) {
     return { ok: false, error: "provenance_signature_invalid", status: 401 };
   }
