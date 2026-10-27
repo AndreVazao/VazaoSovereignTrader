@@ -204,7 +204,7 @@ class PublicL2WebSocketCollector:
                             raise ValueError("invalid_okx_heartbeat")
                         events.append(self._event(
                             venue=venue, symbol=symbol, event_type="heartbeat",
-                            sequence=sequence, sequence_start=sequence,
+                            sequence=sequence, sequence_start=None,
                             exchange_ts_ms=ts, receive_ns=receive_ns,
                             bids=(), asks=(),
                         ))
