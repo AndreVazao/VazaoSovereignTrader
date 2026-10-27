@@ -23,6 +23,12 @@ sleep 8
 adb shell pidof "$PACKAGE"
 adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
 adb logcat -d > "$EVIDENCE/logcat.txt"
+# Preserve the app-local startup traceback in CI evidence without uploading secrets.
+adb shell run-as "$PACKAGE" sh -c 'find files -name startup_error.log -type f -exec cat {} \\;' > "$EVIDENCE/startup_error.txt" 2>/dev/null || true
+if [[ -s "$EVIDENCE/startup_error.txt" ]]; then
+  echo "Startup diagnostic captured:"
+  cat "$EVIDENCE/startup_error.txt"
+fi
 if grep -E "FATAL EXCEPTION|Process: ${PACKAGE}.*has died" "$EVIDENCE/logcat.txt"; then
   echo "Android application crash detected in logcat." | tee "$EVIDENCE/failure.txt"
   exit 1
