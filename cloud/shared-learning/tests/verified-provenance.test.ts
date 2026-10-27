@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { digestPublicPayload, canonicalProvenanceMessage, parseProvenanceEnvelope } from "../lib/provenance";
 import { verifyRegisteredProvenance } from "../lib/verified-provenance";
@@ -28,12 +28,14 @@ function fixture(overrides: Record<string, unknown> = {}) {
   };
   const signature = sign(null, Buffer.from(canonicalProvenanceMessage({ ...base, signature: "" }), "utf8"), privateKey).toString("base64url");
   const envelope = parseProvenanceEnvelope({ ...base, signature, ...overrides });
+  const publicKeyPem = publicKey.export({ type: "spki", format: "pem" }).toString();
+  const keyFingerprint = createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
   const records: Record<string, Record<string, unknown>> = {
     trader_organizations: { id: ids.organization_id, status: "active" },
     trader_organization_memberships: { organization_id: ids.organization_id, user_id: userId, role: "publisher", status: "active" },
     trader_installations: {
       id: ids.installation_id, organization_id: ids.organization_id,
-      public_key_pem: publicKey.export({ type: "spki", format: "pem" }).toString(), status: "approved"
+      public_key_pem: publicKeyPem, key_fingerprint: keyFingerprint, status: "approved"
     },
     trader_agents: {
       id: ids.agent_id, organization_id: ids.organization_id, installation_id: ids.installation_id,
@@ -96,4 +98,19 @@ test("rejects cross-organization agent/department mismatch", async () => {
   const db = mockDb(records, (table, row) => table === "trader_agents" ? { ...row, department_id: "623e4567-e89b-42d3-a456-426614174000" } : row);
   const result = await verifyRegisteredProvenance(db, userId, envelope, payload);
   assert.deepEqual(result, { ok: false, error: "agent_department_scope_invalid", status: 403 });
+});
+
+
+test("rejects an enrolled public key whose stored fingerprint does not match", async () => {
+  const { envelope, records } = fixture();
+  const db = mockDb(records, (table, row) => table === "trader_installations" ? { ...row, key_fingerprint: "0".repeat(64) } : row);
+  const result = await verifyRegisteredProvenance(db, userId, envelope, payload);
+  assert.deepEqual(result, { ok: false, error: "installation_key_fingerprint_mismatch", status: 503 });
+});
+
+test("rejects a suspended organization", async () => {
+  const { envelope, records } = fixture();
+  const db = mockDb(records, (table, row) => table === "trader_organizations" ? { ...row, status: "suspended" } : row);
+  const result = await verifyRegisteredProvenance(db, userId, envelope, payload);
+  assert.deepEqual(result, { ok: false, error: "organization_not_active", status: 403 });
 });
