@@ -29,9 +29,22 @@ def synchronized_book_path(data_dir: Path, venue: str) -> Path:
 
 
 def build_collector(config: L2WebSocketConfig, on_event, on_book) -> PublicL2WebSocketCollector:
-    """Wire every supported venue to the synchronized-book callback."""
-    callback = on_book if config.venue in SYNCHRONIZED_BOOK_FILENAMES else None
+    """Wire each supported venue and preserve identity in synchronized callbacks."""
+    callback = (
+        (lambda view: on_book(config.venue, config.symbol, view))
+        if config.venue in SYNCHRONIZED_BOOK_FILENAMES else None
+    )
     return PublicL2WebSocketCollector(config, on_event, on_book=callback)
+
+
+def synchronized_book_payload(venue: str, symbol: str, view) -> dict:
+    """Serialize a synchronized view with explicit venue/instrument identity."""
+    payload = asdict(view)
+    if hasattr(view.status, "value"):
+        payload["status"] = view.status.value
+    payload["venue"] = venue
+    payload["symbol"] = symbol
+    return payload
 
 
 def main() -> None:
@@ -69,11 +82,9 @@ def main() -> None:
     def persist(event) -> None:
         append_jsonl(output, asdict(event))
 
-    def persist_book(view) -> None:
-        payload = asdict(view)
-        if hasattr(view.status, "value"):
-            payload["status"] = view.status.value
-        target = synchronized_outputs.get(payload.get("venue"))
+    def persist_book(venue: str, symbol: str, view) -> None:
+        payload = synchronized_book_payload(venue, symbol, view)
+        target = synchronized_outputs.get(venue)
         if target is None:
             raise ValueError("unsupported_synchronized_book_venue")
         append_jsonl(target, payload)
