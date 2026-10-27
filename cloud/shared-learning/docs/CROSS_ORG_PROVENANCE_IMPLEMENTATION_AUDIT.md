@@ -167,3 +167,8 @@ This hardening is committed but has not yet been confirmed by a passing TypeScri
 ### Cross-language signing gate
 
 The TypeScript canonicalizer sorts object keys and uses ECMAScript JSON number serialization. The current Python adapter uses Python's `json.dumps(sort_keys=True)`, whose float formatting is not guaranteed to produce byte-identical output for every numeric value. Because the adapter has not yet been wired to sign provenance, this is not an enabled-path regression, but it is a hard blocker for the next integration step: implement and test one explicitly specified cross-language canonicalization format (preferably RFC 8785/JCS or an equivalent schema-specific format) with shared golden vectors for integers, fractional metrics, negative zero, nested values and property ordering. Do not enable signed publication until Python and TypeScript produce identical digest/signature bytes for those vectors.
+
+
+### Installation signing-key immutability hardening — 2026-10-27
+
+The registry migration now prevents in-place updates to an installation's enrolled public key or key fingerprint. Key rotation must revoke the old installation and enroll a new installation/key pair, preserving an auditable identity boundary and reducing the risk of a key-change race between API-side signature verification and transactional publication. This trigger is part of the un-applied migration and still requires database-level tests for rejected key changes and allowed status/metadata updates.
