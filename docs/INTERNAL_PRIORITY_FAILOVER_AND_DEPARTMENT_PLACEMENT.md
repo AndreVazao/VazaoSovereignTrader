@@ -154,3 +154,12 @@ Physical acceptance is still required for power loss, router/LAN partition, Tail
 6. Add placement/resource/contract enforcement and real office event integration.
 7. Run CI and PAPER-only fault-injection tests; keep automatic failover disabled until receiver fencing is demonstrated.
 8. Perform two-host physical tests and document RPO/RTO, partition behavior and recovery evidence before production activation.
+
+
+## Deployment boundary: local departments versus remote hosts
+
+This document's PC1/PC2/PC3 recovery model applies **only when VST is explicitly deployed across multiple authorized PCs**. It is not the coordination model for the current installation.
+
+In the current single-PC installation, all departments are local modules coordinated by one CEO/supervisor. They communicate through local runtime interfaces, events/queues and local memory/storage. Do not create or attempt network calls between those modules, and do not invoke distributed leader election, leases, LAN discovery, Tailscale or Vercel to coordinate them. The user handles internal CEO/departement coordination within this one runtime; there is one local CEO, not one CEO per department.
+
+External network access remains a separate concern for configured exchange/API connections, approved services and remote access. Only a future, explicitly enabled multi-PC deployment uses the host roster, inter-PC authenticated communication, external rendezvous/reconciliation and failover rules described here. Keep local module messaging APIs separate from remote-host transport APIs so that adding multiple PCs later does not impose network overhead or distributed failure modes on the single-PC runtime.
