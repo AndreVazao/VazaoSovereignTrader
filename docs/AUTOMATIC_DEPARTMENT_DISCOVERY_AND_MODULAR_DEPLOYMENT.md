@@ -78,3 +78,18 @@ Implementation order:
 7. Validate real PC-to-PC, remote Tailscale and phone-to-PC behavior before claiming readiness.
 
 All work remains PAPER/read-only. This plan grants no permission to execute live trades or move funds.
+
+
+## Existing implementation audit (2026-10-27)
+
+The following related components already exist on the active consolidation branch, but they do not yet implement the full organization-wide department discovery described above:
+
+- The mobile client has separate LAN and Tailscale endpoint settings and a pure helper that orders configured endpoints LAN-first. The helper itself performs no network I/O and does not discover peers or fetch endpoints from Vercel.
+- The private endpoint lease contract documents a cloud device enrollment flow with Supabase Auth, a per-install keypair, challenge/proof, explicit device approval, and short-lived publication of a private Tailscale endpoint. A published endpoint is routing metadata only; the local PC API must still independently authenticate the peer.
+- The Vercel shared-intelligence adapter exchanges allow-listed learning artifacts. It is not an installation registry or peer-discovery service and must not be repurposed as one without a separately reviewed API contract.
+- The existing cloud endpoint path is therefore a foundation for secure private endpoint publication, not proof that all PCs register roles, enumerate departments, detect co-located services or automatically establish LAN/Tailscale connections.
+- Existing LAN/Tailscale selection documentation is partly a target contract; physical LAN and remote Tailscale end-to-end behavior remains unverified.
+
+### Consequence for implementation
+
+Reuse the existing authenticated cloud-device identity and endpoint-lease design where appropriate, but keep cloud device identity distinct from local owner IDs and local pairing credentials. Define an explicit organization/installation/role registry and peer-directory contract rather than mixing peer discovery into the learning-artifact API. Before wiring clients, verify the deployed Vercel/Supabase routes, current migrations and authentication contract; do not assume a route is deployed or change cloud schema without review.
