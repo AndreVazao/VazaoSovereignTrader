@@ -22,7 +22,10 @@ class MobileStartupContractTests(unittest.TestCase):
 
     def test_startup_failure_has_local_diagnostic_fallback(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
-        self.assertIn("return self._startup_error_view(type(exc).__name__)", source)
+        self.assertIn(
+            "return self._startup_error_view(type(exc).__name__, str(exc))",
+            source,
+        )
         self.assertIn('"startup_error.log"', source)
         self.assertIn("traceback.format_tb", source)
         self.assertNotIn('self._request("POST", "/startup-error"', source)
