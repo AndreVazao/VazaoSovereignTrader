@@ -7,10 +7,10 @@ Runtime integration must use authenticated fencing/lease enforcement separately.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
 
 
-class MigrationState(StrEnum):
+class MigrationState(str, Enum):
     REQUESTED = "requested"
     AUTHORIZED = "authorized"
     PREPARING = "preparing"
