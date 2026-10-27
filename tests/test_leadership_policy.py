@@ -81,6 +81,17 @@ def test_negative_replication_lag_fails_closed():
     ) is LeadershipDecision.DENY_INVALID_EVIDENCE
 
 
+@pytest.mark.parametrize("invalid_lag", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize(
+    "field",
+    ["replication_lag_seconds", "maximum_replication_lag_seconds"],
+)
+def test_non_finite_replication_lag_fails_closed(field, invalid_lag):
+    assert evaluate_leadership_request(
+        _evidence(**{field: invalid_lag}), now=NOW
+    ) is LeadershipDecision.DENY_INVALID_EVIDENCE
+
+
 def test_no_prior_lease_can_be_considered_only_with_consistent_evidence():
     assert evaluate_leadership_request(
         _evidence(current_lease_expires_at=None), now=NOW
