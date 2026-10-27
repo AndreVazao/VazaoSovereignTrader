@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from math import isfinite
 
 
 class LeadershipDecision(str, Enum):
@@ -44,7 +45,12 @@ def evaluate_leadership_request(
     """
     if not evidence.candidate_installation_id.strip() or evidence.current_epoch < 0:
         return LeadershipDecision.DENY_INVALID_EVIDENCE
-    if evidence.replication_lag_seconds < 0 or evidence.maximum_replication_lag_seconds < 0:
+    if (
+        not isfinite(evidence.replication_lag_seconds)
+        or not isfinite(evidence.maximum_replication_lag_seconds)
+        or evidence.replication_lag_seconds < 0
+        or evidence.maximum_replication_lag_seconds < 0
+    ):
         return LeadershipDecision.DENY_INVALID_EVIDENCE
     if not evidence.coordinator_state_is_consistent:
         return LeadershipDecision.DENY_INVALID_EVIDENCE
