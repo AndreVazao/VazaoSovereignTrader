@@ -1,0 +1,100 @@
+# Cross-Organization Provenance: Repository Audit and Safe Implementation Plan
+
+**Status:** audit of the repository source on `main` after PR #503. This document does not claim provenance or organization registration is implemented end-to-end.
+**Safety:** PAPER/read-only. No production database migration, cloud provisioning, or live trading action is performed by this change.
+
+## Executive finding
+
+The shared-learning API is an authenticated, allow-listed aggregate-artifact store, but it does not yet have a trusted organization/installation/agent registry. Cross-user artifact retrieval is already enabled, so attribution must be introduced as a server-verified contract rather than trusting fields supplied by a client.
+
+Do not add `organization_id`, `installation_id`, or `agent_id` to the accepted artifact payload and treat them as verified merely because the JSON contains them. The current user token authenticates a Supabase account; it does not by itself prove ownership of a VST organization, an installation key, or an agent identity.
+
+## Verified source findings
+
+### Artifact API
+
+Source: `cloud/shared-learning/app/api/v1/artifacts/route.ts`.
+
+- Both POST and GET require a Supabase Auth bearer token and call `auth.auth.getUser(token)`.
+- POST bounds the request body, validates the aggregate artifact with `validateArtifact`, maps it through `publicPayload`, hashes the public payload, and persists it to `shared_learning_artifacts`.
+- The database owner is taken from the verified user ID, not from request JSON.
+- Duplicate uploads are deduplicated by `owner_id,artifact_digest`.
+- GET returns eligible, unexpired public payloads across owners. The returned payload currently does not include a trusted contributor envelope.
+- The route does not resolve organization membership, installation identity, agent/department registration, installation signatures, or artifact lineage.
+
+### Current database boundary
+
+Migrations inspected:
+
+- `202609280001_shared_learning_artifacts.sql`: artifact row has `owner_id`, digest, public JSON payload, eligibility and expiry. RLS is enabled; anon/authenticated table access is revoked and server routes use the service role.
+- `202609290001_identity_devices_vault_config.sql`: `user_profiles`, `reserved_usernames`, `authorized_devices`, configuration, vault and security-audit tables exist. `authorized_devices` is attached to a user and has a public key/status, but there is no organization membership, VST installation registry, agent registry, or artifact-provenance relation in these migrations.
+- Later device-proof, rate-limit and endpoint-lease migrations address device/endpoint security; those concepts must not be silently conflated with organization or agent identity.
+
+The cloud device UUID, Supabase user UUID, local PC pairing ID, VST installation ID, organization ID and agent ID must remain distinct identifiers with explicit reviewed mappings.
+
+### PC adapter boundary
+
+Source: `PC_ENGINE/core/vercel_shared_intelligence.py`.
+
+- `CLOUD_FIELDS` is a strict allow-list for aggregate learning fields.
+- The adapter deliberately omits local owner/device provenance.
+- It sends artifacts over HTTPS with bounded timeout/response handling and only uploads eligible, unexpired artifacts.
+- It cannot currently supply verified provenance because the cloud API has no trusted registry contract to validate it against.
+
+This privacy boundary is correct and must be preserved. Do not expose local owner IDs, device pairing tokens, private endpoint addresses, credentials, account state, or private operational logs as a shortcut to attribution.
+
+## Required trust model
+
+The server, not client-provided display names, must determine attribution.
+
+1. Authenticate the account with Supabase Auth.
+2. Resolve an organization membership from a server-owned registry and require explicit permission to publish to the cross-organization pool.
+3. Resolve an approved installation registered to that organization. Enrollment must bind proof-of-possession to a public key and have explicit approval/revocation semantics.
+4. Resolve the contributor agent and department under that installation. Human-readable labels are display metadata only.
+5. Bind artifact provenance to canonical IDs, a canonical payload digest, schema/producer version and timestamps. Verify a signature or another reviewed proof that the enrolled installation attests to this artifact.
+6. Preserve source lineage when artifacts are derived or re-shared. Original contributor, derivative author, and validator/reviewer must be separate fields.
+7. Apply expiry, revocation, eligibility and validation-state checks on reads as well as writes. Cross-organization GET must never reveal private database columns or tenant-private records.
+
+A name such as “Joana — organization João Pedro — installation JP-PC-01 — Market Radar” may be shown only after those values have been resolved from trusted records. It must not become an authorization mechanism.
+
+## Safe implementation sequence
+
+### Phase 1 — identity registry and membership
+- Design normalized organizations, organization memberships, installations, agents and departments with immutable UUIDs.
+- Link authenticated accounts to organizations through explicit membership/role rows; never accept membership from request JSON.
+- Bind installation enrollment to the existing device proof-of-possession lifecycle without reusing device IDs as installation IDs.
+- Define administrator approval, revocation, name collision handling, audit events and deletion/retention rules.
+- Add migration-level uniqueness and foreign-key constraints and tests for cross-organization isolation.
+
+### Phase 2 — signed artifact provenance
+- Define a versioned public envelope separate from the aggregate strategy payload.
+- Derive owner and organization authority server-side; resolve installation/agent/department IDs against approved records.
+- Canonicalize the signed bytes and digest before signature verification. Reject unknown provenance fields, mismatched IDs, revoked identities, stale timestamps and invalid signatures.
+- Keep source lineage and contributor/validator roles distinct. Define backward compatibility for legacy artifacts: un-attributed legacy records must remain explicitly “legacy/unverified”, never be assigned a guessed contributor.
+- Ensure deduplication is stable across retries and does not allow one organization to overwrite another organization's artifact.
+
+### Phase 3 — client and operator integration
+- Update the PC adapter only after the cloud schema and API are tested; transmit only the minimal verified public envelope.
+- Display origin organization, installation, agent, department, contribution time, source lineage, confidence/sample size, validation, expiry and revocation state.
+- Keep internal organization memory on its own local/runtime or authenticated intra-organization replication path. Do not route local department messages through this cross-organization API.
+- Treat shared artifacts as research evidence only. They never confer CEO authority, membership, credentials, balances, orders, risk overrides or execution permission.
+
+### Phase 4 — acceptance gates
+- Missing/invalid token, non-member, pending/revoked installation, unknown agent and cross-org impersonation are denied.
+- Client cannot claim another organization by changing a JSON field or display name.
+- Same display names in different organizations remain unambiguous and cannot collide at the identity level.
+- Signature/digest mismatch, replay, malformed lineage, revoked provenance, expired artifacts and unknown schema versions are rejected or quarantined.
+- Cross-org reads return only eligible, unexpired public artifacts plus the verified minimal provenance envelope.
+- Legacy artifacts remain clearly unverified until independently validated.
+- Cloud outage leaves local memory and local department messaging functional; queued publication is durable, deduplicated and revalidated on reconnect.
+- Automated tests run in PAPER/read-only and produce no external trading side effects.
+
+## Release blockers
+
+- No trusted organization/install/agent registry has been verified in the current migrations.
+- The artifact route currently has no provenance verification or lineage logic.
+- No end-to-end client-to-cloud provenance test has been demonstrated.
+- Migrations have not been applied to a production Supabase project as part of this audit.
+- Vercel deployment readiness does not prove database migration state or end-to-end identity enrollment.
+
+Until those blockers are closed and the tests pass, cross-organization shared learning may remain an authenticated aggregate artifact pool, but it must not be represented in the UI as fully attributable to a verified organization/agent.
