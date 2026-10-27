@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from dataclasses import dataclass
 
 from PC_ENGINE.market_events.orderbook_builder import OrderBookBuilder
 from PC_ENGINE.market_events.l2_collectors import (
@@ -12,6 +13,49 @@ from PC_ENGINE.market_events.l2_collectors import (
 
 
 class L2CollectorTests(unittest.TestCase):
+    def test_synchronized_book_persistence_routes_by_venue_and_fails_closed(self) -> None:
+        from pathlib import Path
+        from PC_ENGINE.tools.run_l2_market_data_collector import (
+            persist_synchronized_book,
+            synchronized_book_path,
+        )
+
+        @dataclass
+        class View:
+            venue: str
+            status: str
+            eligible: bool = True
+
+        root = Path("data")
+        outputs = {
+            venue: synchronized_book_path(root, venue)
+            for venue in ("binance", "coinbase", "okx")
+        }
+        written = []
+        for venue in outputs:
+            with self.subTest(venue=venue):
+                persist_synchronized_book(
+                    View(venue=venue, status="SYNCED"),
+                    outputs,
+                    lambda path, payload: written.append((path, payload)),
+                )
+        self.assertEqual(
+            [path.name for path, _payload in written],
+            [
+                "binance_synchronized_orderbook_views.jsonl",
+                "coinbase_synchronized_orderbook_views.jsonl",
+                "okx_synchronized_orderbook_views.jsonl",
+            ],
+        )
+        self.assertTrue(all(payload["status"] == "SYNCED" for _, payload in written))
+
+        with self.assertRaisesRegex(ValueError, "unsupported_synchronized_book_venue"):
+            persist_synchronized_book(
+                View(venue="unknown", status="SYNCED"),
+                outputs,
+                lambda _path, _payload: self.fail("unsupported venue must not be written"),
+            )
+
     def test_l2_runner_wires_synchronized_views_for_all_supported_venues(self) -> None:
         from PC_ENGINE.tools.run_l2_market_data_collector import build_collector
 
