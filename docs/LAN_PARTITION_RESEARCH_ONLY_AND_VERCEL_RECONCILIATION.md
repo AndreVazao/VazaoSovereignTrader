@@ -1,6 +1,6 @@
 # LAN Partition: Research-Only Mode and Vercel Reconciliation
 
-**Status:** architecture contract; runtime enforcement is not yet implemented.
+**Status:** architecture contract plus a tested pure policy helper; runtime enforcement is not yet integrated.
 **Scope:** VazaoSovereignTrader only. DGM-MAT remains separate.
 **Safety:** all development and acceptance tests remain PAPER/read-only. This document does not authorize live trading.
 
@@ -70,4 +70,15 @@ The virtual office must display actual connectivity and supervisor events, not i
 
 ## Implementation boundary
 
-This document records intended behavior only. The current system does not yet implement this complete connectivity state machine, durable roster/epoch reconciliation, automatic fencing, or end-to-end failover. Automatic promotion must remain disabled until receiver-side fencing or a validated quorum mechanism is implemented and tested.
+Implemented in this PR:
+- `PC_ENGINE/core/connectivity_policy.py`: deterministic pure policy for LAN-first, authenticated private-overlay fallback, partitioned research-only, reconciliation and degraded states.
+- `tests/test_connectivity_policy.py`: policy tests covering Vercel outage, missing peers, route fallback, rejoin reconciliation and inconsistent state.
+
+Not yet implemented/integrated:
+- actual peer health probes and authenticated transport;
+- supervisor enforcement of research-only mode at operation boundaries;
+- durable host roster, event/checkpoint cursors and epoch reconciliation;
+- receiver-side fencing, coordinator/witness semantics, and automatic takeover/failback;
+- real office event integration and physical two-host validation.
+
+The pure helper is not a network detector or authority grant. Automatic promotion must remain disabled until receiver-side fencing or a validated quorum mechanism is implemented and tested.
