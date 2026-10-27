@@ -12,7 +12,7 @@ const ids = {
   department_id: "423e4567-e89b-42d3-a456-426614174000"
 };
 const userId = "523e4567-e89b-42d3-a456-426614174000";
-const payload = { schema_version: 1, strategy_id: "ema_atr_v1", sample_count: 100 };
+const payload = { schema_version: 1, strategy_id: "ema_atr_v1", sample_count: 100, producer_version: "0.1.0" };
 
 function fixture(overrides: Record<string, unknown> = {}) {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -113,4 +113,11 @@ test("rejects a suspended organization", async () => {
   const db = mockDb(records, (table, row) => table === "trader_organizations" ? { ...row, status: "suspended" } : row);
   const result = await verifyRegisteredProvenance(db, userId, envelope, payload);
   assert.deepEqual(result, { ok: false, error: "organization_not_active", status: 403 });
+});
+
+
+test("rejects a provenance producer version that differs from the artifact", async () => {
+  const { envelope, records } = fixture({ producer_version: "0.2.0" });
+  const result = await verifyRegisteredProvenance(mockDb(records), userId, envelope, payload);
+  assert.deepEqual(result, { ok: false, error: "provenance_producer_version_mismatch", status: 400 });
 });
