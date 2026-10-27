@@ -96,7 +96,7 @@ buttons.forEach(b=>b.addEventListener("click",()=>selectRoom(b.dataset.room)));
  function degrade(reason){
    const idx=order.indexOf(current);
    const next=order[Math.min(order.length-1,Math.max(1,idx)+1)];
-   if(next!==current)setMode(next,reason);
+   if(next!==current){manual=false;select.value="auto";setMode(next,reason+" · downgrade automático");}
    slowWindows=0;fastSince=0;
  }
  select.addEventListener("change",()=>{
@@ -115,13 +115,13 @@ buttons.forEach(b=>b.addEventListener("click",()=>selectRoom(b.dataset.room)));
      const heap=performance.memory&&performance.memory.jsHeapSizeLimit>0
        ?performance.memory.usedJSHeapSize/performance.memory.jsHeapSizeLimit:0;
      const pressured=avg>34||(heap>0.80);
-     if(pressured){slowWindows++;fastSince=0;if(slowWindows>=2&&!manual)degrade(heap>0.80?"memória alta":"frames lentos");}
+     if(pressured){slowWindows++;fastSince=0;if(slowWindows>=2)degrade(heap>0.80?"memória alta":"frames lentos");}
      else {slowWindows=0;if(!fastSince)fastSince=now;}
    }
    requestAnimationFrame(frame);
  }
  requestAnimationFrame(frame);
- window.addEventListener("visibilitychange",()=>{if(document.hidden){frameTimes=[];lastFrame=0;}});
+ document.addEventListener("visibilitychange",()=>{if(document.hidden){frameTimes=[];lastFrame=0;}});
  window.addEventListener("error",()=>{if(!manual)degrade("fallback de segurança");},{once:true});
 })();
 document.getElementById("overview").addEventListener("click",()=>{selectRoom("paper");document.querySelector(".scene").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"nearest"});});
