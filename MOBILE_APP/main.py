@@ -50,7 +50,7 @@ class MobileCockpit(App):
             return self._build_cockpit()
         except Exception as exc:
             self._record_startup_error(exc)
-            return self._startup_error_view(type(exc).__name__)
+            return self._startup_error_view(type(exc).__name__, str(exc))
 
     def _build_cockpit(self):
         self.lang = self._load_lang("pt")
@@ -83,14 +83,14 @@ class MobileCockpit(App):
             path.parent.mkdir(parents=True, exist_ok=True)
             frames = "".join(traceback.format_tb(exc.__traceback__))
             path.write_text(
-                f"exception_type={type(exc).__name__}\\n{frames}",
+                f"exception_type={type(exc).__name__}\nmessage={exc}\n{frames}",
                 encoding="utf-8",
             )
             self._startup_error_path = str(path)
         except Exception:
             self._startup_error_path = ""
 
-    def _startup_error_view(self, error_type):
+    def _startup_error_view(self, error_type, error_message=""):
         root = BoxLayout(orientation="vertical", padding=20, spacing=12)
         root.add_widget(Label(
             text="O VST (Vazão Sovereign Trader) não conseguiu iniciar o cockpit.",
@@ -100,6 +100,11 @@ class MobileCockpit(App):
             text=f"Tipo de erro: {error_type}",
             size_hint_y=None, height=42, halign="center", valign="middle",
         ))
+        if error_message:
+            root.add_widget(Label(
+                text=f"Detalhe: {error_message}",
+                size_hint_y=None, height=90, halign="center", valign="middle",
+            ))
         diagnostic_path = getattr(self, "_startup_error_path", "")
         detail = (
             "Diagnóstico local guardado em startup_error.log, sem dados de autenticação."
