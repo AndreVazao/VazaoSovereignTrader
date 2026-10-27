@@ -15,7 +15,7 @@ const ids = {
 
 function unsigned(payloadDigest = "a".repeat(64)) {
   return {
-    schema_version: 1,
+    schema_version: 1 as const,
     ...ids,
     artifact_id: "artifact-001",
     payload_digest: payloadDigest,
