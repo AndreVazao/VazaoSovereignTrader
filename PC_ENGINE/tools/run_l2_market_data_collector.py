@@ -28,6 +28,22 @@ def synchronized_book_path(data_dir: Path, venue: str) -> Path:
     return data_dir / filename
 
 
+def persist_synchronized_book(view, outputs: dict[str, Path], append_jsonl) -> None:
+    """Persist a synchronized view to its venue-specific JSONL file.
+
+    Unknown venues fail closed rather than being silently attributed to a
+    different exchange's output file.
+    """
+    payload = asdict(view)
+    status = getattr(view, "status", None)
+    if hasattr(status, "value"):
+        payload["status"] = status.value
+    target = outputs.get(payload.get("venue"))
+    if target is None:
+        raise ValueError("unsupported_synchronized_book_venue")
+    append_jsonl(target, payload)
+
+
 def build_collector(config: L2WebSocketConfig, on_event, on_book) -> PublicL2WebSocketCollector:
     """Wire every supported venue to the synchronized-book callback."""
     callback = on_book if config.venue in SYNCHRONIZED_BOOK_FILENAMES else None
@@ -70,13 +86,7 @@ def main() -> None:
         append_jsonl(output, asdict(event))
 
     def persist_book(view) -> None:
-        payload = asdict(view)
-        if hasattr(view.status, "value"):
-            payload["status"] = view.status.value
-        target = synchronized_outputs.get(payload.get("venue"))
-        if target is None:
-            raise ValueError("unsupported_synchronized_book_venue")
-        append_jsonl(target, payload)
+        persist_synchronized_book(view, synchronized_outputs, append_jsonl)
 
     configs = []
     requested_venues = set(args.venues)
