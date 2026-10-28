@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 from pathlib import Path
 
@@ -68,3 +70,29 @@ def test_python_provenance_message_uses_the_same_sorted_signed_fields():
         '"schema_version":1,"source_artifact_ids":["root-001","root-002"]}'
     )
     assert canonicalize_provenance_message(envelope).decode("utf-8") == expected
+
+
+def test_python_verifies_shared_typescript_ed25519_provenance_vector():
+    from cryptography.hazmat.primitives.serialization import load_der_public_key
+
+    vector_path = (
+        Path(__file__).resolve().parents[1]
+        / "cloud"
+        / "shared-learning"
+        / "tests"
+        / "fixtures"
+        / "provenance-ed25519-vector.json"
+    )
+    fixture = json.loads(vector_path.read_text(encoding="utf-8"))
+    message = canonicalize_provenance_message(fixture["envelope"])
+    assert message.decode("utf-8") == fixture["message"]
+    assert hashlib.sha256(message).hexdigest() == fixture["message_sha256"]
+
+    public_key = load_der_public_key(
+        base64.b64decode(fixture["public_key_spki_der_base64"])
+    )
+    signature = base64.urlsafe_b64decode(
+        fixture["signature_base64url"]
+        + "=" * (-len(fixture["signature_base64url"]) % 4)
+    )
+    public_key.verify(signature, message)
