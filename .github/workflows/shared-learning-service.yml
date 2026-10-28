@@ -79,3 +79,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d shared_learning_test -v ON_ERROR_STOP=1 -f cloud/shared-learning/supabase/tests/verified_publication_rpc_smoke.sql
+      - name: Verify concurrent publication and revocation races
+        env:
+          PGPASSWORD: postgres
+        run: bash cloud/shared-learning/supabase/tests/verified_publication_concurrency_smoke.sh
