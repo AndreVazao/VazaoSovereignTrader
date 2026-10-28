@@ -26,6 +26,7 @@ from PC_ENGINE.core.execution_gate import ExecutionGate, ExecutionState
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
+from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
@@ -154,10 +155,34 @@ class SovereignEngine:
         self.cycle_count = 0
         self.preflight_done = False
         research_dir = str(self.owner_context.private_path("research"))
+        learning_cfg = dict(config.get("learning_memory", {}))
+        self.learning_memory: SQLiteLearningMemory | None = None
+        learning_enabled = bool(learning_cfg.get("enabled", True))
+        learning_state: dict[str, object] = {
+            "enabled": learning_enabled,
+            "state": "DISABLED" if not learning_enabled else "INITIALIZING",
+            "scope": "owner_private",
+            "order_authority": False,
+        }
+        if learning_enabled:
+            try:
+                learning_path = self.owner_context.private_path(
+                    str(learning_cfg.get("path", "learning/sovereign-learning.sqlite3"))
+                )
+                self.learning_memory = SQLiteLearningMemory(learning_path)
+                learning_state["state"] = "READY"
+            except Exception as exc:
+                # Persistence failure is visible but cannot authorize or submit orders.
+                learning_state.update({
+                    "state": "UNAVAILABLE",
+                    "error": type(exc).__name__,
+                })
+        self.state.operational["learning_memory"] = learning_state
         self.autonomous_research = AutonomousResearchWorker(
             research_dir,
             min_observation_score=float(research_cfg.get("min_observation_score", 70.0)),
             dedupe_seconds=float(research_cfg.get("dedupe_seconds", 3600.0)),
+            learning_memory=self.learning_memory,
         )
         self.research_worker = ResearchWorker(
             research_dir,
