@@ -101,12 +101,14 @@ def build_chat_cockpit(app):
     app.sidebar = sidebar
 
     pages = {}
+    nav_buttons = {}
 
     def nav(label, key, icon):
         btn = RoundedButton(text=icon + "\n" + label, fill=PANEL, size_hint_y=None, height=dp(58))
         btn.font_size = dp(10)
         btn.bind(on_release=lambda *_: show_page(key))
         sidebar.add_widget(btn)
+        nav_buttons[key] = btn
 
     nav("Chat", "chat", "✦")
     nav("Escritório", "office", "▦")
@@ -498,6 +500,7 @@ def build_chat_cockpit(app):
                     ui_preferences.put("experience", mode=value)
                 except Exception:
                     app.status.text = "Preferência não guardada · dados reais desligados"
+            set_navigation_experience(value)
             show_page(value)
 
         simple = Surface(orientation="vertical", padding=dp(14), spacing=dp(7), size_hint_y=None, height=dp(166))
@@ -518,8 +521,19 @@ def build_chat_cockpit(app):
         return page
 
     pages["experience"] = experience_page
-    if not saved_experience:
-        show_page("experience")
-    else:
+
+    def set_navigation_experience(value):
+        # Chat-only mode hides nonessential navigation to reduce visual clutter.
+        # The Modo entry remains visible so the user can switch back at any time.
+        for key, button in nav_buttons.items():
+            visible = value != "chat" or key in {"chat", "experience"}
+            button.height = dp(58) if visible else 0
+            button.opacity = 1 if visible else 0
+            button.disabled = not visible
+
+    if saved_experience:
+        set_navigation_experience(saved_experience)
         show_page(saved_experience)
+    else:
+        show_page("experience")
     return root
