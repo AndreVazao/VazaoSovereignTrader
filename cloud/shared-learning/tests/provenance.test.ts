@@ -79,4 +79,11 @@ test("rejects values that are not valid JSON before computing a public payload d
   assert.throws(() => digestPublicPayload([, 1]), /sparse_canonical_json_array/);
   assert.throws(() => digestPublicPayload({ value: new Date(0) }), /non_plain_canonical_json_object/);
   assert.throws(() => digestPublicPayload({ value: 1n }), /unsupported_canonical_json_value/);
+  assert.throws(() => digestPublicPayload({ value: () => "not-json" }), /unsupported_canonical_json_value/);
+  assert.throws(() => digestPublicPayload({ value: Symbol("not-json") }), /unsupported_canonical_json_value/);
+  assert.throws(() => digestPublicPayload({ nested: [1, undefined] }), /unsupported_canonical_json_value/);
+});
+
+test("normalizes negative zero as JSON number zero for TypeScript payload digests", () => {
+  assert.equal(digestPublicPayload({ metric: -0 }), digestPublicPayload({ metric: 0 }));
 });
