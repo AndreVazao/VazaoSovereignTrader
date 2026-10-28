@@ -191,3 +191,11 @@ Registry verification now also requires the signed provenance producer_version t
 - This is a code-level change only. CI is running on the latest PR head; database integration has not been performed.
 - Remaining lineage hardening: source provenance is checked for verification/revocation and digest integrity, but the read path must also ensure each source's organization, installation, agent and department remain active/approved. Do not treat this as complete until that identity-state check and database-backed tests pass.
 - Still blocked from end-to-end release: trusted organization/installation enrollment and approval, Python adapter signature creation and verified-endpoint consumption, cross-language canonicalization vectors, disposable Supabase migration/RPC tests, and confirmation of the intended cross-organization visibility policy.
+
+
+### Strict JSON input validation follow-up — 2026-10-28
+
+- `digestPublicPayload` now rejects non-finite numbers, unsupported primitive values (`undefined`, functions, symbols and `BigInt`), sparse arrays, and non-plain objects before hashing.
+- The first CI run on this change exposed a regression-test mismatch: `BigInt` initially threw Node's native serialization `TypeError` instead of the intended controlled error. The implementation was adjusted to reject unsupported primitives explicitly.
+- The follow-up commit is `4da4e571a829d8c37badf4a2b292a58b8283b4da`. Snyk is green; Vercel is pending at the last check. The new exact-head test run has not yet been returned, so this fix is not marked validated.
+- This is defensive TypeScript-side input validation only. It does not establish RFC 8785/JCS compatibility and does not remove the Python/TypeScript canonicalization gate.
