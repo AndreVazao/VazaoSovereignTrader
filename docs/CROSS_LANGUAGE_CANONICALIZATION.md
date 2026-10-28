@@ -1,6 +1,6 @@
 # Cross-language canonicalization contract
 
-Status: TypeScript canonical payload serialization and shared golden vectors are implemented in PR #504. Python compatibility is **not yet implemented or verified**. Do not enable Python-side signing or accept Python-generated digests until the Python adapter passes the same vectors byte-for-byte.
+Status: TypeScript canonical serialization and shared golden vectors are implemented. A Python RFC 8785 helper and tests against the shared payload vectors have now been added in PR #504. Cross-runtime CI on the current head is pending; signing remains disabled until those tests pass and the provenance-message bytes are verified end-to-end.
 
 ## Contract
 
@@ -14,13 +14,13 @@ Status: TypeScript canonical payload serialization and shared golden vectors are
 
 ## Shared conformance vectors
 
-The machine-readable fixture is `cloud/shared-learning/tests/fixtures/canonical-json-vectors.json`. TypeScript tests assert both exact canonical bytes and SHA-256 digests. The Python adapter must load this exact fixture and assert both values, not maintain a separate copy.
+The machine-readable fixture is `cloud/shared-learning/tests/fixtures/canonical-json-vectors.json`. TypeScript tests assert both exact canonical bytes and SHA-256 digests. The Python helper loads this exact fixture and asserts both values; it must not maintain a separate copy.
 
 ## Required before Python signing is enabled
 
-1. Implement or adopt a reviewed RFC 8785 implementation in Python.
-2. Add Python tests against the shared fixture and add envelope-signing golden vectors for the exact provenance message.
-3. Include edge cases for UTF-16 key ordering, Unicode escapes, fractional and exponent-form numbers, negative zero, and invalid surrogate sequences.
+1. Confirm Python and TypeScript CI pass the shared payload vectors on the exact same PR head.
+2. Add shared envelope-signing golden vectors for the exact provenance message; current Python test checks the field contract, but does not yet verify an Ed25519 signature generated in one runtime and verified in the other.
+3. Extend Python/TypeScript edge-case coverage for UTF-16 key ordering, Unicode escapes, fractional and exponent-form numbers, negative zero, and invalid surrogate sequences.
 4. Confirm Ed25519 signatures verify across runtimes using the same canonical message bytes.
 5. Keep Python signing disabled if any vector fails or the canonicalization library is unavailable.
 
