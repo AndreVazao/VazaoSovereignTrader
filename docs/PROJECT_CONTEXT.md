@@ -1,3 +1,15 @@
+# CURRENT AUTHORITATIVE HANDOFF — 2026-10-27 (PR #504 provenance gate)
+
+- Live branch: `work/cross-org-learning-provenance-2026-10-27`; PR #504 remains OPEN and unmerged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/504.
+- Current head at this checkpoint: `482e7107a532ad2c4b976eda3a82c635ed2ed427`. GitHub Actions run #82 / ID `40580258249` completed SUCCESS on that exact SHA: npm install, npm tests, TypeScript check and production build all passed. See https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/40580258249.
+- Snyk/Vercel combined status endpoint did not yet return completed status entries for this SHA; verify PR checks live before any merge decision. PR reports mergeable=true, which is not equivalent to release readiness.
+- Latest docs-only change lists migration `202610270001_organization_scoped_provenance.sql` and explicitly warns that it is not validated against a disposable Supabase database.
+- Current scope: strict provenance envelope; registry-backed organization/member/installation/agent/department checks; public-key fingerprint check; immutable enrolled signing key; server-side signature/digest verification; service-role-only atomic publication RPC; verified provenance read endpoint; CI workflow. No cloud migration was applied, no deployment or real account provisioning occurred, and no financial execution occurred.
+- **Do not merge yet.** Remaining gates: (1) verify final Snyk/Vercel/required PR checks; (2) disposable Supabase migration/RPC/trigger integration tests; (3) trusted enrollment and approval flow; (4) Python adapter signing and verified-endpoint consumption; (5) shared cross-language canonicalization/golden vectors before signing from Python; (6) resolve and verify source-artifact lineage before treating lineage claims as trusted. Keep shared learning advisory only, PAPER/read-only, no orders/transfers/withdrawals.
+- Immediate next action: add a disposable-database migration test harness or, if no safe test database is available, add a local PostgreSQL/Supabase-compatible integration test workflow without touching production. Then implement lineage verification as a separate, tested increment.
+
+---
+
 # CURRENT AUTHORITATIVE HANDOFF — 2026-10-04 (private endpoint lease API merged; client contract documented)
 
 - PR #331 [private Tailscale address validation](https://github.com/AndreVazao/VazaoSovereignTrader/pull/331) merged at `44da885c3a839fae5669caa39dba4f35dfb80788`.
@@ -1362,3 +1374,115 @@ Review points before merge:
 - The `/health` probe is public and proves reachability only; the UI reports that authentication is not yet validated by this probe. Authenticated private-state probing remains follow-up work.
 - GitHub Actions run 39419467665 / run #45 passed endpoint-selection unit tests and built/uploaded the debug APK. This does not prove the APK launches on a physical phone; Android 16 startup/logcat validation remains pending.
 - Keep LAN/Tailscale addresses local to Android. Vercel must not proxy orders or LAN traffic; no public port-forward fallback. No exchange keys or trading execution logic were added.
+
+
+## Checkpoint 2026-10-27 — cross-organization provenance audit
+
+- PR #503 merged to `main` as `75fcc6d43c4207b18be830ac57a6a28021d2dd1a`; the exact pre-merge head had successful Python tests, PAPER smoke, Windows EXE workflow and reported security status.
+- New branch: `work/cross-org-learning-provenance-2026-10-27`; PR #504 is open for a source-backed audit of shared-learning provenance.
+- Audited `cloud/shared-learning/app/api/v1/artifacts/route.ts`, `lib/artifact.ts`, current migrations and `PC_ENGINE/core/vercel_shared_intelligence.py`.
+- Confirmed: Supabase Auth protects artifact POST/GET; POST uses the authenticated user as owner and an allow-listed payload; GET exposes eligible, unexpired public aggregate payloads across users. The adapter omits local owner/device provenance.
+- Gap: there is no verified organization/install/agent/department registry or end-to-end artifact provenance verification in the inspected migrations/API. Client-supplied IDs or display names must not be treated as identity proof.
+- Audit document: `cloud/shared-learning/docs/CROSS_ORG_PROVENANCE_IMPLEMENTATION_AUDIT.md`. It defines the safe phased implementation: registry and membership, approved installation identity, signed provenance/lineage, client integration, and negative/expiry/revocation/outage tests.
+- PR #504 checks were still pending at the last query; no merge performed. No production migrations applied, no cloud resources provisioned, no physical-device test, and no live trading side effects. Keep PAPER/read-only.
+
+
+## 2026-10-27 — registry-backed provenance implementation checkpoint
+
+- PR #503 is merged at `75fcc6d43c4207b18be830ac57a6a28021d2dd1a`.
+- PR #504 remains open on `work/cross-org-learning-provenance-2026-10-27`; current work extends the earlier audit/scaffold with a registry migration, server-side provenance authorization and a separate verified-read endpoint.
+- Added migration `cloud/shared-learning/supabase/migrations/202610270001_organization_scoped_provenance.sql` for organizations, memberships, installations/public keys, departments, agents and shared artifact provenance. It includes composite constraints to prevent cross-organization and mismatched agent/install/department references. Not applied to any live Supabase environment.
+- Added `lib/verified-provenance.ts` to verify active organization membership/publishing role, active organization, approved installation, active agent/department scope, exact public payload digest and signature against the registry public key.
+- `POST /api/v1/artifacts` now accepts an optional wrapper `{artifact, provenance}`. Legacy direct payloads remain accepted but explicitly return `legacy_unattributed`; wrapped payloads must verify. Provenance-backed artifacts are inserted ineligible and activated only after provenance persistence; conflicts are rejected.
+- Added `GET /api/v1/artifacts/provenance`, which returns only verified, non-revoked provenance for active organizations, approved installations, active agents and eligible/unexpired artifacts, with minimal public labels/IDs. The legacy GET response remains unchanged for adapter compatibility.
+- Added tests for provenance envelope integrity and registry-backed authorization in `tests/provenance.test.ts` and `tests/verified-provenance.test.ts`.
+- Remaining blockers: enrollment/approval API, PC adapter signing and consuming provenance endpoint, database-transactional atomic persistence, migration/schema integration tests, and successful CI/deployment checks on the final PR head. Keep PAPER/read-only; do not claim production rollout.
+
+
+- Follow-up on 2026-10-27: verified publication now calls service-role-only RPC `publish_verified_shared_learning_artifact` from `POST /api/v1/artifacts`. The SQL function rechecks membership/registry scope and atomically persists artifact + provenance, avoiding a public eligible artifact without its verified provenance. Still needs disposable-database integration/retry tests; not deployed.
+- Added separate `GET /api/v1/artifacts/provenance` response for verified/non-revoked contributions, with minimal organization/installation/agent/department labels and IDs. Legacy `GET /api/v1/artifacts` remains unchanged.
+- Latest changes are awaiting Vercel and Snyk status checks. No CI test run has been confirmed on the latest head; do not merge yet.
+
+
+- 2026-10-27 digest hardening: public payload hashing now uses recursively key-sorted canonical JSON, the POST route uses the same digest helper, and the verified-provenance GET route rechecks the stored payload digest before returning contributor attribution. Added a test for property-order independence. Test execution and final preview checks are still pending.
+
+
+- Additional release gate identified: TypeScript canonical JSON and Python `json.dumps(sort_keys=True)` do not guarantee identical float-number bytes. Before implementing adapter signing, define a cross-language canonicalization format (RFC 8785/JCS or schema-specific equivalent) and shared golden vectors. Do not enable signed publication before parity is proven.
+
+
+## Checkpoint 2026-10-28 — JCS shared vectors extended (validation pending)
+
+- PR #504 remains open and unmerged on `work/cross-org-learning-provenance-2026-10-27`.
+- Shared canonical JSON fixture was extended with explicit negative-zero input (`-0.0` canonicalizes to `0`) and JSON control-character/quote escaping. The corrected fixture parses as valid JSON and is consumed by both the TypeScript and Python tests.
+- The seven expected SHA-256 values were independently recalculated from the declared canonical UTF-8 strings and match the fixture. This is independent digest verification, not a substitute for running both implementations.
+- Product branch head when this checkpoint was started: `ada068facdbc46e63fe89e96ab2198cb53e0a8fd`. The fixture commit itself has not yet been confirmed green by exact-head CI. Previous head `434f37e05721311b3ad4f9a01072403f7778ad03` had successful Python tests, Shared Learning Service (npm test, TypeScript check, build), Windows EXE/installer smoke and PAPER smoke.
+- At the `ada068f...` check snapshot, Snyk was pending, Vercel reported a build rate-limit failure, and the workflow lookup had not returned exact-head runs. Do not claim exact-head validation or merge readiness until refreshed checks resolve.
+- Python signing and production synchronization remain disabled. Continue PAPER/read-only.
+- Next: confirm exact-head TypeScript/Python shared-vector and Ed25519 tests; resolve CI/Vercel/Snyk status; then continue the Python verified-provenance adapter, trusted enrollment/revocation/key rotation, disposable Supabase integration tests, cross-org visibility policy and local learning-memory persistence/concurrency tests.
+- Persistent memory checkpoint recorded in `AndreVazao/andreos-memory`: `AndreOS/02_PROJETOS/VAZAO_SOVEREIGN_TRADER/CHECKPOINT_PR504_2026-10-28.md` (commit `626a2e1da1e239dd01b9d0234da6bcb17c775244`).
+
+
+
+## Follow-up 2026-10-28 — numeric fixture token correction
+
+- Current branch HEAD at this point: `59b7c93bdbb12aebd5969d1e90692456b1508de2`.
+- Inspection found the shared JCS vector's `large` input had been stored as the integer token `100000000000000000000`. Python's standard JSON parser loads that token as an arbitrary-precision integer, which the `rfc8785` package correctly rejects outside the interoperable binary64 number domain.
+- Corrected only the input token to `1e20`; the canonical output remains `100000000000000000000` under ECMAScript number serialization. JSON syntax was validated after editing.
+- Independently recalculated SHA-256 for all seven declared canonical UTF-8 strings; all matched the expected fixture digests. This does not replace runtime tests.
+- Exact HEAD actions are running: Python tests, Shared Learning Service tests/typecheck/build, and PAPER smoke were in progress; Windows EXE workflow was pending at last poll. Snyk pending; Vercel failed with a build-rate-limit indication.
+- PR body refreshed to state the current HEAD and validation status. PR remains open, not merged.
+- Next: obtain exact-head test outcomes; if all shared-vector tests pass, proceed to trusted enrollment/key lifecycle and disposable Supabase integration tests. Keep Python signing disabled and all activity PAPER/read-only.
+
+
+## Follow-up 2026-10-28 — opt-in Python provenance signer and adapter
+
+- Added `PC_ENGINE/core/shared_learning_provenance.py` with `VerifiedProvenanceSigner`: it accepts an injected Ed25519 private key in memory, canonicalizes the v1 provenance message through `PC_ENGINE/core/canonical_json.py`, computes the JCS payload digest, and emits a base64url signature.
+- Added opt-in `VercelSharedIntelligenceProvider.push_verified(..., signer=...)`, which posts `{artifact, provenance}` to the existing `POST /api/v1/artifacts` contract. The legacy `push()` path remains unchanged for backward compatibility.
+- Verified publishing requires `source_artifact_ids` to be explicitly present on each row (an explicit empty list declares a root); it never falls back to legacy unattributed publication and only counts success if the server returns both `accepted: true` and `provenance: "verified"`.
+- Added tests for Ed25519 signing/verification, digest binding, public-field allow-listing, explicit lineage, and fail-closed handling of a legacy response.
+- Product branch HEAD: `a67439eea7d0e9050a387e03ef18059cf4dc1212`. Exact-HEAD PAPER smoke passed and Snyk passed. Python tests and Shared Learning CI were queued/in progress at last poll; Windows EXE was pending. Vercel remained failed due to a build-rate-limit indication.
+- This is an opt-in signing capability, not production activation. No trusted private-key provisioning, enrollment/approval, scheduler activation, production sync, or live trading is enabled. Do not activate it until current-head tests pass and the enrollment/key lifecycle and database/visibility gates are closed.
+- Next: confirm the new Python tests and full CI on the current code, then implement explicit cross-organization visibility policy and disposable Supabase integration tests. Continue PAPER/read-only.
+
+
+## Follow-up 2026-10-28 — explicit cross-organization visibility gate
+
+- Added migration `202610280001_cross_org_visibility_policy.sql`. Existing/new organizations default to `organization_only`; only the explicit `cross_org_public` value permits cross-organization discovery. The migration does not change any organization to public.
+- The verified provenance read endpoint now filters both contributor organizations and every lineage-source organization to active `cross_org_public` organizations, and applies a second fail-closed visibility check at response assembly.
+- The legacy `GET /api/v1/artifacts` route now returns only rows owned by the authenticated user. It can no longer serve as an alternate cross-organization path that bypasses provenance/visibility checks.
+- Added a unit test for the visibility policy helper: only the exact `cross_org_public` value is accepted; missing, null, organization-only, and unknown values fail closed.
+- Product branch current work is on `work/cross-org-learning-provenance-2026-10-27`; PR #504 remains open and unmerged. New exact-HEAD CI must pass before claiming this change validated.
+- Remaining: disposable Supabase integration tests for migration compatibility, RLS/grants, publication RPC atomicity and concurrent revocation; explicit trusted owner/admin workflow to change visibility; trusted installation/key lifecycle; local-memory persistence/concurrency/recovery tests. No production migration, cloud activation, orders, transfers, or live trading.
+
+
+## Follow-up — serialize publication against registry revocation (2026-10-28)
+
+- Hardened `publish_verified_shared_learning_artifact` so organization + publisher membership, installation, agent, and department authorization rows are locked with `FOR UPDATE` during the atomic publication transaction.
+- This is intended to serialize a publication with concurrent membership suspension/revocation, installation revocation, or agent suspension rather than relying only on API-side preflight reads. The database migration and lock behavior are not yet validated against a disposable Supabase/Postgres instance; do not treat this as proven race elimination until concurrency tests run.
+- CI was restarted by the latest source changes. Check results for the exact current PR HEAD; do not reuse green results from prior commits. Vercel remains blocked by the build-rate-limit error.
+
+
+## Follow-up — exact-head CI and disposable DB schema smoke (2026-10-28)
+
+- Confirmed exact-head workflows for commit `9bebf49442ff366785a0ca010eb44e9207ce235b`: Python tests, Shared Learning Service tests/typecheck/build, Trading Engine PAPER smoke, and Windows EXE workflow all completed successfully; Snyk is green.
+- Vercel remains failed due to the explicit build-rate-limit response; this is an infrastructure gate, not a green check.
+- Added `supabase/tests/verified_publication_schema_smoke.sql`, a read-only SQL assertion script for a disposable Supabase/Postgres database. It checks private-by-default visibility, allowed visibility values, RLS on required tables, RPC execute grants, the immutable-installation-key trigger, and direct-read restrictions. It has not yet been run against a real disposable database; do not claim database validation.
+- New SQL test script advances the branch HEAD and triggers a new exact-head CI cycle. Await the result before claiming the latest branch is green.
+- Next: execute the SQL smoke test against a disposable Supabase project, then add two-session tests for publication versus revocation and duplicate/conflicting publication. No production database changes or cloud activation.
+
+
+## Follow-up — broadened disposable database schema smoke assertions (2026-10-28)
+
+- Expanded `cloud/shared-learning/supabase/tests/verified_publication_schema_smoke.sql` to include RLS validation for `trader_departments` and direct-SELECT grant denial for anon/authenticated across the registry tables, provenance table, and shared artifacts table.
+- This remains a read-only assertion harness for a disposable Supabase/Postgres database. It has not been executed against a database in this session; no syntax/runtime or database behavior is claimed as proven from the source review alone.
+- Exact-head validation before this latest test-only commit: Python tests, Shared Learning tests/typecheck/build, PAPER smoke, Windows EXE and installer smoke, and Snyk all passed on `0df93d834840297abdf1662d04dd813859b799b0`. Vercel remains failed with a build-rate-limit indication. The new test-only commit requires its own exact-head CI verification.
+- PR #504 remains open and unmerged. No production migration, cloud activation, orders, transfers, or live trading.
+
+
+## Follow-up — transactional source-lineage gate (2026-10-28)
+
+- Security review found that the signed `source_artifact_ids` list was being persisted without the publication RPC independently confirming that each source still existed and remained eligible. Added a transaction-level source check to `publish_verified_shared_learning_artifact`.
+- The RPC now rejects non-string/empty/duplicate source IDs and checks each source for an eligible, unexpired artifact; verified, non-revoked provenance; an active organization explicitly marked `cross_org_public`; and approved installation/active agent/valid department identity. It locks the source artifact, provenance, organization and registry identity rows while publication runs to serialize against concurrent state changes.
+- API maps `source_lineage_not_eligible` to HTTP 409. This is source-level hardening only until tested against disposable Supabase/Postgres with two-session race cases. PostgreSQL client tools are not available in the current working environment; no SQL execution is claimed.
+- Product branch HEAD: `dcb86efd1cedcb15870f6c9b8dcc5d0be47f0125`. Current-head Python, Shared Learning, PAPER and Windows workflows are pending at last poll; Vercel has a build-rate-limit failure and Snyk is pending. Prior HEAD `49b19ce62c56a49b1244223f1cb2ec539f83c0cc` passed Python, Shared Learning, PAPER, Snyk and Vercel; Windows EXE passed while installer smoke was still in progress.
+- PR #504 remains open/unmerged. No production migration, cloud activation, orders, transfers or live trading. Next: inspect current-head CI, run disposable database assertions and concurrency tests, and continue enrollment/key lifecycle and local memory recovery work.

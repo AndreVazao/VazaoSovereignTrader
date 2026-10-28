@@ -26,6 +26,7 @@ from PC_ENGINE.core.execution_gate import ExecutionGate, ExecutionState
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
+from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
@@ -101,6 +102,7 @@ class SovereignEngine:
         self.real_readiness_service = RealReadinessService(config)
         self._autonomous_real_promotion_attempted = False
         self.state = RuntimeState(mode=self.mode)
+        self._closed = False
         self.state.operational["owner_id"] = self.owner_id
         self.ledger = Ledger(
             path=self.owner_context.private_path("logs/trades.jsonl"),
@@ -154,10 +156,34 @@ class SovereignEngine:
         self.cycle_count = 0
         self.preflight_done = False
         research_dir = str(self.owner_context.private_path("research"))
+        learning_cfg = dict(config.get("learning_memory", {}))
+        self.learning_memory: SQLiteLearningMemory | None = None
+        learning_enabled = bool(learning_cfg.get("enabled", True))
+        learning_state: dict[str, object] = {
+            "enabled": learning_enabled,
+            "state": "DISABLED" if not learning_enabled else "INITIALIZING",
+            "scope": "owner_private",
+            "order_authority": False,
+        }
+        if learning_enabled:
+            try:
+                learning_path = self.owner_context.private_path(
+                    str(learning_cfg.get("path", "learning/sovereign-learning.sqlite3"))
+                )
+                self.learning_memory = SQLiteLearningMemory(learning_path)
+                learning_state["state"] = "READY"
+            except Exception as exc:
+                # Persistence failure is visible but cannot authorize or submit orders.
+                learning_state.update({
+                    "state": "UNAVAILABLE",
+                    "error": type(exc).__name__,
+                })
+        self.state.operational["learning_memory"] = learning_state
         self.autonomous_research = AutonomousResearchWorker(
             research_dir,
             min_observation_score=float(research_cfg.get("min_observation_score", 70.0)),
             dedupe_seconds=float(research_cfg.get("dedupe_seconds", 3600.0)),
+            learning_memory=self.learning_memory,
         )
         self.research_worker = ResearchWorker(
             research_dir,
@@ -611,6 +637,9 @@ class SovereignEngine:
             self.state.status = "SAFE_MODE"
 
     def start(self) -> None:
+        if getattr(self, "_closed", False):
+            self.log("ENGINE_START_BLOCKED_CLOSED", {"reason": "terminal_shutdown_completed"})
+            return
         if self.thread and self.thread.is_alive():
             self.pause(False)
             return
@@ -870,6 +899,39 @@ class SovereignEngine:
         self._publish_observer_snapshot()
         self._persist_recovery()
         self.log("ENGINE_STOPPED")
+
+    def close(self) -> bool:
+        """Terminal process shutdown: stop producers before closing durable memory.
+
+        Unlike stop(), close() is not restartable. If a worker remains alive after
+        bounded joins, keep SQLite open rather than racing an active producer.
+        """
+        if getattr(self, "_closed", False):
+            return True
+        self.stop()
+        current = threading.current_thread()
+        workers = (self.thread, self.research_thread)
+        for worker in workers:
+            if worker is not None and worker.is_alive() and worker is not current:
+                worker.join(timeout=5.0)
+        active = [worker.name for worker in workers if worker is not None and worker.is_alive()]
+        if active:
+            self.state.operational["learning_memory_shutdown"] = {
+                "state": "DEFERRED_ACTIVE_WORKERS",
+                "workers": active,
+            }
+            self.log("ENGINE_CLOSE_DEFERRED_ACTIVE_WORKERS", {"workers": active})
+            return False
+        memory = getattr(self, "learning_memory", None)
+        if memory is not None:
+            memory.close()
+            self.learning_memory = None
+        learning_state = self.state.operational.get("learning_memory")
+        if isinstance(learning_state, dict):
+            learning_state["state"] = "CLOSED"
+        self.state.operational["learning_memory_shutdown"] = {"state": "CLOSED"}
+        self._closed = True
+        return True
 
     def set_mode(self, mode: str, *, real_authorized: bool = False, autonomous: bool = False) -> None:
         mode = mode.upper()

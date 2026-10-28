@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from PC_ENGINE.research.inbox import TraderResearchInbox
 from PC_ENGINE.research.knowledge import ResearchKnowledge
+from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 
 
 class AutonomousResearchWorker:
@@ -13,11 +14,20 @@ class AutonomousResearchWorker:
     that deserve measurement. External-source research can consume the same queue.
     """
 
-    def __init__(self, data_dir: str = "PC_ENGINE/data/research", min_observation_score: float = 70.0, dedupe_seconds: float = 3600.0):
+    def __init__(
+        self,
+        data_dir: str = "PC_ENGINE/data/research",
+        min_observation_score: float = 70.0,
+        dedupe_seconds: float = 3600.0,
+        learning_memory: SQLiteLearningMemory | None = None,
+    ):
         self.inbox = TraderResearchInbox(data_dir)
         self.min_observation_score = float(min_observation_score)
         self.dedupe_seconds = float(dedupe_seconds)
         self.knowledge = ResearchKnowledge(data_dir)
+        self.learning_memory = learning_memory
+        self.memory_write_failures = 0
+        self.last_memory_error = ""
         self.state_path = Path(data_dir) / "autonomous_state.json"
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self._last_emit: dict[str, float] = {}
@@ -47,6 +57,29 @@ class AutonomousResearchWorker:
             tags=[symbol, regime.lower(), "autonomous"],
             hypothesis_id=request.request_id,
         )
+        # Persist the observation in the owner-private shared learning store.
+        # It remains unverified and has no execution/order authority.
+        if self.learning_memory is not None:
+            try:
+                self.learning_memory.put(
+                    key=f"research.autonomous.{request.request_id}",
+                    value={
+                        "symbol": symbol,
+                        "regime": regime,
+                        "score": score,
+                        "opportunity": opp,
+                        "research_request_id": request.request_id,
+                    },
+                    department="market_radar",
+                    provenance=f"autonomous_observation:{request.request_id}",
+                    status="unverified",
+                    confidence=max(0.0, min(1.0, score / 100.0)),
+                )
+                self.last_memory_error = ""
+            except Exception as exc:
+                # A persistence failure must be observable without killing the engine loop.
+                self.memory_write_failures += 1
+                self.last_memory_error = type(exc).__name__
         self._last_emit[key] = now
         self._save()
         return True
@@ -57,6 +90,11 @@ class AutonomousResearchWorker:
             "min_observation_score": self.min_observation_score,
             "dedupe_seconds": self.dedupe_seconds,
             "last_emissions": len(self._last_emit),
+            "durable_memory": {
+                "enabled": self.learning_memory is not None,
+                "write_failures": self.memory_write_failures,
+                "last_error": self.last_memory_error,
+            },
             "queue": self.inbox.snapshot(),
             "knowledge": self.knowledge.snapshot(),
         }
