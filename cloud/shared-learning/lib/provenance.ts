@@ -73,6 +73,10 @@ function canonicalJson(value: unknown): string {
   if (typeof value === "number" && !Number.isFinite(value)) {
     throw new Error("non_finite_canonical_json_number");
   }
+  if (typeof value === "bigint" || typeof value === "function" || typeof value === "symbol" ||
+      typeof value === "undefined") {
+    throw new Error("unsupported_canonical_json_value");
+  }
   if (value === null || typeof value !== "object") {
     const encoded = JSON.stringify(value);
     if (encoded === undefined) throw new Error("unsupported_canonical_json_value");
