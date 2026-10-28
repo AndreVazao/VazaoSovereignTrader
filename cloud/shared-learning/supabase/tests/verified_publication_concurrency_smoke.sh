@@ -10,7 +10,7 @@ psql_base=(psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At
 rpc_call() {
   local digest="$1" artifact_id="$2" signature="$3" sources="${4:-[]}"
   "${psql_base[@]}" -c "
-    select coalesce(result->>'ok', result->>'error')
+    select case when result->>'ok' = 'true' then 'true' else coalesce(result->>'error', 'false') end
       from (select public.publish_verified_shared_learning_artifact(
         '00000000-0000-4000-8000-000000000001'::uuid,
         '$digest',
