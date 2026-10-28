@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     const [artifacts, organizations, installations, agents, departments] = await Promise.all([
       db.from("shared_learning_artifacts").select("id,public_payload,eligible,expires_at")
         .in("id", artifactIds).eq("eligible", true).gt("expires_at", new Date().toISOString()),
-      db.from("trader_organizations").select("id,display_name,status").in("id", organizationIds).eq("status", "active"),
+      db.from("trader_organizations").select("id,display_name,status,cross_org_visibility").in("id", organizationIds).eq("status", "active").eq("cross_org_visibility", "cross_org_public"),
       db.from("trader_installations").select("id,organization_id,installation_label,status")
         .in("id", installationIds).eq("status", "approved"),
       db.from("trader_agents").select("id,organization_id,installation_id,department_id,display_name,status")
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
     const sourceAgentIds = [...new Set(rawSourceProvenance.map((row) => row.agent_id))];
     const sourceDepartmentIds = [...new Set(rawSourceProvenance.map((row) => row.department_id))];
     const [sourceOrganizations, sourceInstallations, sourceAgents, sourceDepartments] = await Promise.all([
-      db.from("trader_organizations").select("id,status").in("id", sourceOrgIds).eq("status", "active"),
+      db.from("trader_organizations").select("id,status,cross_org_visibility").in("id", sourceOrgIds).eq("status", "active").eq("cross_org_visibility", "cross_org_public"),
       db.from("trader_installations").select("id,organization_id,status")
         .in("id", sourceInstallationIds).eq("status", "approved"),
       db.from("trader_agents").select("id,organization_id,installation_id,department_id,status")
