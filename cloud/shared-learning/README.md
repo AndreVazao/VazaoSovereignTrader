@@ -16,7 +16,7 @@ Deploy this directory as a separate Vercel project with Root Directory `cloud/sh
 ## Endpoints
 - `GET /api/health`: non-sensitive health check.
 - `POST /api/v1/artifacts`: submit one artifact, with `Authorization: Bearer <Supabase access token>`.
-- `GET /api/v1/artifacts?limit=50`: retrieve eligible, unexpired artifacts with the same authentication.
+- `GET /api/v1/artifacts?limit=50`: retrieve only the authenticated user's eligible, unexpired legacy artifacts. Cross-organization discovery is served by the provenance endpoint and only includes organizations explicitly opted into `cross_org_public` visibility.
 - `POST /api/v1/devices`: register a validated device public key; registration always starts as `pending`.
 - `GET /api/v1/devices`: list the authenticated user's devices after account activation and mandatory password rotation.
 - `DELETE /api/v1/devices?id=<uuid>`: revoke only a device belonging to the authenticated user.
@@ -27,6 +27,7 @@ Apply only after reviewing the target environment and validating the SQL against
 1. `supabase/migrations/202609280001_shared_learning_artifacts.sql`
 2. `supabase/migrations/202609290001_identity_devices_vault_config.sql`
 3. `supabase/migrations/202610270001_organization_scoped_provenance.sql` — organization-scoped identity registry, immutable installation signing keys, verified provenance records, and the service-role-only atomic publication RPC.
+4. `supabase/migrations/202610280001_cross_org_visibility_policy.sql` — explicit cross-organization visibility policy; all existing organizations default to `organization_only`.
 
 The second migration reserves the exact usernames `AndreVazao` (intended administrator) and `DiogoRocha` (member). These are reservations only, not live Auth accounts. No passwords are included in source control. See `docs/INITIAL_IDENTITY_AND_ONBOARDING.md`.
 
