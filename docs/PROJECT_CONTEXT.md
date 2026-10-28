@@ -1453,3 +1453,10 @@ Review points before merge:
 - Added a unit test for the visibility policy helper: only the exact `cross_org_public` value is accepted; missing, null, organization-only, and unknown values fail closed.
 - Product branch current work is on `work/cross-org-learning-provenance-2026-10-27`; PR #504 remains open and unmerged. New exact-HEAD CI must pass before claiming this change validated.
 - Remaining: disposable Supabase integration tests for migration compatibility, RLS/grants, publication RPC atomicity and concurrent revocation; explicit trusted owner/admin workflow to change visibility; trusted installation/key lifecycle; local-memory persistence/concurrency/recovery tests. No production migration, cloud activation, orders, transfers, or live trading.
+
+
+## Follow-up — serialize publication against registry revocation (2026-10-28)
+
+- Hardened `publish_verified_shared_learning_artifact` so organization + publisher membership, installation, agent, and department authorization rows are locked with `FOR UPDATE` during the atomic publication transaction.
+- This is intended to serialize a publication with concurrent membership suspension/revocation, installation revocation, or agent suspension rather than relying only on API-side preflight reads. The database migration and lock behavior are not yet validated against a disposable Supabase/Postgres instance; do not treat this as proven race elimination until concurrency tests run.
+- CI was restarted by the latest source changes. Check results for the exact current PR HEAD; do not reuse green results from prior commits. Vercel remains blocked by the build-rate-limit error.
