@@ -121,6 +121,6 @@ test("verifies the shared Python/TypeScript Ed25519 provenance vector", () => {
   const message = canonicalProvenanceMessage(fixture.envelope);
   assert.equal(message, fixture.message);
   assert.equal(createHash("sha256").update(message, "utf8").digest("hex"), fixture.message_sha256);
-  const publicKey = `-----BEGIN PUBLIC KEY-----\\n${fixture.public_key_spki_der_base64}\\n-----END PUBLIC KEY-----\\n`;
+  const publicKey = `-----BEGIN PUBLIC KEY-----\n${fixture.public_key_spki_der_base64}\n-----END PUBLIC KEY-----\n`;
   assert.equal(verifyProvenanceSignature(fixture.envelope, publicKey), true);
 });
