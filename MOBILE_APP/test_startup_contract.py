@@ -25,6 +25,10 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn('nav("Escritório", "office", "▦")', source)
         self.assertIn('pages["office"]=office_page', source)
         self.assertIn('"DEMO OFFLINE · ESCRITÓRIO SEM MOTOR"', source)
+        self.assertIn("office_preferences.json", source)
+        self.assertIn("JsonStore", source)
+        self.assertIn('default_mode = "Compacta" if Window.width <= dp(420) else "2.5D leve"', source)
+        self.assertIn('office_preferences.put("display", mode=value)', source)
         for mode in ("2.5D leve", "Pixel / 8-bit", "Palitinhos", "Compacta", "HD 3D (futuro)"):
             with self.subTest(mode=mode):
                 self.assertIn(mode, source)
