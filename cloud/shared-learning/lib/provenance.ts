@@ -70,12 +70,26 @@ export function canonicalProvenanceMessage(envelope: ProvenanceEnvelope): string
 }
 
 function canonicalJson(value: unknown): string {
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new Error("non_finite_canonical_json_number");
+  }
   if (value === null || typeof value !== "object") {
     const encoded = JSON.stringify(value);
     if (encoded === undefined) throw new Error("unsupported_canonical_json_value");
     return encoded;
   }
-  if (Array.isArray(value)) return "[" + value.map((item) => canonicalJson(item)).join(",") + "]";
+  if (Array.isArray(value)) {
+    const items: string[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      if (!(index in value)) throw new Error("sparse_canonical_json_array");
+      items.push(canonicalJson(value[index]));
+    }
+    return "[" + items.join(",") + "]";
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error("non_plain_canonical_json_object");
+  }
   const record = value as Record<string, unknown>;
   return "{" + Object.keys(record).sort().map((key) =>
     JSON.stringify(key) + ":" + canonicalJson(record[key])
