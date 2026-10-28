@@ -7,6 +7,8 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from PC_ENGINE.core.shared_learning_provenance import VerifiedProvenanceSigner
+
 
 CLOUD_FIELDS = (
     "schema_version", "artifact_type", "strategy_id", "market", "regime",
@@ -80,3 +82,45 @@ class VercelSharedIntelligenceProvider:
             if response.get("accepted") is True:
                 accepted += 1
         return {"accepted": accepted, "next_cursor": ""}
+
+    def push_verified(
+        self,
+        *,
+        rows: list[dict[str, Any]],
+        signer: VerifiedProvenanceSigner,
+    ) -> dict[str, Any]:
+        """Publish signed artifacts to the verified endpoint contract.
+
+        This method is deliberately opt-in and never falls back to legacy,
+        unattributed publication. Each row must explicitly provide lineage IDs;
+        an empty list is allowed only when the caller intentionally declares a
+        root artifact. The caller controls when this method may be enabled.
+        """
+        accepted = 0
+        now_ms = time.time_ns() // 1_000_000
+        for row in rows[:100]:
+            artifact = row.get("artifact") if isinstance(row, dict) else None
+            if not isinstance(artifact, dict):
+                continue
+            payload = {key: artifact[key] for key in CLOUD_FIELDS if key in artifact}
+            if payload.get("eligible") is not True:
+                continue
+            try:
+                if int(payload.get("expires_at_ms", 0)) <= now_ms:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            if "source_artifact_ids" not in row:
+                raise ValueError("verified_provenance_source_ids_required")
+            source_ids = row["source_artifact_ids"]
+            provenance = signer.sign(payload, source_artifact_ids=source_ids)
+            response = self._request(
+                "POST",
+                "/api/v1/artifacts",
+                {"artifact": payload, "provenance": provenance},
+            )
+            if response.get("accepted") is not True or response.get("provenance") != "verified":
+                raise RuntimeError("vercel_shared_intelligence_verified_provenance_not_confirmed")
+            accepted += 1
+        return {"accepted": accepted, "next_cursor": ""}
+
