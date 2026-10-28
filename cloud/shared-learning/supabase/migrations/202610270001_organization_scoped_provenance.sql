@@ -209,9 +209,13 @@ begin
     return jsonb_build_object('ok', false, 'error', 'invalid_publication_payload');
   end if;
 
+  -- Process source IDs in a stable order so concurrent publications with
+  -- overlapping lineage sets acquire source-row locks consistently and are
+  -- less likely to deadlock solely because callers supplied different array order.
   for v_source_id in
     select item.value #>> '{}'
       from jsonb_array_elements(p_source_artifact_ids) as item(value)
+     order by item.value #>> '{}'
   loop
     perform 1
       from public.shared_learning_artifacts source_artifact
