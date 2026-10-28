@@ -145,6 +145,7 @@ as $$
 declare
   v_artifact_id uuid;
   v_existing public.shared_learning_provenance%rowtype;
+  v_source_id text;
 begin
   if p_artifact_digest !~ '^[a-f0-9]{64}$'
      or p_payload_digest <> p_artifact_digest
@@ -189,6 +190,61 @@ begin
   if not found then
     return jsonb_build_object('ok', false, 'error', 'agent_department_scope_invalid');
   end if;
+
+  -- Validate and lock every declared source in the same transaction. A signed
+  -- list of source IDs is not sufficient: each source must still be public,
+  -- eligible, unexpired, verified and backed by active registry identities.
+  if exists (
+    select 1
+      from jsonb_array_elements(p_source_artifact_ids) as item(value)
+     where jsonb_typeof(item.value) <> 'string'
+        or length(trim(item.value #>> '{}')) = 0
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'invalid_publication_payload');
+  end if;
+
+  if (select count(distinct item.value #>> '{}')
+        from jsonb_array_elements(p_source_artifact_ids) as item(value))
+       <> jsonb_array_length(p_source_artifact_ids) then
+    return jsonb_build_object('ok', false, 'error', 'invalid_publication_payload');
+  end if;
+
+  for v_source_id in
+    select item.value #>> '{}'
+      from jsonb_array_elements(p_source_artifact_ids) as item(value)
+  loop
+    perform 1
+      from public.shared_learning_artifacts source_artifact
+      join public.shared_learning_provenance source_provenance
+        on source_provenance.artifact_row_id = source_artifact.id
+      join public.trader_organizations source_org
+        on source_org.id = source_provenance.organization_id
+      join public.trader_installations source_installation
+        on source_installation.id = source_provenance.installation_id
+       and source_installation.organization_id = source_provenance.organization_id
+      join public.trader_agents source_agent
+        on source_agent.id = source_provenance.agent_id
+       and source_agent.organization_id = source_provenance.organization_id
+       and source_agent.installation_id = source_provenance.installation_id
+       and source_agent.department_id = source_provenance.department_id
+      join public.trader_departments source_department
+        on source_department.id = source_provenance.department_id
+       and source_department.organization_id = source_provenance.organization_id
+     where source_artifact.public_payload ->> 'artifact_id' = v_source_id
+       and source_artifact.eligible = true
+       and source_artifact.expires_at > now()
+       and source_provenance.verification_state = 'verified'
+       and source_provenance.revoked_at is null
+       and source_org.status = 'active'
+       and source_org.cross_org_visibility = 'cross_org_public'
+       and source_installation.status = 'approved'
+       and source_agent.status = 'active'
+     for update of source_artifact, source_provenance, source_org,
+                   source_installation, source_agent, source_department;
+    if not found then
+      return jsonb_build_object('ok', false, 'error', 'source_lineage_not_eligible');
+    end if;
+  end loop;
 
   insert into public.shared_learning_artifacts (
     owner_id, artifact_digest, public_payload, eligible, expires_at
