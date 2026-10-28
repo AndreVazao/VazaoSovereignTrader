@@ -75,3 +75,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d shared_learning_test -v ON_ERROR_STOP=1 -f cloud/shared-learning/supabase/tests/verified_publication_schema_smoke.sql
+      - name: Verify publication idempotency, conflict and revocation gates
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d shared_learning_test -v ON_ERROR_STOP=1 -f cloud/shared-learning/supabase/tests/verified_publication_rpc_smoke.sql
