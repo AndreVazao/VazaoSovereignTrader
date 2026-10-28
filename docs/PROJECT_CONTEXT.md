@@ -1421,3 +1421,14 @@ Review points before merge:
 - Next: confirm exact-head TypeScript/Python shared-vector and Ed25519 tests; resolve CI/Vercel/Snyk status; then continue the Python verified-provenance adapter, trusted enrollment/revocation/key rotation, disposable Supabase integration tests, cross-org visibility policy and local learning-memory persistence/concurrency tests.
 - Persistent memory checkpoint recorded in `AndreVazao/andreos-memory`: `AndreOS/02_PROJETOS/VAZAO_SOVEREIGN_TRADER/CHECKPOINT_PR504_2026-10-28.md` (commit `626a2e1da1e239dd01b9d0234da6bcb17c775244`).
 
+
+
+## Follow-up 2026-10-28 — numeric fixture token correction
+
+- Current branch HEAD at this point: `59b7c93bdbb12aebd5969d1e90692456b1508de2`.
+- Inspection found the shared JCS vector's `large` input had been stored as the integer token `100000000000000000000`. Python's standard JSON parser loads that token as an arbitrary-precision integer, which the `rfc8785` package correctly rejects outside the interoperable binary64 number domain.
+- Corrected only the input token to `1e20`; the canonical output remains `100000000000000000000` under ECMAScript number serialization. JSON syntax was validated after editing.
+- Independently recalculated SHA-256 for all seven declared canonical UTF-8 strings; all matched the expected fixture digests. This does not replace runtime tests.
+- Exact HEAD actions are running: Python tests, Shared Learning Service tests/typecheck/build, and PAPER smoke were in progress; Windows EXE workflow was pending at last poll. Snyk pending; Vercel failed with a build-rate-limit indication.
+- PR body refreshed to state the current HEAD and validation status. PR remains open, not merged.
+- Next: obtain exact-head test outcomes; if all shared-vector tests pass, proceed to trusted enrollment/key lifecycle and disposable Supabase integration tests. Keep Python signing disabled and all activity PAPER/read-only.
