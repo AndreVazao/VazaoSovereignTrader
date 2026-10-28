@@ -69,7 +69,25 @@ export function canonicalProvenanceMessage(envelope: ProvenanceEnvelope): string
   return JSON.stringify(signed);
 }
 
-function canonicalJson(value: unknown): string {
+function assertWellFormedUnicode(value: string): void {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) throw new Error("unpaired_canonical_json_surrogate");
+      i += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      throw new Error("unpaired_canonical_json_surrogate");
+    }
+  }
+}
+
+/**
+ * Canonical JSON compatible with RFC 8785/JCS for valid JSON values:
+ * ECMAScript number serialization, UTF-16 code-unit property ordering, and
+ * JSON string escaping. Invalid Unicode and non-JSON JavaScript values fail closed.
+ */
+export function canonicalizePublicPayload(value: unknown): string {
   if (typeof value === "number" && !Number.isFinite(value)) {
     throw new Error("non_finite_canonical_json_number");
   }
@@ -77,6 +95,7 @@ function canonicalJson(value: unknown): string {
       typeof value === "undefined") {
     throw new Error("unsupported_canonical_json_value");
   }
+  if (typeof value === "string") assertWellFormedUnicode(value);
   if (value === null || typeof value !== "object") {
     const encoded = JSON.stringify(value);
     if (encoded === undefined) throw new Error("unsupported_canonical_json_value");
@@ -86,7 +105,7 @@ function canonicalJson(value: unknown): string {
     const items: string[] = [];
     for (let index = 0; index < value.length; index += 1) {
       if (!(index in value)) throw new Error("sparse_canonical_json_array");
-      items.push(canonicalJson(value[index]));
+      items.push(canonicalizePublicPayload(value[index]));
     }
     return "[" + items.join(",") + "]";
   }
@@ -95,13 +114,15 @@ function canonicalJson(value: unknown): string {
     throw new Error("non_plain_canonical_json_object");
   }
   const record = value as Record<string, unknown>;
-  return "{" + Object.keys(record).sort().map((key) =>
-    JSON.stringify(key) + ":" + canonicalJson(record[key])
+  const keys = Object.keys(record);
+  for (const key of keys) assertWellFormedUnicode(key);
+  return "{" + keys.sort().map((key) =>
+    JSON.stringify(key) + ":" + canonicalizePublicPayload(record[key])
   ).join(",") + "}";
 }
 
 export function digestPublicPayload(payload: unknown): string {
-  return createHash("sha256").update(canonicalJson(payload), "utf8").digest("hex");
+  return createHash("sha256").update(canonicalizePublicPayload(payload), "utf8").digest("hex");
 }
 
 /** registeredPublicKey must come from the server-side approved installation registry, never from the envelope. */
