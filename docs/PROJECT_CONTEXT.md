@@ -1477,3 +1477,12 @@ Review points before merge:
 - This remains a read-only assertion harness for a disposable Supabase/Postgres database. It has not been executed against a database in this session; no syntax/runtime or database behavior is claimed as proven from the source review alone.
 - Exact-head validation before this latest test-only commit: Python tests, Shared Learning tests/typecheck/build, PAPER smoke, Windows EXE and installer smoke, and Snyk all passed on `0df93d834840297abdf1662d04dd813859b799b0`. Vercel remains failed with a build-rate-limit indication. The new test-only commit requires its own exact-head CI verification.
 - PR #504 remains open and unmerged. No production migration, cloud activation, orders, transfers, or live trading.
+
+
+## Follow-up — transactional source-lineage gate (2026-10-28)
+
+- Security review found that the signed `source_artifact_ids` list was being persisted without the publication RPC independently confirming that each source still existed and remained eligible. Added a transaction-level source check to `publish_verified_shared_learning_artifact`.
+- The RPC now rejects non-string/empty/duplicate source IDs and checks each source for an eligible, unexpired artifact; verified, non-revoked provenance; an active organization explicitly marked `cross_org_public`; and approved installation/active agent/valid department identity. It locks the source artifact, provenance, organization and registry identity rows while publication runs to serialize against concurrent state changes.
+- API maps `source_lineage_not_eligible` to HTTP 409. This is source-level hardening only until tested against disposable Supabase/Postgres with two-session race cases. PostgreSQL client tools are not available in the current working environment; no SQL execution is claimed.
+- Product branch HEAD: `dcb86efd1cedcb15870f6c9b8dcc5d0be47f0125`. Current-head Python, Shared Learning, PAPER and Windows workflows are pending at last poll; Vercel has a build-rate-limit failure and Snyk is pending. Prior HEAD `49b19ce62c56a49b1244223f1cb2ec539f83c0cc` passed Python, Shared Learning, PAPER, Snyk and Vercel; Windows EXE passed while installer smoke was still in progress.
+- PR #504 remains open/unmerged. No production migration, cloud activation, orders, transfers or live trading. Next: inspect current-head CI, run disposable database assertions and concurrency tests, and continue enrollment/key lifecycle and local memory recovery work.
