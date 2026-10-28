@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
           installation_not_approved: 403,
           agent_department_scope_invalid: 403,
           artifact_provenance_conflict: 409,
+          source_lineage_not_eligible: 409,
           invalid_publication_payload: 400
         };
         const errorCode = typeof data?.error === "string" ? data.error : "provenance_storage_unavailable";
