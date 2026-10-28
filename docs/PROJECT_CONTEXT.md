@@ -1443,3 +1443,13 @@ Review points before merge:
 - Product branch HEAD: `a67439eea7d0e9050a387e03ef18059cf4dc1212`. Exact-HEAD PAPER smoke passed and Snyk passed. Python tests and Shared Learning CI were queued/in progress at last poll; Windows EXE was pending. Vercel remained failed due to a build-rate-limit indication.
 - This is an opt-in signing capability, not production activation. No trusted private-key provisioning, enrollment/approval, scheduler activation, production sync, or live trading is enabled. Do not activate it until current-head tests pass and the enrollment/key lifecycle and database/visibility gates are closed.
 - Next: confirm the new Python tests and full CI on the current code, then implement explicit cross-organization visibility policy and disposable Supabase integration tests. Continue PAPER/read-only.
+
+
+## Follow-up 2026-10-28 — explicit cross-organization visibility gate
+
+- Added migration `202610280001_cross_org_visibility_policy.sql`. Existing/new organizations default to `organization_only`; only the explicit `cross_org_public` value permits cross-organization discovery. The migration does not change any organization to public.
+- The verified provenance read endpoint now filters both contributor organizations and every lineage-source organization to active `cross_org_public` organizations, and applies a second fail-closed visibility check at response assembly.
+- The legacy `GET /api/v1/artifacts` route now returns only rows owned by the authenticated user. It can no longer serve as an alternate cross-organization path that bypasses provenance/visibility checks.
+- Added a unit test for the visibility policy helper: only the exact `cross_org_public` value is accepted; missing, null, organization-only, and unknown values fail closed.
+- Product branch current work is on `work/cross-org-learning-provenance-2026-10-27`; PR #504 remains open and unmerged. New exact-HEAD CI must pass before claiming this change validated.
+- Remaining: disposable Supabase integration tests for migration compatibility, RLS/grants, publication RPC atomicity and concurrent revocation; explicit trusted owner/admin workflow to change visibility; trusted installation/key lifecycle; local-memory persistence/concurrency/recovery tests. No production migration, cloud activation, orders, transfers, or live trading.
