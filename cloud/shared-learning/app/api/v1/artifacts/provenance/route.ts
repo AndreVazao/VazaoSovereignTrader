@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { digestPublicPayload } from "../../../../../lib/provenance";
 import { hasVerifiedLineage } from "../../../../../lib/lineage";
+import { canShareAcrossOrganizations } from "../../../../../lib/cross-org-visibility";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -113,7 +114,7 @@ export async function GET(req: NextRequest) {
       const installation = sourceInstallationMap.get(row.installation_id);
       const agent = sourceAgentMap.get(row.agent_id);
       const department = sourceDepartmentMap.get(row.department_id);
-      if (!organization || !installation || !agent || !department ||
+      if (!organization || !canShareAcrossOrganizations(organization.cross_org_visibility) || !installation || !agent || !department ||
           installation.organization_id !== row.organization_id ||
           agent.organization_id !== row.organization_id ||
           agent.installation_id !== row.installation_id ||
@@ -133,7 +134,7 @@ export async function GET(req: NextRequest) {
       const installation = installationMap.get(row.installation_id);
       const agent = agentMap.get(row.agent_id);
       const department = departmentMap.get(row.department_id);
-      if (!artifact || !organization || !installation || !agent || !department ||
+      if (!artifact || !organization || !canShareAcrossOrganizations(organization.cross_org_visibility) || !installation || !agent || !department ||
           digestPublicPayload(artifact.public_payload) !== row.payload_digest ||
           installation.organization_id !== row.organization_id ||
           agent.organization_id !== row.organization_id ||
