@@ -148,6 +148,12 @@ class SQLiteLearningMemory:
             isinstance(ttl_ms, bool) or not isinstance(ttl_ms, int) or ttl_ms < 1
         ):
             raise ValueError("ttl_ms must be a positive integer or None")
+        if expected_version is not None and (
+            isinstance(expected_version, bool)
+            or not isinstance(expected_version, int)
+            or expected_version < 0
+        ):
+            raise ValueError("expected_version must be a non-negative integer or None")
         try:
             value_json = json.dumps(
                 value, ensure_ascii=False, allow_nan=False, separators=(",", ":")
