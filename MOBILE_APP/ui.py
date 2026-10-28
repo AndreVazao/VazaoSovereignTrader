@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from kivy.core.window import Window
+from kivy.storage.jsonstore import JsonStore
 from kivy.graphics import Color, RoundedRectangle
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
@@ -265,9 +268,21 @@ def build_chat_cockpit(app):
             height=dp(44),
         )
         mode_row.add_widget(_label("Visualização", size=12, bold=True, size_hint_x=0.8))
+        mode_values = ("2.5D leve", "Pixel / 8-bit", "Palitinhos", "Compacta", "HD 3D (futuro)")
+        # Keep this preference in private app storage; narrow screens start compact.
+        default_mode = "Compacta" if Window.width <= dp(420) else "2.5D leve"
+        try:
+            office_preferences = JsonStore(os.path.join(app.user_data_dir, "office_preferences.json"))
+            saved_mode = office_preferences.get("display").get("mode", default_mode) if office_preferences.exists("display") else default_mode
+        except Exception:
+            office_preferences = None
+            saved_mode = default_mode
+        if saved_mode not in mode_values:
+            saved_mode = default_mode
+
         mode = Spinner(
-            text="2.5D leve",
-            values=("2.5D leve", "Pixel / 8-bit", "Palitinhos", "Compacta", "HD 3D (futuro)"),
+            text=saved_mode,
+            values=mode_values,
             size_hint_x=1.6,
             size_hint_y=None,
             height=dp(42),
@@ -377,7 +392,15 @@ def build_chat_cockpit(app):
                 detail_title.text = "Pré-visualização 3D"
                 detail_body.text = "O renderer 3D verdadeiro ainda não está integrado. A demonstração mantém o modo 2.5D leve para não simular uma capacidade inexistente."
 
-        mode.bind(text=lambda _spinner, value: render_rooms(value))
+        def on_mode_changed(_spinner, value):
+            render_rooms(value)
+            if office_preferences is not None:
+                try:
+                    office_preferences.put("display", mode=value)
+                except Exception:
+                    render_status.text = "Modo visual: " + value + " · preferência não guardada · dados reais desligados"
+
+        mode.bind(text=on_mode_changed)
         render_rooms(mode.text)
 
         scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), scroll_type=["content", "bars"])
