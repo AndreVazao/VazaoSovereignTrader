@@ -1,6 +1,6 @@
 # Cross-language canonicalization contract
 
-Status: TypeScript canonical serialization and shared golden vectors are implemented. A Python RFC 8785 helper and tests against the shared payload vectors have now been added in PR #504. Cross-runtime CI on the current head is pending; signing remains disabled until those tests pass and the provenance-message bytes are verified end-to-end.
+Status: TypeScript and Python use RFC 8785/JCS for public payloads and provenance-message bytes. Shared payload vectors and a fixed Ed25519 provenance vector are now tested in both runtimes. The cross-runtime signature tests are a release gate and must pass on the exact current PR head before Python signing is enabled.
 
 ## Contract
 
@@ -19,9 +19,9 @@ The machine-readable fixture is `cloud/shared-learning/tests/fixtures/canonical-
 ## Required before Python signing is enabled
 
 1. Confirm Python and TypeScript CI pass the shared payload vectors on the exact same PR head.
-2. Add shared envelope-signing golden vectors for the exact provenance message; current Python test checks the field contract, but does not yet verify an Ed25519 signature generated in one runtime and verified in the other.
+2. Keep the shared Ed25519 golden vector passing in both runtimes; it verifies the exact message bytes and a fixed signature with a public key shared through the fixture.
 3. Extend Python/TypeScript edge-case coverage for UTF-16 key ordering, Unicode escapes, fractional and exponent-form numbers, negative zero, and invalid surrogate sequences.
-4. Confirm Ed25519 signatures verify across runtimes using the same canonical message bytes.
+4. Confirm the exact-head CI passes the cross-runtime Ed25519 vector in both runtimes.
 5. Keep Python signing disabled if any vector fails or the canonicalization library is unavailable.
 
 This document is a compatibility gate, not evidence that the Python adapter already conforms. The existing Python adapter remains legacy/unattributed until the full signing and verified-read integration is reviewed. All work remains PAPER/read-only.
