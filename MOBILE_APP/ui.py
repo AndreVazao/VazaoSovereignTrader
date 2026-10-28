@@ -370,7 +370,7 @@ def build_chat_cockpit(app):
                 button.bind(on_release=lambda _button, selected=room: select_room(selected))
                 grid.add_widget(button)
             render_status.text = (
-                f"Modo visual: {effective_mode} · cérebro desligado"
+                f"Modo visual: {effective_mode} · dados reais desligados"
                 f"{fallback_note}"
             )
             if selected_mode == "HD 3D (futuro)":
