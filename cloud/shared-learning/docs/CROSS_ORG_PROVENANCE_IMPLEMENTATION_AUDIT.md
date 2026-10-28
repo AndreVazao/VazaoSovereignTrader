@@ -182,3 +182,12 @@ The API now derives a SHA-256 fingerprint from the enrolled public key's DER-enc
 ### Artifact-to-envelope consistency — 2026-10-27
 
 Registry verification now also requires the signed provenance producer_version to match the allow-listed public artifact's producer_version. This prevents an otherwise valid signed envelope from attributing the artifact to a different producer version. A negative test covers this mismatch; the test suite still needs to be executed.
+
+## Follow-up — verified lineage read gate (2026-10-28)
+
+- Added `lib/lineage.ts` and focused tests for source-artifact lineage.
+- The verified-provenance read endpoint now resolves source public artifact IDs in bounded query batches and only returns a derived artifact when every declared source resolves to an eligible, unexpired artifact with a non-revoked verified provenance record and matching public-payload digest.
+- Missing, expired, ineligible, tampered, revoked, unverified, or ambiguous source references fail closed; root artifacts with no source references remain valid.
+- This is a code-level change only. CI is running on the latest PR head; database integration has not been performed.
+- Remaining lineage hardening: source provenance is checked for verification/revocation and digest integrity, but the read path must also ensure each source's organization, installation, agent and department remain active/approved. Do not treat this as complete until that identity-state check and database-backed tests pass.
+- Still blocked from end-to-end release: trusted organization/installation enrollment and approval, Python adapter signature creation and verified-endpoint consumption, cross-language canonicalization vectors, disposable Supabase migration/RPC tests, and confirmation of the intended cross-organization visibility policy.
