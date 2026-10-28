@@ -98,7 +98,7 @@ def test_python_verifies_shared_typescript_ed25519_provenance_vector():
     public_key.verify(signature, message)
 
 
-@pytest.mark.parametrize("value", [{"value": "\\ud800"}, {"\\udfff": 1}])
+@pytest.mark.parametrize("value", [{"value": "\ud800"}, {"\udfff": 1}])
 def test_python_canonicalization_rejects_unpaired_unicode_surrogates(value):
     with pytest.raises(ValueError, match="invalid_jcs_value"):
         canonicalize_json(value)
