@@ -102,6 +102,7 @@ class SovereignEngine:
         self.real_readiness_service = RealReadinessService(config)
         self._autonomous_real_promotion_attempted = False
         self.state = RuntimeState(mode=self.mode)
+        self._closed = False
         self.state.operational["owner_id"] = self.owner_id
         self.ledger = Ledger(
             path=self.owner_context.private_path("logs/trades.jsonl"),
@@ -636,6 +637,9 @@ class SovereignEngine:
             self.state.status = "SAFE_MODE"
 
     def start(self) -> None:
+        if getattr(self, "_closed", False):
+            self.log("ENGINE_START_BLOCKED_CLOSED", {"reason": "terminal_shutdown_completed"})
+            return
         if self.thread and self.thread.is_alive():
             self.pause(False)
             return
@@ -895,6 +899,39 @@ class SovereignEngine:
         self._publish_observer_snapshot()
         self._persist_recovery()
         self.log("ENGINE_STOPPED")
+
+    def close(self) -> bool:
+        """Terminal process shutdown: stop producers before closing durable memory.
+
+        Unlike stop(), close() is not restartable. If a worker remains alive after
+        bounded joins, keep SQLite open rather than racing an active producer.
+        """
+        if getattr(self, "_closed", False):
+            return True
+        self.stop()
+        current = threading.current_thread()
+        workers = (self.thread, self.research_thread)
+        for worker in workers:
+            if worker is not None and worker.is_alive() and worker is not current:
+                worker.join(timeout=5.0)
+        active = [worker.name for worker in workers if worker is not None and worker.is_alive()]
+        if active:
+            self.state.operational["learning_memory_shutdown"] = {
+                "state": "DEFERRED_ACTIVE_WORKERS",
+                "workers": active,
+            }
+            self.log("ENGINE_CLOSE_DEFERRED_ACTIVE_WORKERS", {"workers": active})
+            return False
+        memory = getattr(self, "learning_memory", None)
+        if memory is not None:
+            memory.close()
+            self.learning_memory = None
+        learning_state = self.state.operational.get("learning_memory")
+        if isinstance(learning_state, dict):
+            learning_state["state"] = "CLOSED"
+        self.state.operational["learning_memory_shutdown"] = {"state": "CLOSED"}
+        self._closed = True
+        return True
 
     def set_mode(self, mode: str, *, real_authorized: bool = False, autonomous: bool = False) -> None:
         mode = mode.upper()
