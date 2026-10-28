@@ -17,7 +17,8 @@ export type LineageProvenance = {
 /**
  * Treat source_artifact_ids as untrusted claims until every source resolves to
  * an eligible, unexpired artifact with active verified provenance and a
- * matching digest. Empty lineage is valid for root artifacts.
+ * matching digest. Empty lineage is valid for root artifacts. Ambiguous public
+ * artifact IDs fail closed rather than selecting an arbitrary matching row.
  */
 export function hasVerifiedLineage(
   sourceArtifactIds: string[],
@@ -27,13 +28,17 @@ export function hasVerifiedLineage(
 ): boolean {
   if (sourceArtifactIds.length === 0) return true;
   const byPublicId = new Map<string, LineageArtifact>();
+  const duplicateIds = new Set<string>();
   for (const artifact of artifacts) {
     if (!artifact.public_payload || typeof artifact.public_payload !== "object" || Array.isArray(artifact.public_payload)) continue;
     const publicId = (artifact.public_payload as Record<string, unknown>).artifact_id;
-    if (typeof publicId === "string") byPublicId.set(publicId, artifact);
+    if (typeof publicId !== "string") continue;
+    if (byPublicId.has(publicId)) duplicateIds.add(publicId);
+    else byPublicId.set(publicId, artifact);
   }
   const provenanceByRowId = new Map(provenanceRows.map((row) => [row.artifact_row_id, row] as const));
   return sourceArtifactIds.every((sourceId) => {
+    if (duplicateIds.has(sourceId)) return false;
     const artifact = byPublicId.get(sourceId);
     if (!artifact || artifact.eligible !== true) return false;
     const expiresAt = Date.parse(artifact.expires_at);
