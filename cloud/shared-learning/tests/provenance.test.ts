@@ -104,6 +104,6 @@ test("canonical JSON matches shared RFC 8785/JCS golden vectors", () => {
 });
 
 test("rejects lone UTF-16 surrogates in strings and object keys", () => {
-  assert.throws(() => canonicalizePublicPayload({ value: "\\ud800" }), /unpaired_canonical_json_surrogate/);
-  assert.throws(() => canonicalizePublicPayload({ ["\\udfff"]: 1 }), /unpaired_canonical_json_surrogate/);
+  assert.throws(() => canonicalizePublicPayload({ value: "\ud800" }), /unpaired_canonical_json_surrogate/);
+  assert.throws(() => canonicalizePublicPayload({ ["\udfff"]: 1 }), /unpaired_canonical_json_surrogate/);
 });
