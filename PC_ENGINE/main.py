@@ -65,7 +65,12 @@ def main() -> None:
     print(f"VazaoSovereignTrader PC_ENGINE online at http://{host}:{port}")
     print("Default mode is PAPER. Use the API, dashboard, or mobile cockpit to control the engine.")
     print(f"Local dashboard: http://127.0.0.1:{port}/dashboard")
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    try:
+        app.run(host=host, port=port, debug=False, use_reloader=False)
+    finally:
+        close = getattr(engine, "close", None)
+        if callable(close):
+            close()
 
 
 if __name__ == "__main__":
