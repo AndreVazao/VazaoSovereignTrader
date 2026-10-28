@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
     const limit = Number.isInteger(rawLimit) ? Math.min(MAX_PAGE_SIZE, Math.max(1, rawLimit)) : 50;
     const { db } = clients();
     const { data, error } = await db.from("shared_learning_artifacts").select("public_payload")
-      .eq("eligible", true).gt("expires_at", new Date().toISOString())
+      .eq("owner_id", user.id).eq("eligible", true).gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false }).limit(limit);
     if (error) return fail(503, "storage_unavailable");
     return NextResponse.json({ ok: true, artifacts: (data ?? []).map((row) => row.public_payload) },
