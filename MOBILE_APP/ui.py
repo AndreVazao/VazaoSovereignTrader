@@ -10,8 +10,6 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
-from kivy.storage.jsonstore import JsonStore
-from pathlib import Path
 
 
 BG = (0.035, 0.043, 0.060, 1)
@@ -267,22 +265,9 @@ def build_chat_cockpit(app):
             height=dp(44),
         )
         mode_row.add_widget(_label("Visualização", size=12, bold=True, size_hint_x=0.8))
-        mode_values = ("2.5D leve", "Pixel / 8-bit", "Palitinhos", "Compacta", "HD 3D (futuro)")
-        # Save only the visual preference locally; it never changes engine state.
-        office_preferences = None
-        try:
-            preferences_path = Path(app.user_data_dir) / "office_preferences.json"
-            preferences_path.parent.mkdir(parents=True, exist_ok=True)
-            office_preferences = JsonStore(str(preferences_path))
-            saved_mode = office_preferences.get("settings").get("visual_mode", "2.5D leve") if office_preferences.exists("settings") else "2.5D leve"
-        except Exception:
-            saved_mode = "2.5D leve"
-            office_preferences = None
-        if saved_mode not in mode_values:
-            saved_mode = "2.5D leve"
         mode = Spinner(
-            text=saved_mode,
-            values=mode_values,
+            text="2.5D leve",
+            values=("2.5D leve", "Pixel / 8-bit", "Palitinhos", "Compacta", "HD 3D (futuro)"),
             size_hint_x=1.6,
             size_hint_y=None,
             height=dp(42),
@@ -392,16 +377,7 @@ def build_chat_cockpit(app):
                 detail_title.text = "Pré-visualização 3D"
                 detail_body.text = "O renderer 3D verdadeiro ainda não está integrado. A demonstração mantém o modo 2.5D leve para não simular uma capacidade inexistente."
 
-        def on_mode_changed(_spinner, value):
-            if office_preferences is not None:
-                try:
-                    office_preferences.put("settings", visual_mode=value)
-                except Exception:
-                    # A failed local preference write must never block the cockpit.
-                    pass
-            render_rooms(value)
-
-        mode.bind(text=on_mode_changed)
+        mode.bind(text=lambda _spinner, value: render_rooms(value))
         render_rooms(mode.text)
 
         scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), scroll_type=["content", "bars"])

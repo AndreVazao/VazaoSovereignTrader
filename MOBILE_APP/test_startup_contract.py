@@ -29,9 +29,6 @@ class MobileStartupContractTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 self.assertIn(mode, source)
         office = source.split("    def office_page():", 1)[1].split("    def files_page():", 1)[0]
-        self.assertIn("office_preferences.json", office)
-        self.assertIn("office_preferences.put", office)
-        self.assertIn("JsonStore", source)
         self.assertNotIn("app._request(", office)
         for department in ("MARKET RADAR", "COMPARAÇÃO", "INVESTIGAÇÃO", "ANÁLISE", "MEMÓRIA CENTRAL", "RESPOSTA RÁPIDA", "CONTROLO DE RISCO", "PAPER LAB"):
             with self.subTest(department=department):

@@ -78,8 +78,3 @@ Perfis disponíveis:
 - **HD 3D (futuro)** — opção de pré-visualização que faz fallback para 2.5D, porque um renderer 3D real ainda não está incluído.
 
 A planta inclui CEO, Market Radar, Comparação de Exchanges, Investigação, Análise, Memória Central, Resposta Rápida, Controlo de Risco e PAPER Lab. Esta versão serve para validar o fluxo visual básico offline; não prova o desempenho num telefone físico nem substitui os testes de arranque/logcat do APK.
-
-
-## Virtual office rendering profiles
-
-The office starts in **2.5D leve** and stores the chosen visual profile only in the app's private local storage (office_preferences.json). Supported profiles are 2.5D leve, Pixel/8-bit, Palitinhos and Compacta. **HD 3D is a future placeholder**, not a real renderer; it falls back to 2.5D. If the local preference cannot be read or written, the cockpit continues with the lightweight default. This preference does not enable the brain, networking, market feeds or trading. The physical Android device still needs a USB/ADB install, launch and logcat check before release readiness can be claimed.
