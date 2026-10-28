@@ -1432,3 +1432,14 @@ Review points before merge:
 - Exact HEAD actions are running: Python tests, Shared Learning Service tests/typecheck/build, and PAPER smoke were in progress; Windows EXE workflow was pending at last poll. Snyk pending; Vercel failed with a build-rate-limit indication.
 - PR body refreshed to state the current HEAD and validation status. PR remains open, not merged.
 - Next: obtain exact-head test outcomes; if all shared-vector tests pass, proceed to trusted enrollment/key lifecycle and disposable Supabase integration tests. Keep Python signing disabled and all activity PAPER/read-only.
+
+
+## Follow-up 2026-10-28 — opt-in Python provenance signer and adapter
+
+- Added `PC_ENGINE/core/shared_learning_provenance.py` with `VerifiedProvenanceSigner`: it accepts an injected Ed25519 private key in memory, canonicalizes the v1 provenance message through `PC_ENGINE/core/canonical_json.py`, computes the JCS payload digest, and emits a base64url signature.
+- Added opt-in `VercelSharedIntelligenceProvider.push_verified(..., signer=...)`, which posts `{artifact, provenance}` to the existing `POST /api/v1/artifacts` contract. The legacy `push()` path remains unchanged for backward compatibility.
+- Verified publishing requires `source_artifact_ids` to be explicitly present on each row (an explicit empty list declares a root); it never falls back to legacy unattributed publication and only counts success if the server returns both `accepted: true` and `provenance: "verified"`.
+- Added tests for Ed25519 signing/verification, digest binding, public-field allow-listing, explicit lineage, and fail-closed handling of a legacy response.
+- Product branch HEAD: `a67439eea7d0e9050a387e03ef18059cf4dc1212`. Exact-HEAD PAPER smoke passed and Snyk passed. Python tests and Shared Learning CI were queued/in progress at last poll; Windows EXE was pending. Vercel remained failed due to a build-rate-limit indication.
+- This is an opt-in signing capability, not production activation. No trusted private-key provisioning, enrollment/approval, scheduler activation, production sync, or live trading is enabled. Do not activate it until current-head tests pass and the enrollment/key lifecycle and database/visibility gates are closed.
+- Next: confirm the new Python tests and full CI on the current code, then implement explicit cross-organization visibility policy and disposable Supabase integration tests. Continue PAPER/read-only.
