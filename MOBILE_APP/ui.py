@@ -3,9 +3,11 @@ from __future__ import annotations
 from kivy.graphics import Color, RoundedRectangle
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 
@@ -95,6 +97,7 @@ def build_chat_cockpit(app):
         sidebar.add_widget(btn)
 
     nav("Chat", "chat", "✦")
+    nav("Escritório", "office", "▦")
     nav("PC", "pc", "⌂")
     nav("Ficheiros", "files", "□")
     nav("Humano", "human", "!")
@@ -220,6 +223,170 @@ def build_chat_cockpit(app):
         app.pc_scroll = scroll
         return page
 
+    def office_page():
+        page = BoxLayout(orientation="vertical", spacing=dp(8))
+        page.add_widget(header("Escritório Virtual", "Exploração visual local — não depende do cérebro"))
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(9),
+            padding=[0, 0, 0, dp(10)],
+            size_hint_y=None,
+        )
+        content.bind(minimum_height=content.setter("height"))
+
+        banner = Surface(
+            orientation="vertical",
+            padding=dp(12),
+            spacing=dp(4),
+            size_hint_y=None,
+            height=dp(82),
+            fill=(0.12, 0.10, 0.055, 1),
+        )
+        banner.add_widget(_label(
+            "DEMO OFFLINE · ESCRITÓRIO SEM MOTOR",
+            size=12,
+            color=(1.0, 0.78, 0.32, 1),
+            bold=True,
+            size_hint_y=None,
+            height=dp(24),
+        ))
+        banner.add_widget(_label(
+            "Podes explorar as salas e trocar o estilo visual. Não são apresentados agentes, preços ou atividade reais.",
+            size=11,
+            color=MUTED,
+        ))
+        content.add_widget(banner)
+
+        mode_row = BoxLayout(
+            orientation="horizontal",
+            spacing=dp(7),
+            size_hint_y=None,
+            height=dp(44),
+        )
+        mode_row.add_widget(_label("Visualização", size=12, bold=True, size_hint_x=0.8))
+        mode = Spinner(
+            text="2.5D leve",
+            values=("2.5D leve", "Pixel / 8-bit", "Palitinhos", "Compacta", "HD 3D (futuro)"),
+            size_hint_x=1.6,
+            size_hint_y=None,
+            height=dp(42),
+            background_normal="",
+            background_color=PANEL_2,
+            color=TEXT,
+            font_size=dp(11),
+        )
+        mode_row.add_widget(mode)
+        content.add_widget(mode_row)
+
+        rooms = (
+            ("ceo", "CEO · DIREÇÃO", "Topo do edifício", "Direção central e comunicação com os chefes dos departamentos."),
+            ("radar", "MARKET RADAR", "Observação de mercado", "Deteção e acompanhamento de movimentos e eventos de mercado."),
+            ("compare", "COMPARAÇÃO", "Exchanges separadas", "Comparação independente entre exchanges, custos, liquidez e condições."),
+            ("investigation", "INVESTIGAÇÃO", "Recolha de evidência", "Pesquisa de fontes, timestamps e validação do que foi observado."),
+            ("analysis", "ANÁLISE", "Hipóteses e estudos", "Análise de dados e hipóteses; resultados reais só aparecem quando ligados ao motor."),
+            ("memory", "MEMÓRIA CENTRAL", "Serviço transversal", "Memória partilhada entre departamentos, representada como sala e serviço transversal."),
+            ("fast", "RESPOSTA RÁPIDA", "Com limites de risco", "Via de resposta rápida subordinada aos controlos de risco do cérebro."),
+            ("risk", "CONTROLO DE RISCO", "Limites e bloqueios", "A interface nunca contorna nem altera os limites de segurança do motor."),
+            ("paper", "PAPER LAB", "Testes e simulação", "Área para replay e validação em PAPER, sem executar ordens reais."),
+        )
+
+        grid = GridLayout(
+            cols=2,
+            spacing=dp(8),
+            size_hint_y=None,
+            row_default_height=dp(82),
+            row_force_default=True,
+        )
+        grid.bind(minimum_height=grid.setter("height"))
+        content.add_widget(grid)
+
+        details = Surface(
+            orientation="vertical",
+            padding=dp(12),
+            spacing=dp(5),
+            size_hint_y=None,
+            height=dp(126),
+        )
+        detail_title = _label("CEO · Direção", size=15, bold=True, size_hint_y=None, height=dp(28))
+        detail_body = _label(
+            "Seleciona uma sala para ver a sua função. Esta é uma demonstração local, sem ligação ao motor.",
+            size=11,
+            color=MUTED,
+        )
+        details.add_widget(detail_title)
+        details.add_widget(detail_body)
+        content.add_widget(details)
+
+        render_status = _label(
+            "Modo visual: 2.5D leve · dados reais desligados",
+            size=10,
+            color=MUTED,
+            size_hint_y=None,
+            height=dp(24),
+        )
+        content.add_widget(render_status)
+
+        def select_room(room):
+            detail_title.text = room[1].replace("·", "—").title()
+            detail_body.text = room[3]
+
+        def render_rooms(selected_mode):
+            grid.clear_widgets()
+            effective_mode = selected_mode
+            fallback_note = ""
+            if selected_mode == "HD 3D (futuro)":
+                effective_mode = "2.5D leve"
+                fallback_note = " · 3D real ainda não integrado; fallback seguro"
+            if effective_mode == "Pixel / 8-bit":
+                labels = {key: f"[{name.split('·')[0].strip()}]\n{subtitle.upper()}" for key, name, subtitle, _ in rooms}
+                fill = (0.10, 0.15, 0.20, 1)
+                height = 82
+                font_size = 10
+            elif effective_mode == "Palitinhos":
+                labels = {key: f"o/ {name.split('·')[0].strip()}\n{subtitle}" for key, name, subtitle, _ in rooms}
+                fill = (0.045, 0.075, 0.09, 1)
+                height = 74
+                font_size = 10
+            elif effective_mode == "Compacta":
+                labels = {key: f"{name.split('·')[0].strip()}\n{subtitle}" for key, name, subtitle, _ in rooms}
+                fill = (0.08, 0.10, 0.13, 1)
+                height = 58
+                font_size = 9
+            else:
+                labels = {key: f"▣  {name}\n{subtitle}" for key, name, subtitle, _ in rooms}
+                fill = (0.075, 0.14, 0.20, 1)
+                height = 82
+                font_size = 10
+            grid.row_default_height = dp(height)
+            for room in rooms:
+                button = RoundedButton(
+                    text=labels[room[0]],
+                    fill=fill,
+                    size_hint_y=None,
+                    height=dp(height),
+                )
+                button.font_size = dp(font_size)
+                button.bind(on_release=lambda _button, selected=room: select_room(selected))
+                grid.add_widget(button)
+            render_status.text = (
+                f"Modo visual: {effective_mode} · cérebro desligado"
+                f"{fallback_note}"
+            )
+            if selected_mode == "HD 3D (futuro)":
+                detail_title.text = "Pré-visualização 3D"
+                detail_body.text = "O renderer 3D verdadeiro ainda não está integrado. A demonstração mantém o modo 2.5D leve para não simular uma capacidade inexistente."
+
+        mode.bind(text=lambda _spinner, value: render_rooms(value))
+        render_rooms(mode.text)
+
+        scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), scroll_type=["content", "bars"])
+        scroll.add_widget(content)
+        page.add_widget(scroll)
+        app.office_mode_selector = mode
+        app.office_room_grid = grid
+        return page
+
     def files_page():
         page=BoxLayout(orientation="vertical",spacing=dp(8))
         page.add_widget(header("Ficheiros", "INBOX / OUTBOX entre Android e PC"))
@@ -258,6 +425,7 @@ def build_chat_cockpit(app):
         return page
 
     pages["chat"]=chat_page
+    pages["office"]=office_page
     pages["pc"]=pc_page
     pages["files"]=files_page
     pages["human"]=human_page
