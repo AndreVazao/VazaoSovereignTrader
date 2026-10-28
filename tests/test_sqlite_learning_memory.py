@@ -111,6 +111,16 @@ def test_invalid_values_and_metadata_fail_closed(tmp_path):
                 ttl_ms=0,
             )
 
+        for invalid_version in (True, False, -1, 1.5, "1"):
+            with pytest.raises(ValueError, match="expected_version"):
+                memory.put(
+                    key="bad-version",
+                    value={"ok": True},
+                    department="research",
+                    provenance="test",
+                    expected_version=invalid_version,
+                )
+
 
 def test_subscribers_are_not_called_until_transaction_commits(tmp_path):
     with SQLiteLearningMemory(tmp_path / "learning.sqlite3") as memory:
