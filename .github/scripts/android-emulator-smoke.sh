@@ -42,4 +42,13 @@ if grep -qi "Tipo de erro:" "$EVIDENCE/screen-ocr.txt"; then
   echo "The app displayed its startup error fallback; inspect startup_error.txt." | tee "$EVIDENCE/failure.txt"
   exit 1
 fi
-grep -qi "Como posso ajudar" "$EVIDENCE/screen-ocr.txt"
+# First install now intentionally opens the experience chooser. Existing installs
+# can open the chat directly, so accept either valid startup screen.
+if grep -Eqi "Como queres usar o Trader|Chat simples|Escritorio virtual|Escrit[oó]rio virtual" "$EVIDENCE/screen-ocr.txt"; then
+  echo "PASS: first-run experience chooser is visible."
+elif grep -qi "Como posso ajudar" "$EVIDENCE/screen-ocr.txt"; then
+  echo "PASS: saved chat experience is visible."
+else
+  echo "Neither the first-run chooser nor the saved chat screen was detected." | tee "$EVIDENCE/failure.txt"
+  exit 1
+fi
