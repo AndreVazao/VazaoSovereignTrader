@@ -24,7 +24,8 @@ test("allows root artifacts without source references", () => {
 
 test("accepts lineage only when every source is eligible and provenance is verified", () => {
   assert.equal(hasVerifiedLineage(["source-001"], [sourceArtifact], [sourceProvenance], now), true);
-  assert.equal(hasVerifiedLineage(["source-001", "missing-source"], [sourceArtifact], [sourceProvenance], now), false);\n  assert.equal(hasVerifiedLineage(["source-001"], [sourceArtifact, { ...sourceArtifact, id: "row-002" }], [sourceProvenance], now), false);
+  assert.equal(hasVerifiedLineage(["source-001", "missing-source"], [sourceArtifact], [sourceProvenance], now), false);
+  assert.equal(hasVerifiedLineage(["source-001"], [sourceArtifact, { ...sourceArtifact, id: "row-002" }], [sourceProvenance], now), false);
 });
 
 test("rejects expired, ineligible, revoked, unverified or tampered source artifacts", () => {
