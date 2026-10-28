@@ -64,3 +64,17 @@ A autenticação continua a usar VST_LOCAL_TOKEN e o acesso remoto recomendado �
 The current cockpit keeps a canonical status model separate from the per-page status labels, avoiding Kivy widget re-parenting when navigating between lazily-created pages. The chat scroll view is explicitly retained for auto-scroll. If cockpit construction raises a Python exception, the app now shows a small diagnostic screen instead of silently closing; it records the exception class and traceback frames in the app's private `startup_error.log` when storage is available. The log is local-only and is not sent to the PC. The diagnostic screen includes a retry action.
 
 The Android workflow now runs source syntax/structure checks before Buildozer. These checks and a successful APK build do **not** prove that the APK launches on a physical phone; the user-reported immediate crash still requires a fresh APK plus Android launch/logcat smoke test before installation is considered ready.
+
+
+## Escritório virtual offline (protótipo móvel)
+
+A página **Escritório** pode ser aberta sem ligar ao PC_ENGINE. É uma demonstração local para testar navegação, dimensões e legibilidade no telefone; não mostra preços, P&L, ordens nem agentes reais e não envia comandos ao motor.
+
+Perfis disponíveis:
+- **2.5D leve** — cartões de departamentos.
+- **Pixel / 8-bit** — representação textual em blocos.
+- **Palitinhos** — representação simplificada.
+- **Compacta** — cartões menores para ecrãs apertados.
+- **HD 3D (futuro)** — opção de pré-visualização que faz fallback para 2.5D, porque um renderer 3D real ainda não está incluído.
+
+A planta inclui CEO, Market Radar, Comparação de Exchanges, Investigação, Análise, Memória Central, Resposta Rápida, Controlo de Risco e PAPER Lab. Esta versão serve para validar o fluxo visual básico offline; não prova o desempenho num telefone físico nem substitui os testes de arranque/logcat do APK.
