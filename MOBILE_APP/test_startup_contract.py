@@ -20,6 +20,20 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("app.status.bind(text=", source)
         self.assertIn("app._chat_scroll = scroll", source)
 
+    def test_virtual_office_is_offline_and_exposes_adaptive_modes(self) -> None:
+        source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        self.assertIn('nav("Escritório", "office", "▦")', source)
+        self.assertIn('pages["office"]=office_page', source)
+        self.assertIn('"DEMO OFFLINE · ESCRITÓRIO SEM MOTOR"', source)
+        for mode in ("2.5D leve", "Pixel / 8-bit", "Palitinhos", "Compacta", "HD 3D (futuro)"):
+            with self.subTest(mode=mode):
+                self.assertIn(mode, source)
+        office = source.split("    def office_page():", 1)[1].split("    def files_page():", 1)[0]
+        self.assertNotIn("app._request(", office)
+        for department in ("MARKET RADAR", "COMPARAÇÃO", "INVESTIGAÇÃO", "ANÁLISE", "MEMÓRIA CENTRAL", "RESPOSTA RÁPIDA", "CONTROLO DE RISCO", "PAPER LAB"):
+            with self.subTest(department=department):
+                self.assertIn(department, office)
+
     def test_startup_failure_has_local_diagnostic_fallback(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn(
