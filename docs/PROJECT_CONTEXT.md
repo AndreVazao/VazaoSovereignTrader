@@ -1408,3 +1408,16 @@ Review points before merge:
 
 
 - Additional release gate identified: TypeScript canonical JSON and Python `json.dumps(sort_keys=True)` do not guarantee identical float-number bytes. Before implementing adapter signing, define a cross-language canonicalization format (RFC 8785/JCS or schema-specific equivalent) and shared golden vectors. Do not enable signed publication before parity is proven.
+
+
+## Checkpoint 2026-10-28 — JCS shared vectors extended (validation pending)
+
+- PR #504 remains open and unmerged on `work/cross-org-learning-provenance-2026-10-27`.
+- Shared canonical JSON fixture was extended with explicit negative-zero input (`-0.0` canonicalizes to `0`) and JSON control-character/quote escaping. The corrected fixture parses as valid JSON and is consumed by both the TypeScript and Python tests.
+- The seven expected SHA-256 values were independently recalculated from the declared canonical UTF-8 strings and match the fixture. This is independent digest verification, not a substitute for running both implementations.
+- Product branch head when this checkpoint was started: `ada068facdbc46e63fe89e96ab2198cb53e0a8fd`. The fixture commit itself has not yet been confirmed green by exact-head CI. Previous head `434f37e05721311b3ad4f9a01072403f7778ad03` had successful Python tests, Shared Learning Service (npm test, TypeScript check, build), Windows EXE/installer smoke and PAPER smoke.
+- At the `ada068f...` check snapshot, Snyk was pending, Vercel reported a build rate-limit failure, and the workflow lookup had not returned exact-head runs. Do not claim exact-head validation or merge readiness until refreshed checks resolve.
+- Python signing and production synchronization remain disabled. Continue PAPER/read-only.
+- Next: confirm exact-head TypeScript/Python shared-vector and Ed25519 tests; resolve CI/Vercel/Snyk status; then continue the Python verified-provenance adapter, trusted enrollment/revocation/key rotation, disposable Supabase integration tests, cross-org visibility policy and local learning-memory persistence/concurrency tests.
+- Persistent memory checkpoint recorded in `AndreVazao/andreos-memory`: `AndreOS/02_PROJETOS/VAZAO_SOVEREIGN_TRADER/CHECKPOINT_PR504_2026-10-28.md` (commit `626a2e1da1e239dd01b9d0234da6bcb17c775244`).
+
