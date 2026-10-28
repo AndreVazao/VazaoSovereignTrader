@@ -1469,3 +1469,11 @@ Review points before merge:
 - Added `supabase/tests/verified_publication_schema_smoke.sql`, a read-only SQL assertion script for a disposable Supabase/Postgres database. It checks private-by-default visibility, allowed visibility values, RLS on required tables, RPC execute grants, the immutable-installation-key trigger, and direct-read restrictions. It has not yet been run against a real disposable database; do not claim database validation.
 - New SQL test script advances the branch HEAD and triggers a new exact-head CI cycle. Await the result before claiming the latest branch is green.
 - Next: execute the SQL smoke test against a disposable Supabase project, then add two-session tests for publication versus revocation and duplicate/conflicting publication. No production database changes or cloud activation.
+
+
+## Follow-up — broadened disposable database schema smoke assertions (2026-10-28)
+
+- Expanded `cloud/shared-learning/supabase/tests/verified_publication_schema_smoke.sql` to include RLS validation for `trader_departments` and direct-SELECT grant denial for anon/authenticated across the registry tables, provenance table, and shared artifacts table.
+- This remains a read-only assertion harness for a disposable Supabase/Postgres database. It has not been executed against a database in this session; no syntax/runtime or database behavior is claimed as proven from the source review alone.
+- Exact-head validation before this latest test-only commit: Python tests, Shared Learning tests/typecheck/build, PAPER smoke, Windows EXE and installer smoke, and Snyk all passed on `0df93d834840297abdf1662d04dd813859b799b0`. Vercel remains failed with a build-rate-limit indication. The new test-only commit requires its own exact-head CI verification.
+- PR #504 remains open and unmerged. No production migration, cloud activation, orders, transfers, or live trading.
