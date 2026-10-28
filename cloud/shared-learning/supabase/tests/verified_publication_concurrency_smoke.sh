@@ -54,7 +54,11 @@ sleep 0.25
 suspended_digest="$(printf 'b%.0s' {1..64})"
 suspended_result="$(rpc_call "$suspended_digest" "rpc-suspended-race" "signature-suspended-race-0001" '[]')"
 wait "$suspend_pid"
-test "$suspended_result" = "organization_publish_forbidden"
+echo "suspension-race result: $suspended_result"
+if [[ "$suspended_result" != "organization_publish_forbidden" ]]; then
+  echo "Expected organization_publish_forbidden after concurrent suspension, got: $suspended_result" >&2
+  exit 1
+fi
 
 # Restore membership, then race a dependent publication against source-provenance revocation.
 "${psql_base[@]}" -c "update public.trader_organization_memberships set status = 'active' where organization_id = '00000000-0000-4000-8000-000000000002' and user_id = '00000000-0000-4000-8000-000000000001'"
@@ -75,6 +79,10 @@ sleep 0.25
 dependent_digest="$(printf 'f%.0s' {1..64})"
 lineage_result="$(rpc_call "$dependent_digest" "rpc-concurrent-dependent" "signature-dependent-0001" '["rpc-concurrent-artifact-1"]')"
 wait "$revoke_pid"
-test "$lineage_result" = "source_lineage_not_eligible"
+echo "lineage-race result: $lineage_result"
+if [[ "$lineage_result" != "source_lineage_not_eligible" ]]; then
+  echo "Expected source_lineage_not_eligible after concurrent source revocation, got: $lineage_result" >&2
+  exit 1
+fi
 
 echo "verified_publication_concurrency_smoke: PASS"
