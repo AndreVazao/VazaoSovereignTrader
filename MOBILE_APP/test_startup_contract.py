@@ -56,6 +56,13 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("traceback.format_tb", source)
         self.assertNotIn('self._request("POST", "/startup-error"', source)
 
+    def test_emulator_smoke_accepts_first_run_chooser_and_saved_chat(self) -> None:
+        script = (ROOT.parent / ".github" / "scripts" / "android-emulator-smoke.sh").read_text(encoding="utf-8")
+        self.assertIn("Como queres usar o Trader", script)
+        self.assertIn("Chat simples", script)
+        self.assertIn("Como posso ajudar", script)
+        self.assertIn("Neither the first-run chooser nor the saved chat screen", script)
+
 
 if __name__ == "__main__":
     unittest.main()
