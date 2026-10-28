@@ -105,7 +105,7 @@ test("canonical JSON matches shared RFC 8785/JCS golden vectors", () => {
     },
     {
       name: "unicode-and-escaping",
-      value: { text: "café", slash: "/", line: "a\\nb" },
+      value: { text: "café", slash: "/", line: "a\nb" },
       canonical: '{"line":"a\\nb","slash":"/","text":"café"}',
       sha256: "1d121f17fdfccad1823ead75968568570fc4ba4bc544bf1e5819b48892324ab2"
     },
