@@ -156,32 +156,37 @@ begin
     return jsonb_build_object('ok', false, 'error', 'invalid_publication_payload');
   end if;
 
-  if not exists (
-    select 1 from public.trader_organizations o
+  -- Lock authorization rows in this transaction. Revocation/suspension updates
+  -- serialize with publication instead of racing between a state check and insert.
+  perform 1
+    from public.trader_organizations o
     join public.trader_organization_memberships m on m.organization_id = o.id
     where o.id = p_organization_id and o.status = 'active'
       and m.user_id = p_owner_id and m.status = 'active'
       and m.role in ('owner','admin','publisher')
-  ) then
+    for update of o, m;
+  if not found then
     return jsonb_build_object('ok', false, 'error', 'organization_publish_forbidden');
   end if;
 
-  if not exists (
-    select 1 from public.trader_installations i
+  perform 1
+    from public.trader_installations i
     where i.id = p_installation_id and i.organization_id = p_organization_id
       and i.status = 'approved'
-  ) then
+    for update;
+  if not found then
     return jsonb_build_object('ok', false, 'error', 'installation_not_approved');
   end if;
 
-  if not exists (
-    select 1 from public.trader_agents a
+  perform 1
+    from public.trader_agents a
     join public.trader_departments d
       on d.id = a.department_id and d.organization_id = a.organization_id
     where a.id = p_agent_id and a.organization_id = p_organization_id
       and a.installation_id = p_installation_id and a.department_id = p_department_id
       and a.status = 'active'
-  ) then
+    for update of a, d;
+  if not found then
     return jsonb_build_object('ok', false, 'error', 'agent_department_scope_invalid');
   end if;
 
