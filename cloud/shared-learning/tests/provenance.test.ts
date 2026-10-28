@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import {
-  canonicalProvenanceMessage, digestPublicPayload, parseProvenanceEnvelope, verifyProvenanceSignature
+  canonicalProvenanceMessage, canonicalizePublicPayload, digestPublicPayload, parseProvenanceEnvelope, verifyProvenanceSignature
 } from "../lib/provenance";
 
 const now = Date.now();
@@ -86,4 +86,43 @@ test("rejects values that are not valid JSON before computing a public payload d
 
 test("normalizes negative zero as JSON number zero for TypeScript payload digests", () => {
   assert.equal(digestPublicPayload({ metric: -0 }), digestPublicPayload({ metric: 0 }));
+});
+
+
+test("canonical JSON matches shared RFC 8785/JCS golden vectors", () => {
+  const vectors = [
+    {
+      name: "property-order-and-negative-zero",
+      value: { z: 1, a: -0 },
+      canonical: '{"a":0,"z":1}',
+      sha256: "6f8e07a68fb3342735f01b788af3e724a7056b40e2aad3d4321d38f7de49f905"
+    },
+    {
+      name: "ecmascript-number-format",
+      value: { veryLarge: 1e21, small: 1e-7, large: 1e20, fraction: 1e-6 },
+      canonical: '{"fraction":0.000001,"large":100000000000000000000,"small":1e-7,"veryLarge":1e+21}',
+      sha256: "b04cff7ab24fc44e872971bc226145e0e463d3419039d12d4cd678a7183fe443"
+    },
+    {
+      name: "unicode-and-escaping",
+      value: { text: "café", slash: "/", line: "a\\nb" },
+      canonical: '{"line":"a\\nb","slash":"/","text":"café"}',
+      sha256: "1d121f17fdfccad1823ead75968568570fc4ba4bc544bf1e5819b48892324ab2"
+    },
+    {
+      name: "nested-array",
+      value: { version: 1, items: [true, null, { x: -12.5 }] },
+      canonical: '{"items":[true,null,{"x":-12.5}],"version":1}',
+      sha256: "890892ec384db5b85e7e42a8ed4e631892f2af6e32d2f8c99fd8b8c75e24cd86"
+    }
+  ];
+  for (const vector of vectors) {
+    assert.equal(canonicalizePublicPayload(vector.value), vector.canonical, vector.name);
+    assert.equal(digestPublicPayload(vector.value), vector.sha256, vector.name);
+  }
+});
+
+test("rejects lone UTF-16 surrogates in strings and object keys", () => {
+  assert.throws(() => canonicalizePublicPayload({ value: "\\ud800" }), /unpaired_canonical_json_surrogate/);
+  assert.throws(() => canonicalizePublicPayload({ ["\\udfff"]: 1 }), /unpaired_canonical_json_surrogate/);
 });
