@@ -32,6 +32,8 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn('show_page(saved_experience)', source)
         self.assertIn('choose_experience("chat")', source)
         self.assertIn('choose_experience("office")', source)
+        self.assertIn('visible = value != "chat" or key in {"chat", "experience"}', source)
+        self.assertIn("set_navigation_experience(saved_experience)", source)
         self.assertIn("JsonStore", source)
         self.assertIn('default_mode = "Compacta" if Window.width <= dp(420) else "2.5D leve"', source)
         self.assertIn('office_preferences.put("display", mode=value)', source)
