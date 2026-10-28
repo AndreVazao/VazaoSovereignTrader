@@ -1,0 +1,23 @@
+{
+  "format": "RFC8785-JCS-ED25519",
+  "message": "{\"agent_id\":\"323e4567-e89b-42d3-a456-426614174000\",\"artifact_id\":\"artifact-golden-001\",\"created_at_ms\":1793164800000,\"department_id\":\"423e4567-e89b-42d3-a456-426614174000\",\"installation_id\":\"223e4567-e89b-42d3-a456-426614174000\",\"organization_id\":\"123e4567-e89b-42d3-a456-426614174000\",\"payload_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"producer_version\":\"0.1.0\",\"schema_version\":1,\"source_artifact_ids\":[\"root-001\",\"root-002\"]}",
+  "message_sha256": "9f989f768163a30a6ae261ef782d1791890c21597fa6127d86356f505c1a8e34",
+  "public_key_spki_der_base64": "MCowBQYDK2VwAyEAA6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+  "signature_base64url": "DymE0bm212btC6gYq6BCz7BF_mkDyzcnG8Ubb87lq43QbfGVeo27j-VQp2Wh-E0r8IaM0DMq5HsndDpXyWKQBQ",
+  "envelope": {
+    "schema_version": 1,
+    "organization_id": "123e4567-e89b-42d3-a456-426614174000",
+    "installation_id": "223e4567-e89b-42d3-a456-426614174000",
+    "agent_id": "323e4567-e89b-42d3-a456-426614174000",
+    "department_id": "423e4567-e89b-42d3-a456-426614174000",
+    "artifact_id": "artifact-golden-001",
+    "payload_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "created_at_ms": 1793164800000,
+    "producer_version": "0.1.0",
+    "source_artifact_ids": [
+      "root-001",
+      "root-002"
+    ],
+    "signature": "DymE0bm212btC6gYq6BCz7BF_mkDyzcnG8Ubb87lq43QbfGVeo27j-VQp2Wh-E0r8IaM0DMq5HsndDpXyWKQBQ"
+  }
+}
