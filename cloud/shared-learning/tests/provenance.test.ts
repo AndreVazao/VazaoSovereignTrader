@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  canonicalProvenanceMessage, canonicalizePublicPayload, digestPublicPayload, parseProvenanceEnvelope, verifyProvenanceSignature
+  canonicalProvenanceMessage, canonicalizePublicPayload, digestPublicPayload, parseProvenanceEnvelope, verifyProvenanceSignature, type ProvenanceEnvelope
 } from "../lib/provenance";
 
 const now = Date.now();
@@ -106,4 +106,20 @@ test("canonical JSON matches shared RFC 8785/JCS golden vectors", () => {
 test("rejects lone UTF-16 surrogates in strings and object keys", () => {
   assert.throws(() => canonicalizePublicPayload({ value: "\ud800" }), /unpaired_canonical_json_surrogate/);
   assert.throws(() => canonicalizePublicPayload({ ["\udfff"]: 1 }), /unpaired_canonical_json_surrogate/);
+});
+
+
+test("verifies the shared Python/TypeScript Ed25519 provenance vector", () => {
+  const fixture = JSON.parse(readFileSync(join(__dirname, "fixtures", "provenance-ed25519-vector.json"), "utf8")) as {
+    message: string;
+    message_sha256: string;
+    public_key_spki_der_base64: string;
+    signature_base64url: string;
+    envelope: ProvenanceEnvelope;
+  };
+  const message = canonicalProvenanceMessage(fixture.envelope);
+  assert.equal(message, fixture.message);
+  assert.equal(createHash("sha256").update(message, "utf8").digest("hex"), fixture.message_sha256);
+  const publicKey = `-----BEGIN PUBLIC KEY-----\\n${fixture.public_key_spki_der_base64}\\n-----END PUBLIC KEY-----\\n`;
+  assert.equal(verifyProvenanceSignature(fixture.envelope, publicKey), true);
 });
