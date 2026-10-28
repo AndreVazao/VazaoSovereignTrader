@@ -1460,3 +1460,12 @@ Review points before merge:
 - Hardened `publish_verified_shared_learning_artifact` so organization + publisher membership, installation, agent, and department authorization rows are locked with `FOR UPDATE` during the atomic publication transaction.
 - This is intended to serialize a publication with concurrent membership suspension/revocation, installation revocation, or agent suspension rather than relying only on API-side preflight reads. The database migration and lock behavior are not yet validated against a disposable Supabase/Postgres instance; do not treat this as proven race elimination until concurrency tests run.
 - CI was restarted by the latest source changes. Check results for the exact current PR HEAD; do not reuse green results from prior commits. Vercel remains blocked by the build-rate-limit error.
+
+
+## Follow-up — exact-head CI and disposable DB schema smoke (2026-10-28)
+
+- Confirmed exact-head workflows for commit `9bebf49442ff366785a0ca010eb44e9207ce235b`: Python tests, Shared Learning Service tests/typecheck/build, Trading Engine PAPER smoke, and Windows EXE workflow all completed successfully; Snyk is green.
+- Vercel remains failed due to the explicit build-rate-limit response; this is an infrastructure gate, not a green check.
+- Added `supabase/tests/verified_publication_schema_smoke.sql`, a read-only SQL assertion script for a disposable Supabase/Postgres database. It checks private-by-default visibility, allowed visibility values, RLS on required tables, RPC execute grants, the immutable-installation-key trigger, and direct-read restrictions. It has not yet been run against a real disposable database; do not claim database validation.
+- New SQL test script advances the branch HEAD and triggers a new exact-head CI cycle. Await the result before claiming the latest branch is green.
+- Next: execute the SQL smoke test against a disposable Supabase project, then add two-session tests for publication versus revocation and duplicate/conflicting publication. No production database changes or cloud activation.
