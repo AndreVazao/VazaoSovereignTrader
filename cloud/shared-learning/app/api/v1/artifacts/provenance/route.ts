@@ -31,7 +31,7 @@ function chunks<T>(items: T[], size: number): T[][] {
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.headers.get("authorization")?.match(/^Bearer\\s+(.+)$/i)?.[1];
+    const token = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!token || token.length > 8192) return fail(401, "unauthorized");
     const { auth, db } = clients();
     const { data: authData, error: authError } = await auth.auth.getUser(token);
@@ -83,11 +83,49 @@ export async function GET(req: NextRequest) {
     const sourceArtifacts = sourceArtifactResults.flatMap((result) => result.data ?? []);
     const sourceRowIds = [...new Set(sourceArtifacts.map((row) => row.id))];
     const sourceProvenanceResults = await Promise.all(chunks(sourceRowIds, SOURCE_QUERY_CHUNK).map((ids) =>
-      db.from("shared_learning_provenance").select("artifact_row_id,payload_digest,verification_state,revoked_at")
+      db.from("shared_learning_provenance")
+        .select("artifact_row_id,organization_id,installation_id,agent_id,department_id,payload_digest,verification_state,revoked_at")
         .in("artifact_row_id", ids)
     ));
     if (sourceProvenanceResults.some((result) => result.error)) return fail(503, "lineage_storage_unavailable");
-    const sourceProvenance = sourceProvenanceResults.flatMap((result) => result.data ?? []);
+    const rawSourceProvenance = sourceProvenanceResults.flatMap((result) => result.data ?? []);
+    const sourceOrgIds = [...new Set(rawSourceProvenance.map((row) => row.organization_id))];
+    const sourceInstallationIds = [...new Set(rawSourceProvenance.map((row) => row.installation_id))];
+    const sourceAgentIds = [...new Set(rawSourceProvenance.map((row) => row.agent_id))];
+    const sourceDepartmentIds = [...new Set(rawSourceProvenance.map((row) => row.department_id))];
+    const [sourceOrganizations, sourceInstallations, sourceAgents, sourceDepartments] = await Promise.all([
+      db.from("trader_organizations").select("id,status").in("id", sourceOrgIds).eq("status", "active"),
+      db.from("trader_installations").select("id,organization_id,status")
+        .in("id", sourceInstallationIds).eq("status", "approved"),
+      db.from("trader_agents").select("id,organization_id,installation_id,department_id,status")
+        .in("id", sourceAgentIds).eq("status", "active"),
+      db.from("trader_departments").select("id,organization_id").in("id", sourceDepartmentIds)
+    ]);
+    if ([sourceOrganizations, sourceInstallations, sourceAgents, sourceDepartments].some((result) => result.error)) {
+      return fail(503, "lineage_registry_unavailable");
+    }
+    const sourceOrgMap = new Map((sourceOrganizations.data ?? []).map((row) => [row.id, row] as const));
+    const sourceInstallationMap = new Map((sourceInstallations.data ?? []).map((row) => [row.id, row] as const));
+    const sourceAgentMap = new Map((sourceAgents.data ?? []).map((row) => [row.id, row] as const));
+    const sourceDepartmentMap = new Map((sourceDepartments.data ?? []).map((row) => [row.id, row] as const));
+    const sourceProvenance = rawSourceProvenance.flatMap((row) => {
+      const organization = sourceOrgMap.get(row.organization_id);
+      const installation = sourceInstallationMap.get(row.installation_id);
+      const agent = sourceAgentMap.get(row.agent_id);
+      const department = sourceDepartmentMap.get(row.department_id);
+      if (!organization || !installation || !agent || !department ||
+          installation.organization_id !== row.organization_id ||
+          agent.organization_id !== row.organization_id ||
+          agent.installation_id !== row.installation_id ||
+          agent.department_id !== row.department_id ||
+          department.organization_id !== row.organization_id) return [];
+      return [{
+        artifact_row_id: row.artifact_row_id,
+        payload_digest: row.payload_digest,
+        verification_state: row.verification_state,
+        revoked_at: row.revoked_at
+      }];
+    });
 
     const result = provenanceRows.flatMap((row) => {
       const artifact = artifactMap.get(row.artifact_row_id);
