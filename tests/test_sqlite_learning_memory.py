@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
 import pytest
 
 from PC_ENGINE.learning.shared_memory import VersionConflict
@@ -160,3 +163,51 @@ def test_mark_stale_uses_optimistic_version_and_persists(tmp_path):
             "testing",
             "stale",
         ]
+
+
+
+def test_two_connections_serialize_competing_versioned_writes(tmp_path):
+    database = tmp_path / "learning-concurrent.sqlite3"
+    with SQLiteLearningMemory(database) as seed:
+        initial = seed.put(
+            key="cross.department.hypothesis",
+            value={"value": "initial"},
+            department="memory",
+            provenance="test",
+        )
+        assert initial.version == 1
+
+    barrier = threading.Barrier(2)
+
+    def compete(value, department):
+        with SQLiteLearningMemory(database) as memory:
+            barrier.wait(timeout=5)
+            try:
+                return memory.put(
+                    key="cross.department.hypothesis",
+                    value={"value": value},
+                    department=department,
+                    provenance=f"worker:{department}",
+                    expected_version=1,
+                )
+            except VersionConflict:
+                return "version-conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda args: compete(*args),
+            (("from-radar", "radar"), ("from-analysis", "analysis")),
+        ))
+
+    winners = [item for item in results if item != "version-conflict"]
+    conflicts = [item for item in results if item == "version-conflict"]
+    assert len(winners) == 1
+    assert len(conflicts) == 1
+    assert winners[0].version == 2
+
+    with SQLiteLearningMemory(database) as reopened:
+        current = reopened.get("cross.department.hypothesis")
+        assert current == winners[0]
+        events = reopened.list_events(key=current.key)
+        assert [event.version for event in events] == [1, 2]
+        assert [event.event_type for event in events] == ["put", "put"]
