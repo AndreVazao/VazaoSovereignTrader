@@ -117,8 +117,10 @@ def build_chat_cockpit(app):
     nav("Ficheiros", "files", "□")
     nav("Humano", "human", "!")
     nav("Readiness", "ready", "◌")
-    sidebar.add_widget(Widget())
-    sidebar.add_widget(RoundedButton(text="PAPER", fill=(0.12, 0.18, 0.17, 1), size_hint_y=None, height=dp(42)))
+    sidebar_spacer = Widget()
+    sidebar.add_widget(sidebar_spacer)
+    paper_button = RoundedButton(text="PAPER", fill=(0.12, 0.18, 0.17, 1), size_hint_y=None, height=dp(42))
+    sidebar.add_widget(paper_button)
 
     app.status = _label("PC: offline", size=12, color=MUTED, size_hint_y=None, height=dp(30))
 
@@ -530,6 +532,19 @@ def build_chat_cockpit(app):
             button.height = dp(58) if visible else 0
             button.opacity = 1 if visible else 0
             button.disabled = not visible
+        # Hide the spacer and PAPER status action as well in chat-only mode.
+        if value == "chat":
+            sidebar_spacer.size_hint_y = None
+            sidebar_spacer.height = 0
+            paper_button.height = 0
+            paper_button.opacity = 0
+            paper_button.disabled = True
+        else:
+            sidebar_spacer.size_hint_y = 1
+            sidebar_spacer.height = 0
+            paper_button.height = dp(42)
+            paper_button.opacity = 1
+            paper_button.disabled = False
 
     if saved_experience:
         set_navigation_experience(saved_experience)
