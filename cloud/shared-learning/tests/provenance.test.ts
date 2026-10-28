@@ -70,3 +70,13 @@ test("payload digest is canonical across object property order", () => {
   assert.equal(digestPublicPayload(first), digestPublicPayload(reordered));
   assert.match(digestPublicPayload(first), /^[a-f0-9]{64}$/);
 });
+
+
+test("rejects values that are not valid JSON before computing a public payload digest", () => {
+  assert.throws(() => digestPublicPayload({ value: Number.NaN }), /non_finite_canonical_json_number/);
+  assert.throws(() => digestPublicPayload({ value: Number.POSITIVE_INFINITY }), /non_finite_canonical_json_number/);
+  assert.throws(() => digestPublicPayload({ value: undefined }), /unsupported_canonical_json_value/);
+  assert.throws(() => digestPublicPayload([, 1]), /sparse_canonical_json_array/);
+  assert.throws(() => digestPublicPayload({ value: new Date(0) }), /non_plain_canonical_json_object/);
+  assert.throws(() => digestPublicPayload({ value: 1n }), /unsupported_canonical_json_value/);
+});
