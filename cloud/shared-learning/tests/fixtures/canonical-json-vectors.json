@@ -54,6 +54,23 @@
       },
       "canonical": "{\"😀\":2,\"\":1}",
       "sha256": "28c95d1bbb2209223307e62f489020e8f9e0cfa16adf2daf6d88127a1e8dd22a"
+    },
+    {
+      "name": "negative-zero-normalizes",
+      "input": {
+        "value": -0.0
+      },
+      "canonical": "{\"value\":0}",
+      "sha256": "23d7b286bd429460b92a2a1c21b6afc34110446c5034c17363fda363aa0a7c5d"
+    },
+    {
+      "name": "json-control-and-quote-escapes",
+      "input": {
+        "control": "\b\t\n\f\r",
+        "quote": "\""
+      },
+      "canonical": "{\"control\":\"\\b\\t\\n\\f\\r\",\"quote\":\"\\\"\\"}",
+      "sha256": "45c0045e372e453176acb8bde77a2b90fe30adba79a7d821e94c95443658edc2"
     }
   ]
 }
