@@ -78,6 +78,15 @@ def _spacer(height=8):
 
 def build_chat_cockpit(app):
     app.lang = getattr(app, "lang", {})
+    # Persist the first-run experience choice privately; it can be changed later.
+    try:
+        ui_preferences = JsonStore(os.path.join(app.user_data_dir, "ui_preferences.json"))
+        saved_experience = ui_preferences.get("experience").get("mode", "") if ui_preferences.exists("experience") else ""
+    except Exception:
+        ui_preferences = None
+        saved_experience = ""
+    if saved_experience not in {"chat", "office"}:
+        saved_experience = ""
     root = BoxLayout(orientation="horizontal", spacing=0)
     sidebar = Surface(orientation="vertical", size_hint_x=None, width=dp(78), padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
     root.add_widget(sidebar)
@@ -101,6 +110,7 @@ def build_chat_cockpit(app):
 
     nav("Chat", "chat", "✦")
     nav("Escritório", "office", "▦")
+    nav("Modo", "experience", "⚙")
     nav("PC", "pc", "⌂")
     nav("Ficheiros", "files", "□")
     nav("Humano", "human", "!")
@@ -470,5 +480,41 @@ def build_chat_cockpit(app):
     def toggle_sidebar():
         sidebar.width = dp(220) if sidebar.width < dp(100) else dp(78)
 
-    show_page("chat")
+    def experience_page():
+        page = BoxLayout(orientation="vertical", spacing=dp(10))
+        page.add_widget(header("Escolher experiência", "A escolha fica guardada neste dispositivo e pode ser alterada depois."))
+        intro = Surface(orientation="vertical", padding=dp(16), spacing=dp(8), size_hint_y=None, height=dp(118))
+        intro.add_widget(_label("Como queres usar o Trader?", size=18, bold=True, size_hint_y=None, height=dp(34)))
+        intro.add_widget(_label("A interface visual é opcional. O cérebro corre separado e não depende do escritório.", size=12, color=MUTED))
+        page.add_widget(intro)
+
+        def choose_experience(value):
+            nonlocal saved_experience
+            saved_experience = value
+            if ui_preferences is not None:
+                try:
+                    ui_preferences.put("experience", mode=value)
+                except Exception:
+                    app.status.text = "Preferência não guardada · dados reais desligados"
+            show_page(value)
+
+        simple = Surface(orientation="vertical", padding=dp(14), spacing=dp(7))
+        simple.add_widget(_label("1 · Chat simples", size=16, bold=True, size_hint_y=None, height=dp(30)))
+        simple.add_widget(_label("Interface mais leve; conversa direta com o Trader. Recomendada para aparelhos antigos.", size=12, color=MUTED))
+        simple.add_widget(RoundedButton(text="USAR CHAT SIMPLES", fill=ACCENT, size_hint_y=None, height=dp(48), on_release=lambda *_: choose_experience("chat")))
+        page.add_widget(simple)
+
+        visual = Surface(orientation="vertical", padding=dp(14), spacing=dp(7))
+        visual.add_widget(_label("2 · Escritório virtual", size=16, bold=True, size_hint_y=None, height=dp(30)))
+        visual.add_widget(_label("Abre a planta ilustrada dos departamentos. A renderização continua leve; HD 3D é futuro e usa fallback 2.5D.", size=12, color=MUTED))
+        visual.add_widget(RoundedButton(text="USAR ESCRITÓRIO VIRTUAL", fill=PANEL_2, size_hint_y=None, height=dp(48), on_release=lambda *_: choose_experience("office")))
+        page.add_widget(visual)
+        page.add_widget(_label("Podes mudar esta escolha quando quiseres através de Modo. O escritório não é necessário para o cérebro funcionar.", size=11, color=MUTED))
+        return page
+
+    pages["experience"] = experience_page
+    if not saved_experience:
+        show_page("experience")
+    else:
+        show_page(saved_experience)
     return root
