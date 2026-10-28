@@ -31,9 +31,15 @@ def test_engine_wires_owner_private_durable_memory_to_autonomous_research(tmp_pa
         assert len(records) == 1
         assert records[0].value["symbol"] == "BTC/USDT"
         assert records[0].status == "unverified"
+        assert engine.close() is True
+        assert engine.learning_memory is None
+        assert engine.state.operational["learning_memory"]["state"] == "CLOSED"
+        assert engine.close() is True
+        engine.start()
+        assert engine.state.status != "RUNNING"
     finally:
         if engine.learning_memory is not None:
-            engine.learning_memory.close()
+            engine.close()
 
 
 def test_engine_can_disable_durable_learning_memory(tmp_path, monkeypatch):
@@ -49,3 +55,4 @@ def test_engine_can_disable_durable_learning_memory(tmp_path, monkeypatch):
     assert engine.learning_memory is None
     assert engine.autonomous_research.learning_memory is None
     assert engine.state.operational["learning_memory"]["state"] == "DISABLED"
+    assert engine.close() is True
