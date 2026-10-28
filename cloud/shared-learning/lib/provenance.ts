@@ -66,7 +66,7 @@ export function canonicalProvenanceMessage(envelope: ProvenanceEnvelope): string
     producer_version: envelope.producer_version,
     source_artifact_ids: [...envelope.source_artifact_ids]
   };
-  return JSON.stringify(signed);
+  return canonicalizePublicPayload(signed);
 }
 
 function assertWellFormedUnicode(value: string): void {
