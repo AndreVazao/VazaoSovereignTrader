@@ -387,6 +387,11 @@
     "consensus_min_outcome_samples": 30,
     "notes": "PAPER advisory ranking only. Learning never bypasses Risk Engine, RealModeGuard or Order Manager."
   },
+  "learning_memory": {
+    "enabled": true,
+    "path": "learning/sovereign-learning.sqlite3",
+    "notes": "Owner-private SQLite memory for derived research observations. Records remain unverified until independent validation; this store never authorizes orders."
+  },
   "research": {
     "enabled": true,
     "data_dir": "PC_ENGINE/data/research",
