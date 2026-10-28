@@ -1,6 +1,6 @@
 # Durable Learning Memory (SQLite)
 
-**Status:** implemented adapter; production engine wiring and migration remain separate work.
+**Status:** SQLite adapter is wired into `SovereignEngine` and the autonomous market-observation path. Runtime tests cover owner-private placement, persistence of unverified observations, and opt-out behavior. Broader department adoption and operational backup/retention policy remain follow-up work.
 
 ## Why this exists
 
@@ -16,6 +16,7 @@ The original `SharedLearningMemory` is process-local. Its records disappear when
 - Returns expired or over-age records as `stale`; it never silently promotes an unverified hypothesis.
 - Does not store high-frequency market ticks. Raw events and tick streams belong in a dedicated data path; the learning memory should hold derived knowledge and references to reproducible evidence.
 - Does not authorize or submit orders and is not a distributed database.
+- The engine stores the learning-memory health summary in owner operational state; `order_authority` is explicitly false. Learning records stay `unverified` until a separate validation workflow updates them.
 
 ## Minimal use
 
@@ -34,7 +35,7 @@ with SQLiteLearningMemory("PC_ENGINE/data/learning/sovereign-learning.sqlite3") 
     )
 ```
 
-Use a single configured database path for departments that share one local authority. Do not place it in a temporary directory. Backups, retention policy, multi-process deployment, and the engine's startup/shutdown lifecycle need explicit integration work before this adapter is considered the default production memory.
+By default, `SovereignEngine` opens `owners/<owner-id>/learning/sovereign-learning.sqlite3` through `OwnerContext.private_path`; `learning_memory.enabled` can disable it, and `learning_memory.path` can select another owner-private relative path. The same store instance is passed to the autonomous research worker, so new market observations are durably recorded as `unverified` records. A failed memory write is counted and exposed in the worker snapshot without crashing the engine loop. The SQLite connection is process-lifetime state; a terminal process shutdown closes it through the operating system. Do not call `close()` while the engine is expected to restart. Backups, retention policy, multi-process shared writers, and additional department consumers remain follow-up work.
 
 ## Validation boundary
 
