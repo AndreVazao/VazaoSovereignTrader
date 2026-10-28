@@ -113,6 +113,7 @@ export function canonicalizePublicPayload(value: unknown): string {
   if (prototype !== Object.prototype && prototype !== null) {
     throw new Error("non_plain_canonical_json_object");
   }
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new Error("unsupported_canonical_json_symbol_key");
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
   for (const key of keys) assertWellFormedUnicode(key);
