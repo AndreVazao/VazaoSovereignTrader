@@ -40,6 +40,8 @@ begin
     (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relname = 'trader_installations'),
     (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relname = 'trader_departments'),
+    (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relname = 'trader_agents'),
     (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relname = 'shared_learning_provenance'),
@@ -83,8 +85,20 @@ begin
   end if;
 
   if has_table_privilege('anon', 'public.shared_learning_artifacts', 'SELECT')
-     or has_table_privilege('authenticated', 'public.shared_learning_artifacts', 'SELECT') then
-    raise exception 'shared_artifacts_must_not_be_directly_readable';
+     or has_table_privilege('authenticated', 'public.shared_learning_artifacts', 'SELECT')
+     or has_table_privilege('anon', 'public.shared_learning_provenance', 'SELECT')
+     or has_table_privilege('authenticated', 'public.shared_learning_provenance', 'SELECT')
+     or has_table_privilege('anon', 'public.trader_organizations', 'SELECT')
+     or has_table_privilege('authenticated', 'public.trader_organizations', 'SELECT')
+     or has_table_privilege('anon', 'public.trader_organization_memberships', 'SELECT')
+     or has_table_privilege('authenticated', 'public.trader_organization_memberships', 'SELECT')
+     or has_table_privilege('anon', 'public.trader_installations', 'SELECT')
+     or has_table_privilege('authenticated', 'public.trader_installations', 'SELECT')
+     or has_table_privilege('anon', 'public.trader_departments', 'SELECT')
+     or has_table_privilege('authenticated', 'public.trader_departments', 'SELECT')
+     or has_table_privilege('anon', 'public.trader_agents', 'SELECT')
+     or has_table_privilege('authenticated', 'public.trader_agents', 'SELECT') then
+    raise exception 'registry_and_shared_artifacts_must_not_be_directly_readable';
   end if;
 end $$;
 
