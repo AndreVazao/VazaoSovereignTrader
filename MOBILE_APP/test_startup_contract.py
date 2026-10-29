@@ -50,6 +50,14 @@ class MobileStartupContractTests(unittest.TestCase):
             with self.subTest(department=department):
                 self.assertIn(department, office)
 
+    def test_virtual_building_preview_preserves_architectural_proportions(self) -> None:
+        source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("class BuildingPreview(Widget):", source)
+        self.assertIn("scale = min(self.width / base_w, self.height / base_h)", source)
+        self.assertIn('"EDIFÍCIO · PLANTA PROPORCIONAL"', source)
+        self.assertIn("building_preview = BuildingPreview(size_hint=(1, 1))", source)
+        self.assertIn("building_card.add_widget(building_preview)", source)
+
     def test_offline_office_has_lightweight_animated_agents(self) -> None:
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn("from kivy.animation import Animation", source)
