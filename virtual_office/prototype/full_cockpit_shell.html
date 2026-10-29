@@ -118,6 +118,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
   if(headline) headline.insertAdjacentElement("afterend",panel);
   let currentToken="";
   let busy=false;
+  let pollTimer=null;
   const activeRequests=new Set();
   async function boundedFetch(url,options={},timeoutMs=2500){
     const controller=new AbortController();
@@ -136,16 +137,60 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
   function updateRuntimeSummary(snapshot, marketData){
     const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value===null||value===undefined||value===""?"Não fornecido":String(value)};
     set("vstRuntimeEngine",snapshot.status||snapshot.state||"Estado desconhecido");
-    set("vstRuntimeEngineDetail",snapshot.running===true?"Motor em execução":snapshot.running===false?"Motor não está em execução":"Estado comunicado pelo backend");
-    set("vstRuntimeMode",snapshot.mode||"Não fornecido");
-    set("vstRuntimeModeDetail",snapshot.real_mode_guard&&snapshot.real_mode_guard.enabled===true?"Guarda REAL ativa — não equivale a autorização de execução":"Estado informativo; autoridade permanece no motor");
+    set("vstRuntimeEngineDetail","Loop: "+(snapshot.engine_loop||"UNKNOWN")+" · investigação: "+(snapshot.research_worker||"UNKNOWN"));
+    set("vstRuntimeMode",snapshot.memory_consumer_wired===true?"Memória ligada":snapshot.memory_consumer_wired===false?"Memória desligada":"Memória desconhecida");
+    set("vstRuntimeModeDetail","Diagnóstico de memória/workers; não comprova qualidade de aprendizagem nem autoriza execução.");
     const market=marketData||{};
     set("vstRuntimeMarket",market.status||"Desconhecido");
     set("vstRuntimeMarketDetail",market.stale===true?"Dados desatualizados":market.ok===true?"Feed reportado como atual":"Saúde do feed não confirmada");
     set("vstRuntimeUpdated",new Date().toLocaleTimeString());
-    set("vstRuntimeUpdatedDetail","Leitura autenticada; atualização manual");
+    set("vstRuntimeUpdatedDetail","Leitura autenticada; atualização automática a cada 10 segundos");
   }
   function describe(value){if(value===null||value===undefined)return "não fornecido";if(typeof value==="string"||typeof value==="number"||typeof value==="boolean")return String(value);return JSON.stringify(value).slice(0,900)}
+  async function pollRuntimeStatus(){
+    if(!currentToken||busy||document.hidden)return;
+    const base=window.location.origin;
+    try{
+      const headers={"X-Token":currentToken,"Accept":"application/json"};
+      const [runtimeResponse,healthResponse,marketResponse]=await Promise.all([
+        boundedFetch(base+"/learning-memory/runtime",{method:"GET",headers,cache:"no-store",credentials:"omit"}),
+        boundedFetch(base+"/learning-memory/health",{method:"GET",headers,cache:"no-store",credentials:"omit"}),
+        boundedFetch(base+"/market-data-health",{method:"GET",headers,cache:"no-store",credentials:"omit"})
+      ]);
+      if([runtimeResponse,healthResponse,marketResponse].some(r=>r.status===401||r.status===403)){
+        currentToken="";document.getElementById("vstApiToken").value="";
+        setBadge("AUTENTICAÇÃO NECESSÁRIA");state("Sessão terminada","Volta a autenticar para continuar.");
+        if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);
+        return;
+      }
+      if(!runtimeResponse.ok)throw new Error("Estado do motor indisponível (HTTP "+runtimeResponse.status+")");
+      const runtime=await runtimeResponse.json();
+      const health=healthResponse.ok?await healthResponse.json():{status:"UNKNOWN"};
+      const market=marketResponse.ok?await marketResponse.json():{status:"UNKNOWN"};
+      updateRuntimeSummary(runtime,market);
+      safeSummary([
+        ["Motor / workers",runtime.status||"UNKNOWN"],
+        ["Loop do motor",runtime.engine_loop||"UNKNOWN"],
+        ["Worker de investigação",runtime.research_worker||"UNKNOWN"],
+        ["Memória persistente",health.status||"UNKNOWN"],
+        ["Dados de mercado",market.status||"UNKNOWN"],
+        ["Qualidade de aprendizagem verificada",String(runtime.learning_quality_verified===true)],
+        ["Execução autorizada",String(runtime.execution_authorized===true)],
+        ["Última leitura",new Date().toLocaleString()]
+      ]);
+      state("Ligado ao backend","Estado autenticado; consulta automática a cada 10 segundos.");
+      setBadge("LIGADO · LEITURA AUTENTICADA",true);
+      if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(true,false,false);
+    }catch(e){
+      state("Estado indisponível","Falha de leitura; os dados anteriores não devem ser considerados atuais.");
+      setBadge("ESTADO DESCONHECIDO");
+      if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);
+    }
+  }
+  function startRuntimePolling(){
+    if(pollTimer!==null)window.clearInterval(pollTimer);
+    pollTimer=window.setInterval(pollRuntimeStatus,10000);
+  }
   async function connect(){
     if(busy)return;busy=true;
     const token=document.getElementById("vstApiToken").value.trim();
@@ -155,20 +200,20 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     currentToken=token;
     state("A verificar autenticação","A testar resumo leve autenticado…");
     const endpoints=[
-      ["Estado do motor","/observer/summary"],
-      ["Saúde das exchanges","/venue-health"],
-      ["Saúde dos dados de mercado","/market-data-health"],
-      ["Intervenções humanas pendentes","/human-interaction/pending"],
-      ["Pedidos de investigação","/research"]
+      ["Saúde da memória","/learning-memory/health"],
+      ["Saúde dos dados de mercado","/market-data-health"]
     ];
     const rows=[];
     try{
-      const first=await boundedFetch(base+"/observer/summary",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+      const first=await boundedFetch(base+"/learning-memory/runtime",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
       if(first.status===401||first.status===403){currentToken="";document.getElementById("vstApiToken").value="";setBadge("ACESSO RECUSADO");state("Acesso recusado","Token inválido ou sem permissão de leitura.");safeSummary([]);busy=false;return}
-      if(!first.ok)throw new Error("GET /observer/summary respondeu HTTP "+first.status);
+      if(!first.ok)throw new Error("GET /learning-memory/runtime respondeu HTTP "+first.status);
       const firstData=await first.json();
-      rows.push(["Motor",describe(firstData.status||firstData.state||firstData.mode||"Resposta recebida")]);
-      rows.push(["Modo",describe(firstData.mode)]);
+      rows.push(["Estado do motor e workers",describe(firstData.status||"UNKNOWN")]);
+      rows.push(["Loop do motor",describe(firstData.engine_loop)]);
+      rows.push(["Worker de investigação",describe(firstData.research_worker)]);
+      rows.push(["Memória ligada",describe(firstData.memory_consumer_wired)]);
+      rows.push(["Qualidade de aprendizagem verificada",describe(firstData.learning_quality_verified)]);
       rows.push(["Última leitura",new Date().toLocaleString()]);
       let marketData=null;
       for(const [label,path] of endpoints.slice(1)){
@@ -179,14 +224,12 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
           const data=await response.json();
           if(path==="/market-data-health") marketData=data;
           let count;
-          if(path==="/venue-health")count=Array.isArray(data)?data.length:(Array.isArray(data.venues)?data.venues.length:null);
-          else if(path==="/human-interaction/pending")count=Array.isArray(data)?data.length:(Array.isArray(data.requests)?data.requests.length:null);
-          else if(path==="/research")count=Array.isArray(data)?data.length:(Array.isArray(data.requests)?data.requests.length:null);
+          if(path==="/learning-memory/health")count=data.status||"UNKNOWN";
           rows.push([label,count===null||count===undefined?"Resposta recebida":"Registos: "+count]);
         }catch(e){rows.push([label,"Indisponível: "+String(e.message||e).slice(0,100)])}
       }
-      updateRuntimeSummary(firstData,marketData);if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(true,firstData.working===true||firstData.active_work===true,firstData.agent_health_known===true);
-      safeSummary(rows);state("Ligado ao backend","Leitura autenticada; comandos sujeitos às permissões do servidor.");setBadge("LIGADO · ACESSO AUTENTICADO",true);document.getElementById("messages").replaceChildren();conversationHistory[selectedDepartment]=[];addChatMessage("SISTEMA · LIGAÇÃO","Ligação autenticada ao backend. A resposta depende das capacidades existentes no gateway; os departamentos sem agente independente serão identificados como tal.","system");
+      updateRuntimeSummary(firstData,marketData);if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(true,false,false);
+      safeSummary(rows);state("Ligado ao backend","Estado autenticado; atualização automática a cada 10 segundos.");setBadge("LIGADO · LEITURA AUTENTICADA",true);startRuntimePolling();document.getElementById("messages").replaceChildren();conversationHistory[selectedDepartment]=[];addChatMessage("SISTEMA · LIGAÇÃO","Ligação autenticada ao backend. A resposta depende das capacidades existentes no gateway; os departamentos sem agente independente serão identificados como tal.","system");
     }catch(e){currentToken="";document.getElementById("vstApiToken").value="";setBadge("SEM LIGAÇÃO");state("Falha de ligação",String(e.message||e).slice(0,150));if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);safeSummary([["Nota","Confirma que estás a abrir esta página através do servidor VST (Vazão Sovereign Trader) no PC, por LAN ou Tailscale."]])}
     finally{busy=false}
   }
@@ -250,7 +293,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     }finally{chatBusy=false}
   });
   document.getElementById("vstConnect").addEventListener("click",connect);
-  document.getElementById("vstDisconnect").addEventListener("click",()=>{abortVisualRequests();currentToken="";document.getElementById("vstApiToken").value="";setBadge("DESLIGADO");state("Desligado","Pedidos visuais cancelados; token removido da memória desta página.");safeSummary([]);if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false)});
+  document.getElementById("vstDisconnect").addEventListener("click",()=>{if(pollTimer!==null){window.clearInterval(pollTimer);pollTimer=null}abortVisualRequests();currentToken="";document.getElementById("vstApiToken").value="";setBadge("DESLIGADO");state("Desligado","Pedidos visuais cancelados; token removido da memória desta página.");safeSummary([]);if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false)});
 })();
 </script>
 <script>

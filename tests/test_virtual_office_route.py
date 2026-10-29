@@ -57,7 +57,9 @@ def test_virtual_office_runtime_summary_uses_authenticated_backend_data(tmp_path
     assert "Aguardar dados do motor" not in html
     assert "async function boundedFetch(url,options={},timeoutMs=2500)" in html
     assert "abortVisualRequests();currentToken" in html
-    assert '/observer/summary' in html
+    assert '/learning-memory/runtime' in html
+    assert '/learning-memory/health' in html
+    assert 'window.setInterval(pollRuntimeStatus,10000)' in html
     assert '["Saúde dos dados de mercado","/market-data-health"]' in html
     assert "activeRequests=new Set()" in html
     assert 'id="vstConnectionBadge"' in html
@@ -283,7 +285,7 @@ def test_virtual_office_shows_offline_ambient_life_and_health_room(tmp_path, mon
     assert 'data-room="health"' in html
     assert 'health:["Saúde & Enfermaria"' in html
     assert "não executa verificações reais" in html
-    assert "agent_health_known===true" in html
+    assert "window.vstSetAmbientBackendState(true,false,false)" in html
     assert "O motor reporta atividade; animações de trabalho ainda não estão ligadas." in html
 
 
