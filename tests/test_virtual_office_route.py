@@ -301,3 +301,17 @@ def test_virtual_office_only_shows_progress_for_backend_confirmed_tasks_and_has_
     assert 'const progress=status==="completed"?100:Math.floor(numeric)' in html
     assert "não gráfico de mercado" in html
     assert "A barra só aparece com um evento de tarefa validado." in html
+
+
+def test_virtual_office_has_manual_render_profiles_and_persists_selection(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+    html = client.get("/virtual-office").get_data(as_text=True)
+
+    assert 'id="vstRenderProfile"' in html
+    for profile in ("auto", "standard", "pixel", "stick", "clear", "cinematic", "compact"):
+        assert f'<option value="{profile}">' in html
+    assert "localStorage.setItem(key,profile)" in html
+    assert "window.vstSetRenderProfile=function(profile)" in html
+    assert "Seleção manual: " in html
+    assert "não é 3D/WebGL real" in html
+    assert "A escolha manual fica selecionada" not in html
