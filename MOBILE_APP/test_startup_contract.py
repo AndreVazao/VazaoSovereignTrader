@@ -50,6 +50,17 @@ class MobileStartupContractTests(unittest.TestCase):
             with self.subTest(department=department):
                 self.assertIn(department, office)
 
+    def test_offline_office_has_lightweight_animated_agents(self) -> None:
+        source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("from kivy.animation import Animation", source)
+        self.assertIn("from kivy.uix.floatlayout import FloatLayout", source)
+        self.assertIn("Animation(x=right, duration=4.0 + index, t=\"in_out_sine\")", source)
+        self.assertIn("Clock.schedule_once(animate_agents, 0.3)", source)
+        self.assertIn("VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL", source)
+        self.assertIn("demonstração offline; sem tarefa real confirmada", source)
+        self.assertIn("HD 3D (futuro)", source)
+        self.assertIn("fallback seguro", source)
+
     def test_startup_failure_has_local_diagnostic_fallback(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn(
