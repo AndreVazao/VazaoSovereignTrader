@@ -65,7 +65,7 @@ expected = {
 }
 for name, orientation in expected.items():
     data = (root / name).read_bytes()
-    if data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise SystemExit(f"FAIL: {name} is not a valid PNG")
     width, height = struct.unpack(">II", data[16:24])
     print(f"{name}: {width}x{height}")
