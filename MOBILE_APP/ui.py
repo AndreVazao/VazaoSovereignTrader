@@ -340,10 +340,13 @@ def build_chat_cockpit(app):
                 size_hint=(None, None),
                 size=(dp(62), dp(64)),
             )
-            avatar.bind(on_release=lambda _button, key=room_key, name=role: (
-                select_room(next(room for room in rooms if room[0] == key))
-                if "rooms" in locals() else None
-            ))
+            avatar.bind(
+                on_release=lambda _button, key=room_key, name=role: setattr(
+                    render_status,
+                    "text",
+                    f"Agente visual: {name} · departamento {key.upper()} · demonstração offline; sem tarefa real confirmada",
+                )
+            )
             stage.add_widget(avatar)
             agents.append({"widget": avatar, "role": role, "room": room_key, "delay": delay, "moving": False})
 
