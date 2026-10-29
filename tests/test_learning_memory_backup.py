@@ -4,7 +4,10 @@ import sqlite3
 
 import pytest
 
-from PC_ENGINE.learning.memory_backup import backup_learning_memory
+from PC_ENGINE.learning.memory_backup import (
+    backup_learning_memory,
+    verify_learning_memory_backup,
+)
 from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 
 
@@ -91,3 +94,59 @@ def test_backup_rejects_corrupt_or_non_learning_sqlite_database(tmp_path):
         backup_learning_memory(source, destination)
     assert not destination.exists()
     assert list(tmp_path.glob(".backup.sqlite3.*.tmp")) == []
+
+
+def test_backup_verification_reports_healthy_counts_without_modifying_file(tmp_path):
+    source = tmp_path / "learning.sqlite3"
+    destination = tmp_path / "backup.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        record = memory.put(
+            key="verified.record",
+            value={"safe": True},
+            department="test",
+            provenance="replay:verification-test",
+        )
+        memory.put(
+            key=record.key,
+            value={"safe": True, "revision": 2},
+            department="test",
+            provenance="replay:verification-test-update",
+            expected_version=record.version,
+        )
+        backup_learning_memory(source, destination)
+
+    before = destination.read_bytes()
+    result = verify_learning_memory_backup(destination)
+    assert result == {
+        "status": "healthy",
+        "path": str(destination),
+        "integrity": "ok",
+        "learning_records": 1,
+        "learning_events": 2,
+        "reason": None,
+    }
+    assert destination.read_bytes() == before
+
+
+def test_backup_verification_distinguishes_missing_from_degraded(tmp_path):
+    missing = verify_learning_memory_backup(tmp_path / "missing.sqlite3")
+    assert missing["status"] == "missing"
+    assert missing["reason"] == "backup_not_found"
+
+    malformed = tmp_path / "malformed.sqlite3"
+    malformed.write_bytes(b"not a sqlite database")
+    degraded = verify_learning_memory_backup(malformed)
+    assert degraded["status"] == "degraded"
+    assert str(degraded["reason"]).startswith("backup_unreadable:")
+    assert degraded["learning_records"] is None
+
+
+def test_backup_verification_reports_incomplete_schema_as_degraded(tmp_path):
+    incomplete = tmp_path / "incomplete.sqlite3"
+    with sqlite3.connect(incomplete) as connection:
+        connection.execute("CREATE TABLE unrelated (value TEXT)")
+
+    result = verify_learning_memory_backup(incomplete)
+    assert result["status"] == "degraded"
+    assert result["integrity"] == "ok"
+    assert result["reason"] == "backup_schema_incomplete"
