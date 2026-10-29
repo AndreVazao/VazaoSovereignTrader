@@ -55,6 +55,9 @@ jobs:
           # The release APK workflow targets arm64 devices. This smoke-test APK
           # targets the hosted x86_64 emulator and is not published as a release artifact.
           sed -i 's/^android.archs = .*/android.archs = x86_64/' buildozer.spec
+          # The production APK stays portrait-locked; let the temporary smoke APK rotate
+          # so the landscape/tablet screenshots test real responsive layouts.
+          sed -i 's/^orientation = portrait$/orientation = all/' buildozer.spec
           yes | buildozer android debug
           test -n "$(find bin -maxdepth 1 -name '*.apk' -print -quit)"
 
