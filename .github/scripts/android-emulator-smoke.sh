@@ -22,7 +22,33 @@ adb shell monkey -p "$PACKAGE" 1
 sleep 8
 adb shell pidof "$PACKAGE"
 adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
+
+# Exercise portrait, landscape and a tablet-like logical resolution in the hosted
+# emulator. These are layout/startup smoke checks, not a full visual acceptance test.
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 0
+sleep 2
+adb exec-out screencap -p > "$EVIDENCE/vst-portrait.png"
+adb shell pidof "$PACKAGE" >/dev/null
+
+adb shell settings put system user_rotation 1
+sleep 3
+adb exec-out screencap -p > "$EVIDENCE/vst-landscape.png"
+adb shell pidof "$PACKAGE" >/dev/null
+
+# Simulate a landscape tablet viewport without changing app data or backend state.
+adb shell wm size 1280x800
+adb shell wm density 240
+sleep 3
+adb exec-out screencap -p > "$EVIDENCE/vst-tablet-landscape.png"
+adb shell pidof "$PACKAGE" >/dev/null
+
+# Restore emulator display settings for subsequent steps and capture diagnostics.
+adb shell wm size reset
+adb shell wm density reset
+adb shell settings put system accelerometer_rotation 1
 adb logcat -d > "$EVIDENCE/logcat.txt"
+echo "PASS: app process survived portrait, landscape and tablet-like viewport transitions." | tee "$EVIDENCE/orientation-smoke.txt"
 # user_data_dir in the packaged app maps to the app-private files directory.
 # Capture the full traceback, while never reading connection/token files.
 if adb shell run-as "$PACKAGE" sh -c 'find /data/user/0/pt.andrevazao.vazaosovereigntrader -name startup_error.log -type f -print -exec cat {} +' > "$EVIDENCE/startup_error.txt" 2>/dev/null && [[ -s "$EVIDENCE/startup_error.txt" ]]; then
