@@ -446,7 +446,7 @@ def test_venue_economic_evidence_reads_configured_report_and_fails_closed(tmp_pa
     assert invalid.status_code == 409
     assert invalid.get_json()["execution_authorized"] is False
 
-def test_learning_memory_runtime_endpoint_requires_auth_and_returns_safe_unknown(monkeypatch):
+def test_learning_memory_runtime_endpoint_requires_auth_and_reports_missing_memory(monkeypatch):
     monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
     client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
 
@@ -459,7 +459,8 @@ def test_learning_memory_runtime_endpoint_requires_auth_and_returns_safe_unknown
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["component"] == "learning_memory_runtime"
-    assert payload["status"] == "UNKNOWN"
+    assert payload["status"] == "DEGRADED"
+    assert payload["reason"] == "durable_memory_not_available"
     assert payload["execution_authorized"] is False
     assert payload["orders_submitted"] is False
     assert payload["learning_quality_verified"] is False
