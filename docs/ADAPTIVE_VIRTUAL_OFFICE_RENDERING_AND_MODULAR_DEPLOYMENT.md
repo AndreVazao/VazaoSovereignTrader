@@ -10,13 +10,14 @@ The Sovereign Trader Runtime is authoritative and headless. The office is a disp
 
 The same department map and interaction/data contracts must be retained across all profiles. Only presentation changes:
 
-1. **HD / cinematic 3D** — future optional renderer, enabled only after a real WebGL/GPU implementation and profiling exist. It must not be represented as available in the current HTML prototype.
-2. **Standard 2.5D** — isometric lightweight office with room selection.
-3. **Pixel / 8-bit** — simplified edges, shadows and effects.
-4. **Stick figures** — minimum effects and simplified room rendering.
-5. **Compact** — minimum presentation footprint; the chat/control surface remains available if rendering must be disabled entirely.
+1. **HD / cinematic preview** — selectable CSS presentation profile with stronger contrast/depth effects. This is explicitly a 2D/2.5D preview, not a real WebGL/VR renderer.
+2. **Standard 2.5D** — default isometric-lightweight office with room selection.
+3. **Pixel / 8-bit** — squared edges, reduced decorative detail and simple shadows.
+4. **Stick figures / light** — simplified rooms and reduced animation cost.
+5. **Clear rooms / readability** — flatter layout, stronger room boundaries and more readable labels.
+6. **Compact / low consumption** — reduced decorative elements and smaller room cards; chat-only remains a separate application mode.
 
-The current prototype implements CSS-based Standard 2.5D, Pixel, Stick and Compact profiles. It does not yet ship a real WebGL 3D renderer or animated character system. The HD option is intentionally disabled until such a renderer exists.
+The HTML prototype exposes these CSS presentation profiles in one selector. A real WebGL 3D/VR renderer and cinematic animated 3D characters are not implemented and must not be implied by the cinematic preview label. The underlying department map and runtime contracts remain the same across profiles.
 
 ## Automatic device assessment
 
@@ -30,7 +31,7 @@ On startup, the client performs a small, local capability check using informatio
 
 Initial heuristic: very constrained/reduced-motion devices start in Stick mode; constrained devices start in Pixel mode; others start in Standard 2.5D. Missing browser metrics are treated as unknown, not as proof of high capability.
 
-During use, repeated slow-frame windows or supported heap pressure automatically reduce the visual profile without asking the operator. The client resets its profile selector to Automatic when it overrides a manual quality selection. The observer should never automatically upgrade to a heavier profile while the runtime is busy. The user may select a lighter profile manually at any time.
+The selected profile is stored locally per browser installation. Automatic mode chooses a best-effort starting profile from available device hints. A manual selection persists across reloads and is not silently replaced by the automatic recommendation. On constrained devices, the selected profile can keep its identity while decorative effects/animation cadence are reduced; the UI must disclose that reduction. A future native renderer watchdog may ask the operator to switch profiles or disable the scene after sustained severe pressure, but must never change the backend runtime or its safety state. Automatic mode must never upgrade to a heavier profile while the runtime is busy.
 
 Browser metrics are best-effort signals, not a complete measurement of system RAM, GPU memory, CPU saturation or server health. Production desktop clients should add native telemetry where permitted and compare it with server health. Mobile/browser clients must remain safe when these metrics are unavailable.
 
@@ -85,7 +86,7 @@ Every install has a unique device/install identity. A client must authenticate a
 ## Acceptance tests before release
 
 - Unit tests for profile selection, profile degradation, unknown metrics, reduced motion and repeated threshold breaches.
-- Browser tests proving manual quality is overridden when resource pressure persists.
+- Browser tests proving manual selection persists across reloads and is not silently replaced by Automatic; verify resource pressure can reduce effects without changing the selected profile.
 - Tests for tab hiding, reconnect, renderer exception, stale snapshots, queue saturation and backend unavailability.
 - Load tests comparing runtime decision/scheduling latency with office off, standard, pixel, stick and saturated clients.
 - Verify the office can be killed/restarted without runtime restart, state mutation or order duplication.
@@ -141,3 +142,10 @@ A task reaches 100% only on a backend-confirmed completed state. A running task 
 - Zoom reset returns the floor to 100%; focus dims unrelated rooms and can be exited.
 - The chief-chat action selects the same department in the conversation interface.
 - Reduced-motion mode disables animated workstation effects.
+
+
+## Current manual profile selector
+
+The virtual-office prototype now includes a local profile selector with Automatic, Standard 2.5D, Pixel/8-bit, Stick/light, Clear rooms/readability, Cinematic preview (2D/2.5D only) and Compact/low-consumption options. Manual choice is stored in localStorage on the current installation/browser. Automatic uses best-effort device hints (reduced motion, data saver, reported device memory/CPU and viewport width); missing hints are treated as unknown.
+
+Manual choice is not silently overridden by startup heuristics. Profiles only change rendering and do not alter brain scheduling, agent truth state, risk gates, or execution. Compact visual profile and chat-only application mode are separate. The cinematic preview is not a true 3D/VR implementation. Physical PC/Android testing is still required.
