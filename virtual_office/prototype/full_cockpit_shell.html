@@ -219,4 +219,127 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
   document.getElementById("vstConnect").addEventListener("click",connect);
   document.getElementById("vstDisconnect").addEventListener("click",()=>{abortVisualRequests();currentToken="";document.getElementById("vstApiToken").value="";setBadge("DESLIGADO");state("Desligado","Pedidos visuais cancelados; token removido da memória desta página.");safeSummary([]);if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false)});
 })();
-</script></body></html>
+</script>
+<script>
+/* Department focus and verified-task visualization. Social motion is local; work state must be explicitly confirmed by the backend adapter. */
+(function(){
+  const scene=document.getElementById("officeScene");
+  if(!scene)return;
+  const style=document.createElement("style");
+  style.textContent=`
+    .vst-zoom-tools{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:8px}
+    .vst-zoom-tools button,.vst-focus-actions button{border:1px solid #2b4a65;background:#0a1b2b;border-radius:8px;padding:6px 9px;font-size:11px}
+    .vst-zoom-level{font-size:10px;color:#8ca7c1;min-width:48px;text-align:center}
+    #officeScene .floor{transform-origin:top center;transition:transform .18s ease;will-change:transform}
+    #officeScene .floor.vst-focus-mode .room:not(.selected){filter:blur(2px);opacity:.22;transform:scale(.97)}
+    #officeScene .floor.vst-focus-mode .room.selected{position:relative;z-index:2;outline:2px solid #4edbff;box-shadow:0 0 0 5px #4edbff18,0 12px 35px #0008;transform:scale(1.025)}
+    .vst-room-task{display:block;margin-top:7px;text-align:left;font-size:10px;color:#c5e8ff}
+    .vst-task-track{display:block;height:5px;background:#1b3449;border-radius:99px;overflow:hidden;margin-top:4px}
+    .vst-task-fill{display:block;height:100%;background:#42e0b0;width:0;transition:width .2s ease}
+    .vst-agent-focus{margin:12px 0;padding:12px;border:1px solid #28516c;border-radius:12px;background:linear-gradient(145deg,#102a40,#091725);box-shadow:0 12px 28px #0003}
+    .vst-agent-focus[hidden]{display:none}.vst-agent-focus h3{font-size:13px;margin:0 0 5px}
+    .vst-focus-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+    .vst-workstation{min-height:84px;border:1px solid #24465f;border-radius:9px;padding:9px;background:#071522}
+    .vst-workstation-screen{height:35px;position:relative;overflow:hidden;border-bottom:2px solid #31536a;background:repeating-linear-gradient(90deg,transparent 0 14px,#12334a 15px 16px)}
+    .vst-workstation-screen:after{content:"";position:absolute;inset:8px 0 0;background:linear-gradient(165deg,transparent 0 32%,#4edbff 34% 36%,transparent 38% 48%,#42e0b0 50% 52%,transparent 54%);opacity:.85}
+    .vst-workstation.active .vst-workstation-screen:after{animation:vst-processing 1.4s linear infinite}
+    @keyframes vst-processing{0%{transform:translateX(-12%);opacity:.35}50%{opacity:1}100%{transform:translateX(12%);opacity:.35}}
+    .vst-focus-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+    .vst-focus-muted{font-size:10px;color:#8ca7c1;margin:5px 0 0}
+    @media(max-width:650px){.vst-focus-grid{grid-template-columns:1fr}.vst-zoom-tools button{padding:7px 8px}}
+    @media(prefers-reduced-motion:reduce){#officeScene .floor,.vst-task-fill{transition:none}.vst-workstation.active .vst-workstation-screen:after{animation:none}}
+  `;
+  document.head.append(style);
+  const floor=scene.querySelector(".floor");
+  const head=scene.querySelector(".scenehead");
+  if(!floor||!head)return;
+  let zoom=1;
+  const toolbar=document.createElement("div");
+  toolbar.className="vst-zoom-tools";
+  toolbar.setAttribute("aria-label","Controlos de zoom e foco do escritório");
+  toolbar.innerHTML='<button type="button" data-vst-zoom="out" aria-label="Afastar zoom">−</button><span class="vst-zoom-level" aria-live="polite">Zoom 100%</span><button type="button" data-vst-zoom="in" aria-label="Aproximar zoom">+</button><button type="button" data-vst-zoom="reset">Repor vista</button><button type="button" data-vst-focus="toggle">Focar departamento</button>';
+  head.append(toolbar);
+  const focus=document.createElement("section");
+  focus.className="vst-agent-focus";
+  focus.hidden=true;
+  focus.setAttribute("aria-live","polite");
+  focus.innerHTML='<h3 id="vstFocusTitle">Departamento</h3><p id="vstFocusState" class="vst-focus-muted">Sem tarefa real confirmada pelo backend.</p><div class="vst-focus-grid"><div class="vst-workstation" id="vstWorkstation"><strong>Posto de trabalho</strong><div class="vst-workstation-screen" aria-hidden="true"></div><p class="vst-focus-muted" id="vstWorkstationCaption">Sem atividade de trabalho confirmada.</p></div><div><strong>Progresso da tarefa</strong><div id="vstFocusProgressText" class="vst-focus-muted">Sem tarefa ativa confirmada</div><div class="vst-task-track" id="vstFocusTrack" hidden><span class="vst-task-fill" id="vstFocusFill"></span></div><p class="vst-focus-muted" id="vstFocusTaskMeta">A barra só aparece com um evento de tarefa validado.</p></div></div><div class="vst-focus-actions"><button type="button" id="vstTalkToChief">Falar com chefe do departamento</button><button type="button" id="vstCloseFocus">Fechar foco</button></div>';
+  floor.insertAdjacentElement("afterend",focus);
+  const labels={brain:"Cérebro / CEO",markets:"Exchanges",radar:"Market Radar",comparison:"Comparação entre Exchanges",research:"Investigação",analysis:"Análise",paper:"Laboratório PAPER",risk:"Controlo de risco",memory:"Memória Central",fast:"Resposta Rápida",recovery:"Recuperação",audit:"Auditoria",human:"Intervenção humana",health:"Saúde & Enfermaria"};
+  const tasks=new Map();
+  let focusedDepartment="brain";
+  function selectedRoom(){return scene.querySelector(".room.selected")}
+  function currentDepartment(){const room=selectedRoom();return room?room.dataset.room:"brain"}
+  function renderRoomTask(department){
+    const room=scene.querySelector('.room[data-room="'+department+'"]');
+    if(!room)return;
+    const old=room.querySelector(".vst-room-task");if(old)old.remove();
+    const task=tasks.get(department);
+    if(!task||task.status!=="running"&&task.status!=="completed")return;
+    const wrap=document.createElement("span");wrap.className="vst-room-task";
+    const text=document.createElement("span");text.textContent=(task.status==="completed"?"Tarefa concluída":"Trabalho confirmado")+" · "+task.progress+"%";
+    const track=document.createElement("span");track.className="vst-task-track";track.setAttribute("role","progressbar");track.setAttribute("aria-label","Progresso da tarefa de "+(labels[department]||department));track.setAttribute("aria-valuemin","0");track.setAttribute("aria-valuemax","100");track.setAttribute("aria-valuenow",String(task.progress));
+    const fill=document.createElement("span");fill.className="vst-task-fill";fill.style.width=task.progress+"%";track.append(fill);wrap.append(text,track);room.append(wrap);
+  }
+  function renderFocus(){
+    const d=focusedDepartment,task=tasks.get(d),title=labels[d]||d;
+    document.getElementById("vstFocusTitle").textContent=title+" · posto de trabalho";
+    const state=document.getElementById("vstFocusState"),station=document.getElementById("vstWorkstation"),caption=document.getElementById("vstWorkstationCaption");
+    const progressText=document.getElementById("vstFocusProgressText"),track=document.getElementById("vstFocusTrack"),fill=document.getElementById("vstFocusFill"),meta=document.getElementById("vstFocusTaskMeta");
+    if(task&&(task.status==="running"||task.status==="completed")){
+      const done=task.status==="completed";
+      state.textContent=(done?"Tarefa concluída":"Tarefa em execução")+" · confirmado pelo backend · agente: "+task.agentId;
+      station.classList.toggle("active",!done);
+      caption.textContent=done?"O backend confirmou a conclusão.":"Atividade do agente confirmada; visualização de processamento ilustrativa, não gráfico de mercado.";
+      progressText.textContent=task.taskLabel+" · "+task.progress+"%";
+      track.hidden=false;fill.style.width=task.progress+"%";
+      meta.textContent="Tarefa "+task.taskId+" · atualizado "+new Date(task.updatedAt).toLocaleTimeString();
+    }else{
+      state.textContent="Sem tarefa real confirmada pelo backend. A vida social continua local.";
+      station.classList.remove("active");caption.textContent="Posto em repouso visual; não representa trabalho real.";
+      progressText.textContent="Sem tarefa ativa confirmada";track.hidden=true;fill.style.width="0%";meta.textContent="Não existe barra de progresso sem evento de tarefa validado.";
+    }
+  }
+  function setZoom(value){zoom=Math.max(.75,Math.min(1.8,Math.round(value*100)/100));floor.style.transform="scale("+zoom+")";document.querySelector(".vst-zoom-level").textContent="Zoom "+Math.round(zoom*100)+"%";}
+  function focusDepartment(d){focusedDepartment=d||currentDepartment();floor.classList.add("vst-focus-mode");focus.hidden=false;renderFocus();toolbar.querySelector('[data-vst-focus="toggle"]').textContent="Sair do foco";}
+  function clearFocus(){floor.classList.remove("vst-focus-mode");focus.hidden=true;toolbar.querySelector('[data-vst-focus="toggle"]').textContent="Focar departamento";}
+  toolbar.addEventListener("click",event=>{
+    const b=event.target.closest("button");if(!b)return;
+    if(b.dataset.vstZoom==="in")setZoom(zoom+.15);
+    else if(b.dataset.vstZoom==="out")setZoom(zoom-.15);
+    else if(b.dataset.vstZoom==="reset"){setZoom(1);clearFocus()}
+    else if(b.dataset.vstFocus!==undefined){if(focus.hidden)focusDepartment(currentDepartment());else clearFocus()}
+  });
+  scene.addEventListener("click",event=>{const room=event.target.closest(".room[data-room]");if(!room)return;focusedDepartment=room.dataset.room;if(!focus.hidden)renderFocus()});
+  document.getElementById("vstCloseFocus").addEventListener("click",clearFocus);
+  document.getElementById("vstTalkToChief").addEventListener("click",()=>{
+    const d=focusedDepartment;
+    window.dispatchEvent(new CustomEvent("vst-department-change",{detail:{department:d}}));
+    const chatNav=document.querySelector('[data-page="chat"]');if(chatNav)chatNav.click();
+    const chatPanel=document.getElementById("chatPanel");if(chatPanel&&window.matchMedia("(max-width:1050px)").matches)chatPanel.classList.add("open");
+    const title=document.getElementById("chatTitle");if(title)title.textContent="Conversa · Chefe de "+(labels[d]||d);
+  });
+  /* Public adapter contract: call only with a backend-authenticated task snapshot. Unverified payloads clear the display. */
+  window.vstUpdateAgentTaskState=function(payload){
+    const p=payload&&typeof payload==="object"?payload:{};
+    const d=String(p.department||"");
+    if(p.backendConfirmed!==true||!Object.prototype.hasOwnProperty.call(labels,d)||!p.taskId||!p.agentId){
+      if(labels[d]){tasks.delete(d);renderRoomTask(d);if(d===focusedDepartment)renderFocus()}
+      return false;
+    }
+    const status=String(p.status||"");
+    if(!["running","completed","idle"].includes(status)){tasks.delete(d);renderRoomTask(d);if(d===focusedDepartment)renderFocus();return false}
+    if(status==="idle"){tasks.delete(d);renderRoomTask(d);if(d===focusedDepartment)renderFocus();return true}
+    const numeric=Number(p.progress);
+    if(!Number.isFinite(numeric)||numeric<0||numeric>100){tasks.delete(d);renderRoomTask(d);if(d===focusedDepartment)renderFocus();return false}
+    const progress=status==="completed"?100:Math.floor(numeric);
+    const task={department:d,taskId:String(p.taskId),agentId:String(p.agentId),taskLabel:String(p.taskLabel||"Tarefa confirmada"),status,progress,updatedAt:p.updatedAt?String(p.updatedAt):new Date().toISOString()};
+    tasks.set(d,task);renderRoomTask(d);if(d===focusedDepartment)renderFocus();return true;
+  };
+  window.vstClearAgentTaskState=function(department){
+    if(!labels[department])return false;tasks.delete(department);renderRoomTask(department);if(department===focusedDepartment)renderFocus();return true;
+  };
+  setZoom(1);
+})();
+</script>
+</body></html>

@@ -285,3 +285,19 @@ def test_virtual_office_shows_offline_ambient_life_and_health_room(tmp_path, mon
     assert "não executa verificações reais" in html
     assert "agent_health_known===true" in html
     assert "O motor reporta atividade; animações de trabalho ainda não estão ligadas." in html
+
+
+def test_virtual_office_only_shows_progress_for_backend_confirmed_tasks_and_has_focus_controls(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+    html = client.get("/virtual-office").get_data(as_text=True)
+
+    assert 'data-vst-zoom="in"' in html
+    assert 'data-vst-zoom="out"' in html
+    assert 'data-vst-zoom="reset"' in html
+    assert 'data-vst-focus="toggle"' in html
+    assert 'id="vstTalkToChief"' in html
+    assert "window.vstUpdateAgentTaskState=function(payload)" in html
+    assert "p.backendConfirmed!==true" in html
+    assert 'const progress=status==="completed"?100:Math.floor(numeric)' in html
+    assert "não gráfico de mercado" in html
+    assert "A barra só aparece com um evento de tarefa validado." in html

@@ -52,3 +52,13 @@ This is a visual/interaction shell only. The chat is intentionally local demo be
 - No fabricated live activity, no client-held exchange keys, no unauthorized/public fallback.
 - Disconnects, stale data, permission failures and unknown mutation outcomes are explicit.
 - Chat-only mode remains usable on low-power devices.
+
+
+## Verified work, local social animation and department focus
+
+- Ambient movement (walk, café, corridor, gym, exterior) runs locally on the client and is explicitly labelled as visual/social simulation. It does not require a backend connection and never proves that an agent is working.
+- A task progress bar is rendered only after the client receives a backend-authenticated task snapshot containing `backendConfirmed: true`, department, task ID, agent ID, status and a valid progress value. A completed task is shown at 100% only when the backend reports `completed`; elapsed animation time never completes a task.
+- The browser adapter hooks `window.vstUpdateAgentTaskState(snapshot)` and `window.vstClearAgentTaskState(department)` are presentation contracts, not a claim that the current backend already emits task events. Until the production event/API adapter is connected, no real task bars appear.
+- If one department is confirmed active and other departments have no confirmed tasks, only the confirmed department gets a progress bar and active workstation visual. Workstation movement is explicitly described as illustrative processing, not market data. Market charts must use real market payloads.
+- Zoom controls provide zoom in/out/reset. Department focus blurs non-selected rooms, exposes a focused workstation/progress panel, and provides a direct route to chat with that department's chief. The current prototype routes the conversation to the selected department; it does not yet prove an independent chief agent is deployed.
+- Reduced-motion preference disables the workstation animation. The chat-only mode remains available for low-capability devices.
