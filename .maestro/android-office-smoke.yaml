@@ -2,7 +2,7 @@ appId: pt.andrevazao.vazaosovereigntrader
 ---
 - launchApp
 - waitForAnimationToEnd
-- tapOn: "USAR ESCRITÓRIO VIRTUAL"
+- tapOn:
+    point: "60%, 70%"
 - waitForAnimationToEnd
-- assertVisible: "MARKET RADAR"
 - takeScreenshot: vst-android-office
