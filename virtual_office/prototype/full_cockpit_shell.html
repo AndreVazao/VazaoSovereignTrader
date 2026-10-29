@@ -31,6 +31,39 @@
 @media(max-width:1050px){.layout{grid-template-columns:180px minmax(300px,1fr)}.right{position:fixed;z-index:5;right:0;top:64px;bottom:0;width:min(360px,94vw);box-shadow:-20px 0 50px #0009;transform:translateX(102%);transition:transform .2s}.right.open{transform:translateX(0)}.topnote{display:none}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:1250px){.floor{grid-template-columns:repeat(3,minmax(0,1fr));transform:none}.room{min-height:78px}}@media(max-width:650px){.app{height:100dvh;min-height:0;grid-template-rows:58px 1fr}.top{padding:0 10px;gap:8px}.brand{min-width:0;flex:1}.brand{gap:7px}.brand .mark{width:32px;height:32px;flex-shrink:0}.brand-wordmark{gap:0}.brand-letters{font-size:17px;column-gap:4px}.brand-expansion{font-size:7px;column-gap:4px}.brand-context{font-size:8px;margin-top:3px}.pill{font-size:9px;padding:6px 8px}.layout{display:block}.left{display:none}.main{height:calc(100dvh - 58px);padding:12px}.headline h1{font-size:18px}.headline{align-items:center}.mode button{padding:6px;font-size:10px}.stats{gap:7px}.stat{padding:10px}.stat strong{font-size:16px}.scene{padding:12px;min-height:360px}.floor{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:24px auto 14px;transform:none}.room{min-height:72px;padding:10px}.room b{font-size:11px}.lower{grid-template-columns:1fr}.right{top:58px}.mobile-menu{display:inline-flex!important}.scenefoot{line-height:1.5}}.mobile-menu{display:none;border:1px solid var(--line);background:#10243a;border-radius:8px;padding:7px 9px}
 </style>
+
+<style id="vst-render-profiles-css">
+.vst-render-picker{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;padding:8px 10px;border:1px solid #24445b;border-radius:10px;background:#081827dd}
+.vst-render-picker label{font-size:10px;color:#a9c5dc}
+.vst-render-picker select{min-width:190px;max-width:100%;border:1px solid #31536a;border-radius:7px;background:#0b2032;padding:6px 8px;font-size:11px}
+.vst-render-status{font-size:10px;color:#8ca7c1;flex:1;min-width:150px}
+#officeScene[data-vst-render-profile="pixel"] .room{border-radius:2px;box-shadow:3px 3px 0 #030a11;background:#10263a;outline-offset:-3px}
+#officeScene[data-vst-render-profile="pixel"] .room b,#officeScene[data-vst-render-profile="pixel"] .room small{font-family:ui-monospace,SFMono-Regular,monospace;letter-spacing:.01em}
+#officeScene[data-vst-render-profile="pixel"] .idle-person{image-rendering:pixelated;filter:contrast(1.15)}
+#officeScene[data-vst-render-profile="pixel"] .idle-scene,#officeScene[data-vst-render-profile="pixel"] .surface{border-radius:3px}
+#officeScene[data-vst-render-profile="stick"] .floor{transform:none!important;gap:6px}
+#officeScene[data-vst-render-profile="stick"] .room{background:#071522;border:1px dashed #64839a;border-radius:3px;box-shadow:none;min-height:65px}
+#officeScene[data-vst-render-profile="stick"] .room .ico{font-size:16px}
+#officeScene[data-vst-render-profile="stick"] .idle-scene{background:#071522;border-style:dashed;border-radius:3px}
+#officeScene[data-vst-render-profile="stick"] .idle-person{filter:grayscale(1);animation-duration:26s}
+#officeScene[data-vst-render-profile="clear"] .floor{transform:none!important;gap:12px}
+#officeScene[data-vst-render-profile="clear"] .room{min-height:100px;padding:15px;background:#102a40;border-width:2px;box-shadow:0 4px 0 #030a11}
+#officeScene[data-vst-render-profile="clear"] .room b{font-size:13px}
+#officeScene[data-vst-render-profile="clear"] .room small{font-size:11px;color:#c0d6e8}
+#officeScene[data-vst-render-profile="cinematic"]{background:linear-gradient(180deg,#07132188,#030913bb),radial-gradient(ellipse at 50% 0%,#1a5072,#071321 72%)}
+#officeScene[data-vst-render-profile="cinematic"] .floor{transform:perspective(1100px) rotateX(7deg)}
+#officeScene[data-vst-render-profile="cinematic"] .room{background:linear-gradient(145deg,#1b4663,#081827);box-shadow:0 9px 0 #030a11,0 14px 25px #0006;border-color:#4389ae}
+#officeScene[data-vst-render-profile="cinematic"] .idle-scene{box-shadow:0 12px 30px #0006}
+#officeScene[data-vst-render-profile="compact"] .idle-scene,#officeScene[data-vst-render-profile="compact"] .scenefoot{display:none!important}
+#officeScene[data-vst-render-profile="compact"] .floor{margin:12px auto;transform:none!important;gap:5px}
+#officeScene[data-vst-render-profile="compact"] .room{min-height:54px;padding:7px;border-radius:6px;box-shadow:none}
+#officeScene[data-vst-render-profile="compact"] .room .ico{font-size:15px}
+#officeScene[data-vst-render-profile="compact"] .room b{font-size:10px}
+#officeScene[data-vst-render-profile="compact"] .room small{font-size:9px}
+#officeScene.vst-motion-budget-limited .idle-person,#officeScene.vst-motion-budget-limited .idle-bubble{animation-duration:40s!important}
+@media(max-width:650px){.vst-render-picker{align-items:flex-start}.vst-render-picker select{min-width:0;width:100%}#officeScene[data-vst-render-profile="cinematic"] .floor{transform:none}}
+@media(prefers-reduced-motion:reduce){#officeScene[data-vst-render-profile="cinematic"] .floor{transform:none!important}}
+</style>
 </head>
 <body><div class="app">
 <header class="top"><button class="mobile-menu" id="openMenu" aria-label="Abrir navegação">☰</button><div class="brand"><div class="mark"><img src="../../assets/branding/vst-logo.svg" alt="Logótipo VST — Vazão Sovereign Trader"></div><div class="brand-wordmark" aria-label="VST — Vazão Sovereign Trader"><div class="brand-letters" aria-hidden="true"><span>V</span><span>S</span><span>T</span></div><div class="brand-expansion"><span>Vazão</span><span>Sovereign</span><span>Trader</span></div><div class="brand-context">Cockpit · Escritório Virtual</div></div></div><div class="topnote">Uma interface em evolução. Um único motor soberano.</div><span class="pill" id="vstConnectionBadge" role="status" aria-live="polite">DEMONSTRAÇÃO · NÃO LIGADO</span><button class="mobile-menu" id="openChat" aria-label="Abrir conversa">☷</button></header>
@@ -340,6 +373,50 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     if(!labels[department])return false;tasks.delete(department);renderRoomTask(department);if(department===focusedDepartment)renderFocus();return true;
   };
   setZoom(1);
+})();
+</script>
+
+<script>
+/* Manual visual-profile selector. Profiles affect presentation only, never runtime scheduling or trading authority. */
+(function(){
+ const scene=document.getElementById("officeScene");
+ if(!scene)return;
+ const head=scene.querySelector(".scenehead");if(!head)return;
+ const picker=document.createElement("div");
+ picker.className="vst-render-picker";
+ picker.innerHTML='<label for="vstRenderProfile">Perfil visual</label><select id="vstRenderProfile" aria-describedby="vstRenderStatus"><option value="auto">Automático · recomendado para este aparelho</option><option value="standard">Standard 2.5D</option><option value="pixel">Pixel / 8-bit</option><option value="stick">Bonecos / modo leve</option><option value="clear">Salas nítidas / leitura</option><option value="cinematic">HD cinematográfico · pré-visualização 2D</option><option value="compact">Compacto / baixo consumo</option></select><span class="vst-render-status" id="vstRenderStatus" role="status" aria-live="polite">A escolher perfil…</span>';
+ head.insertAdjacentElement("afterend",picker);
+ const select=picker.querySelector("select"),status=picker.querySelector("#vstRenderStatus");
+ const key="vst.virtualOffice.renderProfile.v1";
+ const allowed=new Set(["auto","standard","pixel","stick","clear","cinematic","compact"]);
+ function recommended(){
+   const mq=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+   const memory=Number(navigator.deviceMemory||0),cores=Number(navigator.hardwareConcurrency||0);
+   const save=!!(navigator.connection&&navigator.connection.saveData);
+   if(mq||save||(memory>0&&memory<=2)||(cores>0&&cores<=2)||window.innerWidth<430)return "stick";
+   if((memory>0&&memory<=4)||(cores>0&&cores<=4)||window.innerWidth<720)return "pixel";
+   return "standard";
+ }
+ function label(p){return ({auto:"Automático",standard:"Standard 2.5D",pixel:"Pixel / 8-bit",stick:"Bonecos / modo leve",clear:"Salas nítidas / leitura",cinematic:"HD cinematográfico · pré-visualização 2D",compact:"Compacto / baixo consumo"})[p]||p}
+ function apply(profile,manual){
+   if(!allowed.has(profile))profile="auto";
+   const actual=profile==="auto"?recommended():profile;
+   scene.dataset.vstRenderProfile=actual;
+   scene.dataset.vstRenderSelection=profile;
+   select.value=profile;
+   const low=actual==="stick"||actual==="pixel"||actual==="compact";
+   scene.classList.toggle("vst-motion-budget-limited",low);
+   status.textContent=(profile==="auto"?"Automático: ":"Seleção manual: ")+label(actual)+(profile==="auto"?" · pode mudar ao abrir noutro aparelho":" · fica selecionado neste aparelho")+(actual==="cinematic"?" · não é 3D/WebGL real":"");
+   if(profile!=="auto"){try{localStorage.setItem(key,profile)}catch(_e){}}
+   else{try{localStorage.setItem(key,"auto")}catch(_e){}}
+   window.vstRenderProfileState={selection:profile,active:actual,manual:profile!=="auto"};
+   window.dispatchEvent(new CustomEvent("vst-render-profile-changed",{detail:window.vstRenderProfileState}));
+ }
+ let saved="auto";try{const value=localStorage.getItem(key);if(value&&allowed.has(value))saved=value}catch(_e){}
+ apply(saved,false);
+ select.addEventListener("change",()=>apply(select.value,true));
+ window.vstGetRenderProfile=function(){return {...(window.vstRenderProfileState||{selection:"auto",active:recommended(),manual:false})}};
+ window.vstSetRenderProfile=function(profile){if(!allowed.has(profile))return false;apply(profile,true);return true};
 })();
 </script>
 </body></html>
