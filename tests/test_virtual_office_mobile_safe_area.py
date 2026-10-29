@@ -19,3 +19,18 @@ def test_virtual_office_respects_reduced_motion_preferences() -> None:
     # whose operating system requests reduced motion.
     assert "@media(prefers-reduced-motion:reduce)" in SHELL
     assert ".idle-person,.idle-person *,.idle-bubble{animation:none!important}" in SHELL
+
+
+def test_virtual_office_runtime_poll_is_authenticated_bounded_and_read_only() -> None:
+    # The observer may read status, but must not invent work or issue trading mutations.
+    assert "async function pollRuntimeStatus()" in SHELL
+    assert "if(!currentToken||busy||document.hidden)return;" in SHELL
+    assert 'headers={"X-Token":currentToken,"Accept":"application/json"}' in SHELL
+    assert 'method:"GET"' in SHELL
+    assert 'cache:"no-store",credentials:"omit"' in SHELL
+    assert 'setInterval(pollRuntimeStatus,10000)' in SHELL
+    assert "/learning-memory/runtime" in SHELL
+    assert "/learning-memory/health" in SHELL
+    assert "/market-data-health" in SHELL
+    assert "boundedFetch" in SHELL
+    assert "currentToken=\"\"" in SHELL
