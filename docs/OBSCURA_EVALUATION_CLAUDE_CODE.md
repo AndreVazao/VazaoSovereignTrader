@@ -133,6 +133,26 @@ Se existir dispositivo Android ligado e ADB autorizado:
 
 ## 6. Tailscale, rede e sincronização PC ↔ telefone
 
+**Prioridade E2E:** testar o caminho completo cérebro/backend → cockpit local do PC → APK Android → ligação remota Tailscale, sempre em PAPER/read-only. Executar este bloco tanto quanto o hardware e as autorizações disponíveis permitirem; não o reduzir a uma simples inspeção da configuração.
+
+### 6.1 Preparar Tailscale nos dois dispositivos
+
+1. No PC Windows, verificar se Tailscale está instalado, se o serviço está ativo e se o cliente está autenticado. Usar primeiro comandos de estado/documentação oficial; não imprimir chaves, tokens ou dados sensíveis.
+2. Se estiver instalado mas parado, iniciar o serviço através dos mecanismos normais do sistema operativo e confirmar o estado. Não alterar políticas de arranque corporativas ou permissões de segurança.
+3. No Android ligado por ADB, confirmar se a app oficial Tailscale está instalada. Se não estiver, identificar a origem oficial e preparar a instalação apenas se o artefacto e o método estiverem disponíveis e forem seguros; não instalar APKs de terceiros nem usar fontes não verificadas.
+4. Abrir a app Tailscale no Android através da interface normal quando necessário e verificar o estado de ligação. ADB pode abrir a app e recolher estado, mas não pode substituir o consentimento de login do utilizador.
+5. Se qualquer dispositivo não estiver autenticado, se surgir MFA, aprovação de dispositivo, confirmação de VPN do Android ou outro diálogo de autorização, deixar o fluxo de aprovação visível e marcar o bloqueio como BLOCKED. Não extrair, reutilizar ou solicitar auth keys pessoais; não contornar os diálogos.
+6. Não modificar ACLs, tags, grants, chaves, DNS, rotas de saída, firewall ou router. Se a comunicação exigir uma alteração de política administrativa, documentar exatamente a necessidade e parar essa alteração.
+7. Confirmar que os dois dispositivos pertencem à tailnet esperada e que o peer está online, usando os comandos/visões oficiais disponíveis. Redigir IPs/identificadores do relatório público quando não forem necessários para reproduzir o teste.
+
+### 6.2 Teste de conectividade real
+
+1. Identificar a porta e o endereço de bind do backend a partir da configuração real do projeto. Não presumir que localhost no Android representa o PC.
+2. Confirmar que o serviço escuta apenas nas interfaces pretendidas. Não expor a API na Internet nem abrir portas públicas como workaround.
+3. Do PC, testar primeiro o endpoint de saúde read-only local. Do Android, testar o mesmo endpoint através do endereço Tailscale do PC, com autenticação de teste quando aplicável.
+4. Testar ausência de token, token inválido/expirado, backend parado, rede Tailscale indisponível e recuperação. Confirmar que não aparecem segredos nos logs.
+5. Se o acesso Android exigir um túnel/relay que ainda não existe, não criar infraestrutura cloud nova nem fazer port forwarding. Documentar a lacuna e propor a alteração mínima necessária.
+6. Testar alternância LAN ↔ Tailscale, timeout e recuperação sem deixar o cockpit mostrar estado antigo como se fosse atual.
 - Verificar se o cliente Tailscale está instalado e o estado da ligação através de comandos read-only adequados ao SO.
 - Não alterar ACLs, expor portas publicamente, abrir firewall, reconfigurar DNS ou modificar o router automaticamente.
 - Testar endpoints locais read-only primeiro; depois testar o endereço Tailscale se houver peer autorizado e disponível.
