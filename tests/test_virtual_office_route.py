@@ -277,7 +277,7 @@ def test_virtual_office_shows_offline_ambient_life_and_health_room(tmp_path, mon
     html = client.get("/virtual-office").get_data(as_text=True)
 
     assert 'id="idleScene"' in html
-    assert "BACKEND DESLIGADO · SIMULAÇÃO LOCAL" in html
+    assert "SEM LIGAÇÃO · SIMULAÇÃO LOCAL" in html
     assert "Pausa na cafetaria" in html
     assert "Pausa curta no ginásio" in html
     assert 'data-room="health"' in html
