@@ -13,7 +13,7 @@ def test_virtual_office_polls_real_read_only_runtime_endpoints():
     assert "window.setInterval(pollRuntimeStatus,10000)" in SHELL
     assert 'headers={"X-Token":currentToken' in SHELL
     assert 'credentials:"omit"' in SHELL
-    assert "cache:"no-store"" in SHELL
+    assert 'cache:"no-store"' in SHELL
 
 
 def test_virtual_office_never_infers_agent_activity_from_engine_liveness():
