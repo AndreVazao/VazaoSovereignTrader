@@ -1,6 +1,6 @@
 # Durable Learning Memory (SQLite)
 
-**Status:** SQLite adapter is wired into `SovereignEngine` and the autonomous market-observation path. Runtime tests cover owner-private placement, persistence of unverified observations, and opt-out behavior. Broader department adoption and operational backup/retention policy remain follow-up work.
+**Status:** SQLite adapter is wired into `SovereignEngine` and the autonomous market-observation path. A verified local backup helper now creates consistent SQLite snapshots and checks integrity/schema before publishing a new backup file. Scheduled backup cadence, retention policy, broader department adoption, and physical restore drills remain follow-up work.
 
 ## Why this exists
 
@@ -35,7 +35,31 @@ with SQLiteLearningMemory("PC_ENGINE/data/learning/sovereign-learning.sqlite3") 
     )
 ```
 
-By default, `SovereignEngine` opens `owners/<owner-id>/learning/sovereign-learning.sqlite3` through `OwnerContext.private_path`; `learning_memory.enabled` can disable it, and `learning_memory.path` can select another owner-private relative path. The same store instance is passed to the autonomous research worker, so new market observations are durably recorded as `unverified` records. A failed memory write is counted and exposed in the worker snapshot without crashing the engine loop. The SQLite connection stays open across ordinary `stop()`/`start()` cycles. The terminal `SovereignEngine.close()` method stops and joins producers before closing it; `PC_ENGINE/main.py` calls this in a `finally` block when the server exits. Do not call `close()` while the engine is expected to restart. Backups, retention policy, multi-process shared writers, and additional department consumers remain follow-up work.
+## Verified local backup
+
+Use `backup_learning_memory(source_path, destination_path)` from `PC_ENGINE.learning.memory_backup` to create a snapshot:
+
+```python
+from PC_ENGINE.learning.memory_backup import backup_learning_memory
+
+backup_learning_memory(
+    "owners/my-owner/learning/sovereign-learning.sqlite3",
+    "backups/sovereign-learning-2026-10-28.sqlite3",
+)
+```
+
+The helper uses SQLite's online backup API, so the source may remain open and use WAL mode. Before exposing the destination, it runs `PRAGMA integrity_check` and verifies that both `learning_records` and `learning_events` exist. Publication uses an atomic same-filesystem hard link and refuses to overwrite an existing destination. Keep backups in a private owner-controlled directory with appropriate filesystem permissions; this helper does not encrypt backups, schedule them, rotate old copies, or upload them anywhere.
+
+Recovery validation should open the backup with `SQLiteLearningMemory` and verify expected record keys, versions, provenance, statuses and event history before treating it as a usable recovery point. Keep the original database unchanged until the restored copy has been verified. A backup is not a substitute for an independently tested restore procedure.
+
+By default, `SovereignEngine` opens `owners/<owner-id>/learning/sovereign-learning.sqlite3` through `OwnerContext.private_path`; `learning_memory.enabled` can disable it, and `learning_memory.path` can select another owner-private relative path. The same store instance is passed to the autonomous research worker, so new market observations are durably recorded as `unverified` records. A failed memory write is counted and exposed in the worker snapshot without crashing the engine loop. The SQLite connection stays open across ordinary `stop()`/`start()` cycles. The terminal `SovereignEngine.close()` method stops and joins producers before closing it; `PC_ENGINE/main.py` calls this in a `finally` block when the server exits. Do not call `close()` while the engine is expected to restart.
+
+## Remaining operational work
+
+- Define a bounded backup cadence and retention/rotation policy based on available disk space.
+- Add backup age/health reporting to runtime operational state without exposing private learning payloads.
+- Exercise restore on a separate copy and document a safe operator runbook.
+- Validate multi-process writers/recovery and onboard additional departments deliberately.
 
 ## Validation boundary
 
