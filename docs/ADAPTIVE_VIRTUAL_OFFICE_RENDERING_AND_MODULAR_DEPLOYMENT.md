@@ -48,6 +48,27 @@ The production renderer must use a hysteretic budget controller rather than a si
 
 A renderer watchdog must be outside the rendering loop. Rendering errors, a frozen frame, out-of-memory risk or excessive observer queue lag should cause the office process/scene to be restarted or disabled without restarting the trading runtime.
 
+
+## Ambient social life and department health
+
+The office should retain a small, low-cost visual life even when the backend is stopped or unreachable. In that state, stick figures, pixel agents and future 3D avatars may walk through shared areas, chat, visit the cafeteria, take a short outside break or use the gym. This is a **client-only ambient simulation**: it must be labelled as such and must never imply that the runtime or any department is running. The same underlying activity states and schedules should drive every rendering profile; only the character art and animation fidelity change.
+
+When the backend is connected, real agent work/health states may replace ambient simulation only when supplied by authenticated runtime events or health snapshots. Missing state is “unknown”, not healthy. If the backend reports work but the renderer does not yet implement desk/work animations, the UI must say so rather than pretending that work is visually represented. If there are no confirmed tasks, social idle behaviour may continue.
+
+Add a transversal **Health & Infirmary** service rather than a trading department with authority. The target service performs periodic lightweight heartbeats/check-ups, records last-seen and health status, detects timeouts, raises an alert, and coordinates controlled recovery. A sick-looking character is only a visual mapping of a confirmed degraded/offline state; it must not diagnose by appearance. Recovery should show an agent resting in the infirmary only after the runtime has confirmed isolation/recovery, and return the agent to work only after a successful health check. It must never restart a trading component, clear a risk gate, or replay an order merely because an animation changed.
+
+The initial HTML prototype now includes a lightweight offline-only ambient scene and a selectable Health & Infirmary room. The people, café/gym/exterior activity and conversation bubbles are illustrative CSS animation. They do not represent real agents, actual heartbeat checks, smoking, or backend work. The browser pauses animation for reduced-motion preferences and while the tab is hidden. This is not yet a 3D character system or a production health monitor.
+
+### Health-service acceptance tests
+
+- Backend unavailable: ambient social scene remains visible and explicitly labelled as local simulation.
+- Backend connected but health missing: show “unknown”; never mark every department healthy by default.
+- A confirmed unhealthy agent gets a timestamped alert and visual degraded state; a timeout alone must not trigger destructive recovery.
+- Recovery requires runtime-owned isolation, bounded restart/reconnect policy, a health check and an audit record.
+- Successful recovery returns the agent to its normal schedule; persistent failure escalates to the operator.
+- Reduced-motion, low-memory and hidden-tab states lower or stop ambient rendering without affecting runtime workers.
+- Identical underlying states and activity schedule are preserved across stick, pixel, 2.5D and future 3D renderers.
+
 ## Modular deployment model
 
 Keep versioned interfaces between these components so each can move to another machine without redesign:
