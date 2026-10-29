@@ -26,11 +26,19 @@ adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
 # Capture the first-run chooser before selecting the virtual office.
 adb exec-out screencap -p > "$EVIDENCE/vst-chooser.png"
 
-# Choose the office so that every viewport screenshot exercises the actual room UI,
-# not just the initial chooser. Maestro taps the visible, localized button.
+# Kivy widgets do not consistently expose text to Android accessibility services.
+# Use a stable relative screen point on the visible first-run office button, then
+# verify the resulting screen with OCR rather than a false-negative text selector.
 maestro test .maestro/android-office-smoke.yaml
 sleep 3
 adb shell pidof "$PACKAGE" >/dev/null
+adb exec-out screencap -p > "$EVIDENCE/vst-office-entry.png"
+tesseract "$EVIDENCE/vst-office-entry.png" stdout 2>/dev/null > "$EVIDENCE/office-ocr.txt"
+cat "$EVIDENCE/office-ocr.txt"
+if ! grep -Eqi "MARKET RADAR|MEMÓRIA CENTRAL|COMPARAÇÃO" "$EVIDENCE/office-ocr.txt"; then
+  echo "Virtual office content was not detected after selecting the office experience." | tee "$EVIDENCE/failure.txt"
+  exit 1
+fi
 
 # Explicitly set logical display dimensions. Rotation settings alone can be ignored
 # by portrait-locked apps/emulators, so the PNG dimensions are checked below too.
