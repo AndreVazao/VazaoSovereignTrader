@@ -255,3 +255,18 @@ def test_assistant_message_uses_department_read_handler(tmp_path, monkeypatch):
     assert isinstance(payload["data"]["venues"], list)
     assert "Saúde operacional" in payload["reply"]
     assert payload["execution_authorized"] is False
+
+ 
+def test_virtual_office_keeps_required_departments_separate_and_safe(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+    html = client.get("/virtual-office").get_data(as_text=True)
+
+    for department in ("comparison", "analysis", "memory", "fast"):
+        assert f'data-room="{department}"' in html
+        assert f'{department}:[' in html
+        assert f'{department}:"' in html
+
+    assert "Comparação entre Exchanges" in html
+    assert "Resposta Rápida" in html
+    assert "subordinada a todos os gates de risco" in html
+    assert "Nenhum estado de agente ou atividade está ligado nesta demonstração." in html
