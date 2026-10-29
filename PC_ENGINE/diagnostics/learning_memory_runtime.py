@@ -4,8 +4,19 @@ from __future__ import annotations
 from typing import Any
 
 
+def _thread_state(thread: Any) -> str:
+    """Return RUNNING/STOPPED/UNKNOWN without assuming an absent thread is healthy."""
+    is_alive = getattr(thread, "is_alive", None)
+    if not callable(is_alive):
+        return "UNKNOWN"
+    try:
+        return "RUNNING" if is_alive() else "STOPPED"
+    except Exception:
+        return "UNKNOWN"
+
+
 def build_learning_memory_runtime_diagnostics(engine: Any) -> dict[str, object]:
-    """Report memory wiring and producer-loop liveness without implying learning quality."""
+    """Report memory wiring and both runtime worker states without implying quality."""
     base: dict[str, object] = {
         "component": "learning_memory_runtime",
         "paper_only": True,
@@ -13,11 +24,17 @@ def build_learning_memory_runtime_diagnostics(engine: Any) -> dict[str, object]:
         "execution_authorized": False,
     }
     if engine is None:
-        return {**base, "status": "UNKNOWN", "reason": "engine_unavailable"}
+        return {
+            **base,
+            "status": "UNKNOWN",
+            "reason": "engine_unavailable",
+            "engine_loop": "UNKNOWN",
+            "research_worker": "UNKNOWN",
+        }
 
     closed = getattr(engine, "_closed", None)
-    main_thread = getattr(engine, "thread", None)
-    main_alive = main_thread.is_alive() if callable(getattr(main_thread, "is_alive", None)) else None
+    engine_loop = _thread_state(getattr(engine, "thread", None))
+    research_worker = _thread_state(getattr(engine, "research_thread", None))
     operational = getattr(getattr(engine, "state", None), "operational", {}) or {}
     memory_state = operational.get("learning_memory", {})
     memory_state = memory_state if isinstance(memory_state, dict) else {}
@@ -33,6 +50,8 @@ def build_learning_memory_runtime_diagnostics(engine: Any) -> dict[str, object]:
     observation_enabled = bool(research_cfg.get("enabled", True)) and bool(
         research_cfg.get("autonomous_observation_enabled", True)
     )
+    research_worker_expected = bool(research_cfg.get("enabled", True))
+    write_failures = int(durable.get("write_failures", 0) or 0)
 
     if closed is True:
         status, reason = "CLOSED", "engine_terminally_closed"
@@ -42,23 +61,29 @@ def build_learning_memory_runtime_diagnostics(engine: Any) -> dict[str, object]:
         status, reason = "DEGRADED", "durable_memory_not_available"
     elif not wired:
         status, reason = "DEGRADED", "autonomous_research_memory_not_wired"
-    elif main_alive is False:
+    elif engine_loop == "STOPPED":
         status, reason = "STOPPED", "engine_loop_not_running"
-    elif main_alive is None:
+    elif engine_loop == "UNKNOWN":
         status, reason = "UNKNOWN", "engine_thread_state_unavailable"
-    elif int(durable.get("write_failures", 0) or 0) > 0:
+    elif research_worker_expected and research_worker == "STOPPED":
+        status, reason = "DEGRADED", "research_worker_not_running"
+    elif research_worker_expected and research_worker == "UNKNOWN":
+        status, reason = "UNKNOWN", "research_worker_state_unavailable"
+    elif write_failures > 0:
         status, reason = "DEGRADED", "durable_memory_write_failures"
     else:
-        status, reason = "RUNNING", "memory_consumer_wired_engine_loop_alive"
+        status, reason = "RUNNING", "engine_loop_and_research_worker_observed"
 
     return {
         **base,
         "status": status,
         "reason": reason,
-        "engine_loop": "RUNNING" if main_alive is True else "STOPPED" if main_alive is False else "UNKNOWN",
+        "engine_loop": engine_loop,
+        "research_worker": research_worker,
+        "research_worker_expected": research_worker_expected,
         "memory_consumer_wired": bool(wired),
         "memory_storage_state": str(memory_state.get("state", "UNKNOWN")),
-        "write_failures": int(durable.get("write_failures", 0) or 0),
+        "write_failures": write_failures,
         "last_error": str(durable.get("last_error", "")) or None,
         "learning_quality_verified": False,
     }
