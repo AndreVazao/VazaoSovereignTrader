@@ -26,6 +26,7 @@ from PC_ENGINE.diagnostics.venue_health import build_venue_health
 from PC_ENGINE.diagnostics.path_utils import resolve_config_path
 from PC_ENGINE.diagnostics.evidence_scorecard import build_runtime_evidence_scorecard, refresh_runtime_evidence_reports
 from PC_ENGINE.diagnostics.execution_surface_catalog import build_execution_surface_catalog
+from PC_ENGINE.diagnostics.learning_memory_health import build_learning_memory_health
 from PC_ENGINE.execution.surface_runtime_manager import ExecutionSurfaceRuntimeManager
 from PC_ENGINE.api.operator_exchange import OperatorExchange
 from PC_ENGINE.api.assistant_gateway import OperatorAssistantGateway
@@ -219,6 +220,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             "mode": engine.mode,
             "owner_id": engine.owner_id,
         })
+
+    @app.get("/learning-memory/health")
+    def learning_memory_health():
+        require_scope("read_private_state")
+        return jsonify(build_learning_memory_health(getattr(engine, "learning_memory", None)))
 
     @app.get("/market-data-health")
     def market_data_health():
