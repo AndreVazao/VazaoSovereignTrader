@@ -84,6 +84,56 @@ def _spacer(height=8):
     return Widget(size_hint_y=None, height=dp(height))
 
 
+
+class BuildingPreview(Widget):
+    """Lightweight architectural schematic; scales uniformly to preserve proportions."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(pos=self._draw_building, size=self._draw_building)
+        self._draw_building()
+
+    def _draw_building(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        base_w, base_h = 360.0, 190.0
+        scale = min(self.width / base_w, self.height / base_h)
+        ox = self.x + (self.width - base_w * scale) / 2
+        oy = self.y + (self.height - base_h * scale) / 2
+
+        def box(x, y, w, h, rgba, radius=4):
+            Color(*rgba)
+            RoundedRectangle(
+                pos=(ox + x * scale, oy + y * scale),
+                size=(w * scale, h * scale),
+                radius=[radius * scale],
+            )
+
+        with self.canvas:
+            # Roof and structural frame remain in a fixed 360:190 coordinate system.
+            box(110, 158, 140, 20, (0.20, 0.48, 0.62, 1), 5)
+            box(122, 178, 116, 5, (0.33, 0.76, 0.98, 1), 2)
+            # CEO top floor
+            box(70, 126, 220, 27, (0.09, 0.19, 0.27, 1))
+            box(80, 131, 94, 17, (0.16, 0.34, 0.43, 1))
+            box(186, 131, 94, 17, (0.16, 0.34, 0.43, 1))
+            # Research floor: separate market radar, exchange comparison, investigation and analysis
+            box(35, 87, 290, 32, (0.07, 0.14, 0.20, 1))
+            for x in (43, 114, 185, 256):
+                box(x, 93, 62, 20, (0.12, 0.25, 0.32, 1))
+            # Central memory / rapid response / risk-control lower floor
+            box(55, 48, 250, 31, (0.08, 0.17, 0.20, 1))
+            for x, color in ((63, (0.13, 0.30, 0.28, 1)),
+                             (145, (0.13, 0.25, 0.35, 1)),
+                             (227, (0.30, 0.20, 0.13, 1))):
+                box(x, 54, 74, 19, color)
+            # Foundations and pillars
+            box(45, 34, 270, 8, (0.19, 0.24, 0.31, 1), 2)
+            for x in (68, 132, 196, 260):
+                box(x, 20, 8, 14, (0.20, 0.29, 0.37, 1), 2)
+            box(32, 10, 296, 8, (0.13, 0.18, 0.25, 1), 2)
+
 def build_chat_cockpit(app):
     app.lang = getattr(app, "lang", {})
     # Persist the first-run experience choice privately; it can be changed later.
@@ -282,6 +332,28 @@ def build_chat_cockpit(app):
             color=MUTED,
         ))
         content.add_widget(banner)
+
+        # Architectural preview uses a fixed internal coordinate system and uniform scaling.
+        # The building itself is never stretched to fill a portrait or landscape viewport.
+        building_card = Surface(
+            orientation="vertical",
+            padding=dp(8),
+            spacing=dp(3),
+            size_hint_y=None,
+            height=dp(188),
+            fill=(0.025, 0.045, 0.065, 1),
+        )
+        building_card.add_widget(_label(
+            "EDIFÍCIO · PLANTA PROPORCIONAL",
+            size=10,
+            color=ACCENT,
+            bold=True,
+            size_hint_y=None,
+            height=dp(20),
+        ))
+        building_preview = BuildingPreview(size_hint=(1, 1))
+        building_card.add_widget(building_preview)
+        content.add_widget(building_card)
 
         # Animated offline scene: visual-only agents move between department stations.
         # It deliberately runs without the backend and never claims real work is happening.
