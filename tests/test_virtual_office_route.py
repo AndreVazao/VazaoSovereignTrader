@@ -298,6 +298,6 @@ def test_virtual_office_only_shows_progress_for_backend_confirmed_tasks_and_has_
     assert 'id="vstTalkToChief"' in html
     assert "window.vstUpdateAgentTaskState=function(payload)" in html
     assert "p.backendConfirmed!==true" in html
-    assert 'task.status==="completed"?100:Math.floor(numeric)' in html
+    assert 'const progress=status==="completed"?100:Math.floor(numeric)' in html
     assert "não gráfico de mercado" in html
     assert "A barra só aparece com um evento de tarefa validado." in html
