@@ -66,13 +66,18 @@ def _label(text="", size=14, color=TEXT, bold=False, **kwargs):
     # in kwargs first so Label never receives duplicate halign/valign arguments.
     kwargs.setdefault("halign", "left")
     kwargs.setdefault("valign", "middle")
-    return Label(
+    label = Label(
         text=text,
         color=color,
         font_size=dp(size),
         bold=bold,
         **kwargs,
     )
+    # Kivy labels do not wrap by default. Bind the text box to the actual
+    # allocated width so long Portuguese copy remains readable on phones.
+    label.bind(size=lambda instance, value: setattr(instance, "text_size", (value[0], None)))
+    label.text_size = (label.width, None)
+    return label
 
 
 def _spacer(height=8):
