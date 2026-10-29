@@ -445,3 +445,21 @@ def test_venue_economic_evidence_reads_configured_report_and_fails_closed(tmp_pa
     invalid = client.get("/venue-economic-evidence", headers={"X-Token": "secret-token"})
     assert invalid.status_code == 409
     assert invalid.get_json()["execution_authorized"] is False
+
+def test_learning_memory_runtime_endpoint_requires_auth_and_returns_safe_unknown(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+
+    assert client.get("/learning-memory/runtime").status_code == 401
+
+    response = client.get(
+        "/learning-memory/runtime",
+        headers={"X-Token": "secret-token"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["component"] == "learning_memory_runtime"
+    assert payload["status"] == "UNKNOWN"
+    assert payload["execution_authorized"] is False
+    assert payload["orders_submitted"] is False
+    assert payload["learning_quality_verified"] is False
