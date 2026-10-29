@@ -82,3 +82,65 @@ def backup_learning_memory(
             temporary.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def verify_learning_memory_backup(path: str | Path) -> dict[str, object]:
+    """Read-only verification of a backup without modifying or restoring it.
+
+    A missing file is reported as missing; malformed, incomplete, or unreadable
+    databases are reported as degraded. This is a diagnostic result only and
+    must never be interpreted as permission to overwrite or auto-restore a live
+    learning database.
+    """
+    backup = Path(path).expanduser()
+    result: dict[str, object] = {
+        "status": "missing",
+        "path": str(backup),
+        "integrity": None,
+        "learning_records": None,
+        "learning_events": None,
+        "reason": "backup_not_found",
+    }
+    if not backup.exists() or not backup.is_file():
+        return result
+
+    result["status"] = "degraded"
+    result["reason"] = "backup_not_verified"
+    connection: sqlite3.Connection | None = None
+    try:
+        # mode=ro prevents diagnostics from creating or modifying the database.
+        connection = sqlite3.connect(
+            f"{backup.resolve().as_uri()}?mode=ro", uri=True, timeout=5.0
+        )
+        integrity_row = connection.execute("PRAGMA integrity_check").fetchone()
+        integrity = integrity_row[0] if integrity_row else "no_integrity_result"
+        result["integrity"] = integrity
+        if integrity != "ok":
+            result["reason"] = "backup_integrity_check_failed"
+            return result
+
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        if not _REQUIRED_TABLES.issubset(tables):
+            result["reason"] = "backup_schema_incomplete"
+            return result
+
+        result["learning_records"] = int(
+            connection.execute("SELECT COUNT(*) FROM learning_records").fetchone()[0]
+        )
+        result["learning_events"] = int(
+            connection.execute("SELECT COUNT(*) FROM learning_events").fetchone()[0]
+        )
+        result["status"] = "healthy"
+        result["reason"] = None
+        return result
+    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+        result["reason"] = f"backup_unreadable:{type(exc).__name__}"
+        return result
+    finally:
+        if connection is not None:
+            connection.close()
