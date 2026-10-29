@@ -58,9 +58,9 @@ window.vstSelectedDepartment="brain";
     let index=0;
     window.vstSetAmbientBackendState=function(connected,working,healthKnown){
       if(!status||!title)return;
-      if(!connected){status.textContent="BACKEND DESLIGADO · SIMULAÇÃO LOCAL";title.textContent="Vida do escritório · "+activities[index%activities.length];return}
+      document.getElementById("idleScene").classList.remove("work-reported");if(!connected){status.textContent="BACKEND DESLIGADO · SIMULAÇÃO LOCAL";title.textContent="Vida do escritório · "+activities[index%activities.length];return}
       if(healthKnown===false){status.textContent="LIGADO · SAÚDE DOS AGENTES DESCONHECIDA";title.textContent="Estado dos agentes ainda não confirmado";}
-      else if(working===true){status.textContent="LIGADO · ATIVIDADE CONFIRMADA";title.textContent="Trabalho ativo · apenas com eventos reais do motor";}
+      else if(working===true){status.textContent="LIGADO · TRABALHO REPORTADO";title.textContent="O motor reporta atividade; animações de trabalho ainda não estão ligadas.";document.getElementById("idleScene").classList.add("work-reported");}
       else{status.textContent="LIGADO · SEM TAREFAS CONFIRMADAS";title.textContent="Pausa visual · sem trabalho confirmado pelo motor";}
     };
     window.vstSetAmbientBackendState(false,false,false);
