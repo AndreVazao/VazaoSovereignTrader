@@ -144,3 +144,30 @@ def verify_learning_memory_backup(path: str | Path) -> dict[str, object]:
     finally:
         if connection is not None:
             connection.close()
+
+
+def restore_learning_memory_backup(
+    backup_path: str | Path,
+    destination_path: str | Path,
+) -> Path:
+    """Restore a verified backup to a NEW database path only.
+
+    This is an explicit, offline recovery primitive: it never overwrites an
+    existing destination and never replaces a live database automatically.
+    The caller is responsible for choosing a separate disposable/recovery path
+    and reviewing the result before any operational cutover.
+    """
+    backup = Path(backup_path).expanduser()
+    destination = Path(destination_path).expanduser()
+    verification = verify_learning_memory_backup(backup)
+    if verification["status"] != "healthy":
+        reason = verification.get("reason") or "backup_not_verified"
+        raise sqlite3.DatabaseError(f"learning_memory_restore_source_not_healthy:{reason}")
+    if backup.resolve() == destination.resolve():
+        raise ValueError("restore_destination_must_differ_from_backup")
+    if destination.exists():
+        raise FileExistsError("restore_destination_already_exists")
+
+    # Reuse the atomic, no-overwrite SQLite snapshot path only after the
+    # independent read-only verifier has accepted the backup.
+    return backup_learning_memory(backup, destination)
