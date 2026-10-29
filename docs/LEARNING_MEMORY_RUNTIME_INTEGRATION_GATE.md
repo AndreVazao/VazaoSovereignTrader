@@ -27,3 +27,16 @@
 ## Release decision
 
 Do not mark durable learning as production-ready for every department yet. Initial runtime wiring and lifecycle handling are implemented, but broader department adoption, backup/retention policy, multi-process writer/recovery tests, and evidence of the cloud database/key-lifecycle gates remain outstanding. Describe it as active for autonomous research observations only, not as the active memory of every department.
+
+
+## Read-only health endpoint
+
+The authenticated local API now exposes `GET /learning-memory/health` under the existing `read_private_state` scope. It reports storage integrity/schema status and record/event counts using a separate read-only SQLite connection. It does not create a missing database, repair a damaged database, or trigger restore.
+
+- `HEALTHY`: the configured durable SQLite file passed integrity and required-table checks.
+- `DEGRADED`: the file exists but cannot be verified or has an incomplete schema.
+- `MISSING`: the configured file is absent.
+- `NOT_CONFIGURED`: the engine has no durable learning-memory instance.
+- `UNKNOWN`: the path cannot be inspected safely (including an in-memory database).
+
+This endpoint diagnoses durable storage only. It does not prove the learning worker is running, every department is connected, evidence is useful/fresh, or the whole engine is healthy. Its response explicitly remains PAPER-only and never authorizes execution.
