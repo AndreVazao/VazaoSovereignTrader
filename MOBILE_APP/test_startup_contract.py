@@ -71,12 +71,20 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("traceback.format_tb", source)
         self.assertNotIn('self._request("POST", "/startup-error"', source)
 
-    def test_emulator_smoke_accepts_first_run_chooser_and_saved_chat(self) -> None:
+    def test_emulator_smoke_captures_office_in_verified_viewports(self) -> None:
         script = (ROOT.parent / ".github" / "scripts" / "android-emulator-smoke.sh").read_text(encoding="utf-8")
+        office_flow = (ROOT.parent / ".maestro" / "android-office-smoke.yaml").read_text(encoding="utf-8")
+        spec = (ROOT / "buildozer.spec").read_text(encoding="utf-8")
         self.assertIn("Como queres usar o Trader", script)
-        self.assertIn("Chat simples", script)
-        self.assertIn("Como posso ajudar", script)
-        self.assertIn("Neither the first-run chooser nor the saved chat screen", script)
+        self.assertIn("vst-chooser.png", script)
+        self.assertIn("vst-portrait.png", script)
+        self.assertIn("vst-landscape.png", script)
+        self.assertIn("vst-tablet-landscape.png", script)
+        self.assertIn("struct.unpack(\" >II\"", script.replace(" ", ""))
+        self.assertIn("assertVisible: \"MARKET RADAR\"", office_flow)
+        self.assertIn("tapOn: \"USAR ESCRITÓRIO VIRTUAL\"", office_flow)
+        self.assertIn("orientation = all", spec)
+
 
 
 if __name__ == "__main__":
