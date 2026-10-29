@@ -19,7 +19,7 @@ def test_virtual_office_polls_real_read_only_runtime_endpoints():
 def test_virtual_office_never_infers_agent_activity_from_engine_liveness():
     assert 'window.vstSetAmbientBackendState(true,false,false)' in SHELL
     assert 'window.vstUpdateAgentTaskState' in SHELL
-    assert 'backendConfirmed===true' in SHELL
+    assert "p.backendConfirmed!==true" in SHELL
     assert "firstData.working===true" not in SHELL
     assert "firstData.active_work===true" not in SHELL
 
