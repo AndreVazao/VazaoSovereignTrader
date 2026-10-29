@@ -12,3 +12,10 @@ def test_virtual_office_mobile_layout_respects_system_safe_areas() -> None:
     assert "body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}" in SHELL
     assert ".app{height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));min-height:0;grid-template-rows:58px 1fr}" in SHELL
     assert ".main{height:calc(100dvh - 58px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));padding:12px}" in SHELL
+
+
+def test_virtual_office_respects_reduced_motion_preferences() -> None:
+    # Animated office characters are decorative and must not force motion on users
+    # whose operating system requests reduced motion.
+    assert "@media(prefers-reduced-motion:reduce)" in SHELL
+    assert ".idle-person,.idle-person *,.idle-bubble{animation:none!important}" in SHELL
