@@ -111,3 +111,33 @@ Not yet proven/implemented:
 - physical PC and phone measurements.
 
 Until those gaps are closed, treat this as a prototype-level adaptive presentation feature, not a guarantee against all machine-level resource exhaustion.
+
+
+## Verified task animation and focus navigation
+
+### Truth contract
+
+The office has two distinct visual layers:
+
+1. **Local ambient social life:** a client-side simulation for walking, breaks and informal conversation. It can continue while the backend is unreachable. It must always be labelled as simulation and must not imply backend health or work.
+2. **Backend-confirmed work:** progress bars, working posture and active workstation effects are permitted only after a trusted runtime/API adapter validates a task snapshot. The snapshot needs a task ID, agent ID, department, status, progress and update time. An unconfirmed, malformed, stale or disconnected snapshot must remove or visibly mark the task state as unknown; it must never fabricate progress.
+
+A task reaches 100% only on a backend-confirmed completed state. A running task may show only the progress supplied by the backend. If the CEO is the only agent with confirmed work, only the CEO receives work indicators; other characters retain their local ambient routines. A workstation graph animation is only an abstract processing effect and must not be labelled as live market data. Market graphs require actual market-data payloads.
+
+### Navigation and focus
+
+- Provide zoom in, zoom out and reset controls for the office floor.
+- Focusing a department reduces the visual prominence of other rooms, presents a focused workstation and task state, and offers a direct chat route to that department.
+- The focused conversation targets the department identifier. A named chief-agent identity and independently running agent remain future runtime capabilities until backed by registry/runtime evidence.
+- Respect reduced-motion settings and preserve the chat-only fallback on constrained devices.
+
+### Acceptance tests
+
+- No task bar appears without a backend-confirmed task snapshot.
+- Only the department named in a validated task snapshot receives work indicators.
+- A completed task displays 100% only when status is `completed`.
+- Invalid progress, unknown department, missing IDs or an unconfirmed payload never produces a work animation.
+- Ambient social animation remains available with no backend connection and is clearly labelled as local simulation.
+- Zoom reset returns the floor to 100%; focus dims unrelated rooms and can be exited.
+- The chief-chat action selects the same department in the conversation interface.
+- Reduced-motion mode disables animated workstation effects.
