@@ -84,7 +84,8 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn('point: "60%, 70%"', office_flow)
         self.assertIn("vst-office-entry.png", script)
         self.assertIn("office-ocr.txt", script)
-        self.assertIn("label.text_size = (label.width, None)", source)
+        ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("label.text_size = (label.width, None)", ui_source)
         self.assertIn("orientation = portrait", spec)
 
 
