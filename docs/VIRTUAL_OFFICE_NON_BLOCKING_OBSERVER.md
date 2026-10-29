@@ -17,12 +17,14 @@ The office is allowed to disappear without affecting the Runtime. Closing the br
 7. **No secret persistence.** Tokens stay in memory and travel in headers, never in URLs, logs or browser storage. Requests use same-origin endpoints, `cache: no-store`, and no ambient credentials.
 8. **No invented health.** Missing, stale, malformed or timed-out values render as unknown/stale/offline, not zero or a plausible default.
 
-## Implemented in this increment
+## Implemented in the current HTML shell
 
-- The office's fetch helper gives each observer request a 2.5-second abort deadline.
+- Observer fetches use a 2.5-second abort deadline.
 - The explicit disconnect action aborts outstanding observer/chat requests and clears the page's in-memory token.
-- No background polling or visual subscription was introduced; refresh remains operator-triggered. This avoids creating a new continuous request load while the office is being hardened.
-- A request abort only cancels the browser's wait. It is **not** proof that a server-side mutation was rolled back; chat failures continue to tell the operator to reconcile state before retrying.
+- After successful authentication, the shell polls three read endpoints (runtime state, memory health and market-data health) every 10 seconds. Polling is skipped when the document is hidden, no token is present, or another UI operation is marked busy. This is a bounded request timeout, not a measured CPU/memory isolation guarantee.
+- The browser uses same-origin requests, sends the token in the `X-Token` header, uses `cache: no-store` and `credentials: omit`; the token is not deliberately persisted in browser storage or a URL.
+- A request abort only cancels the browser's wait. It is **not** proof that a server-side mutation was rolled back; chat failures tell the operator to reconcile state before retrying.
+- A reduced-motion media rule disables decorative office-character animations when the operating system requests reduced motion.
 
 ## Required validation before claiming isolation
 
@@ -31,7 +33,8 @@ The office is allowed to disappear without affecting the Runtime. Closing the br
 - Test queue saturation, slow clients, repeated disconnects, malformed snapshots, server restarts and revoked credentials.
 - Confirm observer endpoints never hold critical locks across network I/O and that event queues are bounded.
 - On threshold breach, verify the visual layer degrades/disables and the engine remains healthy. This circuit breaker is an explicit acceptance criterion; it must not be claimed as implemented until code and tests demonstrate it.
+- Browser automation and physical Android/PC tests must confirm layout, safe areas, authentication expiry, offline recovery, and no regression in the APK.
 
 ## Current status
 
-The current HTML shell is a lightweight prototype and its HTTP reads are bounded/cancellable. This is not yet proof of process-level or CPU-level isolation. Automatic rendering degradation, a dedicated observer worker/queue, performance budgets and PC/mobile end-to-end measurements remain future implementation/validation steps. Physical PC/mobile testing must be performed when the owner is back at the PC.
+The HTML shell is a lightweight prototype with bounded/cancellable HTTP requests, a 10-second status poll after authentication, and a reduced-motion rule. These features are not proof of process-level or CPU-level isolation. Automatic rendering degradation, a dedicated observer worker/queue, measured performance budgets, runtime-load comparison tests, and PC/mobile end-to-end measurements remain future implementation/validation steps. Physical PC/mobile testing must be performed when the owner is back at the PC.
