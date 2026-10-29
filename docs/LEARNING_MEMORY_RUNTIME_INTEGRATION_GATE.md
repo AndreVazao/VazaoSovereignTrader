@@ -40,3 +40,7 @@ The authenticated local API now exposes `GET /learning-memory/health` under the 
 - `UNKNOWN`: the path cannot be inspected safely (including an in-memory database).
 
 This endpoint diagnoses durable storage only. It does not prove the learning worker is running, every department is connected, evidence is useful/fresh, or the whole engine is healthy. Its response explicitly remains PAPER-only and never authorizes execution.
+
+## Runtime consumer diagnostics
+
+The authenticated local API also exposes `GET /learning-memory/runtime` under the existing `read_private_state` scope. It distinguishes terminal close, disabled autonomous observation, stopped engine loop, missing/disconnected durable-memory wiring, and observed write failures. The endpoint is read-only and reports only the first durable-memory consumer path through autonomous research; it does not prove all departments use the store, that the learning worker is independently active, or that evidence is validated. `RUNNING` means the engine loop is alive and the autonomous research consumer is wired to the configured memory with no recorded write failures in its current process snapshot. It is not a profitability, market-data, or whole-engine health claim.
