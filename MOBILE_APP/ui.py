@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from kivy.core.window import Window
+from kivy.animation import Animation
+from kivy.uix.floatlayout import FloatLayout
 from kivy.storage.jsonstore import JsonStore
 from kivy.graphics import Color, RoundedRectangle
 from kivy.metrics import dp
@@ -274,6 +276,105 @@ def build_chat_cockpit(app):
             color=MUTED,
         ))
         content.add_widget(banner)
+
+        # Animated offline scene: visual-only agents move between department stations.
+        # It deliberately runs without the backend and never claims real work is happening.
+        scene = Surface(
+            orientation="vertical",
+            padding=dp(8),
+            spacing=dp(4),
+            size_hint_y=None,
+            height=dp(170),
+            fill=(0.025, 0.045, 0.065, 1),
+        )
+        scene.add_widget(_label(
+            "VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL",
+            size=10,
+            color=ACCENT,
+            bold=True,
+            size_hint_y=None,
+            height=dp(20),
+        ))
+        stage = FloatLayout(size_hint_y=1)
+        scene.add_widget(stage)
+        stage.bind(size=lambda *_: place_agents())
+        stage.bind(pos=lambda *_: place_agents())
+
+        stations = [
+            ("CEO", "ceo", 0.04),
+            ("RADAR", "radar", 0.28),
+            ("ANÁLISE", "analysis", 0.52),
+            ("MEMÓRIA", "memory", 0.76),
+        ]
+        for station_name, _room_key, x_fraction in stations:
+            marker = _label(station_name, size=8, color=MUTED)
+            marker.size_hint = (None, None)
+            marker.size = (dp(64), dp(18))
+            marker.pos_hint = {"x": x_fraction, "y": 0.03}
+            stage.add_widget(marker)
+
+        agents = []
+        agent_specs = [
+            ("o\n/|\\\n/ \\", "CEO", "ceo", ACCENT, 0.0),
+            ("o\n/|\\\n/ \\", "RADAR", "radar", GREEN, 0.7),
+            ("o\n/|\\\n/ \\", "ANÁLISE", "analysis", (1.0, 0.72, 0.30, 1), 1.4),
+        ]
+
+        def place_agents(*_):
+            if not stage.width or not stage.height:
+                return
+            for index, agent in enumerate(agents):
+                if agent.get("moving"):
+                    continue
+                agent["widget"].y = stage.y + stage.height * (0.40 + index * 0.12)
+                agent["widget"].x = stage.x + stage.width * (0.04 + index * 0.08)
+
+        for figure, role, room_key, tint, delay in agent_specs:
+            avatar = Button(
+                text=figure + "\n" + role,
+                font_size=dp(9),
+                color=tint,
+                background_normal="",
+                background_down="",
+                background_color=(0.07, 0.13, 0.18, 1),
+                size_hint=(None, None),
+                size=(dp(62), dp(64)),
+            )
+            avatar.bind(on_release=lambda _button, key=room_key, name=role: (
+                select_room(next(room for room in rooms if room[0] == key))
+                if "rooms" in locals() else None
+            ))
+            stage.add_widget(avatar)
+            agents.append({"widget": avatar, "role": role, "room": room_key, "delay": delay, "moving": False})
+
+        def animate_agents(*_):
+            if stage.width <= dp(80):
+                return
+            for index, agent in enumerate(agents):
+                widget = agent["widget"]
+                if agent["moving"]:
+                    continue
+                agent["moving"] = True
+                start_x = stage.x + dp(8) + index * dp(18)
+                end_x = max(stage.x + dp(8), stage.right - widget.width - dp(8))
+                widget.x = start_x
+                widget.y = stage.y + stage.height * (0.35 + index * 0.13)
+                def begin(_dt, item=agent, w=widget, left=start_x, right=end_x):
+                    if not w.parent:
+                        item["moving"] = False
+                        return
+                    forward = Animation(x=right, duration=4.0 + index, t="in_out_sine")
+                    backward = Animation(x=left, duration=4.0 + index, t="in_out_sine")
+                    def again(*_args):
+                        if w.parent:
+                            (backward if w.x >= right - dp(2) else forward).start(w)
+                    forward.bind(on_complete=lambda *_args: backward.start(w))
+                    backward.bind(on_complete=lambda *_args: forward.start(w))
+                    forward.start(w)
+                Clock.schedule_once(begin, agent["delay"])
+        Clock.schedule_once(animate_agents, 0.3)
+        stage.bind(size=lambda *_: Clock.schedule_once(animate_agents, 0.2) if not any(a["moving"] for a in agents) else None)
+        content.add_widget(scene)
 
         mode_row = BoxLayout(
             orientation="horizontal",
