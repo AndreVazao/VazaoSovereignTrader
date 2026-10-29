@@ -80,7 +80,7 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("vst-portrait.png", script)
         self.assertIn("vst-landscape.png", script)
         self.assertIn("vst-tablet-landscape.png", script)
-        self.assertIn("struct.unpack(\" >II\"", script.replace(" ", ""))
+        self.assertIn('struct.unpack(">II", data[16:24])', script)
         self.assertIn("assertVisible: \"MARKET RADAR\"", office_flow)
         self.assertIn("tapOn: \"USAR ESCRITÓRIO VIRTUAL\"", office_flow)
         self.assertIn("orientation = all", spec)
