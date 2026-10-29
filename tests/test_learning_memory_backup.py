@@ -7,6 +7,7 @@ import pytest
 from PC_ENGINE.learning.memory_backup import (
     backup_learning_memory,
     verify_learning_memory_backup,
+    restore_learning_memory_backup,
 )
 from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 
@@ -150,3 +151,83 @@ def test_backup_verification_reports_incomplete_schema_as_degraded(tmp_path):
     assert result["status"] == "degraded"
     assert result["integrity"] == "ok"
     assert result["reason"] == "backup_schema_incomplete"
+
+
+def test_restore_creates_verified_copy_at_new_path_and_preserves_history(tmp_path):
+    source = tmp_path / "live" / "learning.sqlite3"
+    backup = tmp_path / "backups" / "learning.sqlite3"
+    restored_path = tmp_path / "recovery-test" / "restored.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        first = memory.put(
+            key="restore.record",
+            value={"revision": 1},
+            department="analysis",
+            provenance="replay:restore-test",
+        )
+        memory.put(
+            key=first.key,
+            value={"revision": 2},
+            department="analysis",
+            provenance="replay:restore-test-update",
+            expected_version=first.version,
+        )
+        backup_learning_memory(source, backup)
+
+    before_backup = backup.read_bytes()
+    assert restore_learning_memory_backup(backup, restored_path) == restored_path
+    assert backup.read_bytes() == before_backup
+    assert verify_learning_memory_backup(restored_path)["status"] == "healthy"
+
+    with SQLiteLearningMemory(restored_path) as restored:
+        record = restored.get("restore.record")
+        assert record is not None
+        assert record.value == {"revision": 2}
+        assert record.version == 2
+        assert [(event.version, event.event_type) for event in restored.list_events(
+            key="restore.record"
+        )] == [(1, "put"), (2, "put")]
+
+
+def test_restore_refuses_to_overwrite_existing_destination(tmp_path):
+    source = tmp_path / "learning.sqlite3"
+    backup = tmp_path / "backup.sqlite3"
+    destination = tmp_path / "recovery.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        memory.put(
+            key="restore.safe",
+            value={"safe": True},
+            department="test",
+            provenance="test",
+        )
+    backup_learning_memory(source, backup)
+    destination.write_bytes(b"preserve existing recovery target")
+
+    with pytest.raises(FileExistsError, match="restore_destination_already_exists"):
+        restore_learning_memory_backup(backup, destination)
+    assert destination.read_bytes() == b"preserve existing recovery target"
+
+
+def test_restore_rejects_unhealthy_backup_without_creating_destination(tmp_path):
+    backup = tmp_path / "corrupt.sqlite3"
+    destination = tmp_path / "restored.sqlite3"
+    backup.write_bytes(b"not a sqlite database")
+
+    with pytest.raises(sqlite3.DatabaseError, match="restore_source_not_healthy"):
+        restore_learning_memory_backup(backup, destination)
+    assert not destination.exists()
+
+
+def test_restore_rejects_same_backup_and_destination_path(tmp_path):
+    source = tmp_path / "learning.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        memory.put(
+            key="restore.same-path",
+            value={"safe": True},
+            department="test",
+            provenance="test",
+        )
+    backup_learning_memory(source, source.with_name("backup.sqlite3"))
+    backup = source.with_name("backup.sqlite3")
+
+    with pytest.raises(ValueError, match="restore_destination_must_differ_from_backup"):
+        restore_learning_memory_backup(backup, backup)
