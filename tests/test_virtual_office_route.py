@@ -255,3 +255,33 @@ def test_assistant_message_uses_department_read_handler(tmp_path, monkeypatch):
     assert isinstance(payload["data"]["venues"], list)
     assert "Saúde operacional" in payload["reply"]
     assert payload["execution_authorized"] is False
+
+ 
+def test_virtual_office_keeps_required_departments_separate_and_safe(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+    html = client.get("/virtual-office").get_data(as_text=True)
+
+    for department in ("comparison", "analysis", "memory", "fast"):
+        assert f'data-room="{department}"' in html
+        assert f'{department}:[' in html
+        assert f'{department}:"' in html
+
+    assert "Comparação entre Exchanges" in html
+    assert "Resposta Rápida" in html
+    assert "subordinada a todos os gates de risco" in html
+    assert "Nenhum estado de agente ou atividade está ligado nesta demonstração." in html
+
+ 
+def test_virtual_office_shows_offline_ambient_life_and_health_room(tmp_path, monkeypatch):
+    client = _app(tmp_path, monkeypatch)
+    html = client.get("/virtual-office").get_data(as_text=True)
+
+    assert 'id="idleScene"' in html
+    assert "SEM LIGAÇÃO · SIMULAÇÃO LOCAL" in html
+    assert "Pausa na cafetaria" in html
+    assert "Pausa curta no ginásio" in html
+    assert 'data-room="health"' in html
+    assert 'health:["Saúde & Enfermaria"' in html
+    assert "não executa verificações reais" in html
+    assert "agent_health_known===true" in html
+    assert "O motor reporta atividade; animações de trabalho ainda não estão ligadas." in html

@@ -8,7 +8,7 @@ The Virtual Office is a complete alternative interface to the PC cockpit, not a 
 
 ## Three persistent regions
 - **Left navigation:** overview, office, conversational cockpit, markets/exchanges, research, strategies/PAPER, risk/readiness, events/audit, devices and settings.
-- **Central workspace:** responsive 2D/2.5D rooms for the brain/CEO, exchanges, market radar, research, PAPER lab, risk, recovery, audit and human intervention.
+- **Central workspace:** responsive 2D/2.5D rooms for CEO/brain, exchange integrations, Market Radar, Exchange Comparison, Investigation, Analysis, Central Learning Memory, Fast Response, PAPER lab, risk, recovery, audit and human intervention. Market Radar and Exchange Comparison remain distinct; Investigation and Analysis remain distinct. Central Memory is one visual room over the shared local memory service, not a second store.
 - **Right conversation panel:** persistent chat, requests and alerts. Natural-language requests are sent only to the authenticated backend once integration is implemented.
 
 On mobile/narrow windows, the sidebars collapse to overlays and the center switches to a compact or chat-first layout. Keep keyboard focus, visible labels, reduced-motion support and accessible control names.
@@ -27,6 +27,8 @@ On mobile/narrow windows, the sidebars collapse to overlays and the center switc
 ## First shell delivered in this increment
 `virtual_office/prototype/full_cockpit_shell.html` is a standalone, dependency-free responsive interaction prototype:
 - left-side navigation, central department map and persistent right-side conversation panel;
+- separate selectable rooms and conversation labels for Exchange Comparison, Analysis, Central Memory and Fast Response, alongside the previously listed departments;
+- responsive room grid that shifts from four columns to three and then two on narrower screens;
 - office, compact and conversation presentation modes;
 - selectable departments and chat/requests/alerts tabs;
 - narrow-screen sidebar overlays;
