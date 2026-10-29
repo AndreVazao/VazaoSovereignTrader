@@ -406,7 +406,7 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
    select.value=profile;
    const low=actual==="stick"||actual==="pixel"||actual==="compact";
    scene.classList.toggle("vst-motion-budget-limited",low);
-   status.textContent=(manual?"Seleção manual: ":"Automático: ")+label(actual)+(profile==="auto"?" · pode mudar ao abrir noutro aparelho":" · fica selecionado neste aparelho")+(actual==="cinematic"?" · não é 3D/WebGL real":"");
+   status.textContent=(profile==="auto"?"Automático: ":"Seleção manual: ")+label(actual)+(profile==="auto"?" · pode mudar ao abrir noutro aparelho":" · fica selecionado neste aparelho")+(actual==="cinematic"?" · não é 3D/WebGL real":"");
    if(profile!=="auto"){try{localStorage.setItem(key,profile)}catch(_e){}}
    else{try{localStorage.setItem(key,"auto")}catch(_e){}}
    window.vstRenderProfileState={selection:profile,active:actual,manual:profile!=="auto"};
