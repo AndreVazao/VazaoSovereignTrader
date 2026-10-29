@@ -23,32 +23,64 @@ sleep 8
 adb shell pidof "$PACKAGE"
 adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
 
-# Exercise portrait, landscape and a tablet-like logical resolution in the hosted
-# emulator. These are layout/startup smoke checks, not a full visual acceptance test.
+# Capture the first-run chooser before selecting the virtual office.
+adb exec-out screencap -p > "$EVIDENCE/vst-chooser.png"
+
+# Choose the office so that every viewport screenshot exercises the actual room UI,
+# not just the initial chooser. Maestro taps the visible, localized button.
+maestro test .maestro/android-office-smoke.yaml
+sleep 3
+adb shell pidof "$PACKAGE" >/dev/null
+
+# Explicitly set logical display dimensions. Rotation settings alone can be ignored
+# by portrait-locked apps/emulators, so the PNG dimensions are checked below too.
 adb shell settings put system accelerometer_rotation 0
-adb shell settings put system user_rotation 0
-sleep 2
+adb shell wm size 1080x1920
+adb shell wm density 240
+sleep 3
 adb exec-out screencap -p > "$EVIDENCE/vst-portrait.png"
 adb shell pidof "$PACKAGE" >/dev/null
 
+adb shell wm size 1920x1080
 adb shell settings put system user_rotation 1
-sleep 3
+sleep 4
 adb exec-out screencap -p > "$EVIDENCE/vst-landscape.png"
 adb shell pidof "$PACKAGE" >/dev/null
 
-# Simulate a landscape tablet viewport without changing app data or backend state.
+# Tablet-like landscape viewport, still running the office page.
 adb shell wm size 1280x800
-adb shell wm density 240
-sleep 3
+sleep 4
 adb exec-out screencap -p > "$EVIDENCE/vst-tablet-landscape.png"
 adb shell pidof "$PACKAGE" >/dev/null
 
-# Restore emulator display settings for subsequent steps and capture diagnostics.
+# Assert that captures have the requested aspect ratios, not merely a live process.
+python - "$EVIDENCE" <<'PYSCREEN'
+import struct, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+expected = {
+    "vst-portrait.png": "portrait",
+    "vst-landscape.png": "landscape",
+    "vst-tablet-landscape.png": "landscape",
+}
+for name, orientation in expected.items():
+    data = (root / name).read_bytes()
+    if data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+        raise SystemExit(f"FAIL: {name} is not a valid PNG")
+    width, height = struct.unpack(">II", data[16:24])
+    print(f"{name}: {width}x{height}")
+    if orientation == "portrait" and width >= height:
+        raise SystemExit(f"FAIL: {name} should be portrait")
+    if orientation == "landscape" and width <= height:
+        raise SystemExit(f"FAIL: {name} should be landscape")
+PYSCREEN
+
+# Restore emulator display settings and capture diagnostics.
 adb shell wm size reset
 adb shell wm density reset
 adb shell settings put system accelerometer_rotation 1
 adb logcat -d > "$EVIDENCE/logcat.txt"
-echo "PASS: app process survived portrait, landscape and tablet-like viewport transitions." | tee "$EVIDENCE/orientation-smoke.txt"
+echo "PASS: office UI survived and screenshots have verified portrait/landscape dimensions." | tee "$EVIDENCE/orientation-smoke.txt"
 # user_data_dir in the packaged app maps to the app-private files directory.
 # Capture the full traceback, while never reading connection/token files.
 if adb shell run-as "$PACKAGE" sh -c 'find /data/user/0/pt.andrevazao.vazaosovereigntrader -name startup_error.log -type f -print -exec cat {} +' > "$EVIDENCE/startup_error.txt" 2>/dev/null && [[ -s "$EVIDENCE/startup_error.txt" ]]; then
@@ -62,19 +94,19 @@ if grep -E "FATAL EXCEPTION|Process: ${PACKAGE}.*has died" "$EVIDENCE/logcat.txt
   exit 1
 fi
 
-tesseract "$EVIDENCE/vst-home.png" stdout 2>/dev/null > "$EVIDENCE/screen-ocr.txt"
+tesseract "$EVIDENCE/vst-chooser.png" stdout 2>/dev/null > "$EVIDENCE/screen-ocr.txt"
 cat "$EVIDENCE/screen-ocr.txt"
 if grep -qi "Tipo de erro:" "$EVIDENCE/screen-ocr.txt"; then
   echo "The app displayed its startup error fallback; inspect startup_error.txt." | tee "$EVIDENCE/failure.txt"
   exit 1
 fi
-# First install now intentionally opens the experience chooser. Existing installs
-# can open the chat directly, so accept either valid startup screen.
 if grep -Eqi "Como queres usar o Trader|Chat simples|Escritorio virtual|Escrit[oó]rio virtual" "$EVIDENCE/screen-ocr.txt"; then
   echo "PASS: first-run experience chooser is visible."
-elif grep -qi "Como posso ajudar" "$EVIDENCE/screen-ocr.txt"; then
-  echo "PASS: saved chat experience is visible."
 else
-  echo "Neither the first-run chooser nor the saved chat screen was detected." | tee "$EVIDENCE/failure.txt"
+  echo "The first-run experience chooser was not detected." | tee "$EVIDENCE/failure.txt"
+  exit 1
+fi
+if grep -Eqi "FATAL EXCEPTION|Process: ${PACKAGE}.*has died" "$EVIDENCE/logcat.txt"; then
+  echo "Android application crash detected in logcat." | tee "$EVIDENCE/failure.txt"
   exit 1
 fi
