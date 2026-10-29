@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from kivy.core.window import Window
+from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.uix.floatlayout import FloatLayout
 from kivy.storage.jsonstore import JsonStore
