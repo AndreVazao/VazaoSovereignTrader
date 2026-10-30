@@ -140,7 +140,7 @@ jobs:
           cat > /tmp/vst-diorama-prototype/capture.mjs <<'JS'
           import { chromium } from 'playwright';
           import fs from 'node:fs';
-          const browser = await chromium.launch({headless:true});
+          const browser = await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--ignore-gpu-blocklist']});
           const cases = [
             {name:'phone-portrait',width:390,height:844},
             {name:'phone-landscape',width:844,height:390},
