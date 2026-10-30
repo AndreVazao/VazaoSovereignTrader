@@ -71,7 +71,8 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("Clock.schedule_once(place_agents, 0.3)", source)
         self.assertIn("Window.bind(on_resize=adapt_to_viewport)", source)
         self.assertIn("VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL", source)
-        self.assertIn("demonstração offline; sem tarefa real confirmada", source)
+        self.assertIn("Não são apresentados agentes, preços ou atividade reais.", source)
+        self.assertIn("class PixelAgent(Widget):", source)
         self.assertIn("HD 3D (futuro)", source)
         self.assertIn("fallback seguro", source)
 
