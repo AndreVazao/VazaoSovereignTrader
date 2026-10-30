@@ -101,7 +101,7 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("office-ocr.txt", script)
         ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn("label.text_size = (label.width, None)", ui_source)
-        self.assertIn("orientation = all", spec)
+        self.assertIn("orientation = portrait, landscape, portrait-reverse, landscape-reverse", spec)
 
 
 
