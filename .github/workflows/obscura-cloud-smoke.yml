@@ -1,9 +1,10 @@
-name: Obscura cloud smoke
+name: Obscura cloud smoke and Chromium comparison
 
 on:
   pull_request:
     paths:
       - "docs/OBSCURA_EVALUATION_CLAUDE_CODE.md"
+      - "docs/MODULAR_RUNTIME_AND_REMOTE_OFFICE_ARCHITECTURE.md"
       - ".github/workflows/obscura-cloud-smoke.yml"
   workflow_dispatch:
 
@@ -13,29 +14,39 @@ permissions:
 jobs:
   obscura-linux-smoke:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install Chrome for headless comparison
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
       - name: Download official Obscura Linux release
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/obscura"
-          curl --fail --location --retry 3 https://github.com/h4ckf0r0day/obscura/releases/latest/download/obscura-x86_64-linux.tar.gz --output "$RUNNER_TEMP/obscura/release.tar.gz"
+          curl --fail --location --retry 3 \
+            https://github.com/h4ckf0r0day/obscura/releases/latest/download/obscura-x86_64-linux.tar.gz \
+            --output "$RUNNER_TEMP/obscura/release.tar.gz"
           tar -xzf "$RUNNER_TEMP/obscura/release.tar.gz" -C "$RUNNER_TEMP/obscura"
           BIN="$(find "$RUNNER_TEMP/obscura" -type f -name obscura -perm -u+x | head -n 1)"
           test -n "$BIN"
           echo "OBSCURA_BIN=$BIN" >> "$GITHUB_ENV"
-          "$BIN" --version
-      - name: Run isolated local fixture smoke tests
+          "$BIN" --version | tee "$RUNNER_TEMP/obscura-version.txt"
+
+      - name: Run isolated functional smoke tests
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
           cat > "$RUNNER_TEMP/fixture.html" <<'HTML'
           <!doctype html>
-          <html><head><title>VST Obscura Fixture</title></head>
+          <html><head><title>VST Browser Fixture</title></head>
           <body><main id="result">initial</main>
           <script>
             document.querySelector('#result').textContent = 'javascript-ok';
@@ -50,23 +61,92 @@ jobs:
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:8765/fixture.html >/dev/null
-          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --eval "document.title" > artifacts/title.txt
-          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --eval "document.querySelector('#result').textContent" > artifacts/javascript.txt
-          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --dump text > artifacts/text.txt
-          grep -q "VST Obscura Fixture" artifacts/title.txt
-          grep -q "javascript-ok" artifacts/javascript.txt
-          grep -q "javascript-ok" artifacts/text.txt
-          printf 'result=PASS\nengine_version=' > artifacts/report.txt
-          "$OBSCURA_BIN" --version >> artifacts/report.txt
-          printf 'scope=cloud Linux runner; local synthetic page; no real credentials or financial actions\n' >> artifacts/report.txt
-          cat artifacts/report.txt
-      - name: Upload sanitized smoke evidence
+          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --eval "document.title" > artifacts/obscura-title.txt
+          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --eval "document.querySelector('#result').textContent" > artifacts/obscura-javascript.txt
+          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --dump text > artifacts/obscura-text.txt
+          grep -q "VST Browser Fixture" artifacts/obscura-title.txt
+          grep -q "javascript-ok" artifacts/obscura-javascript.txt
+          grep -q "javascript-ok" artifacts/obscura-text.txt
+          "${{ steps.chrome.outputs.chrome-path }}" --headless --no-sandbox --disable-gpu --dump-dom http://127.0.0.1:8765/fixture.html > artifacts/chromium-dom.html 2> artifacts/chromium-smoke-stderr.txt
+          grep -q "javascript-ok" artifacts/chromium-dom.html
+          printf 'obscura_functional_smoke=PASS\nchromium_functional_smoke=PASS\n' > artifacts/smoke-report.txt
+          "$OBSCURA_BIN" --version >> artifacts/smoke-report.txt
+          printf 'scope=local synthetic HTML fixture; no real credentials or financial actions\n' >> artifacts/smoke-report.txt
+          cat artifacts/smoke-report.txt
+
+      - name: Benchmark equivalent local DOM task
+        if: always()
+        shell: bash
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          set -u
+          mkdir -p artifacts
+          if [ ! -x "${OBSCURA_BIN:-}" ] || [ ! -x "${CHROME_BIN:-}" ]; then
+            printf '{"decision":"INCONCLUSIVE","reason":"one or both browser binaries unavailable"}\n' > artifacts/benchmark.json
+            exit 0
+          fi
+          cat > "$RUNNER_TEMP/benchmark.py" <<'PY'
+          import json, os, statistics, subprocess, time
+          url = "http://127.0.0.1:8765/fixture.html"
+          engines = {
+              "obscura": [os.environ["OBSCURA_BIN"], "fetch", url, "--allow-private-network", "--eval", "document.querySelector('#result').textContent"],
+              "chromium": [os.environ["CHROME_BIN"], "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--dump-dom", url],
+          }
+          report = {"task": "load local synthetic HTML, execute JS, extract DOM result",
+                    "repetitions": 7, "environment": "same Ubuntu GitHub Actions runner",
+                    "fixture": "local-only; no network services, credentials, cookies or financial actions",
+                    "engines": {}}
+          for name, cmd in engines.items():
+              samples, failures = [], []
+              for i in range(7):
+                  start = time.perf_counter()
+                  try:
+                      p = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+                      elapsed = (time.perf_counter() - start) * 1000
+                      output = p.stdout + p.stderr
+                      ok = p.returncode == 0 and "javascript-ok" in output
+                      if ok:
+                          samples.append(round(elapsed, 2))
+                      else:
+                          failures.append({"iteration": i + 1, "returncode": p.returncode,
+                                           "output_tail": output[-500:]})
+                  except Exception as e:
+                      failures.append({"iteration": i + 1, "error": str(e)})
+              entry = {"successes": len(samples), "failures": failures}
+              if samples:
+                  entry.update({"median_ms": round(statistics.median(samples), 2),
+                                "min_ms": min(samples), "max_ms": max(samples),
+                                "successful_samples_ms": samples})
+              report["engines"][name] = entry
+          o = report["engines"]["obscura"]; c = report["engines"]["chromium"]
+          if o.get("successes") == 7 and c.get("successes") == 7:
+              report["decision"] = "OBSCURA_FASTER_ON_THIS_FIXTURE" if o["median_ms"] < c["median_ms"] else "CHROMIUM_FASTER_OR_TIED_ON_THIS_FIXTURE"
+              report["relative_median"] = "descriptive only; startup and fixture-specific; not a claim about exchange sites"
+          else:
+              report["decision"] = "INCONCLUSIVE"
+          with open("artifacts/benchmark.json", "w") as f:
+              json.dump(report, f, indent=2)
+          print(json.dumps(report, indent=2))
+          PY
+          python3 -m http.server 8765 --directory "$RUNNER_TEMP" > "$RUNNER_TEMP/benchmark-http.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8765/fixture.html >/dev/null; then break; fi
+            sleep 1
+          done
+          python3 "$RUNNER_TEMP/benchmark.py"
+
+      - name: Upload sanitized evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: obscura-cloud-smoke
+          name: obscura-chromium-cloud-evidence
           path: |
             artifacts/
             ${{ runner.temp }}/http.log
+            ${{ runner.temp }}/benchmark-http.log
+            ${{ runner.temp }}/obscura-version.txt
           if-no-files-found: warn
           retention-days: 14
