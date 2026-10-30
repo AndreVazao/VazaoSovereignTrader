@@ -1,0 +1,114 @@
+name: Obscura vs Chromium benchmark
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/obscura-comparison.yml"
+      - "docs/OBSCURA_EVALUATION_CLAUDE_CODE.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare-local-fixture:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/vst-bench" playwright
+          "$RUNNER_TEMP/vst-bench/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Download official Obscura release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/obscura"
+          curl --fail --location --retry 3 https://github.com/h4ckf0r0day/obscura/releases/latest/download/obscura-x86_64-linux.tar.gz -o "$RUNNER_TEMP/obscura/release.tar.gz"
+          tar -xzf "$RUNNER_TEMP/obscura/release.tar.gz" -C "$RUNNER_TEMP/obscura"
+          BIN="$(find "$RUNNER_TEMP/obscura" -type f -name obscura -perm -u+x | head -n 1)"
+          test -n "$BIN"
+          echo "OBSCURA_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --version
+
+      - name: Benchmark equivalent local navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cat > "$RUNNER_TEMP/fixture.html" <<'HTML'
+          <!doctype html><html><head><title>VST Benchmark Fixture</title></head>
+          <body><main id="result">initial</main><script>
+          document.querySelector('#result').textContent = 'javascript-ok';
+          window.vstFixture = Array.from({length: 100}, (_, i) => ({id:i, value:'item-'+i}));
+          </script></body></html>
+          HTML
+          python3 -m http.server 8765 --directory "$RUNNER_TEMP" > "$RUNNER_TEMP/fixture-server.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/fixture-server.pid"
+          "$OBSCURA_BIN" serve --port 9222 --allow-private-network > "$RUNNER_TEMP/obscura-server.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/obscura-server.pid"
+          trap 'kill "$(cat "$RUNNER_TEMP/fixture-server.pid")" "$(cat "$RUNNER_TEMP/obscura-server.pid")" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8765/fixture.html >/dev/null && curl --silent http://127.0.0.1:9222/json/version | grep -q webSocketDebuggerUrl; then break; fi
+            sleep 1
+          done
+          cat > "$RUNNER_TEMP/vst-bench/bench.cjs" <<'JS'
+          const fs = require('fs');
+          const { chromium } = require('playwright');
+          (async () => {
+            const url = 'http://127.0.0.1:8765/fixture.html';
+            const rounds = 10;
+            const results = { fixture: url, rounds, engines: {} };
+            const chrome = await chromium.launch({ headless: true });
+            const obscura = await chromium.connectOverCDP('http://127.0.0.1:9222');
+            for (const [name, browser] of [['chromium', chrome], ['obscura', obscura]]) {
+              const context = await browser.newContext();
+              const page = await context.newPage();
+              const ms = [];
+              for (let i = 0; i < rounds; i++) {
+                const start = performance.now();
+                await page.goto(url, { waitUntil: 'load', timeout: 15000 });
+                const value = await page.evaluate(() => ({
+                  title: document.title,
+                  result: document.querySelector('#result')?.textContent,
+                  count: window.vstFixture?.length
+                }));
+                ms.push(Number((performance.now() - start).toFixed(2)));
+                if (value.title !== 'VST Benchmark Fixture' || value.result !== 'javascript-ok' || value.count !== 100) {
+                  throw new Error(name + ' functional assertion failed: ' + JSON.stringify(value));
+                }
+              }
+              ms.sort((a,b) => a-b);
+              results.engines[name] = {
+                median_ms: ms[Math.floor(ms.length / 2)],
+                p95_ms: ms[Math.min(ms.length - 1, Math.ceil(ms.length * 0.95) - 1)],
+                samples_ms: ms
+              };
+              await context.close();
+              if (name === 'chromium') await browser.close();
+              else await browser.close();
+            }
+            results.note = 'Warm persistent browser navigation on a shared GitHub-hosted runner and local synthetic fixture; not a measurement of the user PC or cold-start latency.';
+            fs.writeFileSync('artifacts/comparison.json', JSON.stringify(results, null, 2) + '\n');
+            console.log(JSON.stringify(results, null, 2));
+          })().catch(e => { console.error(e); process.exit(1); });
+          JS
+          NODE_PATH="$RUNNER_TEMP/vst-bench/node_modules" node "$RUNNER_TEMP/vst-bench/bench.cjs"
+          cat "$RUNNER_TEMP/obscura-server.log" > artifacts/obscura-server.log
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: obscura-chromium-comparison
+          path: |
+            artifacts/
+            ${{ runner.temp }}/fixture-server.log
+            ${{ runner.temp }}/obscura-server.log
+          if-no-files-found: warn
+          retention-days: 14
