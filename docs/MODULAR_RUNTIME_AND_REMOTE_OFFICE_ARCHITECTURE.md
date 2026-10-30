@@ -59,6 +59,7 @@ Se um motor 3D futuro exigir GPU ou recursos acima do dispositivo, uma máquina 
 - Health check por motor, timeout curto, circuit breaker e fallback imediato quando o motor primário falha ou excede o orçamento. A falha de ambos termina a tarefa como falha explícita/retryable; não bloqueia o departamento inteiro.
 - Seleção inicial baseada em compatibilidade e resultados medidos por classe de tarefa. Não mudar de motor continuamente por pequenas variações de latência.
 - CI usa apenas páginas sintéticas locais, sem credenciais, cookies ou operações financeiras. Não usar stealth para contornar proteções de exchanges.
+- O fetcher oficial existente (`PC_ENGINE/opportunity/source_ingestion.py`) tem allowlist exata, limites de resposta e transporte HTTPS com IP validado/pinado. Não substituir esse controlo por uma chamada de browser que volte a resolver DNS sem pinning: a integração Obscura para fontes públicas exige uma fronteira de rede equivalente ou egress controlado, validação de host/caminho/redirect e testes SSRF antes de ativar. O benchmark CLI isolado não valida esses controlos.
 - Até existir benchmark válido, Obscura fica experimental e não é o motor primário de pesquisas críticas.
 
 ## Plano incremental de implementação
