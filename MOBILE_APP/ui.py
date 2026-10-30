@@ -145,7 +145,7 @@ def build_chat_cockpit(app):
         saved_experience = ""
     if saved_experience not in {"chat", "office"}:
         saved_experience = ""
-    root = BoxLayout(orientation="horizontal", spacing=0)
+    root = BoxLayout(orientation="horizontal", spacing=0, padding=[0, dp(24), 0, dp(12)])
     sidebar = Surface(orientation="vertical", size_hint_x=None, width=dp(78), padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
     root.add_widget(sidebar)
 
@@ -168,13 +168,13 @@ def build_chat_cockpit(app):
         sidebar.add_widget(btn)
         nav_buttons[key] = btn
 
-    nav("Chat", "chat", "✦")
-    nav("Escritório", "office", "▦")
-    nav("Modo", "experience", "⚙")
-    nav("PC", "pc", "⌂")
-    nav("Ficheiros", "files", "□")
+    nav("Chat", "chat", "C")
+    nav("Escritório", "office", "E")
+    nav("Modo", "experience", "M")
+    nav("PC", "pc", "P")
+    nav("Ficheiros", "files", "F")
     nav("Humano", "human", "!")
-    nav("Readiness", "ready", "◌")
+    nav("Readiness", "ready", "R")
     sidebar_spacer = Widget()
     sidebar.add_widget(sidebar_spacer)
     paper_button = RoundedButton(text="PAPER", fill=(0.12, 0.18, 0.17, 1), size_hint_y=None, height=dp(42))
@@ -184,7 +184,7 @@ def build_chat_cockpit(app):
 
     def header(title, subtitle):
         bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48), spacing=dp(8))
-        menu = RoundedButton(text="☰", fill=PANEL, size_hint_x=None, width=dp(46))
+        menu = RoundedButton(text="MENU", fill=PANEL, size_hint_x=None, width=dp(46))
         menu.bind(on_release=lambda *_: toggle_sidebar())
         bar.add_widget(menu)
         col = BoxLayout(orientation="vertical")
