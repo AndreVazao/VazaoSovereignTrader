@@ -39,3 +39,16 @@ Estes estados são um instantâneo, não uma garantia de estado atual. Reconsult
 - Nenhuma validação física do telefone foi realizada nesta sessão.
 - PC↔telefone, ADB real, Tailscale e rede doméstica continuam dependentes de validação física pelo utilizador.
 - Trader permanece PAPER/read-only; não enviar ordens reais, mover fundos, expor portas públicas, alterar router/firewall, nem contornar autenticação/MFA/approval.
+
+
+## Atualização de continuidade — 2026-10-30 (PR #522)
+
+- PR de correção visual: https://github.com/AndreVazao/VazaoSovereignTrader/pull/522
+- Branch: `fix/android-office-layout-2026-10-30`
+- HEAD após alterações de avatares: `29e449136603234965bdf4f11e6a279754c17aef`
+- O screenshot real fornecido pelo utilizador mostra o painel lateral e o cabeçalho a ocupar espaço excessivo e as figuras a sobreporem-se na cena do escritório.
+- Alterações neste checkpoint: a cena offline usa avatares pixel-art desenhados com retângulos leves em vez de caracteres ASCII; os avatares partilham uma linha de base e ocupam três posições horizontais; a grelha de departamentos usa uma coluna em telemóvel portrait, duas em ecrãs intermédios e três em ecrãs largos.
+- A PR mantém a configuração `orientation = all` em `MOBILE_APP/buildozer.spec`, mas esta alteração é experimental até ser validada pelo Buildozer e pelo emulador. O histórico documenta uma falha anterior com esta configuração; não assumir que a rotação está resolvida.
+- O helper GitHub Actions consultado não devolveu runs associados ao HEAD `29e4491...`; portanto não há evidência disponível nesta consulta de uma build APK ou de capturas atuais. Confirmar Actions diretamente/consultar novos runs antes de afirmar sucesso.
+- Não fazer merge: falta build, smoke portrait/landscape/tablet, inspeção de artefactos e estado verde dos checks.
+- O escritório continua a ser demo offline; avatares são apenas decoração visual e não representam trabalho real dos agentes. PAPER/read-only permanece padrão.
