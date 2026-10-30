@@ -778,7 +778,7 @@ def build_chat_cockpit(app):
             button.font_size = dp(9 if phone_layout else 10)
         office_grid = getattr(app, "office_room_grid", None)
         if office_grid is not None:
-            office_grid.cols = 1 if phone_layout else 2
+            office_grid.cols = 1 if width <= dp(520) else (3 if width >= dp(1000) else 2)
             office_grid.spacing = dp(6 if phone_layout else 8)
         if hasattr(app, "office_mode_selector"):
             app.office_mode_selector.font_size = dp(10 if phone_layout else 12)
