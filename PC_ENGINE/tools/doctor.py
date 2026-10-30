@@ -102,8 +102,9 @@ def collect_diagnostics(root: str | Path | None = None) -> dict[str, Any]:
             "available": dependencies,
         },
         "runtime_data_directory": {
-            "ok": data_dir.exists() and data_dir.is_dir(),
+            "ok": not data_dir.exists() or data_dir.is_dir(),
             "exists": data_dir.exists(),
+            "initialized": data_dir.is_dir(),
             "writable_if_present": os.access(data_dir, os.W_OK) if data_dir.exists() else None,
         },
         "disk_space": {"ok": free_disk_bytes is not None, "free_bytes": free_disk_bytes},
