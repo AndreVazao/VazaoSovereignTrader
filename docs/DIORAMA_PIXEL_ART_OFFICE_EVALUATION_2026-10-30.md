@@ -31,7 +31,12 @@ O Diorama é um playbook/kit de cenas de diorama pixel-art em Three.js, não uma
 
 Foi adicionado `.github/workflows/diorama-office-prototype.yml`. O workflow, quando executado, usa uma VM Ubuntu do GitHub Actions para clonar e verificar o commit do playbook Diorama, instalar Node/Three.js/Playwright e renderizar um protótipo visual isolado de uma sala com três postos e avatares low-poly/pixel-like. Captura três viewports (390×844, 844×390 e 1180×820), verifica canvas, erros JavaScript e rótulo DEMO OFFLINE, e publica PNGs + `report.json` como artefacto por 14 dias. O protótipo é temporário e não altera a app nem importa assets externos do Diorama.
 
-**Limitação importante:** o repositório Diorama é um playbook e um kit de módulos, não uma app pronta para abrir; por isso, esta primeira VM é uma prova visual baseada em Three.js e no fluxo determinístico recomendado, não uma execução direta de uma demo oficial do Diorama. O resultado só pode ser avaliado depois do workflow correr e os screenshots serem inspecionados. Não declarar sucesso antecipadamente.
+**Limitação importante:** o repositório Diorama é um playbook e um kit de módulos, não uma app pronta para abrir; por isso, esta VM é uma prova visual baseada em Three.js e no fluxo determinístico recomendado, não uma execução direta de uma demo oficial do Diorama.
+
+### Evidência da primeira execução
+- Run #6/ID `41131895430` passou e publicou o artefacto `vst-diorama-office-vm-screenshots`; o relatório JSON marcou as três viewports como PASS e não registou erros de JavaScript.
+- A inspeção visual manual dos PNGs encontrou um defeito que o teste técnico não detetava: a câmara cortava parte da cena/rótulos em portrait e apertava o enquadramento em landscape. Isto demonstra que um teste de canvas/JS não basta para validar layout.
+- Corrigi a fórmula de enquadramento para priorizar a largura da sala em ecrãs estreitos e lancei nova execução no commit `a350679d1dcf3371f0167756bc926d5b97d47a16` (run #7/ID `41132052504`). No momento deste registo, essa execução ainda estava em curso; a nova captura deve ser inspecionada antes de declarar o layout aceitável.
 
 ## Experiência mínima proposta (após estabilizar o APK atual)
 
