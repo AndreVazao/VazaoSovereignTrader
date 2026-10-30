@@ -1,0 +1,72 @@
+name: Obscura cloud smoke
+
+on:
+  pull_request:
+    paths:
+      - "docs/OBSCURA_EVALUATION_CLAUDE_CODE.md"
+      - ".github/workflows/obscura-cloud-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  obscura-linux-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download official Obscura Linux release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/obscura"
+          curl --fail --location --retry 3 https://github.com/h4ckf0r0day/obscura/releases/latest/download/obscura-x86_64-linux.tar.gz --output "$RUNNER_TEMP/obscura/release.tar.gz"
+          tar -xzf "$RUNNER_TEMP/obscura/release.tar.gz" -C "$RUNNER_TEMP/obscura"
+          BIN="$(find "$RUNNER_TEMP/obscura" -type f -name obscura -perm -u+x | head -n 1)"
+          test -n "$BIN"
+          echo "OBSCURA_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --version
+      - name: Run isolated local fixture smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cat > "$RUNNER_TEMP/fixture.html" <<'HTML'
+          <!doctype html>
+          <html><head><title>VST Obscura Fixture</title></head>
+          <body><main id="result">initial</main>
+          <script>
+            document.querySelector('#result').textContent = 'javascript-ok';
+            window.vstFixture = { status: 'PASS', count: 7 };
+          </script></body></html>
+          HTML
+          python3 -m http.server 8765 --directory "$RUNNER_TEMP" > "$RUNNER_TEMP/http.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8765/fixture.html >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8765/fixture.html >/dev/null
+          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --eval "document.title" > artifacts/title.txt
+          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --eval "document.querySelector('#result').textContent" > artifacts/javascript.txt
+          "$OBSCURA_BIN" fetch http://127.0.0.1:8765/fixture.html --allow-private-network --dump text > artifacts/text.txt
+          grep -q "VST Obscura Fixture" artifacts/title.txt
+          grep -q "javascript-ok" artifacts/javascript.txt
+          grep -q "javascript-ok" artifacts/text.txt
+          printf 'result=PASS\nengine_version=' > artifacts/report.txt
+          "$OBSCURA_BIN" --version >> artifacts/report.txt
+          printf 'scope=cloud Linux runner; local synthetic page; no real credentials or financial actions\n' >> artifacts/report.txt
+          cat artifacts/report.txt
+      - name: Upload sanitized smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: obscura-cloud-smoke
+          path: |
+            artifacts/
+            ${{ runner.temp }}/http.log
+          if-no-files-found: warn
+          retention-days: 14
