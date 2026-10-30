@@ -145,8 +145,10 @@ def build_chat_cockpit(app):
         saved_experience = ""
     if saved_experience not in {"chat", "office"}:
         saved_experience = ""
-    root = BoxLayout(orientation="horizontal", spacing=0, padding=[0, dp(24), 0, dp(12)])
-    sidebar = Surface(orientation="vertical", size_hint_x=None, width=dp(78), padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
+    phone_layout = Window.width <= dp(520)
+    sidebar_width = dp(54) if phone_layout else dp(78)
+    root = BoxLayout(orientation="horizontal", spacing=0, padding=[0, dp(4), 0, dp(4)])
+    sidebar = Surface(orientation="vertical", size_hint_x=None, width=sidebar_width, padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
     root.add_widget(sidebar)
 
     logo = _label("VST", size=20, bold=True, halign="center", size_hint_y=None, height=dp(44))
@@ -183,8 +185,8 @@ def build_chat_cockpit(app):
     app.status = _label("PC: offline", size=12, color=MUTED, size_hint_y=None, height=dp(30))
 
     def header(title, subtitle):
-        bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48), spacing=dp(8))
-        menu = RoundedButton(text="MENU", fill=PANEL, size_hint_x=None, width=dp(46))
+        bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48 if not phone_layout else 54), spacing=dp(5))
+        menu = RoundedButton(text="☰" if phone_layout else "MENU", fill=PANEL, size_hint_x=None, width=dp(38 if phone_layout else 46))
         menu.bind(on_release=lambda *_: toggle_sidebar())
         bar.add_widget(menu)
         col = BoxLayout(orientation="vertical")
@@ -193,9 +195,10 @@ def build_chat_cockpit(app):
         bar.add_widget(col)
         # app.status is the canonical model label; never reparent one Kivy widget
         # into multiple lazily-created page headers.
-        status_label = _label(app.status.text, size=12, color=MUTED, size_hint_x=None, width=dp(90))
+        status_label = _label(app.status.text, size=10, color=MUTED, size_hint_x=None, width=dp(74))
         app.status.bind(text=lambda _instance, value, target=status_label: setattr(target, "text", value))
-        bar.add_widget(status_label)
+        if not phone_layout:
+            bar.add_widget(status_label)
         return bar
 
     def chat_page():
@@ -405,7 +408,9 @@ def build_chat_cockpit(app):
                 if agent.get("moving"):
                     continue
                 agent["widget"].y = stage.y + stage.height * (0.40 + index * 0.12)
-                agent["widget"].x = stage.x + stage.width * (0.04 + index * 0.08)
+                lane_centres = (0.16, 0.50, 0.84)
+                widget = agent["widget"]
+                widget.x = stage.x + stage.width * lane_centres[index] - widget.width / 2
 
         for figure, role, room_key, tint, delay in agent_specs:
             avatar = Button(
@@ -453,8 +458,9 @@ def build_chat_cockpit(app):
                     backward.bind(on_complete=lambda *_args: forward.start(w))
                     forward.start(w)
                 Clock.schedule_once(begin, agent["delay"])
-        Clock.schedule_once(animate_agents, 0.3)
-        stage.bind(size=lambda *_: Clock.schedule_once(animate_agents, 0.2) if not any(a["moving"] for a in agents) else None)
+        # The offline illustration keeps each avatar within its own lane; avoid
+        # continuous cross-stage movement that caused visual collisions on phones.
+        Clock.schedule_once(place_agents, 0.3)
         content.add_widget(scene)
 
         mode_row = BoxLayout(
@@ -503,7 +509,7 @@ def build_chat_cockpit(app):
         )
 
         grid = GridLayout(
-            cols=2,
+            cols=1 if phone_layout else 2,
             spacing=dp(8),
             size_hint_y=None,
             row_default_height=dp(82),
@@ -569,6 +575,9 @@ def build_chat_cockpit(app):
                 fill = (0.075, 0.14, 0.20, 1)
                 height = 82
                 font_size = 10
+            grid.cols = 1 if phone_layout else 2
+            if phone_layout:
+                height = max(height, 70)
             grid.row_default_height = dp(height)
             for room in rooms:
                 button = RoundedButton(
