@@ -1,3 +1,20 @@
+# CURRENT AUTHORITATIVE HANDOFF — 2026-10-29 (Android office smoke / PR #520)
+
+- Product repo: `AndreVazao/VazaoSovereignTrader`.
+- Active PR: [#520](https://github.com/AndreVazao/VazaoSovereignTrader/pull/520), branch `feat/virtual-office-runtime-ux-2026-10-29`; **OPEN, NOT MERGED**.
+- Latest observed head at this handoff: `fee0ad70ff5ab932606333175986d015504520c0`. Re-check live head and checks before acting.
+- Scope: improve Android hosted-emulator evidence for the offline virtual office; the office remains a local UI demo and is not connected to the trading runtime/backend.
+- Latest fix: commit `fee0ad70ff5ab932606333175986d015504520c0` changed `MOBILE_APP/test_startup_contract.py` to expect `orientation = portrait`, matching the supported Buildozer config. Previous commit `0e5bcd64a054a6ee97e49c1e4634f78ef953ef19` had reverted unsupported `orientation = all` after it caused the Android APK build to fail.
+- CI snapshot on exact head `fee0ad70ff5ab932606333175986d015504520c0`: Python tests run #3260 (ID `40961763197`) SUCCESS; Android APK run #105 (ID `40961763157`) IN_PROGRESS; Android Emulator UI Smoke run #62 (ID `40961763144`) IN_PROGRESS; Windows EXE run #961 (ID `40961763250`) IN_PROGRESS. These states are a snapshot, not a final result; recheck.
+- Previous runs on prior head failed for one known reason: stale test assertion `orientation = all` while spec had `portrait`. The Android APK and emulator jobs stopped during their Python precheck and produced no artifacts. The assertion is fixed on current head; the fresh runs must still be inspected.
+- Emulator smoke script aims to launch the app, choose `USAR ESCRITÓRIO VIRTUAL`, assert `MARKET RADAR`, and capture `vst-chooser.png`, `vst-portrait.png`, `vst-landscape.png`, `vst-tablet-landscape.png`, validating actual PNG dimensions. The test currently changes emulator dimensions, but the app is portrait-locked; **landscape layout/rotation is NOT proven fixed** merely because the captured PNG has landscape dimensions.
+- Next steps, in order: (1) re-check all four workflow results for exact head; (2) inspect Android APK job logs and download APK artifact if successful; (3) inspect emulator smoke logs/jobs/artifacts and actual PNGs, especially whether the office page opened and content is correctly laid out; (4) fix any Maestro label/accessibility, capture or dimension-check failures; (5) if portrait lock prevents landscape rendering, investigate a Buildozer-supported rotation approach rather than restoring `orientation = all`; (6) keep the PR open and unmerged until evidence is reviewed.
+- Do not present old screenshots or artifacts from earlier runs as current evidence. Do not claim physical-phone, ADB, local-PC or Tailscale tests: user is away from the PC and these tests have not been performed in this checkpoint.
+- Safety/architecture boundaries: PAPER/read-only; no real orders, transfers or withdrawals; no public ports/firewall changes; do not bypass authentication/MFA/Tailscale prompts. Keep the brain/runtime independent of office rendering; the virtual office is optional and currently offline demo only.
+- Git workflow: small verifiable increments, one active branch/PR for this work, verify exact SHA/checks, do not merge without explicit direction and evidence.
+
+---
+
 # CURRENT AUTHORITATIVE HANDOFF — 2026-10-27 (PR #504 provenance gate)
 
 - Live branch: `work/cross-org-learning-provenance-2026-10-27`; PR #504 remains OPEN and unmerged: https://github.com/AndreVazao/VazaoSovereignTrader/pull/504.

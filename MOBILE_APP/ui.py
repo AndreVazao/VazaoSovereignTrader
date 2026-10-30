@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import os
 from kivy.core.window import Window
+from kivy.clock import Clock
+from kivy.animation import Animation
+from kivy.uix.floatlayout import FloatLayout
 from kivy.storage.jsonstore import JsonStore
 from kivy.graphics import Color, RoundedRectangle
 from kivy.metrics import dp
@@ -63,18 +66,73 @@ def _label(text="", size=14, color=TEXT, bold=False, **kwargs):
     # in kwargs first so Label never receives duplicate halign/valign arguments.
     kwargs.setdefault("halign", "left")
     kwargs.setdefault("valign", "middle")
-    return Label(
+    label = Label(
         text=text,
         color=color,
         font_size=dp(size),
         bold=bold,
         **kwargs,
     )
+    # Kivy labels do not wrap by default. Bind the text box to the actual
+    # allocated width so long Portuguese copy remains readable on phones.
+    label.bind(size=lambda instance, value: setattr(instance, "text_size", (value[0], None)))
+    label.text_size = (label.width, None)
+    return label
 
 
 def _spacer(height=8):
     return Widget(size_hint_y=None, height=dp(height))
 
+
+
+class BuildingPreview(Widget):
+    """Lightweight architectural schematic; scales uniformly to preserve proportions."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(pos=self._draw_building, size=self._draw_building)
+        self._draw_building()
+
+    def _draw_building(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        base_w, base_h = 360.0, 190.0
+        scale = min(self.width / base_w, self.height / base_h)
+        ox = self.x + (self.width - base_w * scale) / 2
+        oy = self.y + (self.height - base_h * scale) / 2
+
+        def box(x, y, w, h, rgba, radius=4):
+            Color(*rgba)
+            RoundedRectangle(
+                pos=(ox + x * scale, oy + y * scale),
+                size=(w * scale, h * scale),
+                radius=[radius * scale],
+            )
+
+        with self.canvas:
+            # Roof and structural frame remain in a fixed 360:190 coordinate system.
+            box(110, 158, 140, 20, (0.20, 0.48, 0.62, 1), 5)
+            box(122, 178, 116, 5, (0.33, 0.76, 0.98, 1), 2)
+            # CEO top floor
+            box(70, 126, 220, 27, (0.09, 0.19, 0.27, 1))
+            box(80, 131, 94, 17, (0.16, 0.34, 0.43, 1))
+            box(186, 131, 94, 17, (0.16, 0.34, 0.43, 1))
+            # Research floor: separate market radar, exchange comparison, investigation and analysis
+            box(35, 87, 290, 32, (0.07, 0.14, 0.20, 1))
+            for x in (43, 114, 185, 256):
+                box(x, 93, 62, 20, (0.12, 0.25, 0.32, 1))
+            # Central memory / rapid response / risk-control lower floor
+            box(55, 48, 250, 31, (0.08, 0.17, 0.20, 1))
+            for x, color in ((63, (0.13, 0.30, 0.28, 1)),
+                             (145, (0.13, 0.25, 0.35, 1)),
+                             (227, (0.30, 0.20, 0.13, 1))):
+                box(x, 54, 74, 19, color)
+            # Foundations and pillars
+            box(45, 34, 270, 8, (0.19, 0.24, 0.31, 1), 2)
+            for x in (68, 132, 196, 260):
+                box(x, 20, 8, 14, (0.20, 0.29, 0.37, 1), 2)
+            box(32, 10, 296, 8, (0.13, 0.18, 0.25, 1), 2)
 
 def build_chat_cockpit(app):
     app.lang = getattr(app, "lang", {})
@@ -87,7 +145,7 @@ def build_chat_cockpit(app):
         saved_experience = ""
     if saved_experience not in {"chat", "office"}:
         saved_experience = ""
-    root = BoxLayout(orientation="horizontal", spacing=0)
+    root = BoxLayout(orientation="horizontal", spacing=0, padding=[0, dp(24), 0, dp(12)])
     sidebar = Surface(orientation="vertical", size_hint_x=None, width=dp(78), padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
     root.add_widget(sidebar)
 
@@ -110,13 +168,13 @@ def build_chat_cockpit(app):
         sidebar.add_widget(btn)
         nav_buttons[key] = btn
 
-    nav("Chat", "chat", "✦")
-    nav("Escritório", "office", "▦")
-    nav("Modo", "experience", "⚙")
-    nav("PC", "pc", "⌂")
-    nav("Ficheiros", "files", "□")
+    nav("Chat", "chat", "C")
+    nav("Escritório", "office", "E")
+    nav("Modo", "experience", "M")
+    nav("PC", "pc", "P")
+    nav("Ficheiros", "files", "F")
     nav("Humano", "human", "!")
-    nav("Readiness", "ready", "◌")
+    nav("Readiness", "ready", "R")
     sidebar_spacer = Widget()
     sidebar.add_widget(sidebar_spacer)
     paper_button = RoundedButton(text="PAPER", fill=(0.12, 0.18, 0.17, 1), size_hint_y=None, height=dp(42))
@@ -126,7 +184,7 @@ def build_chat_cockpit(app):
 
     def header(title, subtitle):
         bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48), spacing=dp(8))
-        menu = RoundedButton(text="☰", fill=PANEL, size_hint_x=None, width=dp(46))
+        menu = RoundedButton(text="MENU", fill=PANEL, size_hint_x=None, width=dp(46))
         menu.bind(on_release=lambda *_: toggle_sidebar())
         bar.add_widget(menu)
         col = BoxLayout(orientation="vertical")
@@ -274,6 +332,130 @@ def build_chat_cockpit(app):
             color=MUTED,
         ))
         content.add_widget(banner)
+
+        # Architectural preview uses a fixed internal coordinate system and uniform scaling.
+        # The building itself is never stretched to fill a portrait or landscape viewport.
+        building_card = Surface(
+            orientation="vertical",
+            padding=dp(8),
+            spacing=dp(3),
+            size_hint_y=None,
+            height=dp(188),
+            fill=(0.025, 0.045, 0.065, 1),
+        )
+        building_card.add_widget(_label(
+            "EDIFÍCIO · PLANTA PROPORCIONAL",
+            size=10,
+            color=ACCENT,
+            bold=True,
+            size_hint_y=None,
+            height=dp(20),
+        ))
+        building_preview = BuildingPreview(size_hint=(1, 1))
+        building_card.add_widget(building_preview)
+        content.add_widget(building_card)
+
+        # Animated offline scene: visual-only agents move between department stations.
+        # It deliberately runs without the backend and never claims real work is happening.
+        scene = Surface(
+            orientation="vertical",
+            padding=dp(8),
+            spacing=dp(4),
+            size_hint_y=None,
+            height=dp(170),
+            fill=(0.025, 0.045, 0.065, 1),
+        )
+        scene.add_widget(_label(
+            "VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL",
+            size=10,
+            color=ACCENT,
+            bold=True,
+            size_hint_y=None,
+            height=dp(20),
+        ))
+        stage = FloatLayout(size_hint_y=1)
+        scene.add_widget(stage)
+        stage.bind(size=lambda *_: place_agents())
+        stage.bind(pos=lambda *_: place_agents())
+
+        stations = [
+            ("CEO", "ceo", 0.04),
+            ("RADAR", "radar", 0.28),
+            ("ANÁLISE", "analysis", 0.52),
+            ("MEMÓRIA", "memory", 0.76),
+        ]
+        for station_name, _room_key, x_fraction in stations:
+            marker = _label(station_name, size=8, color=MUTED)
+            marker.size_hint = (None, None)
+            marker.size = (dp(64), dp(18))
+            marker.pos_hint = {"x": x_fraction, "y": 0.03}
+            stage.add_widget(marker)
+
+        agents = []
+        agent_specs = [
+            ("o\n/|\\\n/ \\", "CEO", "ceo", ACCENT, 0.0),
+            ("o\n/|\\\n/ \\", "RADAR", "radar", GREEN, 0.7),
+            ("o\n/|\\\n/ \\", "ANÁLISE", "analysis", (1.0, 0.72, 0.30, 1), 1.4),
+        ]
+
+        def place_agents(*_):
+            if not stage.width or not stage.height:
+                return
+            for index, agent in enumerate(agents):
+                if agent.get("moving"):
+                    continue
+                agent["widget"].y = stage.y + stage.height * (0.40 + index * 0.12)
+                agent["widget"].x = stage.x + stage.width * (0.04 + index * 0.08)
+
+        for figure, role, room_key, tint, delay in agent_specs:
+            avatar = Button(
+                text=figure + "\n" + role,
+                font_size=dp(9),
+                color=tint,
+                background_normal="",
+                background_down="",
+                background_color=(0.07, 0.13, 0.18, 1),
+                size_hint=(None, None),
+                size=(dp(62), dp(64)),
+            )
+            avatar.bind(
+                on_release=lambda _button, key=room_key, name=role: setattr(
+                    render_status,
+                    "text",
+                    f"Agente visual: {name} · departamento {key.upper()} · demonstração offline; sem tarefa real confirmada",
+                )
+            )
+            stage.add_widget(avatar)
+            agents.append({"widget": avatar, "role": role, "room": room_key, "delay": delay, "moving": False})
+
+        def animate_agents(*_):
+            if stage.width <= dp(80):
+                return
+            for index, agent in enumerate(agents):
+                widget = agent["widget"]
+                if agent["moving"]:
+                    continue
+                agent["moving"] = True
+                start_x = stage.x + dp(8) + index * dp(18)
+                end_x = max(stage.x + dp(8), stage.right - widget.width - dp(8))
+                widget.x = start_x
+                widget.y = stage.y + stage.height * (0.35 + index * 0.13)
+                def begin(_dt, item=agent, w=widget, left=start_x, right=end_x):
+                    if not w.parent:
+                        item["moving"] = False
+                        return
+                    forward = Animation(x=right, duration=4.0 + index, t="in_out_sine")
+                    backward = Animation(x=left, duration=4.0 + index, t="in_out_sine")
+                    def again(*_args):
+                        if w.parent:
+                            (backward if w.x >= right - dp(2) else forward).start(w)
+                    forward.bind(on_complete=lambda *_args: backward.start(w))
+                    backward.bind(on_complete=lambda *_args: forward.start(w))
+                    forward.start(w)
+                Clock.schedule_once(begin, agent["delay"])
+        Clock.schedule_once(animate_agents, 0.3)
+        stage.bind(size=lambda *_: Clock.schedule_once(animate_agents, 0.2) if not any(a["moving"] for a in agents) else None)
+        content.add_widget(scene)
 
         mode_row = BoxLayout(
             orientation="horizontal",

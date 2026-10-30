@@ -22,7 +22,9 @@ class MobileStartupContractTests(unittest.TestCase):
 
     def test_virtual_office_is_offline_and_exposes_adaptive_modes(self) -> None:
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
-        self.assertIn('nav("Escritório", "office", "▦")', source)
+        self.assertIn('nav("Escritório", "office", "E")', source)
+        self.assertIn('padding=[0, dp(24), 0, dp(12)]', source)
+        self.assertIn('RoundedButton(text="MENU", fill=PANEL', source)
         self.assertIn('pages["office"]=office_page', source)
         self.assertIn('"DEMO OFFLINE · ESCRITÓRIO SEM MOTOR"', source)
         self.assertIn("office_preferences.json", source)
@@ -50,6 +52,25 @@ class MobileStartupContractTests(unittest.TestCase):
             with self.subTest(department=department):
                 self.assertIn(department, office)
 
+    def test_virtual_building_preview_preserves_architectural_proportions(self) -> None:
+        source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("class BuildingPreview(Widget):", source)
+        self.assertIn("scale = min(self.width / base_w, self.height / base_h)", source)
+        self.assertIn('"EDIFÍCIO · PLANTA PROPORCIONAL"', source)
+        self.assertIn("building_preview = BuildingPreview(size_hint=(1, 1))", source)
+        self.assertIn("building_card.add_widget(building_preview)", source)
+
+    def test_offline_office_has_lightweight_animated_agents(self) -> None:
+        source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("from kivy.animation import Animation", source)
+        self.assertIn("from kivy.uix.floatlayout import FloatLayout", source)
+        self.assertIn("Animation(x=right, duration=4.0 + index, t=\"in_out_sine\")", source)
+        self.assertIn("Clock.schedule_once(animate_agents, 0.3)", source)
+        self.assertIn("VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL", source)
+        self.assertIn("demonstração offline; sem tarefa real confirmada", source)
+        self.assertIn("HD 3D (futuro)", source)
+        self.assertIn("fallback seguro", source)
+
     def test_startup_failure_has_local_diagnostic_fallback(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn(
@@ -60,12 +81,23 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("traceback.format_tb", source)
         self.assertNotIn('self._request("POST", "/startup-error"', source)
 
-    def test_emulator_smoke_accepts_first_run_chooser_and_saved_chat(self) -> None:
+    def test_emulator_smoke_captures_office_in_verified_viewports(self) -> None:
         script = (ROOT.parent / ".github" / "scripts" / "android-emulator-smoke.sh").read_text(encoding="utf-8")
+        office_flow = (ROOT.parent / ".maestro" / "android-office-smoke.yaml").read_text(encoding="utf-8")
+        spec = (ROOT / "buildozer.spec").read_text(encoding="utf-8")
         self.assertIn("Como queres usar o Trader", script)
-        self.assertIn("Chat simples", script)
-        self.assertIn("Como posso ajudar", script)
-        self.assertIn("Neither the first-run chooser nor the saved chat screen", script)
+        self.assertIn("vst-chooser.png", script)
+        self.assertIn("vst-portrait.png", script)
+        self.assertIn("vst-landscape.png", script)
+        self.assertIn("vst-tablet-landscape.png", script)
+        self.assertIn('struct.unpack(">II", data[16:24])', script)
+        self.assertIn('point: "60%, 70%"', office_flow)
+        self.assertIn("vst-office-entry.png", script)
+        self.assertIn("office-ocr.txt", script)
+        ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("label.text_size = (label.width, None)", ui_source)
+        self.assertIn("orientation = portrait", spec)
+
 
 
 if __name__ == "__main__":
