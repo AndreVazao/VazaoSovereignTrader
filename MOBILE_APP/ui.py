@@ -742,4 +742,24 @@ def build_chat_cockpit(app):
         show_page(saved_experience)
     else:
         show_page("experience")
+
+    # Recalculate responsive navigation and office grid after Android rotates.
+    def adapt_to_viewport(_window, width, height):
+        nonlocal phone_layout
+        phone_layout = width <= dp(520)
+        sidebar.width = dp(54) if phone_layout else dp(78)
+        for button in nav_buttons.values():
+            button.font_size = dp(9 if phone_layout else 10)
+        office_grid = getattr(app, "office_room_grid", None)
+        if office_grid is not None:
+            office_grid.cols = 1 if phone_layout else 2
+            office_grid.spacing = dp(6 if phone_layout else 8)
+        if hasattr(app, "office_mode_selector"):
+            app.office_mode_selector.font_size = dp(10 if phone_layout else 12)
+        # Refresh the currently displayed page so it measures against the new width.
+        if app.current_page in page_instances:
+            current = page_instances[app.current_page]
+            page_area.remove_widget(current)
+            page_area.add_widget(current)
+    Window.bind(on_resize=adapt_to_viewport)
     return root
