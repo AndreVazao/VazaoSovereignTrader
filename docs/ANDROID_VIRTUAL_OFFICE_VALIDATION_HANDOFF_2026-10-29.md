@@ -31,7 +31,7 @@ No checkpoint após a documentação Diorama, o HEAD era `e0b8b287e321c21275c446
 
 - Adicionado `.github/workflows/diorama-office-prototype.yml`: VM Ubuntu, clone verificado do playbook, renderização isolada Three.js/Playwright e artefactos PNG + `report.json` para portrait, landscape e tablet.
 - O protótipo não é a app Android nem uma cena oficial já existente no Diorama; é uma experiência descartável baseada no seu estilo/fluxo, sem tocar no renderer Kivy ou no backend.
-- Só aceitar a evidência após o workflow correr com sucesso e os artefactos serem descarregados/inspecionados. Não afirmar que existem screenshots até o run publicar o artefacto.
+- Run #8 (`41132230066`) concluiu com sucesso e o artefacto foi descarregado e inspecionado. A sala e os rótulos estão enquadrados em portrait, landscape e tablet no protótipo isolado. Isso valida apenas a renderização do protótipo em Chromium/SwiftShader numa VM, não a aplicação Android atual nem desempenho em dispositivo físico.
 
 ## Avaliação Diorama
 
