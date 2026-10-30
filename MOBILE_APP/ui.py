@@ -6,7 +6,7 @@ from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.uix.floatlayout import FloatLayout
 from kivy.storage.jsonstore import JsonStore
-from kivy.graphics import Color, RoundedRectangle
+from kivy.graphics import Color, RoundedRectangle, Rectangle
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -83,6 +83,35 @@ def _label(text="", size=14, color=TEXT, bold=False, **kwargs):
 def _spacer(height=8):
     return Widget(size_hint_y=None, height=dp(height))
 
+
+
+class PixelAgent(Widget):
+    """Tiny low-cost pixel-art avatar drawn with a few rectangles."""
+    def __init__(self, tint=ACCENT, **kwargs):
+        super().__init__(**kwargs)
+        self.tint = tint
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        unit = min(self.width / 12, self.height / 16)
+        ox = self.x + (self.width - unit * 12) / 2
+        oy = self.y + (self.height - unit * 16) / 2
+        with self.canvas:
+            Color(0.91, 0.72, 0.53, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 11*unit), size=(4*unit, 4*unit))
+            Color(0.12, 0.15, 0.20, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 14*unit), size=(4*unit, unit))
+            Color(*self.tint)
+            Rectangle(pos=(ox + 3*unit, oy + 6*unit), size=(6*unit, 5*unit))
+            Rectangle(pos=(ox + unit, oy + 6*unit), size=(2*unit, 5*unit))
+            Rectangle(pos=(ox + 9*unit, oy + 6*unit), size=(2*unit, 5*unit))
+            Color(0.13, 0.17, 0.23, 1)
+            Rectangle(pos=(ox + 3*unit, oy + 2*unit), size=(2*unit, 4*unit))
+            Rectangle(pos=(ox + 7*unit, oy + 2*unit), size=(2*unit, 4*unit))
 
 
 class BuildingPreview(Widget):
@@ -407,31 +436,25 @@ def build_chat_cockpit(app):
             for index, agent in enumerate(agents):
                 if agent.get("moving"):
                     continue
-                agent["widget"].y = stage.y + stage.height * (0.40 + index * 0.12)
                 lane_centres = (0.16, 0.50, 0.84)
                 widget = agent["widget"]
+                # Keep avatars on one baseline; the former vertical offsets overlapped
+                # 64dp text cards inside the short mobile scene.
                 widget.x = stage.x + stage.width * lane_centres[index] - widget.width / 2
+                widget.y = stage.y + max(dp(4), (stage.height - widget.height) * 0.58)
+                label = agent.get("label")
+                if label is not None:
+                    label.center_x = widget.center_x
+                    label.y = max(stage.y, widget.y - dp(17))
 
         for figure, role, room_key, tint, delay in agent_specs:
-            avatar = Button(
-                text=figure + "\n" + role,
-                font_size=dp(9),
-                color=tint,
-                background_normal="",
-                background_down="",
-                background_color=(0.07, 0.13, 0.18, 1),
-                size_hint=(None, None),
-                size=(dp(62), dp(64)),
-            )
-            avatar.bind(
-                on_release=lambda _button, key=room_key, name=role: setattr(
-                    render_status,
-                    "text",
-                    f"Agente visual: {name} · departamento {key.upper()} · demonstração offline; sem tarefa real confirmada",
-                )
-            )
+            avatar = PixelAgent(tint=tint, size_hint=(None, None), size=(dp(36), dp(48)))
             stage.add_widget(avatar)
-            agents.append({"widget": avatar, "role": role, "room": room_key, "delay": delay, "moving": False})
+            role_label = _label(role, size=8, color=tint, halign="center",
+                                 size_hint=(None, None), size=(dp(70), dp(16)))
+            stage.add_widget(role_label)
+            agents.append({"widget": avatar, "label": role_label, "role": role,
+                           "room": room_key, "delay": delay, "moving": False})
 
         def animate_agents(*_):
             if stage.width <= dp(80):
@@ -575,9 +598,12 @@ def build_chat_cockpit(app):
                 fill = (0.075, 0.14, 0.20, 1)
                 height = 82
                 font_size = 10
-            grid.cols = 1 if phone_layout else 2
-            if phone_layout:
+            viewport_width = Window.width
+            grid.cols = 1 if viewport_width <= dp(520) else (3 if viewport_width >= dp(1000) else 2)
+            if viewport_width <= dp(520):
                 height = max(height, 70)
+            elif viewport_width >= dp(1000):
+                height = max(height, 88)
             grid.row_default_height = dp(height)
             for room in rooms:
                 button = RoundedButton(
