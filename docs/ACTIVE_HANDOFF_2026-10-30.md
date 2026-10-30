@@ -29,7 +29,7 @@
 - O screenshot físico fornecido pelo utilizador revelou layout apertado e avatares sobrepostos; o utilizador também reportou ausência de rotação.
 - PR #522 reduz largura da navegação em telemóvel, ajusta a grelha a 1/2/3 colunas, substitui caracteres por figuras pixel-art leves e tenta adaptar layout ao resize.
 - `MOBILE_APP/buildozer.spec` usa `orientation = all`, mas é experimental devido a falha histórica do Buildozer com esse valor. Não afirmar rotação resolvida sem build + screenshots portrait/landscape/tablet inspecionadas.
-- Run APK #126 (41110052887) e Emulator UI Smoke #83 (41110053343) falharam antes da compilação/emulador porque o teste de contrato esperava a frase antiga `demonstração offline; sem tarefa real confirmada`, removida quando as personagens de texto foram substituídas. O teste foi atualizado para verificar o aviso offline efetivamente apresentado; revalidar num run novo.
+- Runs APK #126/#130 (41110052887/41117040326) e smoke #83 (41110053343) falharam primeiro por teste contratual desatualizado; após corrigi-lo, os runs #131 e #88 revelaram que `orientation = all` é inválido e a compilação falhou. A orientação foi alterada para a lista explícita de quatro orientações e o contrato atualizado. Revalidar no run novo; não existem ainda capturas atuais válidas.
 - Não há APK/capturas atuais validados destes runs falhados. Artefactos de runs anteriores não provam o estado atual.
 - Escritório continua demo offline, não ligado ao runtime real. Validação física Android/ADB e ligação PC↔telefone permanecem NOT RUN/BLOCKED.
 
@@ -37,7 +37,7 @@
 - Workflow: `.github/workflows/obscura-cloud-smoke.yml`.
 - Foi acrescentada comparação cloud no mesmo runner Ubuntu: fixture HTML local, execução JS/DOM, smoke funcional e 7 repetições por motor, com medições e JSON de resultados como artefacto.
 - O benchmark inclui o arranque do processo e é limitado a fixture sintética; não demonstra vantagem em exchanges nem no PC antigo.
-- Resultado do novo workflow ainda não consultado nesta atualização; estado do benchmark = PENDING/NOT RUN até obter run/artefacto atual.
+- Run #7 (ID 41117040323, SHA `ac11fe96f0c67d6a8926ed1787322356fbb96551`) passou smoke para ambos e produziu artefacto #13005848220. Obscura 0.2.5: 7/7, mediana 23,65 ms; Chrome headless: 7/7, mediana 728,61 ms. A medição inclui novo processo por tentativa e é apenas uma fixture local; provável custo de arranque do Chrome CLI, não prova superioridade em browser persistente/exchanges. Resultado preliminar, sem seleção automática de produção.
 - Fallback runtime: Chromium/adaptador atual; ainda não declarar implementado um failover automático de produção. Nenhuma integração Obscura no caminho crítico até testes repetíveis justificarem.
 
 ## Próximos passos
