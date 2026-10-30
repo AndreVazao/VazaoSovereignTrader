@@ -27,6 +27,12 @@ O Diorama é um playbook/kit de cenas de diorama pixel-art em Three.js, não uma
 - Não copiar media/preview nem assets de terceiros sem verificar origem, licença e atribuição. O estado MIT do repositório não concede automaticamente direitos sobre assets externos nele referenciados.
 - Um render bonito não pode bloquear nem competir com o motor de trading. A camada gráfica deve continuar opcional, isolada e sem autoridade sobre estados financeiros.
 
+## Workflow de protótipo em VM
+
+Foi adicionado `.github/workflows/diorama-office-prototype.yml`. O workflow, quando executado, usa uma VM Ubuntu do GitHub Actions para clonar e verificar o commit do playbook Diorama, instalar Node/Three.js/Playwright e renderizar um protótipo visual isolado de uma sala com três postos e avatares low-poly/pixel-like. Captura três viewports (390×844, 844×390 e 1180×820), verifica canvas, erros JavaScript e rótulo DEMO OFFLINE, e publica PNGs + `report.json` como artefacto por 14 dias. O protótipo é temporário e não altera a app nem importa assets externos do Diorama.
+
+**Limitação importante:** o repositório Diorama é um playbook e um kit de módulos, não uma app pronta para abrir; por isso, esta primeira VM é uma prova visual baseada em Three.js e no fluxo determinístico recomendado, não uma execução direta de uma demo oficial do Diorama. O resultado só pode ser avaliado depois do workflow correr e os screenshots serem inspecionados. Não declarar sucesso antecipadamente.
+
 ## Experiência mínima proposta (após estabilizar o APK atual)
 
 1. Criar um protótipo descartável numa pasta/branch isolada, sem dependência do motor VST.
