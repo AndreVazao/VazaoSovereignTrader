@@ -123,8 +123,12 @@ jobs:
               const target=new THREE.Vector3(0,.65,0); camera.lookAt(target);
               let zoom=1;
               function resize(){
-                const w=innerWidth,h=innerHeight, aspect=w/h, span=zoom* (h< w ? 5.8 : 7.2);
-                camera.left=-span*aspect/2; camera.right=span*aspect/2;camera.top=span/2;camera.bottom=-span/2;
+                const w=innerWidth,h=innerHeight, aspect=w/h;
+                // Fit the whole slab horizontally even on narrow portrait viewports.
+                const horizontalSpan=zoom*Math.max(10.5,6.8*aspect);
+                const verticalSpan=horizontalSpan/aspect;
+                camera.left=-horizontalSpan/2; camera.right=horizontalSpan/2;
+                camera.top=verticalSpan/2; camera.bottom=-verticalSpan/2;
                 camera.updateProjectionMatrix();renderer.setSize(w,h);document.getElementById('viewport').textContent=w+'×'+h+' · zoom '+zoom.toFixed(1)+'×';
                 renderer.render(scene,camera);
               }
