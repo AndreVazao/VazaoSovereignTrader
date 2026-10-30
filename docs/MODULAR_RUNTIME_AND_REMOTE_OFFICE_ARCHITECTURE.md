@@ -66,12 +66,13 @@ Se um motor 3D futuro exigir GPU ou recursos acima do dispositivo, uma máquina 
 
 1. Auditar o core existente e os contratos reais antes de criar abstrações duplicadas.
 2. Consolidar testes headless de core e garantir que fechar a UI não interrompe o runtime.
-3. Adicionar diagnóstico somente leitura (`vst doctor --json`) e manifesto versionado de componentes.
-4. Implementar perfis declarativos, limites conservadores e adaptadores de serviço Linux/Windows sem alterações privilegiadas implícitas.
-5. Definir interface do browser, timeouts, health check e fallback; só integrar Obscura após benchmark.
-6. Definir API/eventos do cockpit com autenticação/autorização e estado de saúde real.
-7. Validar exportação/restauro/migração em CI/VM descartável; documentar o que exige nova autenticação manual.
-8. Só então avaliar cliente web e renderização remota.
+3. **Primeiro incremento implementado na branch atual:** `PC_ENGINE/tools/doctor.py` e `tests/test_runtime_doctor.py` introduzem diagnóstico JSON somente leitura; a validação CI ainda está pendente. O comando não cria diretórios, não inicia serviços e não faz pedidos de rede.
+4. Adicionar um manifesto versionado de componentes e perfil de capacidades após validar o doctor.
+5. Implementar perfis declarativos, limites conservadores e adaptadores de serviço Linux/Windows sem alterações privilegiadas implícitas.
+6. Definir interface do browser, timeouts, health check e fallback; só integrar Obscura após benchmark e validar a fronteira de rede/pinning.
+7. Definir API/eventos do cockpit com autenticação/autorização e estado de saúde real.
+8. Validar exportação/restauro/migração em CI/VM descartável; documentar o que exige nova autenticação manual.
+9. Só então avaliar cliente web e renderização remota.
 
 ## Métricas obrigatórias
 
@@ -89,3 +90,4 @@ PAPER/read-only continua padrão. Nenhuma ordem real ou movimentação de fundos
 - Renderer dedicado/streaming: FUTURO, não implementado.
 - Browser Obscura vs Chromium: benchmark cloud por executar; vantagem de desempenho ainda NÃO COMPROVADA.
 - Migração multi-nó/instalador adaptativo: arquitetura definida; implementação por etapas pendente.
+- `vst doctor --json`: protótipo de diagnóstico read-only criado nesta branch; ainda sem confirmação de CI no HEAD atual.
