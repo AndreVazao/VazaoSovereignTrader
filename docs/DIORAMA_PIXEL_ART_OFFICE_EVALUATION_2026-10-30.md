@@ -36,7 +36,7 @@ Foi adicionado `.github/workflows/diorama-office-prototype.yml`. O workflow, qua
 ### Evidência da primeira execução
 - Run #6/ID `41131895430` passou e publicou o artefacto `vst-diorama-office-vm-screenshots`; o relatório JSON marcou as três viewports como PASS e não registou erros de JavaScript.
 - A inspeção visual manual dos PNGs encontrou um defeito que o teste técnico não detetava: a câmara cortava parte da cena/rótulos em portrait e apertava o enquadramento em landscape. Isto demonstra que um teste de canvas/JS não basta para validar layout.
-- Corrigi a fórmula de enquadramento para priorizar a largura da sala em ecrãs estreitos e lancei nova execução no commit `a350679d1dcf3371f0167756bc926d5b97d47a16` (run #7/ID `41132052504`). No momento deste registo, essa execução ainda estava em curso; a nova captura deve ser inspecionada antes de declarar o layout aceitável.
+- Corrigi a fórmula de enquadramento para priorizar a largura da sala em ecrãs estreitos e lancei nova execução no commit `a350679d1dcf3371f0167756bc926d5b97d47a16` (run #7/ID `41132052504`). A inspeção da execução #7 confirmou que a sala fica enquadrada nos três formatos. O segundo defeito visual — o HUD a cobrir o rótulo MARKET RADAR em landscape — foi corrigido colocando o HUD no canto inferior esquerdo. O run #8/ID `41132230066` concluiu com sucesso e os PNGs foram inspecionados: rótulos visíveis e sala inteira enquadrada nos três viewports. O teste continua a ser uma prova visual básica, não uma validação de usabilidade ou desempenho em telemóvel físico.
 
 ## Experiência mínima proposta (após estabilizar o APK atual)
 
@@ -46,6 +46,13 @@ Foi adicionado `.github/workflows/diorama-office-prototype.yml`. O workflow, qua
 4. Medir tempo de arranque, FPS/fluidez observada, RAM aproximada, tamanho de dependências, legibilidade e falhas de orientação em dispositivo/emulador suportado.
 5. Comparar lado a lado com a UI atual no mesmo ambiente. Não declarar vencedor sem evidência repetível.
 6. Manter a UI Kivy como fallback. Só considerar integração se o protótipo demonstrar ganho visual relevante sem regressão de recursos, compatibilidade ou estabilidade.
+
+## Resultado observado no protótipo VM (2026-10-30)
+
+- Run #8: [GitHub Actions](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/41132230066) — sucesso; artefacto `vst-diorama-office-vm-screenshots`.
+- O relatório JSON marcou PASS para 390×844, 844×390 e 1180×820; nenhum erro de JavaScript, canvas presente e dimensões corretas.
+- Inspeção manual dos três PNGs: cena inteira visível e HUD sem sobrepor os rótulos após a última correção. Em portrait, a sala ocupa uma área relativamente pequena para caber toda; os botões de zoom estão presentes, mas o fluxo de zoom ainda não foi testado automaticamente.
+- Isto confirma que o protótipo Three.js pode ser renderizado em Chromium headless/SwiftShader numa VM Linux. **Não confirma** desempenho em Android, qualidade final, integração com Kivy ou que o kit Diorama seja superior à UI atual.
 
 ## Critérios de aprovação
 
