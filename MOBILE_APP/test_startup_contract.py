@@ -22,7 +22,9 @@ class MobileStartupContractTests(unittest.TestCase):
 
     def test_virtual_office_is_offline_and_exposes_adaptive_modes(self) -> None:
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
-        self.assertIn('nav("Escritório", "office", "▦")', source)
+        self.assertIn('nav("Escritório", "office", "E")', source)
+        self.assertIn('padding=[0, dp(24), 0, dp(12)]', source)
+        self.assertIn('RoundedButton(text="MENU", fill=PANEL', source)
         self.assertIn('pages["office"]=office_page', source)
         self.assertIn('"DEMO OFFLINE · ESCRITÓRIO SEM MOTOR"', source)
         self.assertIn("office_preferences.json", source)
