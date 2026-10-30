@@ -41,7 +41,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: false
 
       - name: Install isolated prototype dependencies
         working-directory: /tmp
