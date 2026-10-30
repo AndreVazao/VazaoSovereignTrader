@@ -27,6 +27,7 @@ def test_doctor_is_read_only_and_reports_capabilities(tmp_path: Path):
     assert report["safety"]["effective_mode"] == "PAPER"
     assert report["checks"]["config"]["ok"] is True
     assert report["checks"]["dependencies"]["ok"] is True
+    assert report["status"] == "READY"
     assert "private_secret" not in json.dumps(report)
     assert not (tmp_path / "PC_ENGINE" / "data").exists()
 
