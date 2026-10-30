@@ -27,6 +27,12 @@ No checkpoint após a documentação Diorama, o HEAD era `e0b8b287e321c21275c446
 - Pixel-art pode melhorar a apresentação, mas manter modos simples e fallback leve.
 - A vista do escritório não deve depender da disponibilidade do backend para renderizar a demonstração offline.
 
+## Workflow VM — capturas do protótipo
+
+- Adicionado `.github/workflows/diorama-office-prototype.yml`: VM Ubuntu, clone verificado do playbook, renderização isolada Three.js/Playwright e artefactos PNG + `report.json` para portrait, landscape e tablet.
+- O protótipo não é a app Android nem uma cena oficial já existente no Diorama; é uma experiência descartável baseada no seu estilo/fluxo, sem tocar no renderer Kivy ou no backend.
+- Só aceitar a evidência após o workflow correr com sucesso e os artefactos serem descarregados/inspecionados. Não afirmar que existem screenshots até o run publicar o artefacto.
+
 ## Avaliação Diorama
 
 A análise documental de `sloemo01/diorama` está registada em [DIORAMA_PIXEL_ART_OFFICE_EVALUATION_2026-10-30.md](DIORAMA_PIXEL_ART_OFFICE_EVALUATION_2026-10-30.md).
