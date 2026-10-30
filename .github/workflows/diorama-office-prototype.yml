@@ -66,7 +66,7 @@ jobs:
             <style>
               * { box-sizing: border-box }
               html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#f4f0e7; color:#263238; font-family:system-ui,sans-serif }
-              #hud { position:absolute; z-index:2; top:12px; left:12px; max-width:calc(100% - 24px); padding:8px 11px; border:1px solid #d4cbb9; border-radius:8px; background:rgba(255,253,247,.94); font-size:12px; line-height:1.35 }
+              #hud { position:absolute; z-index:2; bottom:12px; left:12px; max-width:calc(100% - 90px); padding:8px 11px; border:1px solid #d4cbb9; border-radius:8px; background:rgba(255,253,247,.94); font-size:12px; line-height:1.35 }
               #hud strong { display:block; font-size:13px }
               #zoom { position:absolute; z-index:2; right:12px; bottom:12px; display:flex; gap:8px }
               button { border:1px solid #c5b9a4; border-radius:8px; background:#fffdf7; padding:10px 14px; font-size:16px }
