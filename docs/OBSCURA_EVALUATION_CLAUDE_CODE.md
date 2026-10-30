@@ -1,213 +1,45 @@
-# Sovereign Trader — Plano autónomo de auditoria local e avaliação da Obscura
+# Sovereign Trader — avaliação cloud-first da Obscura
 
-**Objetivo:** quando este documento for entregue ao Claude Code no PC do utilizador, executar uma auditoria local repetível do VazaoSovereignTrader e uma comparação técnica entre Obscura e Chromium + Playwright. Produzir evidências e um relatório Markdown na branch de trabalho, depois sincronizar os resultados com o GitHub.
+**Objetivo:** avaliar se a Obscura pode ser um motor headless leve para tarefas de pesquisa/leitura dos agentes do VazaoSovereignTrader, sem depender do PC do utilizador, do Desktop Commander, do Claude Code ou dos testes do DGM-MAT.
 
-**Estado deste documento:** plano de execução; não é prova de que os testes locais foram executados. Não declarar nenhum resultado antes de o medir.
+**Estado:** avaliação automatizada em cloud em curso. Este documento não declara resultados de benchmark que ainda não tenham sido medidos. Os resultados de cada execução devem distinguir PASS, FAIL, BLOCKED e NOT RUN.
 
-## 0. Regras de execução autónoma
+## Decisão de arquitetura inicial
 
-Trabalha autonomamente, sem pedir confirmação a cada passo, dentro do âmbito abaixo. Primeiro inspeciona o repositório, as instruções locais e o estado do Git. Cria um plano curto e executa-o até ao fim. Em caso de falha, recolhe diagnóstico, tenta uma alternativa segura e continua os restantes testes. Não fiques bloqueado por um teste que não possa ser realizado.
+- Não integrar Obscura no caminho crítico do Trader antes de existir evidência.
+- Manter o adaptador de browser atual como fallback; Obscura deve ser um adaptador opcional e isolado.
+- PAPER/read-only por defeito. Sem credenciais reais, perfis autenticados, ordens, transferências ou operações financeiras.
+- Não usar o modo stealth para contornar proteções de exchanges. O teste avalia desempenho/compatibilidade, não evasão.
+- Obscura publica o seu código sob Apache-2.0, segundo o repositório oficial: https://github.com/h4ckf0r0day/obscura. Não copiar o seu código para o Trader; instalar apenas artefactos/releases oficiais e registar a versão.
 
-Não pedir ao utilizador autorização repetidamente para operações normais e reversíveis de diagnóstico, instalação de dependências de desenvolvimento, execução de testes, criação de diretórios temporários, captura de logs, instalação de um APK de desenvolvimento no dispositivo explicitamente ligado e criação de commits na branch de trabalho dedicada a esta auditoria.
+## O que a cloud consegue testar sem o PC
 
-**Não contornar** prompts de segurança do sistema operativo, permissões Android/ADB, autenticação MFA/CAPTCHA, políticas de rede ou controlos de acesso. Se uma autorização privilegiada, segredo, dispositivo ou confirmação de segurança for realmente indispensável, não a simules nem a contornes: regista o bloqueio, executa os testes restantes e continua. Não solicitar segredos ao utilizador no chat.
+1. Disponibilidade do binário Linux oficial, arranque, versão e encerramento.
+2. Navegação a uma página HTML local controlada, leitura de título/texto e execução JavaScript.
+3. Comportamento em DOM dinâmico, timeouts, URL inválido e servidor indisponível, quando o ambiente permitir.
+4. Benchmark repetível em runner Linux contra Chromium headless usando a mesma página local, número de repetições, timeout e condições. Registar versão, mediana, p95 quando houver amostra suficiente, taxa de sucesso e RSS/CPU se medidos de forma fiável.
+5. Testes de integração Playwright via CDP, apenas depois de confirmar o protocolo suportado pela versão instalada.
+6. Guardar logs sanitizados e resultados JSON/Markdown como artefactos de workflow.
 
-### Limites de segurança obrigatórios
+A cloud **não** substitui testes no PC antigo: consumo de RAM, drivers, fontes, firewall, latência local, interação com o cockpit e estabilidade prolongada no hardware real continuam por validar. Não declarar esses testes como PASS.
 
-- Sovereign Trader permanece em PAPER/read-only. Não ativar live trading, não submeter ordens, não movimentar fundos e não testar levantamentos.
-- Não usar credenciais reais nas suites automáticas ou em CI.
-- Não escrever palavras-passe, API keys, tokens, cookies, cabeçalhos de autenticação ou dados pessoais em logs, screenshots, artefactos ou relatórios.
-- Não copiar perfis de browser autenticados para o Git, para a cloud ou para o telemóvel.
-- Não desativar controlos de segurança para conseguir um teste verde.
-- Não fazer merge de alterações de código automaticamente. Publicar numa branch dedicada e abrir/atualizar PR apenas se apropriado.
-- Nunca sobrescrever alterações locais do utilizador. Se a working tree estiver suja, inspecionar e preservar; não usar reset --hard, clean -fd, checkout destrutivo ou stash/pop sem avaliar consequências.
-- Não declarar um teste aprovado sem evidência reproduzível. Distinguir PASS, FAIL, BLOCKED e NOT RUN.
+## Critérios antes de integrar
 
-## 1. Preparação e sincronização GitHub → PC
+- Sem falhas críticas de segurança ou estabilidade.
+- Tarefas funcionais de leitura corretas e taxa de sucesso consistente.
+- Vantagem de desempenho/recursos medida e repetível que justifique o custo de manter outro motor.
+- Compatibilidade documentada com as páginas e APIs realmente usadas pelos departamentos.
+- Fallback para o motor atual em páginas incompatíveis, sem bloquear o trabalho dos agentes.
 
-1. Confirmar o repositório correto: `AndreVazao/VazaoSovereignTrader`.
-2. Inspecionar `git status --short --branch`, branch atual, remotes, commits locais e alterações não commitadas.
-3. Ler as instruções do projeto (incluindo `AGENTS.md`, `CLAUDE.md`, README e docs relevantes, caso existam).
-4. Consultar GitHub e confirmar o estado atual de `main`, PRs e checks. Não confiar apenas nos SHAs fixados neste documento; este documento pode ficar desatualizado.
-5. Sincronizar a branch de trabalho com o código validado atual sem destruir alterações locais. Preferir fetch e uma branch nova a operações destrutivas. Não integrar alterações de uma PR que ainda não esteja mergeada ou validada.
-6. Criar/usar uma branch com nome semelhante a `test/obscura-local-audit-YYYY-MM-DD`, baseada na versão validada mais recente de `main`.
-7. Registar SHA inicial, sistema operativo, arquitetura, versão Python, Node (se necessário), Git, ADB e Tailscale. Redigir segredos e identificadores sensíveis.
+Resultado possível: ADOTAR, ADOTAR PARCIALMENTE, MANTER COMO ESTÁ ou INCONCLUSIVO. Não escolher critérios depois de observar os resultados para favorecer um motor.
 
-## 2. Inventário do Sovereign Trader
+## Plano de execução
 
-Inspecionar e documentar, com caminhos de ficheiros reais:
+- **Fase A — CI/cloud:** executar testes Linux isolados com páginas de teste locais e recolher artefactos. Nenhum acesso ao PC do utilizador é necessário.
+- **Fase B — benchmark:** comparar Obscura e Chromium com tarefas equivalentes; separar resultados de arranque frio/aquecido e publicar resultados brutos.
+- **Fase C — integração experimental:** só se a fase B justificar, criar adaptador opcional sob feature flag e testes de contrato, sem substituir o browser atual.
+- **Fase D — validação física:** quando o PC estiver disponível, repetir o subconjunto relevante no hardware do utilizador. Até lá, marcar como BLOCKED/NOT RUN.
 
-- Browser manager, connectors e Playwright PAPER adapter.
-- Configuração de headless/headed e perfis persistentes.
-- API/backend, autenticação, memória de aprendizagem, market-data health e endpoints read-only.
-- Scripts de build Windows EXE, testes e workflows GitHub Actions.
-- APK, configuração de build Android, logs de crash e instruções ADB.
-- Configuração de rede local e Tailscale, discovery/rendezvous e dependências Vercel, sem imprimir segredos.
-- Os pontos em que browser session/authentication se ligam (ou ainda não se ligam) ao cockpit.
-- Confirmar por código e testes que a camada de browser não autoriza operações financeiras.
+## Segurança operacional
 
-Não presumir que funcionalidades descritas em documentação já estão implementadas. Citar ficheiros, funções e comandos que comprovem as conclusões.
-
-## 3. Auditoria de testes do Trader
-
-Executar a suite e os checks documentados pelo projeto, usando o ambiente suportado. No mínimo:
-
-1. Instalar dependências de desenvolvimento a partir dos manifests/lockfiles existentes.
-2. Executar os testes Python da forma recomendada pelo repo.
-3. Executar lint, type-check, security checks ou testes adicionais que já existam e sejam aplicáveis.
-4. Executar o workflow/build do Windows EXE se for possível no host local; caso contrário, consultar os checks do GitHub Actions e marcar o teste local como NOT RUN (não confundir com PASS).
-5. Testar endpoints read-only e autenticação com tokens de teste efémeros, sem segredos reais.
-6. Testar os estados sem autenticação, autenticado, sessão expirada, backend indisponível e recuperação.
-7. Confirmar PAPER/read-only e que não há ordens nem transferências. Usar mocks/stubs ou ambiente de teste.
-8. Repetir os testes relevantes depois de qualquer correção.
-
-Não alargar o âmbito com refactors não relacionados. Corrigir apenas falhas pequenas, diretamente relacionadas com a auditoria e de baixo risco; separar as correções dos resultados do benchmark e documentar cada alteração. Se uma falha revelar uma mudança arquitetural, reportar em vez de a improvisar.
-
-## 4. Laboratório Obscura vs Chromium + Playwright
-
-### 4.1 Descoberta e instalação
-
-- Consultar a documentação e as releases oficiais atuais de https://github.com/h4ckf0r0day/obscura e registar URL, versão/tag, SHA/checksum do artefacto, arquitetura e data.
-- Usar o artefacto oficial apropriado para o sistema operativo; não executar scripts de instalação remotos sem inspecionar o conteúdo.
-- Isolar a instalação em diretório temporário/virtual environment apropriado. Não substituir a instalação atual do Chromium, Playwright ou browser manager do Trader.
-- Não ativar flags de stealth para contornar os controlos das exchanges. O objetivo é compatibilidade e desempenho, não evasão.
-- Se não existir binário compatível com o host, tentar a alternativa oficial segura documentada (por exemplo, container ou build a partir do código-fonte, apenas se ferramentas/recursos estiverem disponíveis); se isso for inviável, documentar o bloqueio e continuar com análise estática e CI.
-- Confirmar a licença publicada e guardar a referência. Não incorporar código-fonte de Obscura no Trader.
-
-### 4.2 Comparação justa
-
-Executar tarefas equivalentes em ambos os motores, com as mesmas URLs de teste, número de repetições, viewport, condições de rede e limites de timeout. Fazer uma ronda de aquecimento e pelo menos 10 repetições por caso quando o ambiente o permitir. Registar todos os resultados brutos; reportar mediana, p95 quando houver amostra suficiente, taxa de sucesso e dispersão. Não comparar uma execução fria de um motor com uma execução aquecida do outro sem assinalar a diferença.
-
-Usar primeiro páginas locais controladas (servidor de teste com HTML estático, JavaScript, DOM dinâmico, formulários sintéticos, navegação e erros simulados). Usar páginas públicas apenas para smoke tests, respeitando limites e termos dos sites. Não enviar credenciais a serviços externos.
-
-Casos mínimos:
-- Arranque frio, arranque repetido e encerramento limpo.
-- Navegação HTML estático e extração de título/texto/links.
-- JavaScript síncrono, temporizadores, fetch/XHR e DOM dinâmico.
-- CSS/layout essencial, screenshots e viewport, se suportados.
-- Navegação de múltiplas páginas e formulário sintético local.
-- Playwright através do método de ligação suportado pela versão atual da Obscura (confirmar documentação; o CDP não é o protocolo nativo de Playwright).
-- Timeout, rede indisponível, página inválida, processo terminado e recuperação.
-- Persistência de cookies numa origem local sintética, se a interface documentada o suportar. Não usar cookies de exchanges.
-- 1, 2 e, se o hardware permitir, 4 sessões concorrentes, sem saturar deliberadamente o PC.
-- Repetição prolongada, começando com 100 navegações e aumentando apenas se o consumo/estabilidade permitir.
-- Verificar se os resultados de JS, DOM e formulários coincidem com o esperado, não apenas se a navegação devolve exit code 0.
-
-### 4.3 Métricas
-
-Recolher por motor e por caso:
-- Tempo de arranque e tempo de navegação (mediana e p95 quando aplicável).
-- RAM em repouso, RAM média aproximada e pico RSS; CPU e duração total.
-- Taxa de sucesso, timeouts, crashes, erros de console/protocolo.
-- Tamanho do artefacto instalado e dependências adicionais.
-- Comportamento com concorrência e após reinício.
-- Diferenças funcionais e limitações da implementação.
-- Versão de cada motor, sistema operativo, CPU/RAM disponível, condições de rede e comandos exatos.
-
-Preferir ferramentas de medição nativas do SO e ferramentas já disponíveis. Se uma métrica não puder ser medida fiavelmente, marcá-la como indisponível; não inventar estimativas. Não usar os valores promocionais do projeto como resultado próprio.
-
-### 4.4 Critérios de decisão
-
-Recomendar uma das opções:
-- **ADOTAR:** vantagem material e repetível, compatibilidade suficiente para as tarefas-alvo e nenhuma regressão crítica de segurança/estabilidade.
-- **ADOTAR PARCIALMENTE:** Obscura para tarefas simples de pesquisa/leitura e Chromium para páginas complexas/autenticação.
-- **MANTER COMO ESTÁ:** benefício pequeno/inconsistente ou incompatibilidades que superam a poupança.
-- **INCONCLUSIVO:** ambiente inadequado ou evidência insuficiente; listar exatamente o que falta.
-
-Não definir limiares depois de ver os resultados para favorecer um motor. Antes do benchmark, registar os critérios acordados: sem falhas críticas; taxa de sucesso funcional pelo menos 98% nos casos compatíveis (ou explicar amostra pequena); poupança de RAM medida e repetível para justificar integração; e sem regressões de segurança. A decisão também deve considerar custo de manutenção e compatibilidade com o sistema existente.
-
-## 5. APK, cockpit móvel e ADB
-
-Se existir dispositivo Android ligado e ADB autorizado:
-
-1. Executar `adb devices -l` e confirmar estado `device`. Se aparecer `unauthorized`, não contornar o diálogo no telemóvel; registar BLOCKED e continuar os testes de build.
-2. Identificar package/application ID a partir dos ficheiros do projeto, não o adivinhar.
-3. Construir o APK com o método documentado e guardar caminho, hash SHA-256 e build output.
-4. Instalar/atualizar o APK de desenvolvimento. Antes de desinstalar qualquer app, verificar se isso apagaria dados; preferir atualização normal. Não apagar dados do utilizador.
-5. Abrir a app e guardar `adb logcat` limitado ao período do teste. Redigir tokens, dados pessoais e outros segredos.
-6. Testar crash-on-launch, orientação/tamanho de ecrã, safe areas/status bar, scroll, botões, navegação, chat e estados de ligação.
-7. Testar backend indisponível, token inválido/expirado, ligação recuperada e polling cancelado ao desligar.
-8. Capturar screenshots de estados-chave e inspecionar o resultado visual; manter os artefactos privados se contiverem informação sensível.
-9. Repetir após correções seguras e reportar regressões.
-10. Se o dispositivo não estiver presente, executar build/lint/testes automatizados e marcar os testes físicos como BLOCKED/NOT RUN. Não declarar o APK validado em dispositivo.
-
-## 6. Tailscale, rede e sincronização PC ↔ telefone
-
-**Prioridade E2E:** testar o caminho completo cérebro/backend → cockpit local do PC → APK Android → ligação remota Tailscale, sempre em PAPER/read-only. Executar este bloco tanto quanto o hardware e as autorizações disponíveis permitirem; não o reduzir a uma simples inspeção da configuração.
-
-### 6.1 Preparar Tailscale nos dois dispositivos
-
-1. No PC Windows, verificar se Tailscale está instalado, se o serviço está ativo e se o cliente está autenticado. Usar primeiro comandos de estado/documentação oficial; não imprimir chaves, tokens ou dados sensíveis.
-2. Se estiver instalado mas parado, iniciar o serviço através dos mecanismos normais do sistema operativo e confirmar o estado. Não alterar políticas de arranque corporativas ou permissões de segurança.
-3. No Android ligado por ADB, confirmar se a app oficial Tailscale está instalada. Se não estiver, identificar a origem oficial e preparar a instalação apenas se o artefacto e o método estiverem disponíveis e forem seguros; não instalar APKs de terceiros nem usar fontes não verificadas.
-4. Abrir a app Tailscale no Android através da interface normal quando necessário e verificar o estado de ligação. ADB pode abrir a app e recolher estado, mas não pode substituir o consentimento de login do utilizador.
-5. Se qualquer dispositivo não estiver autenticado, se surgir MFA, aprovação de dispositivo, confirmação de VPN do Android ou outro diálogo de autorização, deixar o fluxo de aprovação visível e marcar o bloqueio como BLOCKED. Não extrair, reutilizar ou solicitar auth keys pessoais; não contornar os diálogos.
-6. Não modificar ACLs, tags, grants, chaves, DNS, rotas de saída, firewall ou router. Se a comunicação exigir uma alteração de política administrativa, documentar exatamente a necessidade e parar essa alteração.
-7. Confirmar que os dois dispositivos pertencem à tailnet esperada e que o peer está online, usando os comandos/visões oficiais disponíveis. Redigir IPs/identificadores do relatório público quando não forem necessários para reproduzir o teste.
-
-### 6.2 Teste de conectividade real
-
-1. Identificar a porta e o endereço de bind do backend a partir da configuração real do projeto. Não presumir que localhost no Android representa o PC.
-2. Confirmar que o serviço escuta apenas nas interfaces pretendidas. Não expor a API na Internet nem abrir portas públicas como workaround.
-3. Do PC, testar primeiro o endpoint de saúde read-only local. Do Android, testar o mesmo endpoint através do endereço Tailscale do PC, com autenticação de teste quando aplicável.
-4. Testar ausência de token, token inválido/expirado, backend parado, rede Tailscale indisponível e recuperação. Confirmar que não aparecem segredos nos logs.
-5. Se o acesso Android exigir um túnel/relay que ainda não existe, não criar infraestrutura cloud nova nem fazer port forwarding. Documentar a lacuna e propor a alteração mínima necessária.
-6. Testar alternância LAN ↔ Tailscale, timeout e recuperação sem deixar o cockpit mostrar estado antigo como se fosse atual.
-- Verificar se o cliente Tailscale está instalado e o estado da ligação através de comandos read-only adequados ao SO.
-- Não alterar ACLs, expor portas publicamente, abrir firewall, reconfigurar DNS ou modificar o router automaticamente.
-- Testar endpoints locais read-only primeiro; depois testar o endereço Tailscale se houver peer autorizado e disponível.
-- Validar que os serviços escutam apenas nas interfaces pretendidas e que endpoints protegidos exigem autenticação.
-- Testar interrupção e recuperação de rede, timeouts e estado desconhecido.
-- Verificar o fluxo de discovery/Vercel sem publicar segredos e sem transformar Vercel num proxy de credenciais.
-- Se for impossível provar uma ligação remota real porque o PC/telefone não estão na mesma rede disponível ou falta peer autorizado, marcar BLOCKED e fornecer comandos/requisitos exatos para repetir mais tarde.
-
-## 7. Resultados, artefactos e limpeza
-
-Guardar outputs em diretório próprio, por exemplo `artifacts/obscura-evaluation/<timestamp>/`. Não guardar segredos, perfis autenticados, dumps completos de cookies, variáveis de ambiente ou dados pessoais. Artefactos grandes podem ser mantidos localmente e referenciados no relatório por caminho/hash; só publicar ficheiros não sensíveis e necessários.
-
-Criar o relatório final em:
-`docs/reports/OBSCURA_EVALUATION_REPORT_YYYY-MM-DD.md`
-
-O relatório deve incluir:
-- Sumário executivo e recomendação.
-- SHA inicial do código e SHA final da branch.
-- Ambiente e versões.
-- Tabela de testes com PASS / FAIL / BLOCKED / NOT RUN e evidência.
-- Tabela comparativa Obscura vs Chromium + Playwright.
-- Métricas brutas/estatísticas e limitações.
-- Resultados da suite do Trader, EXE, APK/ADB, Tailscale e sincronização.
-- Problemas encontrados, causa provável, correções feitas e testes de regressão.
-- Riscos conhecidos, tarefas pendentes e passos reproduzíveis.
-- Percentagens de prontidão apenas com denominador/critério explícito. Não converter testes não executados em percentagem de sucesso.
-- Decisão final: ADOTAR / ADOTAR PARCIALMENTE / MANTER COMO ESTÁ / INCONCLUSIVO.
-
-Criar também um resumo legível por máquina, por exemplo `artifacts/obscura-evaluation/summary.json`, sem segredos, contendo versão dos motores, contagens por estado, métricas e recomendação.
-
-## 8. Commit e sincronização PC → GitHub
-
-1. Executar novamente os testes relevantes depois de preparar o relatório.
-2. Verificar `git diff --check`, `git status` e rever cada ficheiro a publicar.
-3. Procurar segredos e dados pessoais no diff; remover/redigir antes do commit.
-4. Commitar apenas os ficheiros desta auditoria na branch dedicada. Não incluir binários, perfis de browser, APKs grandes ou logs sensíveis.
-5. Fazer push da branch e confirmar no GitHub o SHA remoto.
-6. Abrir uma PR draft ou atualizar a PR da auditoria, se as permissões disponíveis permitirem. Não fazer merge.
-7. Verificar checks do GitHub Actions no SHA publicado. Se falharem, investigar e corrigir apenas alterações da auditoria.
-8. Terminar com um resumo objetivo no terminal: relatório, branch, SHA, PR, checks, recomendação e limitações que requerem intervenção humana.
-
-## 9. Modelo mínimo de tabela do relatório
-
-| Área | Resultado | Evidência | Limitações |
-|---|---|---|---|
-| Testes Python | PASS/FAIL/BLOCKED/NOT RUN | comando + resumo | ... |
-| Windows EXE | ... | workflow/artefacto | ... |
-| Obscura smoke test | ... | versão + output | ... |
-| Chromium + Playwright baseline | ... | versão + output | ... |
-| Benchmark de RAM/CPU | ... | dados brutos + método | ... |
-| Persistência sintética | ... | teste repetível | ... |
-| APK build | ... | hash + build output | ... |
-| ADB em dispositivo | ... | logs redigidos + screenshots | ... |
-| Tailscale | ... | estado + teste de conectividade | ... |
-| Sincronização remota | ... | request/response redigidos | ... |
-| Segurança PAPER/read-only | ... | testes/mocks/código | ... |
-
-**Princípio final:** maximizar a execução autónoma sem intervenção do utilizador, mas nunca fingir sucesso, ultrapassar autenticação ou sacrificar segurança para completar uma checklist.
+Não usar credenciais reais nem copiar cookies/perfis. Não publicar segredos nos logs ou artefactos. Respeitar rate limits e termos dos sites. Usar primeiro fixtures locais controladas. Não fazer alterações ao motor de execução financeira e não ativar live trading.
