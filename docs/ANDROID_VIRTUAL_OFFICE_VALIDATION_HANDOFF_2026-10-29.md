@@ -52,3 +52,12 @@ Estes estados são um instantâneo, não uma garantia de estado atual. Reconsult
 - O helper GitHub Actions consultado não devolveu runs associados ao HEAD `9c14e29...`; portanto não há evidência disponível nesta consulta de uma build APK ou de capturas atuais. Confirmar Actions diretamente/consultar novos runs antes de afirmar sucesso.
 - Não fazer merge: falta build, smoke portrait/landscape/tablet, inspeção de artefactos e estado verde dos checks.
 - O escritório continua a ser demo offline; avatares são apenas decoração visual e não representam trabalho real dos agentes. PAPER/read-only permanece padrão.
+
+
+## Checkpoint 2026-10-30 — avaliação Diorama
+- Avaliado documentalmente o repositório `sloemo01/diorama` como candidato para um protótipo visual isolado do escritório pixel-art; documentação em `docs/DIORAMA_PIXEL_ART_OFFICE_EVALUATION_2026-10-30.md` na PR VST #522.
+- Decisão: não integrar nem substituir Kivy agora. Primeiro concluir build/artefactos do APK atual; depois, se necessário, comparar uma única sala com três avatares em Three.js contra a UI existente.
+- Benefícios potenciais: câmara de três quartos, estilo pixel-art, personagens articuladas, animações determinísticas e inspiração para QA por screenshots.
+- Riscos: stack WebGL/Three.js adicional, consumo/arranque Android não medidos, câmara fixa não resolve navegação/menus/orientação, e licenças de assets externos precisam de validação separada.
+- Limite de evidência: foi análise documental; Diorama não foi instalado, compilado, executado ou integrado. Não afirmar ganhos de desempenho nem compatibilidade sem protótipo e medições.
+- Segurança: renderer opcional e isolado do cérebro; nenhuma ligação a exchanges, credenciais ou atividade financeira. Escritório offline não representa trabalho real dos agentes.
