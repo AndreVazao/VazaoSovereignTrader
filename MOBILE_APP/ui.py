@@ -450,8 +450,9 @@ def build_chat_cockpit(app):
         for figure, role, room_key, tint, delay in agent_specs:
             avatar = PixelAgent(tint=tint, size_hint=(None, None), size=(dp(36), dp(48)))
             stage.add_widget(avatar)
-            role_label = _label(role, size=8, color=tint, halign="center",
-                                 size_hint=(None, None), size=(dp(70), dp(16)))
+            role_label = _label(role, size=8, color=tint, halign="center")
+            role_label.size_hint = (None, None)
+            role_label.size = (dp(70), dp(16))
             stage.add_widget(role_label)
             agents.append({"widget": avatar, "label": role_label, "role": role,
                            "room": room_key, "delay": delay, "moving": False})
