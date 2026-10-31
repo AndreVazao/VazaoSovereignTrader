@@ -212,7 +212,8 @@ class CEOWallArt(Widget):
             Color(0.02, 0.10, 0.18, 1)
             Rectangle(pos=self.pos, size=self.size)
             Color(0.03, 0.32, 0.52, 0.9)
-            from kivy.graphics import Ellipse as CanvasEllipse\n            CanvasEllipse(pos=(cx-radius, cy-radius), size=(radius*2, radius*2))
+            from kivy.graphics import Ellipse as CanvasEllipse
+            CanvasEllipse(pos=(cx-radius, cy-radius), size=(radius*2, radius*2))
             Color(0.08, 0.72, 0.98, 0.8)
             Line(circle=(cx, cy, radius), width=1.1)
             Line(ellipse=(cx-radius*0.48, cy-radius, radius*0.96, radius*2), width=0.8)
