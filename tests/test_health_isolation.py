@@ -52,4 +52,4 @@ def test_warning_allows_safe_work_but_not_risk_bearing_actions():
 def test_empty_signals_are_healthy_only_when_not_quarantined():
     decision = evaluate_health([])
     assert decision.state is HealthState.HEALTHY
-    assert decision.allow_risk_bearing_actions is True
+    assert decision.allow_risk_bearing_actions is False
