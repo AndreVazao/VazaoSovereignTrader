@@ -36,8 +36,42 @@ Os perfis são objetivos de arquitetura, não instaladores já concluídos. No P
 - **Persistência:** armazenamento local autoritativo no nó configurado; migrações versionadas; backups restauráveis; não tratar o renderer ou o cockpit como fonte de verdade.
 - **Agentes/departamentos:** tarefas com IDs, idempotência, cancelamento, timeout e estado persistido. Workers de investigação não herdam permissões de risco/execução.
 - **Browser adapter:** interface comum de navegação com timeouts, limites, captura sanitizada de erros, cancelamento e classificação de compatibilidade. Cada motor tem health check e circuit breaker.
-- **Cockpit:** cliente fino; pode funcionar em chat simples sem carregar/renderizar o edifício. Não contém lógica crítica de trading.
-- **Renderer do escritório:** recebe apenas estado autorizado e transforma-o em imagem/interação. Não decide se uma tarefa foi realmente executada.
+- **Cockpit:** cliente fino, com modos selecionáveis e fallback automático. Pode funcionar em chat simples sem carregar/renderizar o edifício. Não contém lógica crítica de trading.
+- **Renderer do escritório:** recebe apenas estado autorizado e transforma-o em imagem/interação. Não decide se uma tarefa foi realmente executada. Deve carregar recursos gráficos de forma tardia/opcional e nunca ser dependência do core.
+- **Estado real vs visual:** animações decorativas podem existir em modo offline, mas tarefas, progresso e atividade de agentes só são apresentados como reais quando confirmados pelo backend. O modo offline deve estar identificado de forma explícita.
+
+## Modos visuais e pré-avaliação do equipamento
+
+A referência visual inicial é o protótipo de escritório isométrico pixelado: visão geral do edifício, seleção de uma sala e entrada nessa sala com zoom/perspetiva mais próxima. Não exigir que todas as salas e etiquetas sejam legíveis simultaneamente num ecrã de telemóvel.
+
+Modos previstos, com disponibilidade condicionada às capacidades reais do dispositivo:
+- `chat`: interface textual leve, sem motor gráfico do escritório;
+- `pixel`: escritório isométrico de baixa complexidade, com salas/agentes e zoom por sala;
+- `enhanced`: materiais, animações e resolução superiores, se o dispositivo suportar;
+- `3d`: experiência 3D mais avançada, opcional e futura;
+- `auto`: selecionar o modo mais capaz dentro dos limites medidos, permitindo sempre reduzir manualmente a qualidade.
+
+O conjunto de modos é um objetivo de produto; nem todos estão implementados nesta versão. O modo `chat` deve permanecer disponível em todos os equipamentos compatíveis com o runtime base.
+
+### Contrato de capability check do instalador
+
+O instalador deve fazer uma pré-avaliação **antes de instalar componentes opcionais** e gerar um relatório legível e versionado. Avaliar, conforme o sistema operativo permita:
+1. sistema operativo, arquitetura e versão mínima suportada;
+2. CPU, RAM disponível/total e espaço em disco;
+3. disponibilidade de aceleração gráfica e APIs necessárias ao renderer escolhido (por exemplo, WebGL/WebGL2 verificado no runtime real do front-end, não presumido apenas pelo nome da placa);
+4. resolução/orientação do ecrã e capacidades de entrada relevantes;
+5. dependências base versus dependências específicas de cada modo.
+
+Regras obrigatórias:
+- instalar primeiro apenas o runtime base/headless e componentes selecionados necessários;
+- não descarregar nem instalar dependências 3D pesadas se o utilizador não escolher esse modo ou se a pré-avaliação indicar incompatibilidade;
+- manter chat e controlo do core disponíveis se o renderer falhar, não iniciar ou perder aceleração gráfica;
+- se o teste for inconclusivo, usar o perfil seguro mais leve e explicar o motivo; não inferir suporte gráfico a partir de CPU/RAM apenas;
+- permitir executar novamente o diagnóstico e alterar o modo mais tarde, sem reinstalação integral sempre que a arquitetura permitir;
+- capability check é read-only, sem pedidos de rede, alterações privilegiadas ou criação de serviços durante a fase de diagnóstico;
+- hardware/capacidades apenas recomendam compatibilidade e qualidade visual: nunca concedem permissões de trading, acesso remoto ou autoridade de nó.
+
+A deteção gráfica deve ser implementada por adaptadores específicos de plataforma e validada em CI/VM e em dispositivos reais. O atual `PC_ENGINE/tools/doctor.py` já verifica plataforma, arquitetura, CPU/RAM, configuração, dependências Python e disco de forma read-only; **ainda não é um detector completo de GPU/WebGL nem um instalador adaptativo**. Não anunciar essas capacidades como implementadas antes dos testes correspondentes.
 
 ## Escritório remoto: fases, não requisito inicial
 
@@ -66,13 +100,14 @@ Se um motor 3D futuro exigir GPU ou recursos acima do dispositivo, uma máquina 
 
 1. Auditar o core existente e os contratos reais antes de criar abstrações duplicadas.
 2. Consolidar testes headless de core e garantir que fechar a UI não interrompe o runtime.
-3. **Primeiro incremento implementado na branch atual:** `PC_ENGINE/tools/doctor.py` e `tests/test_runtime_doctor.py` introduzem diagnóstico JSON somente leitura; a validação CI ainda está pendente. O comando não cria diretórios, não inicia serviços e não faz pedidos de rede.
-4. Adicionar um manifesto versionado de componentes e perfil de capacidades após validar o doctor.
-5. Implementar perfis declarativos, limites conservadores e adaptadores de serviço Linux/Windows sem alterações privilegiadas implícitas.
-6. Definir interface do browser, timeouts, health check e fallback; só integrar Obscura após benchmark e validar a fronteira de rede/pinning.
-7. Definir API/eventos do cockpit com autenticação/autorização e estado de saúde real.
-8. Validar exportação/restauro/migração em CI/VM descartável; documentar o que exige nova autenticação manual.
-9. Só então avaliar cliente web e renderização remota.
+3. **Primeiro incremento implementado:** `PC_ENGINE/tools/doctor.py` e `tests/test_runtime_doctor.py` introduzem diagnóstico JSON somente leitura. O CI no HEAD `93370f7dfc35d6ae2f9ba7085fa23032c173d09f` confirmou os testes Python; o doctor continua a ser um diagnóstico inicial, não um instalador.
+4. Especificar e implementar um manifesto versionado de componentes e capability check antes da instalação de dependências opcionais.
+5. Acrescentar deteção testável de capacidades do renderer (incluindo WebGL no runtime real), com fallback chat/pixel e sem instalar dependências 3D desnecessárias.
+6. Implementar perfis declarativos, limites conservadores e adaptadores de serviço Linux/Windows sem alterações privilegiadas implícitas.
+7. Definir interface do browser, timeouts, health check e fallback; só integrar Obscura após benchmark e validar a fronteira de rede/pinning.
+8. Definir API/eventos do cockpit com autenticação/autorização e estado de saúde real.
+9. Validar exportação/restauro/migração em CI/VM descartável; documentar o que exige nova autenticação manual.
+10. Só então avaliar cliente web e renderização remota.
 
 ## Métricas obrigatórias
 
@@ -88,6 +123,7 @@ PAPER/read-only continua padrão. Nenhuma ordem real ou movimentação de fundos
 - PC antigo continua a primeira plataforma; compra de máquinas não é requisito.
 - Linux é preferência futura para servidor headless compatível, não condição para avançar agora.
 - Renderer dedicado/streaming: FUTURO, não implementado.
-- Browser Obscura vs Chromium: benchmark cloud por executar; vantagem de desempenho ainda NÃO COMPROVADA.
+- Modos chat/pixel/enhanced/3D e capability check adaptativo: requisitos arquiteturais documentados; ainda não são todos implementados.
+- Browser Obscura vs Chromium: benchmark cloud sintético concluído; os resultados não comprovam superioridade em páginas reais nem justificam seleção de produção.
 - Migração multi-nó/instalador adaptativo: arquitetura definida; implementação por etapas pendente.
-- `vst doctor --json`: protótipo de diagnóstico read-only criado nesta branch; ainda sem confirmação de CI no HEAD atual.
+- `vst doctor --json`: protótipo read-only criado; testes Python passaram no HEAD `93370f7dfc35d6ae2f9ba7085fa23032c173d09f`. A deteção de GPU/WebGL ainda falta.
