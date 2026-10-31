@@ -1,6 +1,6 @@
 # VST — origem dos agentes e identidade visual
 
-**Estado:** requisito de produto aprovado; contrato de identidade documentado. Não implica que todos os agentes existentes já tenham metadados de origem nem que o renderer já desenhe robots.
+**Estado:** requisito de produto aprovado; contrato documentado e primeira política pura de avatar/métricas implementada em `PC_ENGINE/tools/agent_identity.py`. Ainda não está ligada ao registo persistente de agentes nem ao renderer Android/desktop.
 
 ## Regra visual
 
@@ -23,6 +23,17 @@ Cada agente deve ter um registo persistente, versionado e auditável com:
 - estado de validação da proveniência.
 
 Os campos de origem devem ser definidos no backend e persistidos na criação. O renderer recebe-os pela API/eventos autorizados e escolhe o avatar. Não confiar em campos de origem enviados pelo próprio agente ou escolhidos pelo frontend.
+
+## Primeira política implementada
+
+`PC_ENGINE/tools/agent_identity.py` introduz uma política pura, sem efeitos laterais:
+- origem VST validada → avatar `robot`;
+- origem humana ou importação verificada → avatar existente;
+- origem desconhecida, ID vazio ou proveniência não validada → avatar neutro;
+- métricas deduplicadas por `agent_id`, excluindo registos não persistidos, não validados e placeholders;
+- separação de contagens para ativos, quarentena e inativos.
+
+Testes em `tests/test_agent_identity.py` cobrem estas regras e a deduplicação de agentes repetidos após restore. Os resultados CI para o HEAD atual ainda têm de ser confirmados. Esta política não prova que o backend já persiste a origem nem que o renderer já mostra robôs.
 
 ## Distinguir crescimento real de crescimento aparente
 
@@ -54,4 +65,4 @@ A criação de um agente só conta como expansão operacional depois de passar o
 - Contadores distinguem personagens demonstrativos de agentes persistidos e validados.
 - O estado de saúde (enfermaria/quarentena/oficina) é independente da origem visual.
 
-**Estado atual:** este documento fixa o requisito e o contrato de proveniência. A integração com o modelo de dados existente, a lógica autoritativa de criação, as métricas de expansão e a alteração do renderer Android/desktop continuam pendentes e devem ser implementadas com testes antes de serem anunciadas como funcionais.
+**Estado de integração:** modelo persistente de agentes, criação autoritativa, métricas de expansão e renderer Android/desktop continuam pendentes e devem ser implementados com testes antes de serem anunciados como funcionais.
