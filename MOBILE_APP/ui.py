@@ -243,8 +243,6 @@ class CEOWallArt(Widget):
                          self.x+w*0.85, self.y+h*0.72], width=dp(2.2))
 
 
-class Ellipse(Widget):
-    pass
 \n\nclass BuildingPreview(Widget):
     """Lightweight architectural schematic; scales uniformly to preserve proportions."""
 
@@ -569,9 +567,12 @@ def build_chat_cockpit(app):
 
         agents = []
         agent_specs = [
-            ("o\n/|\\\n/ \\", "CEO", "ceo", ACCENT, 0.0),
-            ("o\n/|\\\n/ \\", "RADAR", "radar", GREEN, 0.7),
-            ("o\n/|\\\n/ \\", "ANÁLISE", "analysis", (1.0, 0.72, 0.30, 1), 1.4),
+            ("o\n/|\
+/ \\", "CEO", "ceo", ACCENT, 0.0),
+            ("o\n/|\
+/ \\", "RADAR", "radar", GREEN, 0.7),
+            ("o\n/|\
+/ \\", "ANÁLISE", "analysis", (1.0, 0.72, 0.30, 1), 1.4),
         ]
 
         def place_agents(*_):
