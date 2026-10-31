@@ -1,6 +1,6 @@
 # VST — origem dos agentes e identidade visual
 
-**Estado:** política de avatar/métricas, registo persistente JSON e uma fronteira inicial de criação autorizada foram implementados com testes dedicados. A fronteira ainda não está ligada ao scheduler/API de produção nem ao renderer Android/desktop.
+**Estado:** política de avatar/métricas, registo persistente JSON, fronteira inicial de criação autorizada e primitiva visual de robô no renderer Android foram implementados. A fronteira ainda não está ligada ao scheduler/API de produção nem a um fluxo de identidades autenticado para o renderer.
 
 ## Regra visual
 
@@ -55,6 +55,10 @@ Testes: `tests/test_agent_registry.py`. O chamador continua responsável por aut
 
 **Limite importante:** o autorizador é uma dependência injetada e tem de ser fornecido por um controlo-plane autenticado; este módulo não implementa autenticação por si. A fronteira ainda não foi ligada ao caminho real de criação/scheduler/API do runtime, e não altera os avatares da aplicação.
 
+### Primitiva visual Android (implementação parcial)
+
+`MOBILE_APP/ui.py` contém `RobotPixelAgent` e `build_agent_avatar(...)`. O avatar robótico só é escolhido quando o chamador passa `origin_type="vst_created"` e `provenance_validated=True`; os restantes casos preservam o avatar pixel existente, sem inferir origem. A cena offline atual continua a ser uma demonstração local e não recebe identidades reais do backend. Esta alteração disponibiliza o desenho e o seletor, mas **não significa que os agentes reais já apareçam como robôs**.
+
 ## Distinguir crescimento real de crescimento aparente
 
 A contagem de robôs não é, por si só, prova de evolução. O painel de expansão deve distinguir:
@@ -85,4 +89,4 @@ Animações, agentes de demonstração e personagens offline não entram nas mé
 - Contadores distinguem personagens demonstrativos de agentes persistidos e validados.
 - O estado de saúde (enfermaria/quarentena/oficina) é independente da origem visual.
 
-**Integração pendente:** ligar `AgentLifecycle` ao caminho real de criação de agentes e à API autenticada, definir migração segura para agentes existentes sem proveniência, fornecer identidades confiáveis ao renderer e desenhar o avatar robótico no renderer Android/desktop. Não anunciar a experiência visual como funcional até esses passos e os testes correspondentes passarem.
+**Integração pendente:** ligar `AgentLifecycle` ao caminho real de criação de agentes e à API autenticada, definir migração segura para agentes existentes sem proveniência, fornecer identidades confiáveis ao renderer e ligar a mesma regra ao renderer desktop. A primitiva Android precisa de validação no build/emulador. Não anunciar a experiência visual como funcional até esses passos e os testes correspondentes passarem.
