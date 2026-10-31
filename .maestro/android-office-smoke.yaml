@@ -3,6 +3,6 @@ appId: pt.andrevazao.vazaosovereigntrader
 - launchApp
 - waitForAnimationToEnd
 - tapOn:
-    point: "50%, 88%"
+    point: "50%, 78%"
 - waitForAnimationToEnd
 - takeScreenshot: vst-android-office
