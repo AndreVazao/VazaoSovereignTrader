@@ -114,6 +114,55 @@ class PixelAgent(Widget):
             Rectangle(pos=(ox + 7*unit, oy + 2*unit), size=(2*unit, 4*unit))
 
 
+class RobotPixelAgent(Widget):
+    """Small robot avatar for backend-verified VST-created agents."""
+    def __init__(self, tint=ACCENT, **kwargs):
+        super().__init__(**kwargs)
+        self.tint = tint
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        unit = min(self.width / 14, self.height / 16)
+        ox = self.x + (self.width - unit * 14) / 2
+        oy = self.y + (self.height - unit * 16) / 2
+        with self.canvas:
+            # Antenna and head are deliberately geometric, unlike the human pixel avatar.
+            Color(*self.tint)
+            Rectangle(pos=(ox + 6*unit, oy + 14*unit), size=(2*unit, unit))
+            Rectangle(pos=(ox + 3*unit, oy + 10*unit), size=(8*unit, 4*unit))
+            # Dark faceplate with two light sensors.
+            Color(0.035, 0.055, 0.075, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 11*unit), size=(6*unit, 2*unit))
+            Color(0.55, 0.91, 1.0, 1)
+            Rectangle(pos=(ox + 5*unit, oy + 11.5*unit), size=(unit, unit))
+            Rectangle(pos=(ox + 8*unit, oy + 11.5*unit), size=(unit, unit))
+            Color(*self.tint)
+            Rectangle(pos=(ox + 4*unit, oy + 5*unit), size=(6*unit, 4*unit))
+            Rectangle(pos=(ox + 2*unit, oy + 6*unit), size=(2*unit, 3*unit))
+            Rectangle(pos=(ox + 10*unit, oy + 6*unit), size=(2*unit, 3*unit))
+            Color(0.13, 0.17, 0.23, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 2*unit), size=(2*unit, 3*unit))
+            Rectangle(pos=(ox + 8*unit, oy + 2*unit), size=(2*unit, 3*unit))
+
+
+def build_agent_avatar(*, origin_type, provenance_validated, tint=ACCENT,
+                       size_hint=(None, None), size=(dp(36), dp(48))):
+    """Render robots only for validated VST provenance; unknown identities stay neutral."""
+    if provenance_validated and origin_type == "vst_created":
+        widget = RobotPixelAgent(tint=tint)
+    else:
+        # Preserve existing human art; unknown/unverified identities are never guessed
+        # to be VST-created. Offline demo actors continue to use this neutral fallback.
+        widget = PixelAgent(tint=tint)
+    widget.size_hint = size_hint
+    widget.size = size
+    return widget
+
+
 class BuildingPreview(Widget):
     """Lightweight architectural schematic; scales uniformly to preserve proportions."""
 
