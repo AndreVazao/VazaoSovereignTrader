@@ -23,7 +23,8 @@ PANEL = (0.065, 0.078, 0.105, 1)
 PANEL_2 = (0.090, 0.105, 0.140, 1)
 TEXT = (0.92, 0.94, 0.98, 1)
 MUTED = (0.56, 0.61, 0.70, 1)
-ACCENT = (0.33, 0.76, 0.98, 1)
+ACCENT = (0.10, 0.72, 0.98, 1)  # VST electric blue/cyan
+GOLD = (1.00, 0.70, 0.20, 1)     # VST metallic-gold accent
 GREEN = (0.26, 0.82, 0.60, 1)
 RED = (0.98, 0.38, 0.48, 1)
 
@@ -149,15 +150,42 @@ class RobotPixelAgent(Widget):
             Rectangle(pos=(ox + 8*unit, oy + 2*unit), size=(2*unit, 3*unit))
 
 
+class NeutralPixelAgent(Widget):
+    """Abstract neutral marker for identities whose origin is not verified."""
+    def __init__(self, tint=GOLD, **kwargs):
+        super().__init__(**kwargs)
+        self.tint = tint
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        unit = min(self.width / 12, self.height / 14)
+        ox = self.x + (self.width - unit * 12) / 2
+        oy = self.y + (self.height - unit * 14) / 2
+        with self.canvas:
+            # A simple outlined-looking question/unknown marker; no human or robot traits.
+            Color(0.18, 0.20, 0.25, 1)
+            Rectangle(pos=(ox + 3*unit, oy + 2*unit), size=(6*unit, 10*unit))
+            Color(*self.tint)
+            Rectangle(pos=(ox + 4*unit, oy + 9*unit), size=(4*unit, 2*unit))
+            Rectangle(pos=(ox + 5*unit, oy + 6*unit), size=(2*unit, 2*unit))
+            Rectangle(pos=(ox + 5*unit, oy + 3*unit), size=(2*unit, unit))
+
+
 def build_agent_avatar(*, origin_type, provenance_validated, tint=ACCENT,
                        size_hint=(None, None), size=(dp(36), dp(48))):
-    """Render robots only for validated VST provenance; unknown identities stay neutral."""
+    """Select robot/human/neutral art only from validated persisted provenance."""
     if provenance_validated and origin_type == "vst_created":
         widget = RobotPixelAgent(tint=tint)
-    else:
-        # Preserve existing human art; unknown/unverified identities are never guessed
-        # to be VST-created. Offline demo actors continue to use this neutral fallback.
+    elif provenance_validated and origin_type in {"human_created", "imported_verified"}:
+        # Existing human-origin avatar design remains unchanged.
         widget = PixelAgent(tint=tint)
+    else:
+        # Unknown or unvalidated identities must not look like human or VST-created agents.
+        widget = NeutralPixelAgent(tint=GOLD)
     widget.size_hint = size_hint
     widget.size = size
     return widget
