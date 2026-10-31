@@ -1,0 +1,191 @@
+name: Diorama Virtual Office Prototype (VM)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/diorama-office-prototype.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diorama-office-prototype-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render-prototype:
+    name: Render isolated office in Ubuntu VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout VST
+        uses: actions/checkout@v4
+
+      - name: Clone and verify Diorama playbook
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/sloemo01/diorama.git /tmp/diorama
+          test -s /tmp/diorama/SKILL.md
+          test -d /tmp/diorama/templates
+          test -d /tmp/diorama/verify
+          test -s /tmp/diorama/LICENSE
+          echo "DIORAMA_COMMIT=$(git -C /tmp/diorama rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "Diorama commit: $(git -C /tmp/diorama rev-parse --short HEAD)"
+          echo "Playbook files verified; this repository is a code kit, not a ready-made office app."
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install isolated prototype dependencies
+        working-directory: /tmp
+        run: |
+          mkdir -p vst-diorama-prototype
+          cd vst-diorama-prototype
+          npm init -y
+          npm install --no-audit --no-fund three playwright
+          npx playwright install --with-deps chromium
+
+      - name: Build responsive three-room-scale prototype
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vst-diorama-prototype/out
+          cat > /tmp/vst-diorama-prototype/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+            <title>VST Diorama Office — isolated visual prototype</title>
+            <style>
+              * { box-sizing: border-box }
+              html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#f4f0e7; color:#263238; font-family:system-ui,sans-serif }
+              #hud { position:absolute; z-index:2; bottom:12px; left:12px; max-width:calc(100% - 90px); padding:8px 11px; border:1px solid #d4cbb9; border-radius:8px; background:rgba(255,253,247,.94); font-size:12px; line-height:1.35 }
+              #hud strong { display:block; font-size:13px }
+              #zoom { position:absolute; z-index:2; right:12px; bottom:12px; display:flex; gap:8px }
+              button { border:1px solid #c5b9a4; border-radius:8px; background:#fffdf7; padding:10px 14px; font-size:16px }
+              canvas { display:block; width:100%; height:100% }
+            </style>
+          </head>
+          <body>
+            <div id="hud"><strong>VST · ESCRITÓRIO VIRTUAL</strong>DEMO OFFLINE · ESCRITÓRIO SEM MOTOR<br><span id="viewport">a preparar vista…</span></div>
+            <div id="zoom"><button id="out" aria-label="Zoom out">−</button><button id="in" aria-label="Zoom in">+</button></div>
+            <script type="module">
+              import * as THREE from '/node_modules/three/build/three.module.js';
+              const scene = new THREE.Scene(); scene.background = new THREE.Color('#f4f0e7');
+              const camera = new THREE.OrthographicCamera(-7,7,7,-7,.1,100);
+              camera.position.set(10,12,14); camera.lookAt(0,1,0);
+              const renderer = new THREE.WebGLRenderer({antialias:false, powerPreference:'low-power'});
+              renderer.setPixelRatio(1); renderer.setSize(innerWidth,innerHeight); renderer.shadowMap.enabled=false;
+              renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(renderer.domElement);
+              scene.add(new THREE.HemisphereLight(0xffffff,0x8a806c,2));
+              const sun = new THREE.DirectionalLight(0xffffff,2); sun.position.set(4,9,5); scene.add(sun);
+              const mat = c => new THREE.MeshLambertMaterial({color:c});
+              function box(name,x,y,z,w,h,d,color) {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color)); m.name=name;
+                m.position.set(x,y,z); scene.add(m); return m;
+              }
+              // A small open-top slab and three distinct workstations, intentionally low-poly.
+              box('floor',0,-.18,0,9,.35,7,'#c7b89a');
+              box('back-wall',0,1.1,-3.42,9,2.5,.16,'#e1d7c4');
+              box('left-wall',-4.42,1.1,0,.16,2.5,7,'#d4c7b0');
+              box('CEO desk',0,.55,-1.9,2.0,.18,1.0,'#8c6848');
+              box('CEO monitor',0,1.0,-2.1,.65,.72,.08,'#43515b');
+              box('Market Radar desk',-2.45,.48,.25,1.5,.16,.8,'#8c6848');
+              box('Radar screen',-2.45,.87,.0,.45,.55,.07,'#537f83');
+              box('Analysis desk',2.25,.48,.25,1.5,.16,.8,'#8c6848');
+              box('Analysis screen',2.25,.87,.0,.45,.55,.07,'#657a9b');
+              function person(x,z,shirt,skin='#d5a47a') {
+                // Pixel-like stacked cuboids; deterministic pose, no external assets.
+                box('body',x,.76,z,.42,.62,.28,shirt);
+                box('head',x,1.25,z,.32,.32,.30,skin);
+                box('hair',x,1.43,z,.34,.10,.32,'#514137');
+                box('leg-left',x-.12,.30,z,.12,.34,.14,'#34414b');
+                box('leg-right',x+.12,.30,z,.12,.34,.14,'#34414b');
+              }
+              person(0,-.85,'#496e9b'); person(-2.45,.95,'#54836e'); person(2.25,.95,'#a66c57');
+              function label(text,x,z,color='#39434a') {
+                const c=document.createElement('canvas'); c.width=256;c.height=64;
+                const ctx=c.getContext('2d');ctx.fillStyle='#fffdf2';ctx.fillRect(0,0,256,64);
+                ctx.strokeStyle='#c9bda7';ctx.strokeRect(1,1,254,62);
+                ctx.fillStyle=color;ctx.font='bold 22px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,128,32,240);
+                const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+                const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:false}));
+                s.position.set(x,1.95,z);s.scale.set(2.2,.55,1);scene.add(s);
+              }
+              label('CEO',0,-1.75); label('MARKET RADAR',-2.45,-.55); label('ANÁLISE',2.25,-.55);
+              const target=new THREE.Vector3(0,.65,0); camera.lookAt(target);
+              let zoom=1;
+              function resize(){
+                const w=innerWidth,h=innerHeight, aspect=w/h;
+                // Fit the whole slab horizontally even on narrow portrait viewports.
+                const horizontalSpan=zoom*Math.max(10.5,6.8*aspect);
+                const verticalSpan=horizontalSpan/aspect;
+                camera.left=-horizontalSpan/2; camera.right=horizontalSpan/2;
+                camera.top=verticalSpan/2; camera.bottom=-verticalSpan/2;
+                camera.updateProjectionMatrix();renderer.setSize(w,h);document.getElementById('viewport').textContent=w+'×'+h+' · zoom '+zoom.toFixed(1)+'×';
+                renderer.render(scene,camera);
+              }
+              document.getElementById('in').onclick=()=>{zoom=Math.max(.65,zoom-.15);resize()};
+              document.getElementById('out').onclick=()=>{zoom=Math.min(1.6,zoom+.15);resize()};
+              addEventListener('resize',resize); resize();
+              window.__vstDioramaReady=true;
+            </script>
+          </body></html>
+          HTML
+
+          cat > /tmp/vst-diorama-prototype/capture.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+          const browser = await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--ignore-gpu-blocklist']});
+          const cases = [
+            {name:'phone-portrait',width:390,height:844},
+            {name:'phone-landscape',width:844,height:390},
+            {name:'tablet-landscape',width:1180,height:820}
+          ];
+          let failed = false;
+          const report = {dioramaCommit:process.env.DIORAMA_COMMIT || 'unknown',cases:[]};
+          for (const c of cases) {
+            const page = await browser.newPage({viewport:{width:c.width,height:c.height},deviceScaleFactor:1});
+            const errors=[];
+            page.on('pageerror',e=>errors.push(String(e)));
+            page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
+            const response=await page.goto('http://127.0.0.1:4173/',{waitUntil:'networkidle'});
+            await page.waitForFunction(()=>window.__vstDioramaReady===true,{timeout:10000});
+            await page.screenshot({path:'/tmp/vst-diorama-prototype/out/'+c.name+'.png'});
+            const state=await page.evaluate(()=>({canvas:!!document.querySelector('canvas'),canvasWidth:document.querySelector('canvas')?.width,canvasHeight:document.querySelector('canvas')?.height,hud:document.querySelector('#hud')?.innerText}));
+            const ok=response?.ok() && state.canvas && state.canvasWidth===c.width && state.canvasHeight===c.height && state.hud.includes('DEMO OFFLINE') && errors.length===0;
+            report.cases.push({...c,status:ok?'PASS':'FAIL',state,errors});
+            if(!ok)failed=true;
+            await page.close();
+          }
+          fs.writeFileSync('/tmp/vst-diorama-prototype/out/report.json',JSON.stringify(report,null,2));
+          await browser.close();
+          console.log(JSON.stringify(report,null,2));
+          if(failed)process.exit(1);
+          JS
+
+      - name: Render and capture VM screenshots
+        working-directory: /tmp/vst-diorama-prototype
+        env:
+          DIORAMA_COMMIT: ${{ env.DIORAMA_COMMIT }}
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/vst-diorama-server.log 2>&1 &
+          echo $! > /tmp/vst-diorama-server.pid
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node capture.mjs
+
+      - name: Upload screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vst-diorama-office-vm-screenshots
+          path: /tmp/vst-diorama-prototype/out/
+          if-no-files-found: warn
+          retention-days: 14
