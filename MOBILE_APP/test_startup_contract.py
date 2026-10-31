@@ -96,7 +96,7 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("vst-landscape.png", script)
         self.assertIn("vst-tablet-landscape.png", script)
         self.assertIn('struct.unpack(">II", data[16:24])', script)
-        self.assertIn('point: "50%, 88%"', office_flow)
+        self.assertIn('point: "50%, 78%"', office_flow)
         self.assertIn("vst-office-entry.png", script)
         self.assertIn("office-ocr.txt", script)
         ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
