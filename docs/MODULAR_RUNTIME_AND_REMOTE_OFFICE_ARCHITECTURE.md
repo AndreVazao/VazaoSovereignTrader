@@ -243,3 +243,40 @@ A recuperação deve incluir não apenas configuração e perfis de departamento
 4. Testes negativos demonstram que credenciais, cookies, dados pessoais e dados financeiros privados não entram na memória partilhada.
 5. Cloud offline não interrompe aprendizagem; após recuperação de rede, a sincronização retoma sem duplicados.
 6. Nenhum caminho de importação/exportação pode autorizar trading real ou submeter ordens.
+
+
+## Enfermaria, quarentena e oficina de reparação (decisão + primeiro núcleo de política)
+
+A enfermaria é uma representação visual de estados reais de saúde do backend, não uma animação que infere falhas por conta própria. O escritório pode mostrar agentes em macas, enfermeiros, técnicos e uma oficina pixelada, mas só quando receber um evento de saúde autenticado e atual. Se não houver ligação ao backend, a interface mostra estado desconhecido/offline; não inventa agentes doentes nem apresenta uma falsa recuperação.
+
+### Estados e comportamento pretendido
+
+- **Healthy:** verificações recentes passaram; o componente pode receber trabalho de acordo com as permissões normais.
+- **Degraded:** alertas, erros repetidos ou desempenho fora dos limites. Bloquear novas tarefas ou ações de risco conforme severidade, sem isolar automaticamente quando a política não o exigir.
+- **Quarantined:** isolamento explícito/manual ou sinal crítico de integridade/segurança. Bloquear novas tarefas e ações com risco, cortar a comunicação/partilha que possa propagar estado contaminado e preservar logs/evidência para investigação.
+- **Recovering:** reparação aplicada e testes iniciais aprovados, mas ainda sem autoridade para regressar ao serviço normal. Manter isolado até aprovação explícita do operador ou política de controlo autorizada.
+- **Unknown/offline:** não foi possível confirmar saúde; nunca mostrar como saudável só porque deixou de haver sinais.
+
+### Enfermaria e oficina
+
+1. O diagnóstico cria um incidente com ID, componente/agente/departamento, severidade, timestamps, sinais observados e proveniência.
+2. A política de saúde decide a recomendação de degradação/quarentena. O plano de isolamento é aplicado pelo control plane do backend, não pelo renderer.
+3. A enfermaria apresenta a lista de incidentes e o estado de cada agente. A oficina corre diagnósticos e reparações permitidas num ambiente isolado, com logs sanitizados.
+4. A validação usa testes de saúde, regressão e integridade. A recuperação não elimina o incidente nem a proveniência.
+5. A libertação da quarentena é uma transição explícita e auditada. Passar nos testes apenas permite entrar em recuperação; não autoriza por si só trading REAL.
+6. Se um departamento estiver isolado, os seus dados/artefactos não podem ser publicados na memória partilhada até serem validados. O core e departamentos não afetados continuam a operar quando a política de dependências permitir.
+
+### Primeiro núcleo de política
+
+Foi acrescentado `PC_ENGINE/tools/health_isolation.py` com uma função pura de decisão e testes em `tests/test_health_isolation.py`. A política recomenda quarentena para sinais críticos ou decisão manual, mantém quarentena pegajosa até verificações de recuperação e bloqueia ações de risco nos estados degradado/quarentenado/em recuperação. O módulo **não executa isolamento real nem altera serviços/permissões**; isso requer integração com o control plane e persistência/auditoria, ainda pendentes.
+
+### Critérios de aceitação antes de ligar à execução real
+
+- Testes para erro crítico, quarentena manual, persistência da quarentena, recuperação incompleta, sinais de warning/error e componente saudável.
+- Falha do serviço de saúde resulta em estado desconhecido/conservador, nunca em saúde presumida.
+- A quarentena de um departamento impede submissão de tarefas/ações de risco através do backend, incluindo caminhos alternativos e reinícios.
+- A UI não pode retirar quarentena nem conceder permissões; todas as transições ficam auditadas.
+- Injeção de falha numa área não derruba o core nem contamina a memória partilhada.
+- Exercícios de recuperação provam que a evidência fica preservada e que nenhuma reparação/importação promove o modo REAL.
+
+**Estado honesto:** o contrato arquitetural e a primeira política pura estão no branch de trabalho; a integração com serviços, UI/animações, armazenamento de incidentes, quarentena efetiva e oficina executável ainda não estão concluídos. A validação CI desta alteração ainda é necessária.
