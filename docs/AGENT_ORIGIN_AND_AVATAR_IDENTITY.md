@@ -57,7 +57,7 @@ Testes: `tests/test_agent_registry.py`. O chamador continua responsável por aut
 
 ### Primitiva visual Android (implementação parcial)
 
-`MOBILE_APP/ui.py` contém `RobotPixelAgent` e `build_agent_avatar(...)`. O avatar robótico só é escolhido quando o chamador passa `origin_type="vst_created"` e `provenance_validated=True`; os restantes casos preservam o avatar pixel existente, sem inferir origem. A cena offline atual continua a ser uma demonstração local e não recebe identidades reais do backend. Esta alteração disponibiliza o desenho e o seletor, mas **não significa que os agentes reais já apareçam como robôs**.
+`MOBILE_APP/ui.py` contém `RobotPixelAgent` e `build_agent_avatar(...)`. O avatar robótico só é escolhido quando o chamador passa `origin_type="vst_created"` e `provenance_validated=True`. Origem humana/importação verificada preserva o avatar pixel existente; origem desconhecida ou não validada usa um marcador neutro, sem inferir identidade. A cena offline atual continua a ser uma demonstração local e não recebe identidades reais do backend. Esta alteração disponibiliza o desenho e o seletor, mas **não significa que os agentes reais já apareçam como robôs**.
 
 ## Distinguir crescimento real de crescimento aparente
 
