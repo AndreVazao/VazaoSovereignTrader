@@ -244,7 +244,9 @@ class CEOWallArt(Widget):
                          self.x+w*0.85, self.y+h*0.72], width=dp(2.2))
 
 
-\n\nclass BuildingPreview(Widget):
+
+
+class BuildingPreview(Widget):
     """Lightweight architectural schematic; scales uniformly to preserve proportions."""
 
     def __init__(self, **kwargs):
