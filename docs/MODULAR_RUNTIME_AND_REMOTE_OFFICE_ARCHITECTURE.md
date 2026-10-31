@@ -73,6 +73,10 @@ Regras obrigatórias:
 
 A deteção gráfica deve ser implementada por adaptadores específicos de plataforma e validada em CI/VM e em dispositivos reais. O atual `PC_ENGINE/tools/doctor.py` já verifica plataforma, arquitetura, CPU/RAM, configuração, dependências Python e disco de forma read-only; **ainda não é um detector completo de GPU/WebGL nem um instalador adaptativo**. Não anunciar essas capacidades como implementadas antes dos testes correspondentes.
 
+### Estado do instalador Windows existente
+
+A auditoria de `installer/VazaoSovereignTrader.iss` mostra que o instalador atual empacota `build/ms-playwright` e agenda o motor e o coletor de mercado no início de sessão. O pacote Playwright pertence ao worker de browser/pesquisa do VST; não deve ser confundido com dependências de renderização 3D do escritório, nem removido sem mapear os consumidores reais. O instalador atual **ainda não** oferece seleção de modos visuais nem usa `component_plan.py`. A integração deverá ser feita quando os componentes gráficos opcionais e as suas dependências estiverem definidos e cobertos por testes de instalação/desinstalação. Não alterar o arranque dos serviços de trading como efeito secundário de uma escolha visual.
+
 ## Escritório remoto: fases, não requisito inicial
 
 ### Fase A — agora
