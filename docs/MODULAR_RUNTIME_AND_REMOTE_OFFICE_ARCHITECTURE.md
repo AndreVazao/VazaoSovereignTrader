@@ -167,3 +167,43 @@ A distribuição final deve ter **três artefactos instaláveis**, sem os confun
 6. Fazer teste de instalação limpa Linux na máquina nova e recolher métricas antes de decidir se é necessário Windows.
 
 **Estado honesto:** esta secção regista a arquitetura-alvo acordada. Não significa que os três instaladores finais, o backend Linux, a ligação Tailscale integrada ou a instalação distribuída já estejam implementados. A PR atual continua a ser validada; cada capacidade só será marcada como concluída depois de existir código e teste reproduzível.
+## Backend onboarding, Obscura, credenciais locais e recuperação (decisão de produto, 2026-10-31)
+
+### Consola do backend antes do escritório
+
+O backend deve disponibilizar uma consola administrativa local, utilizável sem desktop cockpit ou Android. A consola serve para setup inicial, diagnóstico, estado dos serviços, configuração de departamentos, gestão de autenticação e pedidos de intervenção humana. Não deve oferecer um canal de execução de ordens que contorne o ExecutionGate, RealModeGuard ou as políticas de risco existentes. A consola pode ser CLI e/ou interface local mínima; a escolha concreta depende da auditoria dos entrypoints existentes.
+
+### Dependências e navegação
+
+- O instalador do backend deve declarar e verificar as dependências necessárias, com versões fixadas e testes de integridade; deve distinguir dependências obrigatórias do core de motores opcionais de browser.
+- Obscura deve ser instalada/configurada como motor candidato de navegação se a licença, distribuição, dependências e testes de segurança o permitirem. Chromium permanece fallback até benchmark repetível demonstrar adequação por tarefa.
+- O browser worker deve ter health check, timeouts, limites de recursos, logs sem segredos e fallback. Navegação não pode converter diretamente conteúdo de páginas em comandos de trading nem contornar autenticação, MFA, CAPTCHA ou proteções das exchanges.
+- Para integração de exchange, preferir API oficial quando disponível e autorizada. Browser/sessões persistentes só devem ser usados de acordo com os termos da plataforma. A configuração de credenciais de trading deve privilegiar chaves API com permissões mínimas, sem permissão de levantamento quando desnecessária, e restrições de IP quando suportadas.
+
+### Vault local e autenticação
+
+- Credenciais, cookies/sessões, tokens e segredos são dados locais de cada instalação/organização; nunca entram na memória partilhada, logs, telemetria, artefactos CI ou repositório.
+- O vault deve cifrar dados em repouso usando mecanismos de sistema operativo quando disponíveis (por exemplo, Windows DPAPI/Credential Manager ou Linux Secret Service/keyring) e permitir um segredo mestre alternativo bem protegido quando não existir integração de sistema adequada. Não guardar passwords em texto simples nem incluir chaves de desencriptação junto dos dados cifrados.
+- O acesso ao vault deve exigir desbloqueio local e aplicar bloqueio automático/inatividade. Operações sensíveis devem ter logs de auditoria sem incluir o segredo. A autenticação da aplicação e a autorização por função continuam obrigatórias mesmo numa rede privada.
+- A primeira autenticação é interativa: o utilizador introduz os dados no ecrã seguro e completa MFA, SMS, passkey ou aprovação externa. Depois disso, a aplicação pode reutilizar tokens ou sessões renováveis que a plataforma disponibilize legitimamente; não pode prometer login invisível permanente. Se uma sessão expirar ou a exchange exigir nova confirmação, cria um pedido de aprovação e pausa apenas a tarefa afetada.
+- Não pedir nem guardar o e-mail/password principal de uma exchange se uma API key restrita ou OAuth oficial satisfizer o caso de uso. Nunca guardar PINs de uso único como credenciais permanentes.
+
+### USB de recuperação
+
+A pen de recuperação deve ser um export cifrado, não uma cópia em claro do vault. Deve incluir apenas a configuração selecionada, manifestos de versões, perfis de departamentos e segredos explicitamente escolhidos pelo utilizador; por defeito, não exportar sessões/cookies ativos. O export exige desbloqueio, uma frase-passe forte ou chave separada, e confirmação explícita. Deve permitir restaurar em máquina nova sem transportar uma chave de desencriptação dentro da própria pen; após restauro, pedir desbloqueio e autenticação adicional quando necessário. Oferecer também uma opção de recuperação sem segredos, que restaura configuração e exige login de novo.
+
+### Fronteira de memória partilhada entre organizações
+
+A memória de aprendizagem partilhada pode conter apenas conhecimento técnico permitido e com proveniência, por exemplo, padrões de comportamento de mercado, resultados agregados e lições de investigação aprovadas. Não pode conter saldos, volumes financeiros privados, posições, histórico identificável de ordens, credenciais, e-mails, cookies, tokens, dados pessoais ou configurações privadas. Aplicar allowlist explícita de campos, redacção, validação antes da publicação e testes negativos que tentem introduzir segredos. Por defeito, a partilha é opt-in por categoria e os dados privados permanecem locais.
+
+### Critérios mínimos de aceitação
+
+1. Instalar backend numa máquina limpa sem instalar o frontend; abrir a consola e obter diagnóstico útil.
+2. Verificar dependências de navegação e demonstrar fallback quando Obscura falha, sem bloquear o core.
+3. Introduzir credenciais de teste no vault e confirmar que ficam cifradas; logs e memória partilhada não contêm os valores.
+4. Simular sessão expirada/MFA e confirmar pedido claro de intervenção humana, sem loops de login nem falsa indicação de sucesso.
+5. Exportar/importar backup cifrado num ambiente descartável; um backup com frase-passe errada deve falhar fechado.
+6. Testar que os filtros de memória partilhada rejeitam credenciais, saldos, posições e dados privados.
+7. Repetir em Windows e Linux; não declarar compatibilidade de vault até testar a integração de segredos do sistema operativo e o comportamento de recuperação.
+
+**Estado honesto:** consola de backend, vault, integração completa de Obscura, login de exchanges e USB de recuperação são requisitos definidos nesta secção, não funcionalidades já concluídas. Devem ser implementados em incrementos pequenos e testados antes de serem usados com contas reais.
