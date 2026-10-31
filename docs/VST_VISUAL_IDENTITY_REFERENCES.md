@@ -1,6 +1,6 @@
 # VST — referências da identidade visual do escritório
 
-**Estado:** referências visuais aprovadas como direção de design; ainda não são assets integrados na aplicação. Não afirmar que o gabinete já reproduz as imagens de referência até existir um asset versionado, implementação e validação visual no APK/PC.
+**Estado:** referências visuais aprovadas. A aplicação já tem uma primeira versão decorativa leve do painel do CEO; não é reprodução exata das imagens de referência. A validação de arranque e orientação do emulador passou no commit `ec61ab018c035bb77c9def5c50f33801f1f1388e`; essa execução antecede eventuais alterações posteriores.
 
 ## Referências aprovadas
 
@@ -19,7 +19,7 @@
 
 ## Próximos passos de implementação
 
-1. Preparar assets locais versionados para o quadro do CEO, logótipo e fundos; confirmar dimensões, compressão e licença.
+1. Promover o raster aprovado para caminho canónico sob `assets/branding/`, confirmar dimensões, compressão e licença; o SVG `assets/branding/vst-logo.svg` já existe.
 2. Aplicar a paleta à interface global, preservando vermelho/verde e outros indicadores semânticos de risco.
 3. Integrar o quadro apenas na sala do CEO e fundos adequados nas outras salas, com fallback de cor sólida.
 4. Gerar APK e capturas portrait/landscape/tablet; inspecionar cortes, contraste, legibilidade e consumo de memória.
