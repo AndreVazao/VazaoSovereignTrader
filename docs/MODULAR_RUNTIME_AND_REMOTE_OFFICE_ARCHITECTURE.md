@@ -131,3 +131,39 @@ PAPER/read-only continua padrão. Nenhuma ordem real ou movimentação de fundos
 - Browser Obscura vs Chromium: benchmark cloud sintético concluído; os resultados não comprovam superioridade em páginas reais nem justificam seleção de produção.
 - Migração multi-nó/instalador adaptativo: arquitetura definida; implementação por etapas pendente.
 - `vst doctor --json`: protótipo read-only criado; testes Python passaram no HEAD `93370f7dfc35d6ae2f9ba7085fa23032c173d09f`. A deteção de GPU/WebGL ainda falta.
+
+## Produto de distribuição: três aplicações separadas (decisão de arquitetura, 2026-10-31)
+
+A distribuição final deve ter **três artefactos instaláveis**, sem os confundir num único processo:
+
+1. **VST Backend** — pacote/instalador próprio para Windows e Linux. Instala o motor headless, os serviços comuns e os departamentos selecionados. Deve suportar instalação de todos os departamentos numa máquina ou distribuição de departamentos por vários PCs. O backend é soberano: não depende de qualquer UI, renderer, APK ou sessão gráfica para continuar a funcionar.
+2. **VST Desktop** — frontend de desktop instalável separadamente para Windows e Linux. Inclui cockpit, conversação e escritório virtual opcional. Liga-se a um backend local ou remoto autorizado. Fechar, reiniciar ou atualizar o frontend não pode parar o backend.
+3. **VST Android** — APK separado. Funciona como cliente móvel para conversação, estado, alertas e comandos autorizados; não aloja o cérebro nem substitui o backend.
+
+“Três aplicações” não significa necessariamente três formatos binários iguais: Windows poderá produzir instaladores/executáveis Windows; Linux deverá ter um pacote/instalador nativo ou bundle executável equivalente; Android produz APK. O formato de empacotamento concreto será escolhido após avaliar o runtime e as dependências existentes, sem prometer um .exe nativo em Linux.
+
+### Sistemas operativos e matriz de validação
+
+- **Windows:** backend e desktop são alvos de distribuição; manter e validar o instalador Windows existente.
+- **Linux:** backend e desktop são alvos explícitos de primeira classe. Criar adaptadores de serviço/arranque próprios do Linux; não reutilizar scripts Windows por suposição. Validar numa VM Linux em CI e, quando a máquina reconstruída chegar, numa instalação limpa de Linux.
+- **Android:** APK independente; validar em emulador e depois no telefone físico.
+- **Migração/fallback:** a instalação limpa Linux é a primeira experiência na nova máquina. Medir arranque, CPU, RAM, estabilidade e compatibilidade; só considerar Windows se houver evidência de incompatibilidade ou desempenho insuficiente.
+
+### Rede, acesso remoto e autenticação
+
+- **Tailscale** é a via preferida para ligar dispositivos autorizados fora da LAN; dentro de casa, preferir LAN quando adequada. A ligação de rede não substitui autenticação da aplicação, autorização por função, logs nem proteção de comandos.
+- O utilizador faz manualmente os logins e aprova autenticações, dispositivos, permissões e credenciais quando forem pedidos. Nunca embutir credenciais, tokens Tailscale ou chaves privadas nos instaladores, no repositório, no APK ou em logs.
+- O setup deve detetar e explicar que falta autenticação, abrir/instruir o passo de login e aguardar confirmação; não tentar contornar MFA, prompts ou aprovações humanas.
+- O VST não deve depender de Vercel para o funcionamento local do cérebro. Qualquer registo/descoberta externa será opcional, com fallback LAN/Tailscale e sem bloquear o runtime local quando o serviço externo estiver indisponível.
+- Não abrir portas públicas nem expor uma API de controlo sem autenticação forte, autorização, transporte protegido, limites de pedidos e auditoria. Os frontends são clientes não autoritativos; o backend valida cada comando.
+
+### Fases de entrega
+
+1. Preservar a segurança e a execução headless do cérebro; auditar os caminhos de arranque, paragem, recuperação e modo PAPER.
+2. Formalizar um contrato de API autenticada e de estado entre backend, desktop e Android.
+3. Separar os entrypoints e manifests de empacotamento do backend e desktop, sem duplicar lógica crítica.
+4. Implementar e testar instalação/remoção em Windows e Linux, serviços de arranque opcionais, atualização, logs, recuperação e migração de departamentos.
+5. Manter o APK como cliente fino e validar orientação, layout e reconexão.
+6. Fazer teste de instalação limpa Linux na máquina nova e recolher métricas antes de decidir se é necessário Windows.
+
+**Estado honesto:** esta secção regista a arquitetura-alvo acordada. Não significa que os três instaladores finais, o backend Linux, a ligação Tailscale integrada ou a instalação distribuída já estejam implementados. A PR atual continua a ser validada; cada capacidade só será marcada como concluída depois de existir código e teste reproduzível.
