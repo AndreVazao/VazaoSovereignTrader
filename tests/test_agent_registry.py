@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from PC_ENGINE.core.agent_registry import AgentRegistry, AgentRegistryError
@@ -54,6 +52,13 @@ def test_restore_is_idempotent_and_conflicting_record_is_rejected(tmp_path):
     conflicting = dict(record, creation_event_sha256="0" * 64)
     with pytest.raises(AgentRegistryError):
         restored.import_verified_record(conflicting)
+
+
+def test_restore_rejects_tampered_origin_even_if_hash_field_is_present(tmp_path):
+    record = create(AgentRegistry(tmp_path / "source.json"))
+    record["origin_type"] = "human_created"
+    with pytest.raises(AgentRegistryError):
+        AgentRegistry(tmp_path / "target.json").import_verified_record(record)
 
 
 def test_registry_refuses_to_overwrite_corrupt_file(tmp_path):
