@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import tempfile
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -48,8 +47,7 @@ class AgentRegistry:
             raise AgentRegistryError("Agent registry unreadable; refusing to overwrite") from exc
         if not isinstance(data, dict) or data.get("schema_version") != SCHEMA_VERSION:
             raise AgentRegistryError("Unsupported agent registry schema")
-        agents = data.get("agents")
-        if not isinstance(agents, dict):
+        if not isinstance(data.get("agents"), dict):
             raise AgentRegistryError("Invalid agent registry structure")
         return data
 
@@ -87,7 +85,10 @@ class AgentRegistry:
         agents = data["agents"]
         if agent_id in agents:
             existing = agents[agent_id]
-            if existing.get("origin_type") != origin_type or existing.get("created_by") != created_by:
+            if (existing.get("origin_type") != origin_type
+                    or existing.get("created_by") != created_by
+                    or existing.get("reason") != reason
+                    or existing.get("authorization_id") != authorization_id):
                 raise AgentRegistryError("Agent ID already exists with conflicting provenance")
             return dict(existing)
         record: dict[str, Any] = {
@@ -102,7 +103,8 @@ class AgentRegistry:
             "provenance_validated": True,
             "status": "active",
         }
-        record["creation_event_sha256"] = _canonical_hash(record)
+        event_payload = {key: value for key, value in record.items() if key != "status"}
+        record["creation_event_sha256"] = _canonical_hash(event_payload)
         agents[agent_id] = record
         self._write(data)
         return dict(record)
@@ -113,8 +115,16 @@ class AgentRegistry:
         origin = record.get("origin_type")
         if not agent_id or origin not in ORIGINS:
             raise AgentRegistryError("Imported record requires agent_id and a recognized origin")
+        if record.get("schema_version") != SCHEMA_VERSION:
+            raise AgentRegistryError("Unsupported imported agent schema")
         if not record.get("provenance_validated") or not record.get("creation_event_sha256"):
             raise AgentRegistryError("Imported record has no validated creation provenance")
+        event_payload = {
+            key: value for key, value in record.items()
+            if key not in {"creation_event_sha256", "status"}
+        }
+        if _canonical_hash(event_payload) != record["creation_event_sha256"]:
+            raise AgentRegistryError("Imported creation provenance hash is invalid")
         data = self._read()
         agents = data["agents"]
         existing = agents.get(agent_id)
@@ -123,7 +133,6 @@ class AgentRegistry:
                 raise AgentRegistryError("Conflicting restore record for existing agent ID")
             return dict(existing)
         clean = dict(record)
-        clean["schema_version"] = SCHEMA_VERSION
         clean["status"] = clean.get("status", "active") if clean.get("status", "active") in STATUSES else "suspended"
         agents[agent_id] = clean
         self._write(data)
