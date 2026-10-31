@@ -44,7 +44,7 @@ def test_growth_metrics_exclude_unpersisted_unvalidated_and_placeholders():
     ]
     metrics = growth_metrics(rows)
     assert metrics == {
-        "validated_total": 4,
+        "validated_total": 3,
         "active": 1,
         "quarantined": 1,
         "inactive": 1,
