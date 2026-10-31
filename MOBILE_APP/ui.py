@@ -6,7 +6,7 @@ from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.uix.floatlayout import FloatLayout
 from kivy.storage.jsonstore import JsonStore
-from kivy.graphics import Color, RoundedRectangle, Rectangle
+from kivy.graphics import Color, RoundedRectangle, Rectangle, Line
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -191,7 +191,61 @@ def build_agent_avatar(*, origin_type, provenance_validated, tint=ACCENT,
     return widget
 
 
-class BuildingPreview(Widget):
+
+
+class CEOWallArt(Widget):
+    """Low-cost decorative finance artwork inspired by the approved CEO reference."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        w, h = self.width, self.height
+        cx, cy = self.x + w * 0.48, self.y + h * 0.52
+        radius = min(w * 0.23, h * 0.42)
+        with self.canvas:
+            # Orbital globe and longitude/latitude rings.
+            Color(0.02, 0.10, 0.18, 1)
+            Rectangle(pos=self.pos, size=self.size)
+            Color(0.03, 0.32, 0.52, 0.9)
+            from kivy.graphics import Ellipse as CanvasEllipse\n            CanvasEllipse(pos=(cx-radius, cy-radius), size=(radius*2, radius*2))
+            Color(0.08, 0.72, 0.98, 0.8)
+            Line(circle=(cx, cy, radius), width=1.1)
+            Line(ellipse=(cx-radius*0.48, cy-radius, radius*0.96, radius*2), width=0.8)
+            Line(ellipse=(cx-radius*0.78, cy-radius*0.72, radius*1.56, radius*1.44), width=0.7)
+            Line(points=[cx-radius, cy, cx+radius, cy], width=0.7)
+            Line(points=[cx-radius*0.9, cy-radius*0.35, cx+radius*0.9, cy-radius*0.35], width=0.6)
+            Line(points=[cx-radius*0.9, cy+radius*0.35, cx+radius*0.9, cy+radius*0.35], width=0.6)
+            # Decorative candles only; these are not market data.
+            candle_colors = [(0.10, 0.85, 0.98, 1), (1.0, 0.70, 0.20, 1)]
+            for i, height_factor in enumerate((0.18, 0.28, 0.22, 0.42, 0.34, 0.56, 0.48, 0.72)):
+                x = self.x + w * (0.12 + i * 0.075)
+                base = self.y + h * 0.16
+                ch = h * height_factor
+                Color(*candle_colors[i % 2])
+                Line(points=[x, base, x, base+ch*1.18], width=1)
+                Rectangle(pos=(x-dp(2), base+ch*0.35), size=(dp(4), ch*0.48))
+            # Gold rising arrow, purely illustrative.
+            Color(*GOLD)
+            points = [self.x+w*0.10, self.y+h*0.23,
+                      self.x+w*0.36, self.y+h*0.34,
+                      self.x+w*0.57, self.y+h*0.48,
+                      self.x+w*0.77, self.y+h*0.70,
+                      self.x+w*0.88, self.y+h*0.84]
+            Line(points=points, width=dp(2.2), cap="round", joint="round")
+            Line(points=[self.x+w*0.88, self.y+h*0.84,
+                         self.x+w*0.77, self.y+h*0.80], width=dp(2.2))
+            Line(points=[self.x+w*0.88, self.y+h*0.84,
+                         self.x+w*0.85, self.y+h*0.72], width=dp(2.2))
+
+
+class Ellipse(Widget):
+    pass
+\n\nclass BuildingPreview(Widget):
     """Lightweight architectural schematic; scales uniformly to preserve proportions."""
 
     def __init__(self, **kwargs):
@@ -441,6 +495,19 @@ def build_chat_cockpit(app):
             color=MUTED,
         ))
         content.add_widget(banner)
+
+        # CEO wall artwork: locally drawn, decorative only, never sourced from market data.
+        ceo_art_card = Surface(
+            orientation="vertical", padding=dp(8), spacing=dp(3),
+            size_hint_y=None, height=dp(174), fill=(0.015, 0.035, 0.065, 1),
+        )
+        ceo_art_card.add_widget(_label(
+            "GABINETE DO CEO · PAINEL DECORATIVO",
+            size=10, color=GOLD, bold=True, size_hint_y=None, height=dp(20),
+        ))
+        ceo_art = CEOWallArt(size_hint=(1, 1))
+        ceo_art_card.add_widget(ceo_art)
+        content.add_widget(ceo_art_card)
 
         # Architectural preview uses a fixed internal coordinate system and uniform scaling.
         # The building itself is never stretched to fill a portrait or landscape viewport.
