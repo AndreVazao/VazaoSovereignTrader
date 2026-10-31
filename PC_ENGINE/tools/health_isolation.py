@@ -92,4 +92,4 @@ def evaluate_health(
             tuple(f"{s.code}:{s.severity.value}" for s in warnings),
         )
 
-    return HealthDecision(HealthState.HEALTHY, False, True, True, ())
+    return HealthDecision(HealthState.HEALTHY, False, True, False, ("health status never grants trading authority",))
