@@ -47,8 +47,9 @@ def avatar_kind(identity: AgentIdentity) -> AvatarKind:
 
 def growth_metrics(identities: Iterable[AgentIdentity]) -> dict[str, int]:
     """Count persisted, validated records only; never count visual placeholders."""
+    all_rows = tuple(identities)
     rows = [
-        row for row in identities
+        row for row in all_rows
         if row.persisted
         and row.provenance_validated
         and bool(row.agent_id.strip())
@@ -59,5 +60,5 @@ def growth_metrics(identities: Iterable[AgentIdentity]) -> dict[str, int]:
         "active": len({row.agent_id for row in rows if row.active and not row.quarantined}),
         "quarantined": len({row.agent_id for row in rows if row.quarantined}),
         "inactive": len({row.agent_id for row in rows if not row.active}),
-        "placeholders_excluded": sum(1 for row in identities if row.placeholder),
+        "placeholders_excluded": sum(1 for row in all_rows if row.placeholder),
     }
