@@ -207,3 +207,39 @@ A memória de aprendizagem partilhada pode conter apenas conhecimento técnico p
 7. Repetir em Windows e Linux; não declarar compatibilidade de vault até testar a integração de segredos do sistema operativo e o comportamento de recuperação.
 
 **Estado honesto:** consola de backend, vault, integração completa de Obscura, login de exchanges e USB de recuperação são requisitos definidos nesta secção, não funcionalidades já concluídas. Devem ser implementados em incrementos pequenos e testados antes de serem usados com contas reais.
+
+## Recuperação integral da aprendizagem — USB e nó de memória partilhada
+
+A recuperação deve incluir não apenas configuração e perfis de departamentos, mas também o estado de aprendizagem que o Sovereign Trader acumulou. Esta é uma capacidade obrigatória de portabilidade, ainda por implementar e validar.
+
+### Conteúdo a incluir no backup de aprendizagem
+- Ledger de evidência e respetivos metadados de proveniência, timestamps, versão de schema e auditoria.
+- Observações/resultados de aprendizagem PAPER, avaliações históricas e snapshots derivados que possam ser reconstruídos ou exportados.
+- Índices, checkpoints e estado necessário para retomar o processo de aprendizagem, acompanhados de versão do formato e versão do software que os produziu.
+- Manifesto de contagens, hashes, intervalo temporal, componentes incluídos/excluídos e validações de integridade.
+- Configuração de sincronização e identidade do nó apenas se o utilizador a selecionar; segredos e credenciais continuam excluídos por defeito.
+
+### USB cifrada: exportação e restauro
+- Exportação explícita pelo operador para um arquivo cifrado com passphrase/chave separada; a chave não pode ser guardada no mesmo USB ao lado do arquivo.
+- Oferecer dois perfis: **recuperação completa** (configuração + aprendizagem elegível + estado local selecionado) e **recuperação apenas de aprendizagem** (ledger, checkpoints, índices e metadados aprovados).
+- Importação em nova instalação com validação de assinatura/hash, schema, versão, origem e contagens antes de alterar o estado local. Importar primeiro para staging; só promover após validação completa e confirmação humana.
+- Restauro inválido, passphrase incorreta, ficheiro truncado, schema incompatível ou hash divergente deve falhar fechado, sem sobrescrever dados existentes. Criar snapshot do destino antes de promover a importação.
+- Segredos, sessões de browser, cookies e credenciais de exchange ficam excluídos por defeito. A recuperação exige reautenticação onde necessário.
+- A exportação nunca deve executar ordens, promover modo REAL nem mudar permissões de risco.
+
+### Memória partilhada remota (Vercel, Render ou alternativa)
+- O fornecedor de alojamento ainda não está decidido. O contrato deve ser independente do fornecedor e permitir exportar/recuperar a memória sem depender exclusivamente do serviço cloud.
+- Tratar a memória partilhada como réplica de conhecimento técnico/mercado explicitamente elegível, não como backup único nem fonte autoritativa de estado privado da organização.
+- Cada artefacto de aprendizagem deve incluir proveniência, versão, data, classe de conteúdo, hash e política de retenção; sincronização idempotente e reprocessável.
+- Aplicar allowlist positiva de tipos de aprendizagem, redaction e testes negativos para credenciais, cookies, e-mail, dados pessoais, saldos, posições, volumes privados, histórico identificável de ordens e configuração privada.
+- A aprendizagem local deve continuar se a cloud estiver indisponível; filas de sincronização persistem localmente e retomam quando a ligação regressar. Não bloquear o cérebro nem descartar aprendizagem local por falha de rede.
+- Restauro da memória cloud e importação USB devem passar pelo mesmo validador de schema, proveniência, integridade e privacidade. Deduplicar por identificador/hash para evitar duplicações.
+- Não afirmar que “tudo o que aprende” é partilhável: apenas aprendizagem aprovada pelo filtro pode sair da organização. O conjunto completo elegível para recuperação permanece exportável localmente, sob controlo do proprietário.
+
+### Critérios de aceitação
+1. Gerar aprendizagem de teste PAPER e exportar pacote completo e pacote só de aprendizagem para armazenamento local/USB.
+2. Restaurar em diretório/instalação limpa e verificar igualdade de contagens, hashes, versões e relatórios de auditoria.
+3. Passphrase errada, arquivo corrompido, schema desconhecido ou alteração de hash falham sem tocar no estado existente.
+4. Testes negativos demonstram que credenciais, cookies, dados pessoais e dados financeiros privados não entram na memória partilhada.
+5. Cloud offline não interrompe aprendizagem; após recuperação de rede, a sincronização retoma sem duplicados.
+6. Nenhum caminho de importação/exportação pode autorizar trading real ou submeter ordens.
