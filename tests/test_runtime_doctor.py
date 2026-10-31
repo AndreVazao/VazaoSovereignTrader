@@ -56,3 +56,74 @@ def test_doctor_does_not_create_missing_config_or_data_dirs(tmp_path: Path):
     assert report["checks"]["config"]["ok"] is False
     assert not (tmp_path / "PC_ENGINE" / "config").exists()
     assert not (tmp_path / "PC_ENGINE" / "data").exists()
+
+
+
+def test_visual_profile_keeps_lightweight_modes_available_without_renderer_probe(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    with patch("PC_ENGINE.tools.doctor._available_ram_bytes", return_value=16 * 1024**3), patch(
+        "PC_ENGINE.tools.doctor.os.cpu_count", return_value=8
+    ), patch("PC_ENGINE.tools.doctor._probe_webgl") as probe:
+        report = collect_diagnostics(tmp_path)
+
+    probe.assert_not_called()
+    assert report["renderer"]["status"] == "not_requested"
+    assert report["visual_profile"]["recommended_modes"]["chat"] is True
+    assert report["visual_profile"]["recommended_modes"]["pixel"] is True
+    assert report["visual_profile"]["recommended_modes"]["enhanced"] is False
+    assert report["visual_profile"]["recommended_modes"]["3d"] is False
+
+
+def test_visual_profile_allows_enhanced_but_not_3d_on_detected_software_renderer(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    renderer = {
+        "status": "probed",
+        "webgl1": True,
+        "webgl2": True,
+        "renderer": "SwiftShader",
+        "software_renderer_detected": True,
+    }
+    with patch("PC_ENGINE.tools.doctor._available_ram_bytes", return_value=16 * 1024**3), patch(
+        "PC_ENGINE.tools.doctor.os.cpu_count", return_value=8
+    ), patch("PC_ENGINE.tools.doctor._probe_webgl", return_value=renderer):
+        report = collect_diagnostics(tmp_path, probe_renderer=True)
+
+    assert report["renderer"] == renderer
+    assert report["visual_profile"]["recommended_modes"]["chat"] is True
+    assert report["visual_profile"]["recommended_modes"]["pixel"] is True
+    assert report["visual_profile"]["recommended_modes"]["enhanced"] is True
+    assert report["visual_profile"]["recommended_modes"]["3d"] is False
+    assert report["network_requests"] == 0
+    assert report["changes_made"] is False
+
+
+def test_visual_profile_enables_3d_only_with_webgl2_and_nonsoftware_renderer(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    renderer = {
+        "status": "probed",
+        "webgl1": True,
+        "webgl2": True,
+        "renderer": "Example Hardware Renderer",
+        "software_renderer_detected": False,
+    }
+    with patch("PC_ENGINE.tools.doctor._available_ram_bytes", return_value=16 * 1024**3), patch(
+        "PC_ENGINE.tools.doctor.os.cpu_count", return_value=8
+    ), patch("PC_ENGINE.tools.doctor._probe_webgl", return_value=renderer):
+        report = collect_diagnostics(tmp_path, probe_renderer=True)
+
+    assert report["visual_profile"]["recommended_modes"]["3d"] is True
+
+
+def test_renderer_probe_failure_is_unknown_and_does_not_echo_exception(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    with patch("PC_ENGINE.tools.doctor.importlib.util.find_spec", return_value=object()), patch(
+        "PC_ENGINE.tools.doctor._available_ram_bytes", return_value=16 * 1024**3
+    ), patch("PC_ENGINE.tools.doctor.os.cpu_count", return_value=8), patch(
+        "PC_ENGINE.tools.doctor._probe_webgl",
+        return_value={"status": "unknown", "reason": "BrowserTypeLaunchError", "webgl1": False, "webgl2": False},
+    ):
+        report = collect_diagnostics(tmp_path, probe_renderer=True)
+
+    assert report["renderer"]["status"] == "unknown"
+    assert report["visual_profile"]["recommended_modes"]["3d"] is False
+    assert "private" not in json.dumps(report).lower()
