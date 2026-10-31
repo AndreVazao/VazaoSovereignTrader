@@ -1,6 +1,6 @@
 # VST — origem dos agentes e identidade visual
 
-**Estado:** requisito de produto aprovado. A política de avatar/métricas e um primeiro registo persistente JSON foram implementados, com testes dedicados. Ainda falta ligar o registo ao caminho real de criação de agentes e ao renderer Android/desktop.
+**Estado:** política de avatar/métricas, registo persistente JSON e uma fronteira inicial de criação autorizada foram implementados com testes dedicados. A fronteira ainda não está ligada ao scheduler/API de produção nem ao renderer Android/desktop.
 
 ## Regra visual
 
@@ -49,6 +49,12 @@ Testes: `tests/test_agent_identity.py`.
 
 Testes: `tests/test_agent_registry.py`. O chamador continua responsável por autenticar e autorizar a criação antes de chamar o registo; o módulo não substitui o controlo de acesso nem é ainda o registo autoritativo usado por todo o runtime.
 
+### Fronteira de criação autorizada (implementação inicial)
+
+`PC_ENGINE/core/agent_lifecycle.py` introduz `AgentLifecycle`, que chama um autorizador de controlo-plane confiável antes de escrever no registo. `create_vst_agent()` fixa a origem como `vst_created` no backend, sem aceitar uma origem fornecida pelo cliente; `create_human_agent()` regista explicitamente origem humana. Se o autorizador não devolver um ID de autorização válido, a criação falha sem persistir o agente. Testes em `tests/test_agent_lifecycle.py` cobrem autorização, falha fechada e origem humana.
+
+**Limite importante:** o autorizador é uma dependência injetada e tem de ser fornecido por um controlo-plane autenticado; este módulo não implementa autenticação por si. A fronteira ainda não foi ligada ao caminho real de criação/scheduler/API do runtime, e não altera os avatares da aplicação.
+
 ## Distinguir crescimento real de crescimento aparente
 
 A contagem de robôs não é, por si só, prova de evolução. O painel de expansão deve distinguir:
@@ -79,4 +85,4 @@ Animações, agentes de demonstração e personagens offline não entram nas mé
 - Contadores distinguem personagens demonstrativos de agentes persistidos e validados.
 - O estado de saúde (enfermaria/quarentena/oficina) é independente da origem visual.
 
-**Integração pendente:** ligar o registo à criação real de agentes, definir migração segura para agentes existentes sem proveniência, expor a identidade por API autenticada e desenhar o avatar robótico no renderer Android/desktop. Não anunciar a experiência visual como funcional até esses passos e os testes correspondentes passarem.
+**Integração pendente:** ligar `AgentLifecycle` ao caminho real de criação de agentes e à API autenticada, definir migração segura para agentes existentes sem proveniência, fornecer identidades confiáveis ao renderer e desenhar o avatar robótico no renderer Android/desktop. Não anunciar a experiência visual como funcional até esses passos e os testes correspondentes passarem.
