@@ -100,9 +100,9 @@ Se um motor 3D futuro exigir GPU ou recursos acima do dispositivo, uma máquina 
 
 1. Auditar o core existente e os contratos reais antes de criar abstrações duplicadas.
 2. Consolidar testes headless de core e garantir que fechar a UI não interrompe o runtime.
-3. **Primeiro incremento implementado:** `PC_ENGINE/tools/doctor.py` e `tests/test_runtime_doctor.py` introduzem diagnóstico JSON somente leitura. O CI no HEAD `93370f7dfc35d6ae2f9ba7085fa23032c173d09f` confirmou os testes Python; o doctor continua a ser um diagnóstico inicial, não um instalador.
-4. Especificar e implementar um manifesto versionado de componentes e capability check antes da instalação de dependências opcionais.
-5. Acrescentar deteção testável de capacidades do renderer (incluindo WebGL no runtime real), com fallback chat/pixel e sem instalar dependências 3D desnecessárias.
+3. **Incremento implementado, validação pendente no HEAD atual:** `PC_ENGINE/tools/doctor.py` fornece diagnóstico JSON read-only e a opção `--probe-renderer` tenta uma prova local de WebGL/WebGL2 sem instalar browser ou usar URLs externas; `tests/test_runtime_doctor.py` cobre recomendações conservadoras e fallback em caso de renderer desconhecido.
+4. Implementar um manifesto versionado de componentes e ligar as recomendações a um instalador que só instale dependências opcionais depois da seleção explícita e validação.
+5. Validar o probe em Windows/Linux e num conjunto de equipamentos reais; distinguir GPU física de renderização por software e nunca assumir que WebGL implica desempenho 3D adequado.
 6. Implementar perfis declarativos, limites conservadores e adaptadores de serviço Linux/Windows sem alterações privilegiadas implícitas.
 7. Definir interface do browser, timeouts, health check e fallback; só integrar Obscura após benchmark e validar a fronteira de rede/pinning.
 8. Definir API/eventos do cockpit com autenticação/autorização e estado de saúde real.
