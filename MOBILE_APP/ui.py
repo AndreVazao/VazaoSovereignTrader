@@ -576,11 +576,11 @@ def build_chat_cockpit(app):
             padding=dp(8),
             spacing=dp(3),
             size_hint_y=None,
-            height=dp(188),
+            height=dp(240),
             fill=(0.025, 0.045, 0.065, 1),
         )
         building_card.add_widget(_label(
-            "EDIFÍCIO · PLANTA PROPORCIONAL",
+            "ESCRITÓRIO VST · VISTA ISOMÉTRICA",
             size=10,
             color=ACCENT,
             bold=True,
