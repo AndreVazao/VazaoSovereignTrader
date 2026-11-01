@@ -52,6 +52,18 @@ class MobileStartupContractTests(unittest.TestCase):
             with self.subTest(department=department):
                 self.assertIn(department, office)
 
+    def test_mobile_office_prioritizes_building_over_decorative_panels(self) -> None:
+        source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        office = source.split("    def office_page():", 1)[1].split("    def files_page():", 1)[0]
+        self.assertNotIn("ceo_art_card", office)
+        self.assertIn("height=max(dp(220), min(dp(340), Window.height * 0.36))", office)
+        self.assertIn("height=dp(62)", office)
+        self.assertIn("height=dp(126)", office)
+        self.assertLess(
+            office.index('"ESCRITÓRIO VST · VISTA ISOMÉTRICA"'),
+            office.index('"VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL"'),
+        )
+
     def test_virtual_building_preview_preserves_architectural_proportions(self) -> None:
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn("class BuildingPreview(Widget):", source)
