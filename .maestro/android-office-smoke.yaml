@@ -2,9 +2,8 @@ appId: pt.andrevazao.vazaosovereigntrader
 ---
 - launchApp
 - waitForAnimationToEnd
-# The office CTA sits near the lower edge of the scrollable first-run chooser on
-# the 1080x1920 CI emulator. 78% lands in the description on the current layout.
+# The chooser CTA is in the lower half of the virtual-office card, not at the bottom of the scroll view.
 - tapOn:
-    point: "50%, 92%"
+    point: "50%, 65%"
 - waitForAnimationToEnd
 - takeScreenshot: vst-android-office
