@@ -113,3 +113,22 @@ Comentário de aceitação visual já registado na PR: https://github.com/AndreV
 - HEAD da última consulta: a45c9f3c82a616f44baa580b4cc34e1221fe967d. Os novos workflows ainda não estavam disponíveis na consulta imediatamente após o commit; verificar novamente antes de assumir qualquer resultado.
 
 - Correção adicional da análise geométrica do formulário: 92% do ecrã também fica abaixo do botão. O toque foi corrigido para 65%, onde o CTA “USAR ESCRITÓRIO VIRTUAL” deve estar no layout atual; o contrato de teste foi alinhado. Commits: Maestro 0541831905ebc9ce8178044945638f343a9fb153; teste 6359357a2cd69dfc1fea86c5d69311f01ee84aad. A nova execução precisa confirmar a coordenada; se o layout mudar, preferir uma asserção visual/fluxo mais robusto.
+
+## Deskforce study and phased implementation — 2026-11-01
+
+Status: reference study only; no Deskforce code imported. Keep the VST brain as the authority for task state, risk policy, memory and trading permissions. Deskforce/Pixel Office are inspiration, not replacements.
+
+Architecture ideas to evaluate against existing VST code before adding abstractions:
+- Keep UI/cockpit as a thin client; renderer failure or closure must not interrupt headless market/risk/learning loops.
+- Persist task lifecycle and recovery state in the authoritative backend; verify scheduler/API integration before claiming end-to-end recovery.
+- Keep model-provider adapters behind contracts with timeouts, cancellation, budgets and secret-safe logs.
+- Require explicit authenticated authorization and audit for sensitive actions; health status or model output must never grant trading authority.
+- Office animation is DEMO/OFFLINE unless an authenticated backend confirms agent/task state.
+
+Phased plan:
+1. Stabilize #522: inspect current APK/emulator artifacts, improve mobile hierarchy so the building is the primary viewport, reduce redundant CEO artwork/cards, make room selection/zoom discoverable, and preserve portrait/landscape proportions.
+2. Add/strengthen focused layout and state-contract tests; run APK build and emulator screenshots, inspect artifacts, and document any remaining visual limitations.
+3. Compare the runtime/scheduler/persistence implementation with Deskforce concepts; implement only concrete gaps, with unit tests and no duplicate queue/store.
+4. Merge only when every required check is green on the exact HEAD and visual acceptance is met. Then verify main and open the next branch/PR only after #522 is merged, preserving one open implementation PR.
+
+Do not claim physical-phone validation without evidence. Keep trading PAPER/read-only; no real orders, real credentials, public ports, or mandatory paid services.
