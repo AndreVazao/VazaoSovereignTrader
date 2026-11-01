@@ -6,7 +6,7 @@ from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.uix.floatlayout import FloatLayout
 from kivy.storage.jsonstore import JsonStore
-from kivy.graphics import Color, RoundedRectangle, Rectangle, Line
+from kivy.graphics import Color, RoundedRectangle, Rectangle, Line, Mesh
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -247,53 +247,112 @@ class CEOWallArt(Widget):
 
 
 class BuildingPreview(Widget):
-    """Lightweight architectural schematic; scales uniformly to preserve proportions."""
+    """Lightweight isometric open-front office diorama; all geometry is local and decorative."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.bind(pos=self._draw_building, size=self._draw_building)
+        self._room_labels = []
+        for title, color in (
+            ("CEO", (0.96, 0.77, 0.35, 1)),
+            ("RADAR", (0.45, 0.85, 0.76, 1)),
+            ("COMPARAÇÃO", (0.55, 0.79, 0.98, 1)),
+            ("INVESTIGAÇÃO", (0.85, 0.76, 0.98, 1)),
+            ("ANÁLISE", (0.98, 0.69, 0.47, 1)),
+            ("MEMÓRIA", (0.48, 0.84, 0.88, 1)),
+        ):
+            label = Label(text=title, color=color, bold=True, font_size=dp(8),
+                          size_hint=(None, None), size=(dp(86), dp(16)),
+                          halign="center", valign="middle")
+            label.bind(size=lambda item, value: setattr(item, "text_size", value))
+            self.add_widget(label)
+            self._room_labels.append(label)
         self._draw_building()
 
     def _draw_building(self, *_):
         self.canvas.clear()
         if self.width <= 1 or self.height <= 1:
             return
-        base_w, base_h = 360.0, 190.0
+        # Use an isometric 2D projection. Scale uniformly to preserve the building shape.
+        base_w, base_h = 420.0, 250.0
         scale = min(self.width / base_w, self.height / base_h)
         ox = self.x + (self.width - base_w * scale) / 2
         oy = self.y + (self.height - base_h * scale) / 2
 
-        def box(x, y, w, h, rgba, radius=4):
+        def pt(x, y):
+            return (ox + x * scale, oy + y * scale)
+
+        def poly(points, rgba):
             Color(*rgba)
-            RoundedRectangle(
-                pos=(ox + x * scale, oy + y * scale),
-                size=(w * scale, h * scale),
-                radius=[radius * scale],
-            )
+            vertices = []
+            for x, y in points:
+                px, py = pt(x, y)
+                vertices.extend([px, py, 0, 0])
+            indices = []
+            for i in range(1, len(points) - 1):
+                indices.extend([0, i, i + 1])
+            Mesh(vertices=vertices, indices=indices, mode="triangles")
+
+        def line(points, rgba, width=1):
+            Color(*rgba)
+            Line(points=[v for point in points for v in pt(*point)], width=max(1, width * scale))
+
+        def desk(x, y, tint):
+            # Isometric desk top plus front edge and monitor.
+            poly([(x, y+10), (x+27, y), (x+53, y+12), (x+26, y+23)], tint)
+            poly([(x+3, y+12), (x+26, y+23), (x+26, y+28), (x+3, y+17)], (0.36, 0.27, 0.20, 1))
+            poly([(x+26, y+23), (x+53, y+12), (x+53, y+17), (x+26, y+28)], (0.48, 0.35, 0.25, 1))
+            poly([(x+20, y+7), (x+31, y+2), (x+31, y+13), (x+20, y+18)], (0.12, 0.22, 0.29, 1))
+            poly([(x+21, y+7), (x+30, y+3), (x+30, y+10), (x+21, y+14)], (0.22, 0.68, 0.82, 1))
+
+        def agent(x, y, shirt):
+            # Small voxel-like agent with head, torso and feet.
+            Color(0.83, 0.62, 0.44, 1)
+            Rectangle(pos=pt(x+5, y+15), size=(7*scale, 7*scale))
+            Color(0.22, 0.17, 0.14, 1)
+            Rectangle(pos=pt(x+4, y+21), size=(9*scale, 3*scale))
+            Color(*shirt)
+            Rectangle(pos=pt(x+3, y+7), size=(11*scale, 8*scale))
+            Color(0.17, 0.20, 0.25, 1)
+            Rectangle(pos=pt(x+4, y+2), size=(3*scale, 5*scale))
+            Rectangle(pos=pt(x+10, y+2), size=(3*scale, 5*scale))
 
         with self.canvas:
-            # Roof and structural frame remain in a fixed 360:190 coordinate system.
-            box(110, 158, 140, 20, (0.20, 0.48, 0.62, 1), 5)
-            box(122, 178, 116, 5, (0.33, 0.76, 0.98, 1), 2)
-            # CEO top floor
-            box(70, 126, 220, 27, (0.09, 0.19, 0.27, 1))
-            box(80, 131, 94, 17, (0.16, 0.34, 0.43, 1))
-            box(186, 131, 94, 17, (0.16, 0.34, 0.43, 1))
-            # Research floor: separate market radar, exchange comparison, investigation and analysis
-            box(35, 87, 290, 32, (0.07, 0.14, 0.20, 1))
-            for x in (43, 114, 185, 256):
-                box(x, 93, 62, 20, (0.12, 0.25, 0.32, 1))
-            # Central memory / rapid response / risk-control lower floor
-            box(55, 48, 250, 31, (0.08, 0.17, 0.20, 1))
-            for x, color in ((63, (0.13, 0.30, 0.28, 1)),
-                             (145, (0.13, 0.25, 0.35, 1)),
-                             (227, (0.30, 0.20, 0.13, 1))):
-                box(x, 54, 74, 19, color)
-            # Foundations and pillars
-            box(45, 34, 270, 8, (0.19, 0.24, 0.31, 1), 2)
-            for x in (68, 132, 196, 260):
-                box(x, 20, 8, 14, (0.20, 0.29, 0.37, 1), 2)
-            box(32, 10, 296, 8, (0.13, 0.18, 0.25, 1), 2)
+            # Soft warm backdrop and cast-free floor.
+            Color(0.96, 0.94, 0.88, 1)
+            Rectangle(pos=self.pos, size=self.size)
+            # Open-front floor: top diamond, front fascia, right fascia.
+            poly([(210, 30), (390, 105), (210, 190), (30, 105)], (0.78, 0.70, 0.56, 1))
+            poly([(30, 105), (210, 190), (210, 210), (30, 124)], (0.54, 0.45, 0.34, 1))
+            poly([(210, 190), (390, 105), (390, 125), (210, 210)], (0.63, 0.52, 0.39, 1))
+            # Back and side walls are cut away at the front to keep all rooms visible.
+            poly([(30, 105), (210, 30), (210, 78), (30, 153)], (0.87, 0.82, 0.71, 1))
+            poly([(210, 30), (390, 105), (390, 153), (210, 78)], (0.75, 0.68, 0.56, 1))
+            # Interior partitions create separate departments.
+            poly([(210, 78), (210, 126), (210, 174), (210, 126)], (0.68, 0.60, 0.48, 1))
+            line([(30, 105), (210, 180), (390, 105)], (0.42, 0.34, 0.25, 1), 2)
+            line([(120, 68), (120, 142)], (0.61, 0.53, 0.42, 1), 2)
+            line([(300, 68), (300, 142)], (0.61, 0.53, 0.42, 1), 2)
+            # Office desks and monitors, placed in the room footprints.
+            desk(70, 96, (0.56, 0.39, 0.26, 1))
+            desk(143, 65, (0.58, 0.42, 0.28, 1))
+            desk(236, 65, (0.56, 0.39, 0.26, 1))
+            desk(290, 98, (0.56, 0.39, 0.26, 1))
+            desk(174, 133, (0.56, 0.39, 0.26, 1))
+            # CEO occupies the rear/top office; other avatars are clearly separated.
+            agent(196, 82, (0.10, 0.42, 0.67, 1))
+            agent(104, 113, (0.12, 0.48, 0.38, 1))
+            agent(274, 113, (0.66, 0.35, 0.20, 1))
+            # Gold VST roof sign.
+            poly([(174, 204), (210, 189), (246, 204), (210, 219)], (0.08, 0.23, 0.32, 1))
+            line([(174, 204), (210, 219), (246, 204)], (1.0, 0.70, 0.20, 1), 2)
+
+        positions = ((167, 151), (45, 97), (112, 70), (247, 70), (310, 97), (170, 126))
+        for label, (x, y) in zip(self._room_labels, positions):
+            label.pos = pt(x, y)
+            label.size = (dp(78) * scale, dp(15) * scale)
+            label.font_size = max(dp(5), dp(8) * scale)
+
 
 def build_chat_cockpit(app):
     app.lang = getattr(app, "lang", {})
