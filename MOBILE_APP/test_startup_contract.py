@@ -56,7 +56,7 @@ class MobileStartupContractTests(unittest.TestCase):
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn("class BuildingPreview(Widget):", source)
         self.assertIn("scale = min(self.width / base_w, self.height / base_h)", source)
-        self.assertIn('"EDIFÍCIO · PLANTA PROPORCIONAL"', source)
+        self.assertIn('"ESCRITÓRIO VST · VISTA ISOMÉTRICA"', source)
         self.assertIn("building_preview = BuildingPreview(size_hint=(1, 1))", source)
         self.assertIn("building_card.add_widget(building_preview)", source)
 
@@ -96,7 +96,7 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("vst-landscape.png", script)
         self.assertIn("vst-tablet-landscape.png", script)
         self.assertIn('struct.unpack(">II", data[16:24])', script)
-        self.assertIn('point: "50%, 78%"', office_flow)
+        self.assertIn('point: "50%, 92%"', office_flow)
         self.assertIn("vst-office-entry.png", script)
         self.assertIn("office-ocr.txt", script)
         ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
