@@ -132,3 +132,9 @@ Phased plan:
 4. Merge only when every required check is green on the exact HEAD and visual acceptance is met. Then verify main and open the next branch/PR only after #522 is merged, preserving one open implementation PR.
 
 Do not claim physical-phone validation without evidence. Keep trading PAPER/read-only; no real orders, real credentials, public ports, or mandatory paid services.
+
+### Implementation phase 1 — mobile visual hierarchy (2026-11-01)
+- `MOBILE_APP/ui.py`: removed the separate decorative CEO wall-art card from the Office page so the isometric building appears earlier; reduced the offline notice from 82dp to 62dp; made the building card height adapt to viewport height within 220–340dp; reduced the separate offline animation panel from 170dp to 126dp.
+- `MOBILE_APP/test_startup_contract.py`: added a source contract guarding the new hierarchy and adaptive building height.
+- Commits made on the existing PR branch: `5620b65f3ff89833956ea0067ca13b550f8cfe22` (UI) and `bf8b582ce6e1cf63be4c7762d250dfcbfaf7e65d` (test). Documentation update for Deskforce is commit `8ddcaa130fc44ed9469bce5e93406840a4dfa076`.
+- Status: implementation committed, but CI for the newest HEAD and fresh emulator screenshots are still required. Do not treat source-contract tests as visual acceptance. Next: wait for checks, inspect portrait/landscape/tablet screenshots, then adjust scene framing/room selection based on evidence.
