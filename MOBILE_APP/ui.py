@@ -538,7 +538,7 @@ def build_chat_cockpit(app):
             padding=dp(12),
             spacing=dp(4),
             size_hint_y=None,
-            height=dp(82),
+            height=dp(62),
             fill=(0.12, 0.10, 0.055, 1),
         )
         banner.add_widget(_label(
@@ -556,19 +556,8 @@ def build_chat_cockpit(app):
         ))
         content.add_widget(banner)
 
-        # CEO wall artwork: locally drawn, decorative only, never sourced from market data.
-        ceo_art_card = Surface(
-            orientation="vertical", padding=dp(8), spacing=dp(3),
-            size_hint_y=None, height=dp(174), fill=(0.015, 0.035, 0.065, 1),
-        )
-        ceo_art_card.add_widget(_label(
-            "GABINETE DO CEO · PAINEL DECORATIVO",
-            size=10, color=GOLD, bold=True, size_hint_y=None, height=dp(20),
-        ))
-        ceo_art = CEOWallArt(size_hint=(1, 1))
-        ceo_art_card.add_widget(ceo_art)
-        content.add_widget(ceo_art_card)
-
+        # Keep the building as the primary visual element; decorative CEO artwork
+        # remains available elsewhere but must not push the actual office below the fold.
         # Architectural preview uses a fixed internal coordinate system and uniform scaling.
         # The building itself is never stretched to fill a portrait or landscape viewport.
         building_card = Surface(
@@ -576,7 +565,7 @@ def build_chat_cockpit(app):
             padding=dp(8),
             spacing=dp(3),
             size_hint_y=None,
-            height=dp(240),
+            height=max(dp(220), min(dp(340), Window.height * 0.36)),
             fill=(0.025, 0.045, 0.065, 1),
         )
         building_card.add_widget(_label(
@@ -598,7 +587,7 @@ def build_chat_cockpit(app):
             padding=dp(8),
             spacing=dp(4),
             size_hint_y=None,
-            height=dp(170),
+            height=dp(126),
             fill=(0.025, 0.045, 0.065, 1),
         )
         scene.add_widget(_label(
