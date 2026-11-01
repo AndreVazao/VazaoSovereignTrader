@@ -100,3 +100,11 @@ Comentário de aceitação visual já registado na PR: https://github.com/AndreV
 - Não usar credenciais reais nem executar ordens reais.
 - Não introduzir compras, serviços pagos obrigatórios, portas públicas ou dependências cloud críticas.
 - Ao retomar, começar por verificar estado atual da PR #522 e falha de Emulator run 153, porque esta documentação foi escrita para HEAD 1cd99862ac7590b9b60f364f921fd7e218a65e32.
+
+
+## Atualização de execução — 2026-11-01, depois do primeiro registo
+- Commit de documentação: 8fd0f2ad55ce22bdf6d762853fcb8d9fb169a12d.
+- O log do Emulator run 153 foi inspecionado. O build e instalação do APK funcionaram; o teste falhou porque, após o toque em 50%,78%, o OCR ainda encontrou o ecrã de escolha inicial (incluindo o botão “USAR ESCRITÓRIO VIRTUAL”) e não o ecrã do escritório. Isto indica que a coordenada de toque não selecionou a ação esperada; não é prova de crash da app.
+- Ajustei o cenário Maestro para tocar mais abaixo, em 50%,92%: commit 55f233b7d9f707e592d4bafeced0d0939e5ea4c3. A correção ainda precisa de CI para confirmar que a escolha é acionada.
+- Comecei a substituir o preview esquemático em MOBILE_APP/ui.py por uma cena geométrica isométrica local com piso em losango, paredes traseiras/laterais abertas, separadores, secretárias, monitores, agentes voxel e etiquetas de salas. Commit 5ecc6087206e932566279ad22d2e480572ecc623. Esta alteração ainda NÃO está validada por APK/emulador nem por teste físico; rever a escala e a legibilidade nas capturas antes de a considerar aceite.
+- Próxima ação imediata: consultar checks no HEAD mais recente, abrir os artefactos de screenshot, corrigir erros de renderização/OCR e ajustar a composição. Não fazer merge enquanto houver qualquer check vermelho ou a cena ainda não corresponder visualmente à referência.
