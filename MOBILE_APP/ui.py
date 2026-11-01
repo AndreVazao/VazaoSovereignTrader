@@ -366,7 +366,7 @@ def build_chat_cockpit(app):
     if saved_experience not in {"chat", "office"}:
         saved_experience = ""
     phone_layout = Window.width <= dp(520)
-    sidebar_width = dp(54) if phone_layout else dp(78)
+    sidebar_width = dp(72) if phone_layout else dp(96)
     root = BoxLayout(orientation="horizontal", spacing=0, padding=[0, dp(4), 0, dp(4)])
     sidebar = Surface(orientation="vertical", size_hint_x=None, width=sidebar_width, padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
     root.add_widget(sidebar)
@@ -384,8 +384,13 @@ def build_chat_cockpit(app):
     nav_buttons = {}
 
     def nav(label, key, icon):
-        btn = RoundedButton(text=icon + "\n" + label, fill=PANEL, size_hint_y=None, height=dp(58))
-        btn.font_size = dp(10)
+        # Keep navigation labels on one line on narrow screens.
+        mobile_labels = {"chat": "Chat", "office": "Office", "experience": "Modo",
+                         "pc": "PC", "files": "Files", "human": "Humano", "ready": "Ready"}
+        text = mobile_labels.get(key, label) if phone_layout else label
+        btn = RoundedButton(text=text, fill=PANEL, size_hint_y=None,
+                            height=dp(48 if phone_layout else 58))
+        btn.font_size = dp(9 if phone_layout else 10)
         btn.bind(on_release=lambda *_: show_page(key))
         sidebar.add_widget(btn)
         nav_buttons[key] = btn
@@ -609,13 +614,6 @@ def build_chat_cockpit(app):
             ("ANÁLISE", "analysis", 0.52),
             ("MEMÓRIA", "memory", 0.76),
         ]
-        for station_name, _room_key, x_fraction in stations:
-            marker = _label(station_name, size=8, color=MUTED)
-            marker.size_hint = (None, None)
-            marker.size = (dp(64), dp(18))
-            marker.pos_hint = {"x": x_fraction, "y": 0.03}
-            stage.add_widget(marker)
-
         agents = []
         agent_specs = [
             ("o\n/|\
