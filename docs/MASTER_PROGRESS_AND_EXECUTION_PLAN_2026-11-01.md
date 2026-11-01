@@ -111,3 +111,5 @@ Comentário de aceitação visual já registado na PR: https://github.com/AndreV
 
 - Iteração seguinte: o contrato de teste MOBILE_APP/test_startup_contract.py também foi atualizado para esperar a nova coordenada de toque e o título da cena isométrica (commit b59c653516894f810f88a64dec0ba509cec29b36). A área da cena foi aumentada e o título da vista foi atualizado em MOBILE_APP/ui.py (commit a45c9f3c82a616f44baa580b4cc34e1221fe967d).
 - HEAD da última consulta: a45c9f3c82a616f44baa580b4cc34e1221fe967d. Os novos workflows ainda não estavam disponíveis na consulta imediatamente após o commit; verificar novamente antes de assumir qualquer resultado.
+
+- Correção adicional da análise geométrica do formulário: 92% do ecrã também fica abaixo do botão. O toque foi corrigido para 65%, onde o CTA “USAR ESCRITÓRIO VIRTUAL” deve estar no layout atual; o contrato de teste foi alinhado. Commits: Maestro 0541831905ebc9ce8178044945638f343a9fb153; teste 6359357a2cd69dfc1fea86c5d69311f01ee84aad. A nova execução precisa confirmar a coordenada; se o layout mudar, preferir uma asserção visual/fluxo mais robusto.
