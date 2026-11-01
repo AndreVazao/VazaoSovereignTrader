@@ -2,8 +2,8 @@ appId: pt.andrevazao.vazaosovereigntrader
 ---
 - launchApp
 - waitForAnimationToEnd
-# The chooser CTA is in the lower half of the virtual-office card, not at the bottom of the scroll view.
+# CTA center verified from the emulator chooser screenshot; tap the button rather than the descriptive text above it.
 - tapOn:
-    point: "50%, 65%"
+    point: "50%, 71%"
 - waitForAnimationToEnd
 - takeScreenshot: vst-android-office
