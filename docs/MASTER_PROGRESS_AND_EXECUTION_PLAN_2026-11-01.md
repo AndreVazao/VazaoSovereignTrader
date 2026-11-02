@@ -216,3 +216,13 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - Updated the assertion to require `startup_health_report is None`, while also requiring readiness to remain `UNKNOWN` and `verified is False`. This preserves the security property: an invalid identity cannot resolve another owner's report.
 - Correction commit: `223d5b60d4e41245184d851d7003cb7a14ce3104`.
 - Fresh CI on this exact commit is required; do not treat the prior run as green. The PR remains open and unmerged.
+
+
+### Preparação do teste local com Desktop Commander — 2026-11-02
+- O utilizador confirmou que o Desktop Commander está agora disponível na conta ChatGPT principal (`vazao.andre@gmail.com`); a conta secundária `aiamorchato@gmail.com` não é a conta-alvo para a execução local.
+- Criado `prompts/PROMPT_MASTER_LOCAL_WINDOWS_BACKEND_E2E.md`: procedimento completo para validar o backend headless no PC Windows antigo, com segurança PAPER/read-only, confirmação de identidade do build, instalação, diagnóstico, ciclo start/stop/restart, persistência SQLite/vault, isolamento de rede e recolha de evidências. Inclui condições explícitas de paragem e proíbe ações financeiras reais.
+- Criado `docs/templates/LOCAL_WINDOWS_BACKEND_E2E_REPORT_TEMPLATE.md`: matriz de testes e estrutura para relatório detalhado com evidências, hashes, erros, resultados bloqueados e plano de correções.
+- O relatório final e as evidências sanitizadas devem ficar em `artifacts/local-validation/<timestamp>/` no checkout local e numa pasta local separada. Desktop Commander não deve fazer commit/push automaticamente; o relatório será revisto antes de ser anexado ou integrado.
+- Regra de segurança: só instalar o artefacto Windows produzido para o HEAD exato e com workflow de build verificado. Se não existir um artefacto validado, marcar instalação E2E como BLOCKED e executar apenas verificações locais não destrutivas. Não desinstalar/reinstalar nem migrar dados sem backup verificado e autorização explícita.
+- Commits de preparação: `4fde608a37cd257f88a5da40df064686dd0d0d60` (Prompt Master) e `e428ac2c7be492462557b69fd6748de252f2991a` (template de relatório). A documentação desta atualização segue no mesmo PR/branch.
+- Estado CI observado no HEAD `e428ac2c7be492462557b69fd6748de252f2991a`: Python, Windows EXE, Trading PAPER smoke, APK, Emulator UI, Obscura e Diorama ainda estavam em execução/na fila. Não instalar até confirmar build Windows e verificações de segurança no HEAD final.
