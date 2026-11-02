@@ -177,3 +177,28 @@ def test_doctor_rejects_invalid_startup_health_report(tmp_path: Path):
     assert report["runtime_readiness"]["status"] == "INVALID"
     assert report["runtime_readiness"]["verified"] is False
     assert report["runtime_readiness"]["reason"] == "JSONDecodeError"
+
+
+
+def test_doctor_keeps_runtime_in_safe_state_when_recovery_check_failed(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    data_dir = tmp_path / "PC_ENGINE" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "startup_health.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "status": "READY",
+            "paper_only": True,
+            "critical_checks": [],
+            "checks": {
+                "startup_mode": {"ok": True, "effective": "PAPER"},
+                "recovery_integrity": {"ok": False},
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    report = collect_diagnostics(tmp_path)
+
+    assert report["runtime_readiness"]["status"] == "SAFE_STATE"
+    assert report["runtime_readiness"]["verified"] is False
