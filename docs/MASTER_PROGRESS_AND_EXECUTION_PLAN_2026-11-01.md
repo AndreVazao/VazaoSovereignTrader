@@ -180,3 +180,12 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - Modo operacional de desenvolvimento: PAPER/read-only; não ligar contas reais nem enviar ordens.
 - Manter uma única PR/branch ativa. A PR #522 permanece aberta; não fazer merge até CI obrigatório e critérios aplicáveis estarem satisfeitos.
 - Percentagens reportadas como estimativas separadas de implementação, CI, pacote produzido e teste local real.
+
+
+### Backend progress log — 2026-11-02 (continued)
+- The latest completed CI run before the newest doctor changes reported Python tests, PAPER smoke, Windows EXE build and Android APK build as successful; Android Emulator UI Smoke still failed. These results are for commit `0c83a99f`, not for the current HEAD, and must not be carried forward as current validation.
+- `GET /health` now reports API liveness separately from the engine status, including `engine_running`; tests cover stopped and running snapshots. This prevents an available API from being misread as a running brain.
+- `vst doctor` now reports `runtime_readiness` separately from install preflight. Missing startup health is `UNKNOWN`; invalid JSON/schema is `INVALID`; recovery failure/non-PAPER startup is `SAFE_STATE`; only a PAPER startup report with explicit passing mode and recovery checks can report `STARTUP_CHECKS_PASSED`.
+- This status is deliberately named `STARTUP_CHECKS_PASSED`, not “fully ready”: it is not proof of an end-to-end lifecycle, active heartbeat, working market-data feed, or successful PC installation.
+- Tests were added for missing/invalid startup reports and failed recovery checks. The latest commits are awaiting their own CI results; do not describe them as passed until the exact HEAD has completed its workflows.
+- Next engineering task remains the integrated PAPER lifecycle gate: start -> authenticated diagnostics/heartbeat -> persistence -> clean stop -> restart/recovery -> confirm no duplicate pending execution and no permission escalation.
