@@ -30,11 +30,25 @@ class FakeEngine:
         self.mode = mode
 
 
-def test_health_is_public():
+def test_health_is_public_but_does_not_claim_engine_ready_when_stopped():
     client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.get_json()["ok"] is True
+    payload = response.get_json()
+    assert payload["ok"] is True  # API process is alive.
+    assert payload["engine_status"] == "OFF"
+    assert payload["engine_running"] is False
+    assert "does not imply engine readiness" in payload["readiness_note"]
+
+
+def test_health_reports_engine_running_separately_from_api_liveness():
+    engine = FakeEngine()
+    engine.snapshot = lambda: {"status": "RUNNING", "mode": "PAPER"}
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+    payload = client.get("/health").get_json()
+    assert payload["ok"] is True
+    assert payload["engine_status"] == "RUNNING"
+    assert payload["engine_running"] is True
 
 
 def test_status_requires_token(monkeypatch):
