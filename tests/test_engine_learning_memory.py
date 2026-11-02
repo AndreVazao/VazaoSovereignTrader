@@ -20,8 +20,10 @@ def test_engine_wires_owner_private_durable_memory_to_autonomous_research(tmp_pa
     try:
         memory = engine.learning_memory
         assert isinstance(memory, SQLiteLearningMemory)
-        expected_path = engine.owner_context.private_path("learning/sovereign-learning.sqlite3")
+        expected_path = engine.vault_root / "learning" / engine.owner_id / "sovereign-learning.sqlite3"
         assert Path(memory.database_path) == expected_path
+        assert engine.owner_id in Path(memory.database_path).parts
+        assert engine.vault_root in Path(memory.database_path).parents
         assert engine.autonomous_research.learning_memory is memory
         assert engine.state.operational["learning_memory"]["state"] == "READY"
         assert engine.state.operational["learning_memory"]["order_authority"] is False
