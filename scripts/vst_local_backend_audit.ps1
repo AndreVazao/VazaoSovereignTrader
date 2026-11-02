@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "VazaoSovereignTrader"),
-    [string]$OutputRoot = (Join-Path $env:LOCALAPPDATA "VazaoSovereignTrader\artifacts\local-validation"),
+    [string]$OutputRoot = (Join-Path $env:USERPROFILE "Documents\VST-Local-Validation"),
     [int]$Port = 8765
 )
 $ErrorActionPreference = "Stop"
