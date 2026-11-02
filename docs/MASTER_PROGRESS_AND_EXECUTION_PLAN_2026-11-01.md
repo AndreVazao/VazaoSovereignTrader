@@ -236,3 +236,17 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - Updated `prompts/PROMPT_MASTER_LOCAL_WINDOWS_BACKEND_E2E.md` to require running the audit and attaching its Markdown/JSON output to the evidence index.
 - Latest source changes are on the existing PR #522 / branch `fix/android-office-layout-2026-10-30`; do not create a second active PR. New commits require fresh exact-HEAD CI and a new Windows installer artifact before local installation.
 - Limitations are explicit: this audit is observational and does not prove vault continuity, perform migration, test authenticated private endpoints, or establish end-to-end trading readiness. Those remain separate gated tests. Keep PAPER/read-only; no REAL credentials or orders.
+
+
+## Atualização de execução — 2026-11-02, ciclo de persistência headless
+
+- A prioridade foi corrigida para cérebro/backend primeiro; a UI Android fica em segundo plano.
+- HEAD de trabalho atualizado nesta sequência:
+  - `05b3feeeb458778bf3e5b8bd6e0c6f88af1ea5d6` — adicionou `tests/test_headless_lifecycle_persistence.py`.
+  - `70f088b2945e55c7d3e82e8e3a3ec83058969bc1` — corrigiu o teste para passar configuração PAPER explicitamente.
+- O novo teste cobre, em ambiente temporário, relatório de startup PAPER, integridade de recovery, gravação de uma única observação sintética em SQLite, fecho/reabertura da base e confirmação de que o registo/evento continuam únicos. É um teste de componentes; **não** simula ainda o processo EXE real, o heartbeat do servidor, autenticação HTTP, o serviço collector nem preservação durante uninstall/reinstall.
+- Não declarar o teste aprovado até o workflow Python executar no SHA exato `70f088b2945e55c7d3e82e8e3a3ec83058969bc1`. A consulta imediata após o commit ainda não devolveu runs/statuses associados a esse SHA.
+- Estado confirmado no último commit com workflows consultáveis (`dc5e42b88f53c2464b86c8c1a7662ec0a89baac8`): Python tests, PAPER smoke, Windows EXE/installer, Android APK e protótipo VM passaram; Android Emulator UI Smoke falhou porque o Maestro não encontrou o texto `USAR ESCRITÓRIO VIRTUAL`. O log mostra que o emulador arrancou, instalou e lançou a aplicação; a falha ocorreu no seletor do ecrã, portanto a hipótese de falha ADB isolada não explica o log observado.
+- O status combinado de `dc5e42b...` mantém `security/snyk (andrevazao)=error`; Vercel está `success`. A causa Snyk não foi identificada e não há evidência para a classificar como falso positivo ou vulnerabilidade concreta.
+- PR #522 continua aberta e não deve ser merged. Manter apenas esta branch ativa.
+- Próximos passos: obter CI para o teste novo no SHA exato; corrigir/explicar Snyk a partir de evidência; depois expandir o lifecycle para testar serviço real em PAPER e heartbeat/stop/restart de forma isolada, sem tocar no vault do proprietário. O teste local no PC continua pendente. Não executar uninstall/reinstall no PC sem backup verificado do vault e autorização explícita.
