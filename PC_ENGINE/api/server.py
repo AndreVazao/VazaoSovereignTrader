@@ -215,11 +215,26 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
 
     @app.get("/health")
     def health():
+        """Public liveness endpoint; service liveness is not engine readiness."""
+        runtime_status = "UNKNOWN"
+        try:
+            state = getattr(engine, "state", None)
+            runtime_status = str(getattr(state, "status", "") or "")
+            if not runtime_status:
+                snapshot = getattr(engine, "snapshot", None)
+                payload = snapshot() if callable(snapshot) else {}
+                runtime_status = str(payload.get("status", "UNKNOWN")) if isinstance(payload, dict) else "UNKNOWN"
+        except Exception:
+            # Health checks must fail closed for readiness without exposing exception details.
+            runtime_status = "UNKNOWN"
         return jsonify({
             "ok": True,
             "service": "VazaoSovereignTrader",
             "mode": engine.mode,
             "owner_id": engine.owner_id,
+            "engine_status": runtime_status,
+            "engine_running": runtime_status == "RUNNING",
+            "readiness_note": "API liveness does not imply engine readiness or trading authorization",
         })
 
     @app.get("/learning-memory/health")
