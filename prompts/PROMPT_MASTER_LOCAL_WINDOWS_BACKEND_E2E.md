@@ -25,9 +25,9 @@ Do not work on the visual office, Android APK, DGM-MAT, Obscura, or unrelated pr
 1. Confirm Desktop Commander is connected to the intended old Windows PC. Record Windows edition/build, architecture, available disk space, current date/time and timezone, and whether the current session is elevated. Do not include the Windows account's full personal path in the report; redact it as `<USER>`.
 2. Inspect the repository/PR and identify the exact current PR #522 HEAD at `https://github.com/AndreVazao/VazaoSovereignTrader/pull/522`. Record commit SHA and CI statuses for that exact SHA. Do not reuse CI results from earlier commits.
 3. Fetch the PR branch `fix/android-office-layout-2026-10-30` from `origin` and verify the fetched commit SHA matches the PR HEAD before running repository tools. Check `git status` first; never overwrite or reset local changes. If the checkout is dirty or on another task, use a separate clean worktree/clone rather than forcing a checkout. Do not merge PR #522 locally or change the user's active branch.
-3. Look for the Windows EXE installer/artifact built for that exact SHA. Verify its origin, artifact name, build workflow result, checksum if supplied, and whether it is a debug/test or production installer.
-4. **Do not install a stale, unverified, or mismatched artifact.** If the exact-HEAD Windows build is missing, red, or cannot be authenticated, mark installation tests BLOCKED, save the evidence, and perform only safe read-only machine/repository preflight checks. Do not substitute an old installer without explicitly documenting the mismatch.
-5. Record the exact EXE filename, artifact/run identifier, SHA-256, file size, and source URL. Do not run unknown downloaded binaries.
+4. Look for the Windows EXE installer/artifact built for that exact SHA. Verify its origin, artifact name, build workflow result, checksum if supplied, and whether it is a debug/test or production installer.
+5. **Do not install a stale, unverified, or mismatched artifact.** If the exact-HEAD Windows build is missing, red, or cannot be authenticated, mark installation tests BLOCKED, save the evidence, and perform only safe read-only machine/repository preflight checks. Do not substitute an old installer without explicitly documenting the mismatch.
+6. Record the exact EXE filename, artifact/run identifier, SHA-256, file size, and source URL. Do not run unknown downloaded binaries.
 
 ## Phase 1 — pre-install machine and safety preflight
 
