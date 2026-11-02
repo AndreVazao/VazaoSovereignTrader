@@ -30,6 +30,7 @@ from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
 from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
+from PC_ENGINE.learning.memory_backup import backup_learning_memory
 from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
@@ -183,6 +184,12 @@ class SovereignEngine:
                 else:
                     learning_path = self.vault_root / "learning" / self.owner_id / "sovereign-learning.sqlite3"
                 learning_path.parent.mkdir(parents=True, exist_ok=True)
+                if not configured_learning_path and not learning_path.exists():
+                    legacy_path = self.owner_context.private_path("learning/sovereign-learning.sqlite3")
+                    if legacy_path.is_file():
+                        # Copy through SQLite's consistent backup API; preserve the legacy source.
+                        backup_learning_memory(legacy_path, learning_path)
+                        learning_state["migration"] = "copied_legacy_database_without_deleting_source"
                 self.learning_memory = SQLiteLearningMemory(learning_path)
                 learning_state["path"] = str(learning_path)
                 learning_state["vault_root"] = str(self.vault_root)
