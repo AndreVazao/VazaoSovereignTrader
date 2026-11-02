@@ -105,3 +105,28 @@ Run only the tests supported by the installed package and documented interfaces.
 ## Final instruction
 
 Prefer conservative, reversible checks. Collect evidence, do not improvise. The goal is to make the next engineering decision obvious to the primary developer while protecting the owner's PC, data, credentials, and funds.
+
+
+## Persistent learning vault — required validation
+
+The runtime now resolves a per-user vault outside the install directory. On Windows, the default root is under `%LOCALAPPDATA%\\VazaoSovereignTrader\\vault` (falling back to `%APPDATA%` if needed). An explicit `VST_VAULT_PATH` environment variable can override it; do not set this unless the owner has chosen the destination.
+
+Expected layout:
+- `vault_manifest.json`
+- `learning/<owner-id>/sovereign-learning.sqlite3`
+- `backups/`
+- `imports/` (quarantine only; never auto-apply imported data)
+- `exports/`
+- `logs/`
+
+Add these checks to the report:
+1. Record the resolved vault root from runtime diagnostics without exposing private unrelated paths.
+2. Confirm learning database path is inside the vault and outside the installation directory.
+3. Write a harmless test learning record only if a documented non-financial test interface exists; otherwise mark persistence-write test NOT RUN.
+4. Stop the app, verify the database remains, and record file size and SHA-256 without modifying it.
+5. Uninstall the application, then confirm the vault and database remain. Do not manually delete them.
+6. Reinstall a newer build from a verified commit, confirm the same vault is reused, and verify the existing record count/data remain. Do not run schema destructive migrations.
+7. If a legacy learning DB exists under the old owner-private runtime directory, verify migration copies it to the vault using SQLite backup and leaves the original untouched.
+8. Record any mismatch as FAIL/BLOCKED. Never restore or overwrite a live database automatically.
+
+Uninstall preservation must be verified in the actual installer; the vault code alone does not prove the installer preserves it.
