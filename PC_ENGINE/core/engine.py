@@ -178,9 +178,18 @@ class SovereignEngine:
             try:
                 configured_learning_path = learning_cfg.get("path")
                 if configured_learning_path:
-                    learning_path = Path(str(configured_learning_path)).expanduser()
-                    if not learning_path.is_absolute():
-                        learning_path = self.vault_root / learning_path
+                    configured_path = Path(str(configured_learning_path)).expanduser()
+                    if configured_path.is_absolute():
+                        # Absolute paths remain an explicit operator override.
+                        learning_path = configured_path
+                    else:
+                        # Relative paths are owner-scoped inside the durable vault.
+                        # Preserve the legacy config convention "learning/<file>"
+                        # without creating a duplicated learning/learning directory.
+                        relative_parts = configured_path.parts
+                        if relative_parts and relative_parts[0].lower() == "learning":
+                            relative_parts = relative_parts[1:]
+                        learning_path = self.vault_root / "learning" / self.owner_id / Path(*relative_parts)
                 else:
                     learning_path = self.vault_root / "learning" / self.owner_id / "sovereign-learning.sqlite3"
                 learning_path.parent.mkdir(parents=True, exist_ok=True)
