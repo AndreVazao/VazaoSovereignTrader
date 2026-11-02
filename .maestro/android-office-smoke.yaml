@@ -2,8 +2,8 @@ appId: pt.andrevazao.vazaosovereigntrader
 ---
 - launchApp
 - waitForAnimationToEnd
-# CTA center verified from the emulator chooser screenshot; tap the button rather than the descriptive text above it.
+# CTA center is about 60% down the 1080x1920 chooser capture; tap the office button rather than the descriptive text above it.
 - tapOn:
-    point: "50%, 71%"
+    point: "50%, 60%"
 - waitForAnimationToEnd
 - takeScreenshot: vst-android-office
