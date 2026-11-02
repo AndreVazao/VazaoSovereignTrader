@@ -146,3 +146,37 @@ Do not claim physical-phone validation without evidence. Keep trading PAPER/read
 - Failure artifact showed the app alive on the first-run chooser; no office screenshot was produced. Comparing the 1080x1920 chooser capture with the Maestro tap target revealed the configured 71% vertical point landed below the office CTA (the button center is around 60%).
 - Updated `.maestro/android-office-smoke.yaml` and its source-contract assertion to tap `50%, 60%`. This is a test-coordinate correction based on the captured UI, not yet a passing validation.
 - Next gate: wait for fresh checks on the resulting exact HEAD, inspect office/portrait/landscape/tablet screenshots, and merge only when every required workflow is green. Physical-phone validation remains unconfirmed.
+
+
+## Mudança de prioridade — 2026-11-02: pausa visual, foco exclusivo no cérebro
+
+Decisão explícita do proprietário: suspender novas alterações de UI/arte do APK enquanto se acelera o backend/cérebro. Não investir ciclos em avatares, renderer, layout ou animações nesta fase. Alterações mínimas na UI só são permitidas se forem necessárias para testar ou desbloquear o backend.
+
+### Auditoria inicial do runtime (código consultado na branch ativa)
+- `PC_ENGINE/main.py` seleciona `PaperConfluenceEngine` em modo PAPER quando a confluência está ativa; cria relatório `StartupHealth`; cria a API; o auto-start depende de `engine.auto_start_paper`; por omissão a API usa loopback e fecha o motor no encerramento.
+- `PC_ENGINE/core/startup_health.py` escreve um relatório de arranque e considera `recovery_manager_missing` crítico. O modo REAL configurado é degradado para PAPER no relatório, mas esta verificação não substitui uma prova end-to-end de que todas as rotas de execução ficam bloqueadas.
+- `PC_ENGINE/tools/health_isolation.py` calcula decisões fail-closed de isolamento, mas o próprio módulo declara que não para workers nem altera o runtime. É uma política, não um supervisor operacional integrado.
+- `tests/test_real_controlled_runtime_e2e.py` contém um adaptador sintético controlado que testa a cadeia de ordens com gate REAL explicitamente ativado em teste. Não prova acesso a uma exchange real nem prontidão para trading real.
+- O projeto tem testes de recuperação, memória SQLite/backup, PAPER, saúde de market data, risco final e superfícies de execução. A próxima etapa é consolidar esses testes num gate de prontidão único, com evidência legível, em vez de inferir prontidão a partir da presença de módulos.
+
+### Próximo marco de backend: instalação de teste segura
+1. Fazer inventário das dependências e dos comandos suportados de arranque/diagnóstico; manter o serviço headless independente do cockpit.
+2. Criar/fortalecer um comando de diagnóstico que devolva estado estruturado para configuração, modo PAPER efetivo, recuperação, persistência de memória, serviços/collector, API local e bloqueio de execução REAL.
+3. Criar um teste end-to-end de ciclo de vida: iniciar runtime PAPER, consultar saúde autenticada/local, verificar heartbeat e persistência, parar, reiniciar e comprovar recuperação sem duplicação nem promoção de permissões.
+4. Executar testes focados e os workflows Python, PAPER smoke e Windows EXE no HEAD exato. Não afirmar que está pronto para PC até o artefacto e o ciclo de arranque serem verificáveis.
+5. Produzir uma instrução simples para o primeiro teste local quando o utilizador tiver o PC disponível; sem chaves reais, sem ordens reais, sem portas públicas.
+
+### Critérios para declarar o cérebro pronto para primeiro teste local
+- Arranque repetível e encerramento limpo do processo headless.
+- Estado `PAPER` efetivo e bloqueio fail-closed de execução real.
+- Diagnóstico exportável com falhas explícitas, não apenas um rótulo `RUNNING`.
+- Persistência/recovery validados com reinício.
+- API limitada a loopback por defeito, controlo autenticado e nenhum segredo registado em logs.
+- Windows EXE compilado no HEAD exato e pacote/artefacto inspecionado; teste físico local ainda deve ser marcado como pendente até executado no PC do utilizador.
+
+### Regras para esta fase
+- UI visual: **PAUSADA**. Não fazer mais alterações cosméticas no APK.
+- Prioridade: backend, diagnóstico, ciclo de vida, segurança, memória/recovery e PAPER end-to-end.
+- Modo operacional de desenvolvimento: PAPER/read-only; não ligar contas reais nem enviar ordens.
+- Manter uma única PR/branch ativa. A PR #522 permanece aberta; não fazer merge até CI obrigatório e critérios aplicáveis estarem satisfeitos.
+- Percentagens reportadas como estimativas separadas de implementação, CI, pacote produzido e teste local real.
