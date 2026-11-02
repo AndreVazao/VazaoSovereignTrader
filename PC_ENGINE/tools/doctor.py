@@ -190,6 +190,48 @@ def collect_diagnostics(
     except OSError:
         free_disk_bytes = None
 
+    startup_health_path = data_dir / "startup_health.json"
+    startup_health: dict[str, Any] | None = None
+    startup_health_error: str | None = None
+    if startup_health_path.is_file():
+        try:
+            candidate = json.loads(startup_health_path.read_text(encoding="utf-8"))
+            if isinstance(candidate, dict):
+                startup_health = candidate
+            else:
+                startup_health_error = "report_root_must_be_object"
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            startup_health_error = type(exc).__name__
+
+    runtime_readiness = {
+        "status": "UNKNOWN",
+        "verified": False,
+        "reason": "startup_health_report_missing",
+        "startup_health_report": str(startup_health_path) if startup_health_path.is_file() else None,
+    }
+    if startup_health is not None:
+        checks_payload = startup_health.get("checks", {})
+        critical_payload = startup_health.get("critical_checks", [])
+        paper_only = startup_health.get("paper_only") is True
+        report_status = startup_health.get("status")
+        report_valid = (
+            isinstance(checks_payload, dict)
+            and isinstance(critical_payload, list)
+            and report_status in {"READY", "SAFE_STATE"}
+        )
+        if not report_valid:
+            runtime_readiness.update(status="INVALID", reason="startup_health_report_schema_invalid")
+        elif report_status == "READY" and paper_only and not critical_payload:
+            runtime_readiness.update(status="STARTUP_CHECKS_PASSED", verified=True, reason=None)
+        else:
+            runtime_readiness.update(
+                status="SAFE_STATE",
+                reason="startup_health_has_critical_checks_or_nonready_status",
+                critical_checks=[str(item) for item in critical_payload],
+            )
+    elif startup_health_error:
+        runtime_readiness.update(status="INVALID", reason=startup_health_error)
+
     checks: dict[str, dict[str, Any]] = {
         "config": {
             "ok": config is not None and config_error is None,
@@ -244,6 +286,7 @@ def collect_diagnostics(
             "data_directory_exists": data_dir.is_dir(),
         },
         "checks": checks,
+        "runtime_readiness": runtime_readiness,
         "renderer": renderer,
         "visual_profile": _visual_recommendations(ram_bytes, cpu_count, renderer),
         "critical_checks": critical,
