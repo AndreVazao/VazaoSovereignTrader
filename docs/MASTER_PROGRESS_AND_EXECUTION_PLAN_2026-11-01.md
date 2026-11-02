@@ -138,3 +138,11 @@ Do not claim physical-phone validation without evidence. Keep trading PAPER/read
 - `MOBILE_APP/test_startup_contract.py`: added a source contract guarding the new hierarchy and adaptive building height.
 - Commits made on the existing PR branch: `5620b65f3ff89833956ea0067ca13b550f8cfe22` (UI) and `bf8b582ce6e1cf63be4c7762d250dfcbfaf7e65d` (test). Documentation update for Deskforce is commit `8ddcaa130fc44ed9469bce5e93406840a4dfa076`.
 - Status: implementation committed, but CI for the newest HEAD and fresh emulator screenshots are still required. Do not treat source-contract tests as visual acceptance. Next: wait for checks, inspect portrait/landscape/tablet screenshots, then adjust scene framing/room selection based on evidence.
+
+
+## Follow-up validation — 2026-11-02
+
+- Exact HEAD `6252c3087712bef3fcdf501f1647f5d9f05cf2e9`: Python, Android APK, Windows EXE, Diorama VM, Obscura and PAPER smoke passed; Android Emulator UI Smoke failed at the office-navigation stage.
+- Failure artifact showed the app alive on the first-run chooser; no office screenshot was produced. Comparing the 1080x1920 chooser capture with the Maestro tap target revealed the configured 71% vertical point landed below the office CTA (the button center is around 60%).
+- Updated `.maestro/android-office-smoke.yaml` and its source-contract assertion to tap `50%, 60%`. This is a test-coordinate correction based on the captured UI, not yet a passing validation.
+- Next gate: wait for fresh checks on the resulting exact HEAD, inspect office/portrait/landscape/tablet screenshots, and merge only when every required workflow is green. Physical-phone validation remains unconfirmed.
