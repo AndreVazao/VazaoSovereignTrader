@@ -56,4 +56,5 @@ def test_doctor_does_not_read_another_owners_report_for_invalid_identity(tmp_pat
 
     assert result["runtime_readiness"]["status"] == "UNKNOWN"
     assert result["runtime_readiness"]["verified"] is False
-    assert "__invalid_owner_id__" in result["runtime_readiness"]["startup_health_report"]
+    # Invalid owner IDs must not resolve to any existing owner's report.
+    assert result["runtime_readiness"]["startup_health_report"] is None
