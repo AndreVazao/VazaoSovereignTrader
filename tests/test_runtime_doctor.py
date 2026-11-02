@@ -127,3 +127,53 @@ def test_renderer_probe_failure_is_unknown_and_does_not_echo_exception(tmp_path:
     assert report["renderer"]["status"] == "unknown"
     assert report["visual_profile"]["recommended_modes"]["3d"] is False
     assert "private" not in json.dumps(report).lower()
+
+
+
+def test_doctor_does_not_confuse_install_preflight_with_runtime_readiness(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    report = collect_diagnostics(tmp_path)
+
+    assert report["status"] == "READY"  # install preflight only
+    assert report["runtime_readiness"]["status"] == "UNKNOWN"
+    assert report["runtime_readiness"]["verified"] is False
+    assert report["runtime_readiness"]["reason"] == "startup_health_report_missing"
+
+
+def test_doctor_reports_passing_startup_checks_without_claiming_end_to_end_readiness(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    data_dir = tmp_path / "PC_ENGINE" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "startup_health.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "status": "READY",
+            "paper_only": True,
+            "critical_checks": [],
+            "checks": {
+                "data_dir": {"ok": True},
+                "startup_mode": {"ok": True, "effective": "PAPER"},
+                "recovery_integrity": {"ok": True},
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    report = collect_diagnostics(tmp_path)
+
+    assert report["runtime_readiness"]["status"] == "STARTUP_CHECKS_PASSED"
+    assert report["runtime_readiness"]["verified"] is True
+    assert "end-to-end" not in json.dumps(report["runtime_readiness"]).lower()
+
+
+def test_doctor_rejects_invalid_startup_health_report(tmp_path: Path):
+    write_config(tmp_path, json.dumps({"mode": "PAPER"}))
+    data_dir = tmp_path / "PC_ENGINE" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "startup_health.json").write_text("{invalid", encoding="utf-8")
+
+    report = collect_diagnostics(tmp_path)
+
+    assert report["runtime_readiness"]["status"] == "INVALID"
+    assert report["runtime_readiness"]["verified"] is False
+    assert report["runtime_readiness"]["reason"] == "JSONDecodeError"
