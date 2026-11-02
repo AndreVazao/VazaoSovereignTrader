@@ -27,9 +27,9 @@ function Get-SafeConfigSummary {
             server_port = $cfg.server.port
             auto_start_paper = [bool]$cfg.engine.auto_start_paper
             real_flags = @{
-                allow_real = [bool]$cfg.autonomous_execution.allow_real
-                auto_promote_real = [bool]$cfg.autonomous_execution.auto_promote_real
-                fast_path_allow_real = [bool]$cfg.fast_path.allow_real
+                allow_real = if ($null -ne $cfg.autonomous_execution -and $null -ne $cfg.autonomous_execution.PSObject.Properties["allow_real"]) { [bool]$cfg.autonomous_execution.allow_real } else { $null }
+                auto_promote_real = if ($null -ne $cfg.autonomous_execution -and $null -ne $cfg.autonomous_execution.PSObject.Properties["auto_promote_real"]) { [bool]$cfg.autonomous_execution.auto_promote_real } else { $null }
+                fast_path_allow_real = if ($null -ne $cfg.fast_path -and $null -ne $cfg.fast_path.PSObject.Properties["allow_real"]) { [bool]$cfg.fast_path.allow_real } else { $null }
             }
             credentials_values_read_or_reported = $false
         }
@@ -61,9 +61,12 @@ if ($configSummary.found -and -not $configSummary.error) {
     if ($configSummary.server_host -in @("127.0.0.1", "localhost", "::1")) {
         Add-Check "api_binding" "PASS" "API is configured for loopback."
     } else { Add-Check "api_binding" "CHECK" "API host is not loopback. Verify approved private binding; do not expose publicly." }
-    if ($configSummary.real_flags.allow_real -or $configSummary.real_flags.auto_promote_real -or $configSummary.real_flags.fast_path_allow_real) {
+    $realFlags = @($configSummary.real_flags.allow_real, $configSummary.real_flags.auto_promote_real, $configSummary.real_flags.fast_path_allow_real)
+    if ($realFlags -contains $true) {
         Add-Check "real_execution_flags" "FAIL" "At least one known REAL execution flag is enabled. Do not operate the engine."
-    } else { Add-Check "real_execution_flags" "PASS" "Known REAL execution flags are disabled." }
+    } elseif ($realFlags -contains $null) {
+        Add-Check "real_execution_flags" "FAIL" "One or more REAL execution flags are missing or unverifiable. Do not operate the engine."
+    } else { Add-Check "real_execution_flags" "PASS" "Known REAL execution flags are explicitly disabled." }
 } else { Add-Check "config" "FAIL" "Config missing or invalid; no configuration values were printed." }
 
 $enginePath = Join-Path $InstallRoot "VazaoSovereignTrader.exe"
