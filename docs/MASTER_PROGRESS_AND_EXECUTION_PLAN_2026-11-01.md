@@ -189,3 +189,14 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - This status is deliberately named `STARTUP_CHECKS_PASSED`, not “fully ready”: it is not proof of an end-to-end lifecycle, active heartbeat, working market-data feed, or successful PC installation.
 - Tests were added for missing/invalid startup reports and failed recovery checks. The latest commits are awaiting their own CI results; do not describe them as passed until the exact HEAD has completed its workflows.
 - Next engineering task remains the integrated PAPER lifecycle gate: start -> authenticated diagnostics/heartbeat -> persistence -> clean stop -> restart/recovery -> confirm no duplicate pending execution and no permission escalation.
+
+
+### Persistent learning vault — 2026-11-02
+- Added `PC_ENGINE/core/data_vault.py`: stable per-user vault paths, atomic manifest creation, read-only validation. Windows defaults to `%LOCALAPPDATA%\\VazaoSovereignTrader\\vault`; `VST_VAULT_PATH` permits an explicit operator-selected location.
+- The vault layout separates `learning/`, `backups/`, `imports/`, `exports/`, and `logs/`. Imports are quarantined and must never be automatically treated as trusted learning or execution authority.
+- Engine learning SQLite is now routed to `<vault>/learning/<owner-id>/sovereign-learning.sqlite3`, outside the versioned install directory.
+- If the legacy learning database exists and the new vault database does not, startup attempts a consistent SQLite backup copy and leaves the source database untouched. The migration is non-destructive; migration failure must remain visible as learning-memory unavailable.
+- Added `tests/test_data_vault.py` for path selection, layout, preservation, missing vault and corrupt manifest cases.
+- Updated the Windows local validation Prompt Master to require uninstall/reinstall persistence checks and legacy-database migration verification.
+- Important remaining gap: the installer must be verified not to remove the user vault, and the actual Windows package must be tested across uninstall/reinstall. Code-level path separation alone does not prove installer preservation.
+- Current commit series has not yet completed CI; do not mark vault tests or Windows packaging as passed until workflows for the exact HEAD finish.
