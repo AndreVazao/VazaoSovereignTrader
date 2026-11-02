@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -190,7 +191,20 @@ def collect_diagnostics(
     except OSError:
         free_disk_bytes = None
 
-    startup_health_path = data_dir / "startup_health.json"
+    # The engine writes startup health inside the owner-private namespace. Prefer
+    # that authoritative report; retain the old flat path only for compatibility.
+    owner_cfg = config.get("owner", {}) if isinstance(config, dict) else {}
+    owner_id = str(os.environ.get("VST_OWNER_ID") or owner_cfg.get("id") or "andre").strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", owner_id):
+        # Never fall back to another owner's report when identity is malformed.
+        owner_id = "__invalid_owner_id__"
+    owner_startup_health_path = data_dir / "owners" / owner_id / "startup" / "startup_health.json"
+    legacy_startup_health_path = data_dir / "startup_health.json"
+    startup_health_path = (
+        owner_startup_health_path
+        if owner_startup_health_path.is_file() or not legacy_startup_health_path.is_file()
+        else legacy_startup_health_path
+    )
     startup_health: dict[str, Any] | None = None
     startup_health_error: str | None = None
     if startup_health_path.is_file():
