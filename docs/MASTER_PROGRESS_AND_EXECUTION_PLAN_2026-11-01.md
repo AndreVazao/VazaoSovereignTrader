@@ -209,3 +209,10 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - Commits: `4f2524621169e91ccb4a945023a18ba550aec21a` (diagnostic path fix), `ea519ecae61dd59fe41b727ec6ddd97cefbd9b83` (focused tests).
 - Validation status: code committed to the existing PR branch. New CI for these exact commits must complete before calling the fix verified. Earlier Python and PAPER smoke successes belonged to the prior HEAD and are not carried forward as validation of this change.
 - Next: run the focused doctor tests and full Python workflow; inspect Windows EXE and PAPER smoke on the new HEAD; then continue the integrated PAPER start/health/heartbeat/persist/stop/restart recovery gate. Physical Windows PC testing remains pending.
+
+
+### Doctor owner-isolation test correction — 2026-11-02
+- The Python workflow on merge commit `021a181dec212265da0877eae93e6eb0dff95053` reported 1,286 passed and one failure in the new invalid-owner test. The failure was in the test expectation: for an invalid owner ID, the doctor correctly returned no report path (`None`) rather than exposing a synthetic path string.
+- Updated the assertion to require `startup_health_report is None`, while also requiring readiness to remain `UNKNOWN` and `verified is False`. This preserves the security property: an invalid identity cannot resolve another owner's report.
+- Correction commit: `223d5b60d4e41245184d851d7003cb7a14ce3104`.
+- Fresh CI on this exact commit is required; do not treat the prior run as green. The PR remains open and unmerged.
