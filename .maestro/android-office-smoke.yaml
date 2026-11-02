@@ -2,8 +2,8 @@ appId: pt.andrevazao.vazaosovereigntrader
 ---
 - launchApp
 - waitForAnimationToEnd
-# CTA center is about 60% down the 1080x1920 chooser capture; tap the office button rather than the descriptive text above it.
+# Prefer the visible CTA label over fixed screen coordinates; Android viewport and status/navigation bars can shift percentage taps.
 - tapOn:
-    point: "50%, 60%"
+    text: "USAR ESCRITÓRIO VIRTUAL"
 - waitForAnimationToEnd
 - takeScreenshot: vst-android-office
