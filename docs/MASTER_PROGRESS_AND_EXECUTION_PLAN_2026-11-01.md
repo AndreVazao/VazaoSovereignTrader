@@ -200,3 +200,12 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - Updated the Windows local validation Prompt Master to require uninstall/reinstall persistence checks and legacy-database migration verification.
 - Important remaining gap: the installer must be verified not to remove the user vault, and the actual Windows package must be tested across uninstall/reinstall. Code-level path separation alone does not prove installer preservation.
 - Current commit series has not yet completed CI; do not mark vault tests or Windows packaging as passed until workflows for the exact HEAD finish.
+
+
+### Backend integration fix — 2026-11-02, continuation
+- Found a concrete diagnostics-path mismatch: `PC_ENGINE/main.py` writes startup health to the owner-private path `PC_ENGINE/data/owners/<owner-id>/startup/startup_health.json`, while `vst doctor` previously looked only at `PC_ENGINE/data/startup_health.json`. As a result, a valid engine startup report could be missed and readiness incorrectly remain `UNKNOWN`.
+- Updated `PC_ENGINE/tools/doctor.py` to prefer the configured/effective owner's private report and retain the flat path only as a legacy compatibility fallback. Invalid owner IDs are mapped to an isolated impossible namespace instead of reading another owner's report.
+- Added `tests/test_doctor_owner_startup_health.py` covering the owner-private report path and preventing invalid owner identity from reading another owner's health report.
+- Commits: `4f2524621169e91ccb4a945023a18ba550aec21a` (diagnostic path fix), `ea519ecae61dd59fe41b727ec6ddd97cefbd9b83` (focused tests).
+- Validation status: code committed to the existing PR branch. New CI for these exact commits must complete before calling the fix verified. Earlier Python and PAPER smoke successes belonged to the prior HEAD and are not carried forward as validation of this change.
+- Next: run the focused doctor tests and full Python workflow; inspect Windows EXE and PAPER smoke on the new HEAD; then continue the integrated PAPER start/health/heartbeat/persist/stop/restart recovery gate. Physical Windows PC testing remains pending.
