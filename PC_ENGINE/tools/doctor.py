@@ -214,14 +214,25 @@ def collect_diagnostics(
         critical_payload = startup_health.get("critical_checks", [])
         paper_only = startup_health.get("paper_only") is True
         report_status = startup_health.get("status")
+        mode_check = checks_payload.get("startup_mode") if isinstance(checks_payload, dict) else None
+        recovery_check = checks_payload.get("recovery_integrity") if isinstance(checks_payload, dict) else None
         report_valid = (
             isinstance(checks_payload, dict)
             and isinstance(critical_payload, list)
             and report_status in {"READY", "SAFE_STATE"}
+            and isinstance(mode_check, dict)
+            and isinstance(recovery_check, dict)
         )
         if not report_valid:
             runtime_readiness.update(status="INVALID", reason="startup_health_report_schema_invalid")
-        elif report_status == "READY" and paper_only and not critical_payload:
+        elif (
+            report_status == "READY"
+            and paper_only
+            and not critical_payload
+            and mode_check.get("effective") == "PAPER"
+            and mode_check.get("ok") is True
+            and recovery_check.get("ok") is True
+        ):
             runtime_readiness.update(status="STARTUP_CHECKS_PASSED", verified=True, reason=None)
         else:
             runtime_readiness.update(
