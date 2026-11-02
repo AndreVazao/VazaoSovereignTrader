@@ -28,7 +28,8 @@ jobs:
         run: |
           foreach ($scriptPath in @(
             "scripts/android_emulator_headless.ps1",
-            "scripts/android_phone_mirror.ps1"
+            "scripts/android_phone_mirror.ps1",
+            "scripts/vst_local_backend_audit.ps1"
           )) {
             $tokens = $null
             $parseErrors = $null
