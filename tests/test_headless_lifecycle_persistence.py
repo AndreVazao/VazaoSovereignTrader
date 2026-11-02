@@ -15,7 +15,7 @@ from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 
 def _startup_report(runtime_dir: Path) -> dict:
     recovery = RecoveryManager(runtime_dir / "runtime_state.json")
-    return StartupHealth(runtime_dir / "startup").run(recovery)
+    return StartupHealth(runtime_dir / "startup", {"mode": "PAPER"}).run(recovery)
 
 
 def test_paper_lifecycle_preserves_synthetic_learning_without_duplicate_write(
