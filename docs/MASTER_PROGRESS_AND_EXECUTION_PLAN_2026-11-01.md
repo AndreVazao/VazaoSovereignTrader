@@ -226,3 +226,13 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - Regra de segurança: só instalar o artefacto Windows produzido para o HEAD exato e com workflow de build verificado. Se não existir um artefacto validado, marcar instalação E2E como BLOCKED e executar apenas verificações locais não destrutivas. Não desinstalar/reinstalar nem migrar dados sem backup verificado e autorização explícita.
 - Commits de preparação: `4fde608a37cd257f88a5da40df064686dd0d0d60` (Prompt Master) e `e428ac2c7be492462557b69fd6748de252f2991a` (template de relatório). A documentação desta atualização segue no mesmo PR/branch.
 - Estado CI observado no HEAD `e428ac2c7be492462557b69fd6748de252f2991a`: Python, Windows EXE, Trading PAPER smoke, APK, Emulator UI, Obscura e Diorama ainda estavam em execução/na fila. Não instalar até confirmar build Windows e verificações de segurança no HEAD final.
+
+
+## 2026-11-02 — local Windows backend audit tooling
+
+- Added `scripts/vst_local_backend_audit.ps1`: read-only inventory for the installed Windows backend. It records executable SHA-256, sanitized allowlisted config fields, loopback `/health` response, engine-running flag, owner-scoped startup report summaries, vault directory/file counts, and scheduled-task state.
+- The script does not start/stop processes, change config, enumerate full environment variables, read/report credential values, submit orders, or make public-network requests. A failed/unreachable health endpoint is recorded as NOT RUN; API liveness is explicitly not treated as engine readiness.
+- Added PowerShell parser validation for the audit script to `.github/workflows/windows-exe.yml`, so the next Windows EXE run checks script syntax before packaging.
+- Updated `prompts/PROMPT_MASTER_LOCAL_WINDOWS_BACKEND_E2E.md` to require running the audit and attaching its Markdown/JSON output to the evidence index.
+- Latest source changes are on the existing PR #522 / branch `fix/android-office-layout-2026-10-30`; do not create a second active PR. New commits require fresh exact-HEAD CI and a new Windows installer artifact before local installation.
+- Limitations are explicit: this audit is observational and does not prove vault continuity, perform migration, test authenticated private endpoints, or establish end-to-end trading readiness. Those remain separate gated tests. Keep PAPER/read-only; no REAL credentials or orders.
