@@ -13,8 +13,7 @@ from PC_ENGINE.core.startup_health import StartupHealth
 from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 
 
-def _startup_report(runtime_dir: Path) -> dict:
-    recovery = RecoveryManager(runtime_dir / "runtime_state.json")
+def _startup_report(runtime_dir: Path, recovery: RecoveryManager) -> dict:
     return StartupHealth(runtime_dir / "startup", {"mode": "PAPER"}).run(recovery)
 
 
@@ -28,7 +27,12 @@ def test_paper_lifecycle_preserves_synthetic_learning_without_duplicate_write(
     vault.mkdir()
     runtime.mkdir()
 
-    first_health = _startup_report(runtime)
+    recovery = RecoveryManager(runtime / "runtime_state.json")
+    # A clean first launch has no recovery snapshot yet. Persist an explicit
+    # empty PAPER-safe baseline before requiring recovery integrity to pass.
+    recovery.save_positions({}, runtime_status="OFF")
+
+    first_health = _startup_report(runtime, recovery)
     assert first_health["status"] == "READY"
     assert first_health["paper_only"] is True
     assert first_health["real_promotion_attempted"] is False
@@ -48,7 +52,7 @@ def test_paper_lifecycle_preserves_synthetic_learning_without_duplicate_write(
         assert len(memory.list_events(key=saved.key)) == 1
 
     # A new memory connection and startup-health instance model a process restart.
-    second_health = _startup_report(runtime)
+    second_health = _startup_report(runtime, recovery)
     assert second_health["status"] == "READY"
     assert second_health["paper_only"] is True
     assert second_health["real_promotion_attempted"] is False
