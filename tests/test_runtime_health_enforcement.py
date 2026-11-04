@@ -85,3 +85,14 @@ def test_health_transition_is_audited_only_when_decision_changes():
     assert first["state"] == second["state"] == "degraded"
     assert len(engine.events) == 1
     assert engine.events[0][0] == "HEALTH_ISOLATION_DECISION"
+
+
+def test_safe_state_transition_refreshes_health_immediately():
+    engine = _engine()
+    engine._refresh_health_isolation = lambda: SovereignEngine._refresh_health_isolation(engine)
+
+    SovereignEngine._enter_safe_state(engine, "synthetic_test_failure")
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.health_isolation["state"] == "quarantined"
+    assert engine.state.health_isolation["allow_new_tasks"] is False
