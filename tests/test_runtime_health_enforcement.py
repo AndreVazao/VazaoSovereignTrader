@@ -96,3 +96,24 @@ def test_safe_state_transition_refreshes_health_immediately():
     assert engine.state.status == "SAFE_MODE"
     assert engine.state.health_isolation["state"] == "quarantined"
     assert engine.state.health_isolation["allow_new_tasks"] is False
+
+
+def test_order_entry_boundary_blocks_before_touching_execution_dependencies():
+    events = []
+    engine = SimpleNamespace(
+        state=SimpleNamespace(health_isolation={
+            "state": "degraded",
+            "allow_new_tasks": False,
+            "reasons": ["learning_memory_unavailable:error"],
+        }),
+        paper=True,
+        log=lambda event, payload=None: events.append((event, payload or {})),
+    )
+
+    SovereignEngine._open_position(
+        engine, None, "BTC/USDT", 100.0, 0.1, 0.02, 0.04, "synthetic"
+    )
+
+    assert len(events) == 1
+    assert events[0][0] == "HEALTH_ISOLATION_ORDER_BLOCK"
+    assert events[0][1]["symbol"] == "BTC/USDT"
