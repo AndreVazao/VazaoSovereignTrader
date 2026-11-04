@@ -261,3 +261,64 @@ Decisão explícita do proprietário: suspender novas alterações de UI/arte do
 - Artefacto Windows do run `41538641569`, para SHA PR base `03cd18a...`: ZIP `vazaosovereigntrader-windows`, SHA-256 `67886c49213160780413e41f6c8ac81563a0764245689be69dfe7e91d5844d22`, artifact ID `13185860466`. **Não é artefacto do novo SHA 27fd618...** e não deve ser usado como pacote exato para validação local.
 - O status Snyk para `03cd18a...` era `error`; para o novo SHA `27fd618...` passou a `pending` na consulta inicial. A causa original permanece desconhecida; não declarar o gate de segurança resolvido até receber um resultado explicável.
 - Não fazer merge, não pedir ainda validação no PC. Continuar a aguardar CI do SHA `27fd618...`, identificar o status Snyk e manter a validação local bloqueada até haver artefacto Windows produzido a partir do SHA exato e gates backend verdes.
+
+
+---
+
+## Atualização operacional — 2026-11-04
+
+**PR única:** #522  
+**Branch:** `fix/android-office-layout-2026-10-30`  
+**HEAD de referência desta atualização:** `a9d6b4cdca22d5d1e105a274daae3cb71648dc2c`  
+**Estado:** OPEN, não merged. Não iniciar outra PR/branch.
+
+### CI verificado no commit anterior `235aa2f30af3ea37937be8bfb77a5a1d6a677e6c`
+
+- Python tests: PASS.
+- Trading engine PAPER smoke: PASS.
+- Windows EXE build + installer build + silent install/start/health/uninstall in disposable CI environment: PASS.
+- Android APK build: PASS.
+- Obscura smoke: PASS.
+- Diorama isolated VM prototype: PASS.
+- Android Emulator UI Smoke: FAIL. ADB inicialmente reportou `device offline`, recuperou e concluiu o boot; o script Maestro terminou com exit code 1. Isto não é prova de falha do backend Windows.
+- Snyk combined status: ERROR no SHA anterior; voltou a PENDING no SHA mais recente. Não declarar segurança aprovada até obter conclusão e detalhe do fornecedor.
+- Vercel é apenas preview e não é gate funcional do cérebro.
+
+Artefactos Windows daquele commit:
+- Installer run 41597845617, artifact ID 13213940328, SHA-256 ZIP `02f5d4f4bc6c765a7f62749e420a107c45435344751e7dd6501e1ece06d7ab43`.
+- EXE package artifact ID 13212459999, SHA-256 ZIP `98ccc0895b8470fcd9fb34222b2ffcce76238877cd3724acb868454861ce963e`.
+- **Não usar estes artefactos para validação da versão posterior a `235aa2f`.** Esperar por artefactos Windows do HEAD final exato.
+
+### Correção de persistência em curso
+
+Foi identificado que o caminho de vault anterior `%LOCALAPPDATA%\\VazaoSovereignTrader\\vault` ficava dentro da pasta-base de instalação Inno Setup. A configuração nova separa o vault em:
+
+`%LOCALAPPDATA%\\VazaoSovereignTraderData\\vault`
+
+A localização antiga continua a ser descoberta e preservada em place se existir e a nova ainda não existir. O runtime não move nem apaga automaticamente a base antiga. Nessa situação a auditoria assinala `legacy_inside_install_root`; uninstall/migração física ficam BLOCKED até backup verificado e plano explícito. O override `VST_VAULT_PATH` continua disponível.
+
+Ficheiros alterados nesta correção:
+- `PC_ENGINE/core/data_vault.py`: novo diretório de dados separado e função de descoberta legacy.
+- `PC_ENGINE/core/engine.py`: preserva vault legacy existente sem cópia/movimentação automática.
+- `tests/test_data_vault.py`: testa caminho separado e descoberta legacy.
+- `scripts/vst_local_backend_audit.ps1`: inspeciona vault novo e legacy; não declara PASS para legacy dentro da instalação.
+- `prompts/PROMPT_MASTER_LOCAL_WINDOWS_BACKEND_E2E.md`: atualiza caminho e bloqueia uninstall se legacy for encontrado.
+
+### Critério para disponibilizar teste local
+
+O primeiro teste no PC será não destrutivo e PAPER/read-only. Exigir:
+1. Python tests e PAPER smoke verdes no HEAD exato.
+2. Windows installer e EXE artefactos construídos no mesmo HEAD exato, com SHA-256 registado.
+3. PowerShell audit script validado em Windows CI.
+4. Snyk resolvido ou erro tecnicamente explicado e revisto; não esconder falha de segurança.
+5. Prompt Master atualizado e relatório local sanitizado.
+6. Nunca testar uninstall/reinstall com dados pessoais sem backup separado, verificado e aprovação explícita.
+
+O teste local pode começar sem aceitar o escritório Android como concluído: a validação do cérebro Windows é independente. A falha do Android fica registada e não deve bloquear o teste backend se os gates Windows/Python/PAPER estiverem verdes. Não alegar validação física antes do relatório do PC.
+
+### Próximas tarefas imediatas
+- Aguardar CI do HEAD após a separação do vault.
+- Rever os logs do Windows installer e confirmar que o vault novo fica fora de `{app}`; verificar preservação do legacy sem apagar dados.
+- Inspecionar o detalhe Snyk, sem assumir falso positivo.
+- Se os gates Windows/Python/PAPER passarem, entregar o artefacto e Prompt Master para validação não destrutiva no PC.
+- Depois do relatório local, corrigir problemas observados antes de qualquer promoção ou execução REAL.
