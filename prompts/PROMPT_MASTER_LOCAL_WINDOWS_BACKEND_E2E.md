@@ -34,8 +34,9 @@ Do not work on the visual office, Android APK, DGM-MAT, Obscura, or unrelated pr
 1. Check available disk space and Windows architecture.
 2. Check whether a VST installation/service/process already exists. Do not kill processes or overwrite an existing install blindly. Record process/service names, paths, status, and listening ports without dumping command lines that might contain secrets.
 3. Search for existing VST data/vault locations without opening or copying secrets:
-   - Default vault: `%LOCALAPPDATA%\VazaoSovereignTrader\vault\`
-   - Optional override: `VST_VAULT_PATH` (report only whether set and the resolved path; never dump other environment variables).
+   - **Current default vault:** `%LOCALAPPDATA%\VazaoSovereignTraderData\vault\` (outside the application install directory).
+   - **Legacy vault to discover and preserve in place:** `%LOCALAPPDATA%\VazaoSovereignTrader\vault\` (inside the old install-root layout). If this exists and the current vault does not, mark migration/uninstall as BLOCKED; do not move, copy over, rename, or delete it.
+   - Optional override: `VST_VAULT_PATH` (report only whether set and the resolved path; never dump other environment variables). If set, it takes precedence and must be checked for separation from the install directory.
    - Expected layout includes `learning\`, `backups\`, `imports\`, `exports\`, and `logs\`.
 4. Record whether the vault and legacy learning SQLite database already exist, their sizes and timestamps, and whether SQLite files have matching WAL/SHM sidecars. Do not delete or alter them.
 5. Create a dated local evidence folder outside the install directory and outside the vault, preferably `%USERPROFILE%\Documents\VST-Local-Validation\<timestamp>\`. If a repository checkout is available, also prepare `artifacts/local-validation/<timestamp>/` for sanitized copies. Do not store credentials or raw secret-bearing configs there.
