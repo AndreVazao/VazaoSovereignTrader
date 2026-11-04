@@ -2074,11 +2074,16 @@ class SovereignEngine:
             with self.lock:
                 acquired_ns = time.perf_counter_ns()
                 state = self.state
+                health = getattr(state, "health_isolation", {}) or {}
                 snapshot.publish(
                     status=str(state.status),
                     mode=str(self.mode),
                     open_positions_count=len(state.open_positions),
                     opportunities_count=len(state.opportunities),
+                    health_state=str(health.get("state", "unknown")),
+                    allow_new_tasks=bool(health.get("allow_new_tasks", False)),
+                    allow_risk_bearing_actions=False,
+                    health_checked_at_ms=int(health.get("checked_at", 0) or 0) * 1000,
                 )
         finally:
             released_ns = time.perf_counter_ns()
