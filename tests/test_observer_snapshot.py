@@ -12,6 +12,10 @@ def test_observer_snapshot_keeps_only_latest_primitive_payload():
         open_positions_count=2,
         opportunities_count=8,
         updated_at_ms=123,
+        health_state="healthy",
+        allow_new_tasks=True,
+        allow_risk_bearing_actions=True,
+        health_checked_at_ms=1000,
     )
     mailbox.publish(
         status="PAUSED",
@@ -19,6 +23,10 @@ def test_observer_snapshot_keeps_only_latest_primitive_payload():
         open_positions_count=1,
         opportunities_count=3,
         updated_at_ms=456,
+        health_state="degraded",
+        allow_new_tasks=False,
+        allow_risk_bearing_actions=True,
+        health_checked_at_ms=2000,
     )
 
     payload = mailbox.read()
@@ -29,6 +37,10 @@ def test_observer_snapshot_keeps_only_latest_primitive_payload():
         "open_positions_count": 1,
         "opportunities_count": 3,
         "updated_at_ms": 456,
+        "health_state": "degraded",
+        "allow_new_tasks": False,
+        "allow_risk_bearing_actions": False,
+        "health_checked_at_ms": 2000,
     }
 
     # A reader cannot mutate the cached value by changing its copy.
@@ -45,6 +57,10 @@ def test_observer_snapshot_normalizes_counts_and_keeps_fixed_schema():
         open_positions_count=-5,
         opportunities_count="4",
         updated_at_ms=789,
+        health_state=None,
+        allow_new_tasks="false",
+        allow_risk_bearing_actions=True,
+        health_checked_at_ms=-1,
     )
     payload = mailbox.read()
 
@@ -55,10 +71,18 @@ def test_observer_snapshot_normalizes_counts_and_keeps_fixed_schema():
         "open_positions_count",
         "opportunities_count",
         "updated_at_ms",
+        "health_state",
+        "allow_new_tasks",
+        "allow_risk_bearing_actions",
+        "health_checked_at_ms",
     }
     assert payload["status"] == "None"
     assert payload["open_positions_count"] == 0
     assert payload["opportunities_count"] == 4
+    assert payload["health_state"] == "None"
+    assert payload["allow_new_tasks"] is True
+    assert payload["allow_risk_bearing_actions"] is False
+    assert payload["health_checked_at_ms"] == 0
     assert all(
         isinstance(payload[key], (str, int, bool))
         for key in payload
