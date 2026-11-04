@@ -43,7 +43,6 @@ def test_observer_snapshot_keeps_only_latest_primitive_payload():
         "health_checked_at_ms": 2000,
     }
 
-    # A reader cannot mutate the cached value by changing its copy.
     payload["status"] = "CORRUPTED"
     assert mailbox.read()["status"] == "PAUSED"
 
@@ -116,3 +115,24 @@ def test_observer_snapshot_bounds_text_and_normalizes_invalid_numbers():
     assert payload["allow_new_tasks"] is True
     assert payload["allow_risk_bearing_actions"] is False
     assert sum(len(value) for value in payload.values() if isinstance(value, str)) <= 144
+
+
+def test_observer_snapshot_caps_numeric_magnitude():
+    mailbox = RuntimeObserverSnapshot()
+    huge = 10**100
+
+    mailbox.publish(
+        status="RUNNING",
+        mode="PAPER",
+        open_positions_count=huge,
+        opportunities_count=huge,
+        updated_at_ms=huge,
+        health_state="healthy",
+        health_checked_at_ms=huge,
+    )
+
+    payload = mailbox.read()
+    assert payload["open_positions_count"] == 2_147_483_647
+    assert payload["opportunities_count"] == 2_147_483_647
+    assert payload["updated_at_ms"] == 9_223_372_036_854_775_807
+    assert payload["health_checked_at_ms"] == 9_223_372_036_854_775_807
