@@ -26,6 +26,8 @@ class RuntimeObserverSnapshot:
         "health_checked_at_ms",
     )
     _TEXT_LIMIT = 48
+    _COUNT_MAX = 2_147_483_647
+    _TIMESTAMP_MAX = 9_223_372_036_854_775_807
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -47,9 +49,9 @@ class RuntimeObserverSnapshot:
         return str(value)[: cls._TEXT_LIMIT]
 
     @staticmethod
-    def _nonnegative_int(value: Any, default: int = 0) -> int:
+    def _nonnegative_int(value: Any, default: int = 0, maximum: int = _TIMESTAMP_MAX) -> int:
         try:
-            return max(0, int(value))
+            return min(maximum, max(0, int(value)))
         except (TypeError, ValueError, OverflowError):
             return default
 
@@ -72,13 +74,21 @@ class RuntimeObserverSnapshot:
             "ok": True,
             "status": self._bounded_text(status),
             "mode": self._bounded_text(mode),
-            "open_positions_count": self._nonnegative_int(open_positions_count),
-            "opportunities_count": self._nonnegative_int(opportunities_count),
-            "updated_at_ms": self._nonnegative_int(updated_at_ms, default=now_ms) or now_ms,
+            "open_positions_count": self._nonnegative_int(
+                open_positions_count, maximum=self._COUNT_MAX
+            ),
+            "opportunities_count": self._nonnegative_int(
+                opportunities_count, maximum=self._COUNT_MAX
+            ),
+            "updated_at_ms": self._nonnegative_int(
+                updated_at_ms, default=now_ms, maximum=self._TIMESTAMP_MAX
+            ) or now_ms,
             "health_state": self._bounded_text(health_state),
             "allow_new_tasks": allow_new_tasks is True,
             "allow_risk_bearing_actions": False,
-            "health_checked_at_ms": self._nonnegative_int(health_checked_at_ms),
+            "health_checked_at_ms": self._nonnegative_int(
+                health_checked_at_ms, maximum=self._TIMESTAMP_MAX
+            ),
         }
         with self._lock:
             self._payload = payload
