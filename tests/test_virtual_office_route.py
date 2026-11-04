@@ -105,6 +105,10 @@ def test_observer_summary_does_not_build_full_engine_snapshot(tmp_path, monkeypa
         "open_positions_count",
         "opportunities_count",
         "updated_at_ms",
+        "health_state",
+        "allow_new_tasks",
+        "allow_risk_bearing_actions",
+        "health_checked_at_ms",
     }
     assert isinstance(payload["status"], str)
     assert isinstance(payload["mode"], str)
@@ -156,6 +160,10 @@ def test_observer_summary_does_not_acquire_engine_lock(tmp_path, monkeypatch):
         "open_positions_count",
         "opportunities_count",
         "updated_at_ms",
+        "health_state",
+        "allow_new_tasks",
+        "allow_risk_bearing_actions",
+        "health_checked_at_ms",
     }
 
 
