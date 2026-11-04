@@ -368,3 +368,6 @@ A falha Android e a não execução do Snyk permanecem visíveis. O merge da PR 
 - Prompt Master atualizado para exigir inspeção de `operational.shutdown`, lista de workers ativos e estado do fecho da memória.
 - Android Emulator UI Smoke permanece falho e isolado do backend. Snyk permanece sem análise disponível por quota; não classificar como aprovação de segurança.
 - Próximo marco: validar o novo HEAD em CI, produzir instalador Windows desse HEAD e entregar teste PC PAPER/read-only. Não fazer uninstall/reinstall nem migração de vault nesta fase.
+
+
+- Complemento da supervisão: o coletor PAPER agora conserva a referência da thread se o timeout expirar, fecha o radar apenas depois de a thread terminar e reconstrói o radar no próximo start. Foram acrescentados testes de timeout e restart do coletor.
