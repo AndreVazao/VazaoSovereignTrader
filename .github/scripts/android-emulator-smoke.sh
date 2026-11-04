@@ -35,7 +35,7 @@ adb shell pidof "$PACKAGE" >/dev/null
 adb exec-out screencap -p > "$EVIDENCE/vst-office-entry.png"
 tesseract "$EVIDENCE/vst-office-entry.png" stdout 2>/dev/null > "$EVIDENCE/office-ocr.txt"
 cat "$EVIDENCE/office-ocr.txt"
-if ! grep -Eqi "MARKET RADAR|MEMÓRIA CENTRAL|COMPARAÇÃO" "$EVIDENCE/office-ocr.txt"; then
+if ! grep -Eqi "MARKET RADAR|MEMÓRIA CENTRAL|COMPARAÇÃO|CEO[[:space:]]+RADAR[[:space:]]+AN[ÁA]LISE|VIDA DO ESCRIT[ÓO]RIO" "$EVIDENCE/office-ocr.txt"; then
   echo "Virtual office content was not detected after selecting the office experience." | tee "$EVIDENCE/failure.txt"
   exit 1
 fi

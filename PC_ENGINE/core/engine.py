@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hmac
 import math
+import os
 import threading
 import time
+from pathlib import Path
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
@@ -12,6 +14,7 @@ from PC_ENGINE.core.allocator import CapitalAllocator
 from PC_ENGINE.core.opportunity import PaperOpportunityEngine
 from PC_ENGINE.core.config import DATA_DIR, env_value
 from PC_ENGINE.core.owner_context import OwnerContext
+from PC_ENGINE.core.data_vault import default_vault_path, initialize_vault, legacy_vault_path
 from PC_ENGINE.core.observer_snapshot import RuntimeObserverSnapshot
 from PC_ENGINE.core.runtime_timing_metrics import RuntimeTimingMetrics
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
@@ -27,6 +30,7 @@ from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.exchanges.ccxt_client import CcxtExchangeClient
 from PC_ENGINE.learning.champion_challenger import ChampionChallenger
 from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
+from PC_ENGINE.learning.memory_backup import backup_learning_memory
 from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
 from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
@@ -86,6 +90,25 @@ class RuntimeState:
 class SovereignEngine:
     def __init__(self, config: dict):
         self.config = config
+        # Durable user-data vault is outside the versioned installation directory.
+        # VST_VAULT_PATH can select a deliberate migration/backup location.
+        vault_override = os.environ.get("VST_VAULT_PATH", "").strip()
+        if vault_override:
+            self.vault_root = Path(vault_override).expanduser().resolve()
+            self.vault_info = initialize_vault(self.vault_root)
+        else:
+            preferred_vault = default_vault_path()
+            legacy_vault = legacy_vault_path()
+            # Preserve an existing pre-separation vault in place. Never silently
+            # copy, move, overwrite, or delete a live SQLite database.
+            if not preferred_vault.exists() and legacy_vault.is_dir():
+                self.vault_root = legacy_vault.resolve()
+                self.vault_info = initialize_vault(self.vault_root)
+                self.vault_info["legacy_location_detected"] = True
+                self.vault_info["migration"] = "preserved_in_place_pending_verified_backup"
+            else:
+                self.vault_root = preferred_vault
+                self.vault_info = initialize_vault(self.vault_root)
         self.owner_context = OwnerContext.from_config(config, DATA_DIR)
         self.owner_id = self.owner_context.owner_id
         config.setdefault("owner", {})["id"] = self.owner_id
@@ -167,10 +190,32 @@ class SovereignEngine:
         }
         if learning_enabled:
             try:
-                learning_path = self.owner_context.private_path(
-                    str(learning_cfg.get("path", "learning/sovereign-learning.sqlite3"))
-                )
+                configured_learning_path = learning_cfg.get("path")
+                if configured_learning_path:
+                    configured_path = Path(str(configured_learning_path)).expanduser()
+                    if configured_path.is_absolute():
+                        # Absolute paths remain an explicit operator override.
+                        learning_path = configured_path
+                    else:
+                        # Relative paths are owner-scoped inside the durable vault.
+                        # Preserve the legacy config convention "learning/<file>"
+                        # without creating a duplicated learning/learning directory.
+                        relative_parts = configured_path.parts
+                        if relative_parts and relative_parts[0].lower() == "learning":
+                            relative_parts = relative_parts[1:]
+                        learning_path = self.vault_root / "learning" / self.owner_id / Path(*relative_parts)
+                else:
+                    learning_path = self.vault_root / "learning" / self.owner_id / "sovereign-learning.sqlite3"
+                learning_path.parent.mkdir(parents=True, exist_ok=True)
+                if not configured_learning_path and not learning_path.exists():
+                    legacy_path = self.owner_context.private_path("learning/sovereign-learning.sqlite3")
+                    if legacy_path.is_file():
+                        # Copy through SQLite's consistent backup API; preserve the legacy source.
+                        backup_learning_memory(legacy_path, learning_path)
+                        learning_state["migration"] = "copied_legacy_database_without_deleting_source"
                 self.learning_memory = SQLiteLearningMemory(learning_path)
+                learning_state["path"] = str(learning_path)
+                learning_state["vault_root"] = str(self.vault_root)
                 learning_state["state"] = "READY"
             except Exception as exc:
                 # Persistence failure is visible but cannot authorize or submit orders.

@@ -6,7 +6,7 @@ from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.uix.floatlayout import FloatLayout
 from kivy.storage.jsonstore import JsonStore
-from kivy.graphics import Color, RoundedRectangle
+from kivy.graphics import Color, RoundedRectangle, Rectangle, Line, Mesh
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -23,7 +23,8 @@ PANEL = (0.065, 0.078, 0.105, 1)
 PANEL_2 = (0.090, 0.105, 0.140, 1)
 TEXT = (0.92, 0.94, 0.98, 1)
 MUTED = (0.56, 0.61, 0.70, 1)
-ACCENT = (0.33, 0.76, 0.98, 1)
+ACCENT = (0.10, 0.72, 0.98, 1)  # VST electric blue/cyan
+GOLD = (1.00, 0.70, 0.20, 1)     # VST metallic-gold accent
 GREEN = (0.26, 0.82, 0.60, 1)
 RED = (0.98, 0.38, 0.48, 1)
 
@@ -85,54 +86,273 @@ def _spacer(height=8):
 
 
 
+class PixelAgent(Widget):
+    """Tiny low-cost pixel-art avatar drawn with a few rectangles."""
+    def __init__(self, tint=ACCENT, **kwargs):
+        super().__init__(**kwargs)
+        self.tint = tint
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        unit = min(self.width / 12, self.height / 16)
+        ox = self.x + (self.width - unit * 12) / 2
+        oy = self.y + (self.height - unit * 16) / 2
+        with self.canvas:
+            Color(0.91, 0.72, 0.53, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 11*unit), size=(4*unit, 4*unit))
+            Color(0.12, 0.15, 0.20, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 14*unit), size=(4*unit, unit))
+            Color(*self.tint)
+            Rectangle(pos=(ox + 3*unit, oy + 6*unit), size=(6*unit, 5*unit))
+            Rectangle(pos=(ox + unit, oy + 6*unit), size=(2*unit, 5*unit))
+            Rectangle(pos=(ox + 9*unit, oy + 6*unit), size=(2*unit, 5*unit))
+            Color(0.13, 0.17, 0.23, 1)
+            Rectangle(pos=(ox + 3*unit, oy + 2*unit), size=(2*unit, 4*unit))
+            Rectangle(pos=(ox + 7*unit, oy + 2*unit), size=(2*unit, 4*unit))
+
+
+class RobotPixelAgent(Widget):
+    """Small robot avatar for backend-verified VST-created agents."""
+    def __init__(self, tint=ACCENT, **kwargs):
+        super().__init__(**kwargs)
+        self.tint = tint
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        unit = min(self.width / 14, self.height / 16)
+        ox = self.x + (self.width - unit * 14) / 2
+        oy = self.y + (self.height - unit * 16) / 2
+        with self.canvas:
+            # Antenna and head are deliberately geometric, unlike the human pixel avatar.
+            Color(*self.tint)
+            Rectangle(pos=(ox + 6*unit, oy + 14*unit), size=(2*unit, unit))
+            Rectangle(pos=(ox + 3*unit, oy + 10*unit), size=(8*unit, 4*unit))
+            # Dark faceplate with two light sensors.
+            Color(0.035, 0.055, 0.075, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 11*unit), size=(6*unit, 2*unit))
+            Color(0.55, 0.91, 1.0, 1)
+            Rectangle(pos=(ox + 5*unit, oy + 11.5*unit), size=(unit, unit))
+            Rectangle(pos=(ox + 8*unit, oy + 11.5*unit), size=(unit, unit))
+            Color(*self.tint)
+            Rectangle(pos=(ox + 4*unit, oy + 5*unit), size=(6*unit, 4*unit))
+            Rectangle(pos=(ox + 2*unit, oy + 6*unit), size=(2*unit, 3*unit))
+            Rectangle(pos=(ox + 10*unit, oy + 6*unit), size=(2*unit, 3*unit))
+            Color(0.13, 0.17, 0.23, 1)
+            Rectangle(pos=(ox + 4*unit, oy + 2*unit), size=(2*unit, 3*unit))
+            Rectangle(pos=(ox + 8*unit, oy + 2*unit), size=(2*unit, 3*unit))
+
+
+class NeutralPixelAgent(Widget):
+    """Abstract neutral marker for identities whose origin is not verified."""
+    def __init__(self, tint=GOLD, **kwargs):
+        super().__init__(**kwargs)
+        self.tint = tint
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        unit = min(self.width / 12, self.height / 14)
+        ox = self.x + (self.width - unit * 12) / 2
+        oy = self.y + (self.height - unit * 14) / 2
+        with self.canvas:
+            # A simple outlined-looking question/unknown marker; no human or robot traits.
+            Color(0.18, 0.20, 0.25, 1)
+            Rectangle(pos=(ox + 3*unit, oy + 2*unit), size=(6*unit, 10*unit))
+            Color(*self.tint)
+            Rectangle(pos=(ox + 4*unit, oy + 9*unit), size=(4*unit, 2*unit))
+            Rectangle(pos=(ox + 5*unit, oy + 6*unit), size=(2*unit, 2*unit))
+            Rectangle(pos=(ox + 5*unit, oy + 3*unit), size=(2*unit, unit))
+
+
+def build_agent_avatar(*, origin_type, provenance_validated, tint=ACCENT,
+                       size_hint=(None, None), size=(dp(36), dp(48))):
+    """Select robot/human/neutral art only from validated persisted provenance."""
+    if provenance_validated and origin_type == "vst_created":
+        widget = RobotPixelAgent(tint=tint)
+    elif provenance_validated and origin_type in {"human_created", "imported_verified"}:
+        # Existing human-origin avatar design remains unchanged.
+        widget = PixelAgent(tint=tint)
+    else:
+        # Unknown or unvalidated identities must not look like human or VST-created agents.
+        widget = NeutralPixelAgent(tint=GOLD)
+    widget.size_hint = size_hint
+    widget.size = size
+    return widget
+
+
+
+
+class CEOWallArt(Widget):
+    """Low-cost decorative finance artwork inspired by the approved CEO reference."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        if self.width <= 1 or self.height <= 1:
+            return
+        w, h = self.width, self.height
+        cx, cy = self.x + w * 0.48, self.y + h * 0.52
+        radius = min(w * 0.23, h * 0.42)
+        with self.canvas:
+            # Orbital globe and longitude/latitude rings.
+            Color(0.02, 0.10, 0.18, 1)
+            Rectangle(pos=self.pos, size=self.size)
+            Color(0.03, 0.32, 0.52, 0.9)
+            from kivy.graphics import Ellipse as CanvasEllipse
+            CanvasEllipse(pos=(cx-radius, cy-radius), size=(radius*2, radius*2))
+            Color(0.08, 0.72, 0.98, 0.8)
+            Line(circle=(cx, cy, radius), width=1.1)
+            Line(ellipse=(cx-radius*0.48, cy-radius, radius*0.96, radius*2), width=0.8)
+            Line(ellipse=(cx-radius*0.78, cy-radius*0.72, radius*1.56, radius*1.44), width=0.7)
+            Line(points=[cx-radius, cy, cx+radius, cy], width=0.7)
+            Line(points=[cx-radius*0.9, cy-radius*0.35, cx+radius*0.9, cy-radius*0.35], width=0.6)
+            Line(points=[cx-radius*0.9, cy+radius*0.35, cx+radius*0.9, cy+radius*0.35], width=0.6)
+            # Decorative candles only; these are not market data.
+            candle_colors = [(0.10, 0.85, 0.98, 1), (1.0, 0.70, 0.20, 1)]
+            for i, height_factor in enumerate((0.18, 0.28, 0.22, 0.42, 0.34, 0.56, 0.48, 0.72)):
+                x = self.x + w * (0.12 + i * 0.075)
+                base = self.y + h * 0.16
+                ch = h * height_factor
+                Color(*candle_colors[i % 2])
+                Line(points=[x, base, x, base+ch*1.18], width=1)
+                Rectangle(pos=(x-dp(2), base+ch*0.35), size=(dp(4), ch*0.48))
+            # Gold rising arrow, purely illustrative.
+            Color(*GOLD)
+            points = [self.x+w*0.10, self.y+h*0.23,
+                      self.x+w*0.36, self.y+h*0.34,
+                      self.x+w*0.57, self.y+h*0.48,
+                      self.x+w*0.77, self.y+h*0.70,
+                      self.x+w*0.88, self.y+h*0.84]
+            Line(points=points, width=dp(2.2), cap="round", joint="round")
+            Line(points=[self.x+w*0.88, self.y+h*0.84,
+                         self.x+w*0.77, self.y+h*0.80], width=dp(2.2))
+            Line(points=[self.x+w*0.88, self.y+h*0.84,
+                         self.x+w*0.85, self.y+h*0.72], width=dp(2.2))
+
+
+
+
 class BuildingPreview(Widget):
-    """Lightweight architectural schematic; scales uniformly to preserve proportions."""
+    """Lightweight isometric open-front office diorama; all geometry is local and decorative."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.bind(pos=self._draw_building, size=self._draw_building)
+        self._room_labels = []
+        for title, color in (
+            ("CEO", (0.96, 0.77, 0.35, 1)),
+            ("RADAR", (0.45, 0.85, 0.76, 1)),
+            ("COMPARAÇÃO", (0.55, 0.79, 0.98, 1)),
+            ("INVESTIGAÇÃO", (0.85, 0.76, 0.98, 1)),
+            ("ANÁLISE", (0.98, 0.69, 0.47, 1)),
+            ("MEMÓRIA", (0.48, 0.84, 0.88, 1)),
+        ):
+            label = Label(text=title, color=color, bold=True, font_size=dp(8),
+                          size_hint=(None, None), size=(dp(86), dp(16)),
+                          halign="center", valign="middle")
+            label.bind(size=lambda item, value: setattr(item, "text_size", value))
+            self.add_widget(label)
+            self._room_labels.append(label)
         self._draw_building()
 
     def _draw_building(self, *_):
         self.canvas.clear()
         if self.width <= 1 or self.height <= 1:
             return
-        base_w, base_h = 360.0, 190.0
+        # Use an isometric 2D projection. Scale uniformly to preserve the building shape.
+        base_w, base_h = 420.0, 250.0
         scale = min(self.width / base_w, self.height / base_h)
         ox = self.x + (self.width - base_w * scale) / 2
         oy = self.y + (self.height - base_h * scale) / 2
 
-        def box(x, y, w, h, rgba, radius=4):
+        def pt(x, y):
+            return (ox + x * scale, oy + y * scale)
+
+        def poly(points, rgba):
             Color(*rgba)
-            RoundedRectangle(
-                pos=(ox + x * scale, oy + y * scale),
-                size=(w * scale, h * scale),
-                radius=[radius * scale],
-            )
+            vertices = []
+            for x, y in points:
+                px, py = pt(x, y)
+                vertices.extend([px, py, 0, 0])
+            indices = []
+            for i in range(1, len(points) - 1):
+                indices.extend([0, i, i + 1])
+            Mesh(vertices=vertices, indices=indices, mode="triangles")
+
+        def line(points, rgba, width=1):
+            Color(*rgba)
+            Line(points=[v for point in points for v in pt(*point)], width=max(1, width * scale))
+
+        def desk(x, y, tint):
+            # Isometric desk top plus front edge and monitor.
+            poly([(x, y+10), (x+27, y), (x+53, y+12), (x+26, y+23)], tint)
+            poly([(x+3, y+12), (x+26, y+23), (x+26, y+28), (x+3, y+17)], (0.36, 0.27, 0.20, 1))
+            poly([(x+26, y+23), (x+53, y+12), (x+53, y+17), (x+26, y+28)], (0.48, 0.35, 0.25, 1))
+            poly([(x+20, y+7), (x+31, y+2), (x+31, y+13), (x+20, y+18)], (0.12, 0.22, 0.29, 1))
+            poly([(x+21, y+7), (x+30, y+3), (x+30, y+10), (x+21, y+14)], (0.22, 0.68, 0.82, 1))
+
+        def agent(x, y, shirt):
+            # Small voxel-like agent with head, torso and feet.
+            Color(0.83, 0.62, 0.44, 1)
+            Rectangle(pos=pt(x+5, y+15), size=(7*scale, 7*scale))
+            Color(0.22, 0.17, 0.14, 1)
+            Rectangle(pos=pt(x+4, y+21), size=(9*scale, 3*scale))
+            Color(*shirt)
+            Rectangle(pos=pt(x+3, y+7), size=(11*scale, 8*scale))
+            Color(0.17, 0.20, 0.25, 1)
+            Rectangle(pos=pt(x+4, y+2), size=(3*scale, 5*scale))
+            Rectangle(pos=pt(x+10, y+2), size=(3*scale, 5*scale))
 
         with self.canvas:
-            # Roof and structural frame remain in a fixed 360:190 coordinate system.
-            box(110, 158, 140, 20, (0.20, 0.48, 0.62, 1), 5)
-            box(122, 178, 116, 5, (0.33, 0.76, 0.98, 1), 2)
-            # CEO top floor
-            box(70, 126, 220, 27, (0.09, 0.19, 0.27, 1))
-            box(80, 131, 94, 17, (0.16, 0.34, 0.43, 1))
-            box(186, 131, 94, 17, (0.16, 0.34, 0.43, 1))
-            # Research floor: separate market radar, exchange comparison, investigation and analysis
-            box(35, 87, 290, 32, (0.07, 0.14, 0.20, 1))
-            for x in (43, 114, 185, 256):
-                box(x, 93, 62, 20, (0.12, 0.25, 0.32, 1))
-            # Central memory / rapid response / risk-control lower floor
-            box(55, 48, 250, 31, (0.08, 0.17, 0.20, 1))
-            for x, color in ((63, (0.13, 0.30, 0.28, 1)),
-                             (145, (0.13, 0.25, 0.35, 1)),
-                             (227, (0.30, 0.20, 0.13, 1))):
-                box(x, 54, 74, 19, color)
-            # Foundations and pillars
-            box(45, 34, 270, 8, (0.19, 0.24, 0.31, 1), 2)
-            for x in (68, 132, 196, 260):
-                box(x, 20, 8, 14, (0.20, 0.29, 0.37, 1), 2)
-            box(32, 10, 296, 8, (0.13, 0.18, 0.25, 1), 2)
+            # Soft warm backdrop and cast-free floor.
+            Color(0.96, 0.94, 0.88, 1)
+            Rectangle(pos=self.pos, size=self.size)
+            # Open-front floor: top diamond, front fascia, right fascia.
+            poly([(210, 30), (390, 105), (210, 190), (30, 105)], (0.78, 0.70, 0.56, 1))
+            poly([(30, 105), (210, 190), (210, 210), (30, 124)], (0.54, 0.45, 0.34, 1))
+            poly([(210, 190), (390, 105), (390, 125), (210, 210)], (0.63, 0.52, 0.39, 1))
+            # Back and side walls are cut away at the front to keep all rooms visible.
+            poly([(30, 105), (210, 30), (210, 78), (30, 153)], (0.87, 0.82, 0.71, 1))
+            poly([(210, 30), (390, 105), (390, 153), (210, 78)], (0.75, 0.68, 0.56, 1))
+            # Interior partitions create separate departments.
+            poly([(210, 78), (210, 126), (210, 174), (210, 126)], (0.68, 0.60, 0.48, 1))
+            line([(30, 105), (210, 180), (390, 105)], (0.42, 0.34, 0.25, 1), 2)
+            line([(120, 68), (120, 142)], (0.61, 0.53, 0.42, 1), 2)
+            line([(300, 68), (300, 142)], (0.61, 0.53, 0.42, 1), 2)
+            # Office desks and monitors, placed in the room footprints.
+            desk(70, 96, (0.56, 0.39, 0.26, 1))
+            desk(143, 65, (0.58, 0.42, 0.28, 1))
+            desk(236, 65, (0.56, 0.39, 0.26, 1))
+            desk(290, 98, (0.56, 0.39, 0.26, 1))
+            desk(174, 133, (0.56, 0.39, 0.26, 1))
+            # CEO occupies the rear/top office; other avatars are clearly separated.
+            agent(196, 82, (0.10, 0.42, 0.67, 1))
+            agent(104, 113, (0.12, 0.48, 0.38, 1))
+            agent(274, 113, (0.66, 0.35, 0.20, 1))
+            # Gold VST roof sign.
+            poly([(174, 204), (210, 189), (246, 204), (210, 219)], (0.08, 0.23, 0.32, 1))
+            line([(174, 204), (210, 219), (246, 204)], (1.0, 0.70, 0.20, 1), 2)
+
+        positions = ((167, 151), (45, 97), (112, 70), (247, 70), (310, 97), (170, 126))
+        for label, (x, y) in zip(self._room_labels, positions):
+            label.pos = pt(x, y)
+            label.size = (dp(78) * scale, dp(15) * scale)
+            label.font_size = max(dp(5), dp(8) * scale)
+
 
 def build_chat_cockpit(app):
     app.lang = getattr(app, "lang", {})
@@ -145,8 +365,10 @@ def build_chat_cockpit(app):
         saved_experience = ""
     if saved_experience not in {"chat", "office"}:
         saved_experience = ""
-    root = BoxLayout(orientation="horizontal", spacing=0, padding=[0, dp(24), 0, dp(12)])
-    sidebar = Surface(orientation="vertical", size_hint_x=None, width=dp(78), padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
+    phone_layout = Window.width <= dp(520)
+    sidebar_width = dp(72) if phone_layout else dp(96)
+    root = BoxLayout(orientation="horizontal", spacing=0, padding=[0, dp(4), 0, dp(4)])
+    sidebar = Surface(orientation="vertical", size_hint_x=None, width=sidebar_width, padding=[dp(10), dp(14)], spacing=dp(10), fill=(0.025, 0.030, 0.045, 1), radius=0)
     root.add_widget(sidebar)
 
     logo = _label("VST", size=20, bold=True, halign="center", size_hint_y=None, height=dp(44))
@@ -162,8 +384,13 @@ def build_chat_cockpit(app):
     nav_buttons = {}
 
     def nav(label, key, icon):
-        btn = RoundedButton(text=icon + "\n" + label, fill=PANEL, size_hint_y=None, height=dp(58))
-        btn.font_size = dp(10)
+        # Keep navigation labels on one line on narrow screens.
+        mobile_labels = {"chat": "Chat", "office": "Office", "experience": "Modo",
+                         "pc": "PC", "files": "Files", "human": "Humano", "ready": "Ready"}
+        text = mobile_labels.get(key, label) if phone_layout else label
+        btn = RoundedButton(text=text, fill=PANEL, size_hint_y=None,
+                            height=dp(48 if phone_layout else 58))
+        btn.font_size = dp(9 if phone_layout else 10)
         btn.bind(on_release=lambda *_: show_page(key))
         sidebar.add_widget(btn)
         nav_buttons[key] = btn
@@ -183,8 +410,8 @@ def build_chat_cockpit(app):
     app.status = _label("PC: offline", size=12, color=MUTED, size_hint_y=None, height=dp(30))
 
     def header(title, subtitle):
-        bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48), spacing=dp(8))
-        menu = RoundedButton(text="MENU", fill=PANEL, size_hint_x=None, width=dp(46))
+        bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48 if not phone_layout else 54), spacing=dp(5))
+        menu = RoundedButton(text="☰" if phone_layout else "MENU", fill=PANEL, size_hint_x=None, width=dp(38 if phone_layout else 46))
         menu.bind(on_release=lambda *_: toggle_sidebar())
         bar.add_widget(menu)
         col = BoxLayout(orientation="vertical")
@@ -193,9 +420,10 @@ def build_chat_cockpit(app):
         bar.add_widget(col)
         # app.status is the canonical model label; never reparent one Kivy widget
         # into multiple lazily-created page headers.
-        status_label = _label(app.status.text, size=12, color=MUTED, size_hint_x=None, width=dp(90))
+        status_label = _label(app.status.text, size=10, color=MUTED, size_hint_x=None, width=dp(74))
         app.status.bind(text=lambda _instance, value, target=status_label: setattr(target, "text", value))
-        bar.add_widget(status_label)
+        if not phone_layout:
+            bar.add_widget(status_label)
         return bar
 
     def chat_page():
@@ -315,7 +543,7 @@ def build_chat_cockpit(app):
             padding=dp(12),
             spacing=dp(4),
             size_hint_y=None,
-            height=dp(82),
+            height=dp(62),
             fill=(0.12, 0.10, 0.055, 1),
         )
         banner.add_widget(_label(
@@ -333,6 +561,8 @@ def build_chat_cockpit(app):
         ))
         content.add_widget(banner)
 
+        # Keep the building as the primary visual element; decorative CEO artwork
+        # remains available elsewhere but must not push the actual office below the fold.
         # Architectural preview uses a fixed internal coordinate system and uniform scaling.
         # The building itself is never stretched to fill a portrait or landscape viewport.
         building_card = Surface(
@@ -340,11 +570,11 @@ def build_chat_cockpit(app):
             padding=dp(8),
             spacing=dp(3),
             size_hint_y=None,
-            height=dp(188),
+            height=max(dp(220), min(dp(340), Window.height * 0.36)),
             fill=(0.025, 0.045, 0.065, 1),
         )
         building_card.add_widget(_label(
-            "EDIFÍCIO · PLANTA PROPORCIONAL",
+            "ESCRITÓRIO VST · VISTA ISOMÉTRICA",
             size=10,
             color=ACCENT,
             bold=True,
@@ -362,7 +592,7 @@ def build_chat_cockpit(app):
             padding=dp(8),
             spacing=dp(4),
             size_hint_y=None,
-            height=dp(170),
+            height=dp(126),
             fill=(0.025, 0.045, 0.065, 1),
         )
         scene.add_widget(_label(
@@ -384,18 +614,14 @@ def build_chat_cockpit(app):
             ("ANÁLISE", "analysis", 0.52),
             ("MEMÓRIA", "memory", 0.76),
         ]
-        for station_name, _room_key, x_fraction in stations:
-            marker = _label(station_name, size=8, color=MUTED)
-            marker.size_hint = (None, None)
-            marker.size = (dp(64), dp(18))
-            marker.pos_hint = {"x": x_fraction, "y": 0.03}
-            stage.add_widget(marker)
-
         agents = []
         agent_specs = [
-            ("o\n/|\\\n/ \\", "CEO", "ceo", ACCENT, 0.0),
-            ("o\n/|\\\n/ \\", "RADAR", "radar", GREEN, 0.7),
-            ("o\n/|\\\n/ \\", "ANÁLISE", "analysis", (1.0, 0.72, 0.30, 1), 1.4),
+            ("o\n/|\
+/ \\", "CEO", "ceo", ACCENT, 0.0),
+            ("o\n/|\
+/ \\", "RADAR", "radar", GREEN, 0.7),
+            ("o\n/|\
+/ \\", "ANÁLISE", "analysis", (1.0, 0.72, 0.30, 1), 1.4),
         ]
 
         def place_agents(*_):
@@ -404,29 +630,26 @@ def build_chat_cockpit(app):
             for index, agent in enumerate(agents):
                 if agent.get("moving"):
                     continue
-                agent["widget"].y = stage.y + stage.height * (0.40 + index * 0.12)
-                agent["widget"].x = stage.x + stage.width * (0.04 + index * 0.08)
+                lane_centres = (0.16, 0.50, 0.84)
+                widget = agent["widget"]
+                # Keep avatars on one baseline; the former vertical offsets overlapped
+                # 64dp text cards inside the short mobile scene.
+                widget.x = stage.x + stage.width * lane_centres[index] - widget.width / 2
+                widget.y = stage.y + max(dp(4), (stage.height - widget.height) * 0.58)
+                label = agent.get("label")
+                if label is not None:
+                    label.center_x = widget.center_x
+                    label.y = max(stage.y, widget.y - dp(17))
 
         for figure, role, room_key, tint, delay in agent_specs:
-            avatar = Button(
-                text=figure + "\n" + role,
-                font_size=dp(9),
-                color=tint,
-                background_normal="",
-                background_down="",
-                background_color=(0.07, 0.13, 0.18, 1),
-                size_hint=(None, None),
-                size=(dp(62), dp(64)),
-            )
-            avatar.bind(
-                on_release=lambda _button, key=room_key, name=role: setattr(
-                    render_status,
-                    "text",
-                    f"Agente visual: {name} · departamento {key.upper()} · demonstração offline; sem tarefa real confirmada",
-                )
-            )
+            avatar = PixelAgent(tint=tint, size_hint=(None, None), size=(dp(36), dp(48)))
             stage.add_widget(avatar)
-            agents.append({"widget": avatar, "role": role, "room": room_key, "delay": delay, "moving": False})
+            role_label = _label(role, size=8, color=tint, halign="center")
+            role_label.size_hint = (None, None)
+            role_label.size = (dp(70), dp(16))
+            stage.add_widget(role_label)
+            agents.append({"widget": avatar, "label": role_label, "role": role,
+                           "room": room_key, "delay": delay, "moving": False})
 
         def animate_agents(*_):
             if stage.width <= dp(80):
@@ -453,8 +676,9 @@ def build_chat_cockpit(app):
                     backward.bind(on_complete=lambda *_args: forward.start(w))
                     forward.start(w)
                 Clock.schedule_once(begin, agent["delay"])
-        Clock.schedule_once(animate_agents, 0.3)
-        stage.bind(size=lambda *_: Clock.schedule_once(animate_agents, 0.2) if not any(a["moving"] for a in agents) else None)
+        # The offline illustration keeps each avatar within its own lane; avoid
+        # continuous cross-stage movement that caused visual collisions on phones.
+        Clock.schedule_once(place_agents, 0.3)
         content.add_widget(scene)
 
         mode_row = BoxLayout(
@@ -503,7 +727,7 @@ def build_chat_cockpit(app):
         )
 
         grid = GridLayout(
-            cols=2,
+            cols=1 if phone_layout else 2,
             spacing=dp(8),
             size_hint_y=None,
             row_default_height=dp(82),
@@ -569,6 +793,12 @@ def build_chat_cockpit(app):
                 fill = (0.075, 0.14, 0.20, 1)
                 height = 82
                 font_size = 10
+            viewport_width = Window.width
+            grid.cols = 1 if viewport_width <= dp(520) else (3 if viewport_width >= dp(1000) else 2)
+            if viewport_width <= dp(520):
+                height = max(height, 70)
+            elif viewport_width >= dp(1000):
+                height = max(height, 88)
             grid.row_default_height = dp(height)
             for room in rooms:
                 button = RoundedButton(
@@ -733,4 +963,24 @@ def build_chat_cockpit(app):
         show_page(saved_experience)
     else:
         show_page("experience")
+
+    # Recalculate responsive navigation and office grid after Android rotates.
+    def adapt_to_viewport(_window, width, height):
+        nonlocal phone_layout
+        phone_layout = width <= dp(520)
+        sidebar.width = dp(54) if phone_layout else dp(78)
+        for button in nav_buttons.values():
+            button.font_size = dp(9 if phone_layout else 10)
+        office_grid = getattr(app, "office_room_grid", None)
+        if office_grid is not None:
+            office_grid.cols = 1 if width <= dp(520) else (3 if width >= dp(1000) else 2)
+            office_grid.spacing = dp(6 if phone_layout else 8)
+        if hasattr(app, "office_mode_selector"):
+            app.office_mode_selector.font_size = dp(10 if phone_layout else 12)
+        # Refresh the currently displayed page so it measures against the new width.
+        if app.current_page in page_instances:
+            current = page_instances[app.current_page]
+            page_area.remove_widget(current)
+            page_area.add_widget(current)
+    Window.bind(on_resize=adapt_to_viewport)
     return root

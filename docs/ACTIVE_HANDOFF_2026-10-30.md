@@ -1,45 +1,56 @@
-# ACTIVE HANDOFF — VazaoSovereignTrader — 2026-10-30
+# ACTIVE HANDOFF — VazaoSovereignTrader — 2026-10-30 (atualizado)
 
-## Ordem de prioridade
-1. Tornar o cérebro/runtime robusto, headless e independente do cockpit/escritório virtual.
-2. Fazer o APK abrir e navegar de forma fiável; manter testes de emulador e inspecionar artefactos atuais.
-3. Suportar Windows e Linux, com preferência por Linux Server LTS mínimo em servidores/department workers dedicados quando compatível.
-4. Preparar instalação adaptativa por capacidades e função autorizada da máquina.
-5. Manter documentação e memória sincronizadas, uma PR/branch de implementação ativa de cada vez.
+## Prioridades vigentes
+1. Cérebro/runtime headless, modular, seguro, observável e migrável; PC antigo continua o primeiro ambiente.
+2. Corrigir e validar APK/escritório Android com artefactos do commit atual.
+3. Windows e Linux suportados; Linux Server LTS mínimo é preferência futura para nós dedicados compatíveis, sem migração obrigatória agora.
+4. Obscura vs Chromium: avaliar em cloud Linux com smoke e benchmark repetível; não afirmar vantagem antes dos resultados.
+5. Escritório remoto/streaming é uma capacidade futura opcional; cockpit/chat leve não pode depender do renderer.
 
-## Estado Git confirmado neste checkpoint
-- PR #520, correções de safe-area e navegação Android: merged; os testes de emulador anteriores passaram. Isso não prova instalação/arranque no telefone físico nem ligação ao runtime real.
-- PR #521: aberta em `docs/cross-platform-runtime-policy-2026-10-30`; HEAD observado `bb2e359b1cd3d35bcdd6396570c71deb931c38fe`. Contém `docs/CROSS_PLATFORM_RUNTIME_POLICY.md`, `docs/ADAPTIVE_INSTALLATION_AND_NODE_ROLES.md`, `docs/OBSCURA_EVALUATION_CLAUDE_CODE.md` e `.github/workflows/obscura-cloud-smoke.yml`. Os checks do commit final ainda precisam de confirmação; não declarar merge.
-- PR #519 (Obscura) será fechada depois de transferidos para #521 o plano e o smoke workflow. O benchmark comparativo não foi transferido porque o contrato CDP/servidor não está confirmado; não afirmar vantagem de desempenho.
-- Só a PR #521 deve ficar aberta no produto neste checkpoint. PRs fechadas podem deixar branches remotas; não afirmar que branches foram apagadas sem confirmação explícita do GitHub.
-- Main do produto era `1672fdd8a6ce1c0dc4b4f66ead3c31fdf1ea6d88` na base da PR #521; confirmar SHA atual antes de integrar.
+## Estado Git confirmado nesta atualização
+- PR #521 foi merged em main: documentação de política multiplataforma, perfis adaptativos e avaliação cloud Obscura.
+- PR #519 está fechada sem merge para evitar duas PRs ativas; o plano e o workflow Obscura foram transferidos para main via PR #521. O benchmark comparativo agora é desenvolvido na branch ativa de #522.
+- PR #522 é a única PR de implementação aberta neste bloco: https://github.com/AndreVazao/VazaoSovereignTrader/pull/522
+- Branch: `fix/android-office-layout-2026-10-30`. Confirmar o HEAD antes de interpretar resultados de Actions; qualquer commit novo invalida a evidência de commits anteriores.
+- Não declarar branch remota apagada sem confirmação explícita do GitHub.
 
 ## Decisões de arquitetura
-- Windows e Linux são plataformas suportadas. Linux Server LTS mínimo é a preferência para cérebro headless e nós dedicados, não uma exigência universal.
-- A instalação deve começar com diagnóstico sem alterações; detetar OS/arquitetura/CPU/RAM/disco e propor componentes/perfil. Não conceder permissões a partir do hostname/fingerprint; requer enrollment/autorização explícitos.
-- Perfis pretendidos: brain-server, department-worker, research-worker, memory-node, desktop-cockpit e office-visualizer. Cada nó executa apenas funções autorizadas e adequadas aos seus recursos.
-- Core, departamentos, API/cockpit e visualização são camadas separadas. Fechar/crashar UI ou renderização 3D não pode parar o cérebro.
-- Em máquinas limitadas, reduzir concorrência e desativar por defeito 3D, browsers persistentes e modelos locais pesados.
-- PAPER/read-only por defeito; sem ordens reais, transferências, chaves reais em CI, portas públicas automáticas ou alterações de segurança do OS.
-- Obscura permanece opcional. Só integrar no caminho de pesquisa se testes funcionais e benchmark repetível mostrarem compatibilidade e vantagem real face ao browser existente.
+- O primeiro deployment continua no PC antigo; não exigir nova máquina, GPU dedicada ou servidor gráfico.
+- Core, departamentos, memória, browser/research, API/cockpit e visualização são fronteiras separadas. Falha da UI/renderer/browser não deve parar o cérebro.
+- Um PC primeiro: módulos locais comunicam-se por interfaces internas sem introduzir rede desnecessária; os mesmos contratos permitem distribuir componentes depois.
+- Perfis futuros: brain-server, department-worker, research-worker, memory-node, desktop-cockpit, office-visualizer e browser-worker. São alvos arquiteturais, não todos implementados.
+- Migração exige configuração declarativa, estado versionado, backup/restauro e enrollment/autorização explícitos. Identidade/autoridade não deriva do hostname/fingerprint.
+- Linux Server LTS é preferido para futuro nó headless compatível, mas Windows continua suportado. Benchmark de OS no hardware físico = NOT RUN.
+- Renderização remota/vídeo é FASE FUTURA. Primeiro manter cockpit leve; depois avaliar cliente web por API/eventos. Streaming (ex. WebRTC) só se um motor gráfico futuro justificar GPU remota.
+- Obscura é experimental; Chromium/adaptador suportado continua fallback. Não implementar seleção automática de produção até funcionalidade, compatibilidade, fallback e benchmark serem comprovados.
+- PAPER/read-only por defeito; sem ordens reais, transferências, credenciais reais em CI, portas públicas automáticas ou bypass de MFA/CAPTCHA/anti-bot.
 
 ## APK / escritório virtual
-- PR #520 melhorou safe areas e navegação com labels ASCII e foi integrada. Testes de emulador passaram, com demonstração offline do escritório.
-- O escritório continua a ser uma camada de visualização/demo offline; não afirmar que já está ligado ao runtime real.
-- Teste físico Android/ADB e pairing PC↔telefone/Tailscale permanecem NOT RUN/BLOCKED até o utilizador ter PC/dispositivo disponível.
-- Próxima tarefa: revalidar workflows atuais no main, obter APK de run atual, inspecionar screenshots/logcat e confirmar arranque/navegação no emulador. Depois preparar instruções de instalação simples para o telefone. Não reutilizar screenshots antigas como prova atual.
+- O screenshot físico fornecido pelo utilizador revelou layout apertado e avatares sobrepostos; o utilizador também reportou ausência de rotação.
+- PR #522 reduz largura da navegação em telemóvel, ajusta a grelha a 1/2/3 colunas, substitui caracteres por figuras pixel-art leves e tenta adaptar layout ao resize.
+- `MOBILE_APP/buildozer.spec` usa `orientation = all`, mas é experimental devido a falha histórica do Buildozer com esse valor. Não afirmar rotação resolvida sem build + screenshots portrait/landscape/tablet inspecionadas.
+- Runs APK #126/#130 (41110052887/41117040326) e smoke #83 (41110053343) falharam primeiro por teste contratual desatualizado; após corrigi-lo, os runs #131 e #88 revelaram que `orientation = all` é inválido e a compilação falhou. A orientação foi alterada para a lista explícita de quatro orientações e o contrato atualizado. Revalidar no run novo; não existem ainda capturas atuais válidas.
+- Não há APK/capturas atuais validados destes runs falhados. Artefactos de runs anteriores não provam o estado atual.
+- Escritório continua demo offline, não ligado ao runtime real. Validação física Android/ADB e ligação PC↔telefone permanecem NOT RUN/BLOCKED.
 
-## Próximos passos concretos
-1. Verificar os checks exatos da PR #521 e o workflow Obscura cloud smoke; resolver falhas antes de merge.
-2. Integrar a documentação consolidada numa única PR, sem apagar evidência histórica útil. Arquivar/substituir handoffs contraditórios por um apontador para este handoff atual.
-3. Atualizar AndreOS memory com este estado e os blockers.
-4. Priorizar APK: build atual, emulador, artefactos, instruções de instalação e teste físico quando possível.
-5. Auditar runtime/core no código atual e correr testes CI disponíveis; separar claramente PASS, FAIL, BLOCKED e NOT RUN.
-6. Só depois começar implementação incremental de `vst doctor --json`, manifesto de componentes e adaptadores de serviço por OS.
+## Obscura vs Chromium — estado
+- Workflow: `.github/workflows/obscura-cloud-smoke.yml`.
+- Foi acrescentada comparação cloud no mesmo runner Ubuntu: fixture HTML local, execução JS/DOM, smoke funcional e 7 repetições por motor, com medições e JSON de resultados como artefacto.
+- O benchmark inclui o arranque do processo e é limitado a fixture sintética; não demonstra vantagem em exchanges nem no PC antigo.
+- Run #7 (ID 41117040323, SHA `ac11fe96f0c67d6a8926ed1787322356fbb96551`) passou smoke para ambos e produziu artefacto #13005848220. Obscura 0.2.5: 7/7, mediana 23,65 ms; Chrome headless: 7/7, mediana 728,61 ms. A medição inclui novo processo por tentativa e é apenas uma fixture local; provável custo de arranque do Chrome CLI, não prova superioridade em browser persistente/exchanges. Resultado preliminar, sem seleção automática de produção.
+- Fallback runtime: Chromium/adaptador atual; ainda não declarar implementado um failover automático de produção. Nenhuma integração Obscura no caminho crítico até testes repetíveis justificarem.
+
+## Próximos passos
+1. Confirmar HEAD atual da #522 e runs Actions associados a esse HEAD.
+2. Obter logs completos de falhas; corrigir causa real sem enfraquecer testes.
+3. Confirmar o workflow Obscura cloud, inspecionar smoke-report e benchmark.json; repetir se inconclusivo.
+4. Corrigir APK/smoke; inspecionar screenshots atuais e disponibilizar APK apenas quando o artefacto atual existir.
+5. Auditar o core/runtime atual e implementar incrementalmente diagnóstico read-only, manifesto de componentes e adaptadores multiplataforma, evitando abstrações duplicadas.
+6. Atualizar memória persistente AndreOS após checkpoint validado.
 
 ## Regras de trabalho
-- Uma PR/branch de implementação ativa por vez; branches curtas, mudanças pequenas.
-- Não fazer merge com checks pendentes/falhados ou com artefactos não inspecionados quando relevantes.
-- Não apagar documentos técnicos sem verificar se contêm evidência/decisões únicas; substituir documentos contraditórios por um handoff autoritativo e marcar o resto como histórico.
-- Não declarar testes de hardware físico, benchmark ou integração que não tenham sido executados.
-- Nenhuma alteração ao DGM-MAT; projeto separado.
+- Uma única PR/branch ativa de implementação de cada vez.
+- Não fazer merge com checks pendentes/falhados ou sem inspeção dos artefactos visuais relevantes.
+- Não apagar documentos que contenham evidência única; manter este handoff como estado atual e marcar documentos antigos como históricos quando necessário.
+- Separar PASS, FAIL, BLOCKED e NOT RUN. Não declarar hardware físico, benchmark ou integração que não tenha sido executado.
+- Não trabalhar no DGM-MAT; é um projeto separado.

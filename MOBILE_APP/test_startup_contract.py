@@ -23,8 +23,8 @@ class MobileStartupContractTests(unittest.TestCase):
     def test_virtual_office_is_offline_and_exposes_adaptive_modes(self) -> None:
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn('nav("Escritório", "office", "E")', source)
-        self.assertIn('padding=[0, dp(24), 0, dp(12)]', source)
-        self.assertIn('RoundedButton(text="MENU", fill=PANEL', source)
+        self.assertIn('padding=[0, dp(4), 0, dp(4)]', source)
+        self.assertIn('RoundedButton(text="☰" if phone_layout else "MENU"', source)
         self.assertIn('pages["office"]=office_page', source)
         self.assertIn('"DEMO OFFLINE · ESCRITÓRIO SEM MOTOR"', source)
         self.assertIn("office_preferences.json", source)
@@ -52,11 +52,23 @@ class MobileStartupContractTests(unittest.TestCase):
             with self.subTest(department=department):
                 self.assertIn(department, office)
 
+    def test_mobile_office_prioritizes_building_over_decorative_panels(self) -> None:
+        source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        office = source.split("    def office_page():", 1)[1].split("    def files_page():", 1)[0]
+        self.assertNotIn("ceo_art_card", office)
+        self.assertIn("height=max(dp(220), min(dp(340), Window.height * 0.36))", office)
+        self.assertIn("height=dp(62)", office)
+        self.assertIn("height=dp(126)", office)
+        self.assertLess(
+            office.index('"ESCRITÓRIO VST · VISTA ISOMÉTRICA"'),
+            office.index('"VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL"'),
+        )
+
     def test_virtual_building_preview_preserves_architectural_proportions(self) -> None:
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn("class BuildingPreview(Widget):", source)
         self.assertIn("scale = min(self.width / base_w, self.height / base_h)", source)
-        self.assertIn('"EDIFÍCIO · PLANTA PROPORCIONAL"', source)
+        self.assertIn('"ESCRITÓRIO VST · VISTA ISOMÉTRICA"', source)
         self.assertIn("building_preview = BuildingPreview(size_hint=(1, 1))", source)
         self.assertIn("building_card.add_widget(building_preview)", source)
 
@@ -64,10 +76,15 @@ class MobileStartupContractTests(unittest.TestCase):
         source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn("from kivy.animation import Animation", source)
         self.assertIn("from kivy.uix.floatlayout import FloatLayout", source)
+        self.assertIn("class PixelAgent(Widget):", source)
+        self.assertIn("grid.cols = 1 if viewport_width <= dp(520)", source)
+        self.assertIn("Window.bind(on_resize=adapt_to_viewport)", source)
         self.assertIn("Animation(x=right, duration=4.0 + index, t=\"in_out_sine\")", source)
-        self.assertIn("Clock.schedule_once(animate_agents, 0.3)", source)
+        self.assertIn("Clock.schedule_once(place_agents, 0.3)", source)
+        self.assertIn("Window.bind(on_resize=adapt_to_viewport)", source)
         self.assertIn("VIDA DO ESCRITÓRIO · ANIMAÇÃO LOCAL", source)
-        self.assertIn("demonstração offline; sem tarefa real confirmada", source)
+        self.assertIn("Não são apresentados agentes, preços ou atividade reais.", source)
+        self.assertIn("class PixelAgent(Widget):", source)
         self.assertIn("HD 3D (futuro)", source)
         self.assertIn("fallback seguro", source)
 
@@ -91,12 +108,12 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("vst-landscape.png", script)
         self.assertIn("vst-tablet-landscape.png", script)
         self.assertIn('struct.unpack(">II", data[16:24])', script)
-        self.assertIn('point: "60%, 70%"', office_flow)
+        self.assertIn('text: "USAR ESCRITÓRIO VIRTUAL"', office_flow)
         self.assertIn("vst-office-entry.png", script)
         self.assertIn("office-ocr.txt", script)
         ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
         self.assertIn("label.text_size = (label.width, None)", ui_source)
-        self.assertIn("orientation = portrait", spec)
+        self.assertIn("orientation = portrait, landscape, portrait-reverse, landscape-reverse", spec)
 
 
 
