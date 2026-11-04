@@ -20,6 +20,10 @@ class RuntimeObserverSnapshot:
         "open_positions_count",
         "opportunities_count",
         "updated_at_ms",
+        "health_state",
+        "allow_new_tasks",
+        "allow_risk_bearing_actions",
+        "health_checked_at_ms",
     )
 
     def __init__(self) -> None:
@@ -31,6 +35,10 @@ class RuntimeObserverSnapshot:
             "open_positions_count": 0,
             "opportunities_count": 0,
             "updated_at_ms": time.time_ns() // 1_000_000,
+            "health_state": "unknown",
+            "allow_new_tasks": False,
+            "allow_risk_bearing_actions": False,
+            "health_checked_at_ms": 0,
         }
 
     def publish(
@@ -41,6 +49,10 @@ class RuntimeObserverSnapshot:
         open_positions_count: int,
         opportunities_count: int,
         updated_at_ms: int | None = None,
+        health_state: str = "unknown",
+        allow_new_tasks: bool = False,
+        allow_risk_bearing_actions: bool = False,
+        health_checked_at_ms: int = 0,
     ) -> None:
         """Replace the last value; slow readers never back-pressure publishers."""
         payload = {
@@ -50,6 +62,10 @@ class RuntimeObserverSnapshot:
             "open_positions_count": max(0, int(open_positions_count)),
             "opportunities_count": max(0, int(opportunities_count)),
             "updated_at_ms": int(updated_at_ms or time.time_ns() // 1_000_000),
+            "health_state": str(health_state),
+            "allow_new_tasks": allow_new_tasks is True,
+            "allow_risk_bearing_actions": False,
+            "health_checked_at_ms": max(0, int(health_checked_at_ms)),
         }
         with self._lock:
             self._payload = payload

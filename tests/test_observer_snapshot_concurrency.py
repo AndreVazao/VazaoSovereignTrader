@@ -16,6 +16,10 @@ def test_observer_snapshot_remains_bounded_under_concurrent_readers_and_publishe
         "open_positions_count",
         "opportunities_count",
         "updated_at_ms",
+        "health_state",
+        "allow_new_tasks",
+        "allow_risk_bearing_actions",
+        "health_checked_at_ms",
     }
 
     def reader() -> None:
