@@ -656,6 +656,7 @@ class SovereignEngine:
         if getattr(self, "mode", "PAPER") != "REAL":
             self.state.status = "SAFE_MODE"
             self.real_operational = False
+            self._refresh_health_isolation()
             return
         self.real_fail_safe_reason = str(reason)
         self.real_operational = False
@@ -677,12 +678,14 @@ class SovereignEngine:
         if data:
             payload.update(data)
         self.log("REAL_FAIL_SAFE", payload)
+        self._refresh_health_isolation()
 
     def _enter_safe_state(self, reason: str, data: dict | None = None) -> None:
         if getattr(self, "mode", "PAPER") == "REAL":
             self._enter_real_fail_safe(reason, data)
         else:
             self.state.status = "SAFE_MODE"
+            self._refresh_health_isolation()
 
     def start(self) -> None:
         if getattr(self, "_closed", False):
