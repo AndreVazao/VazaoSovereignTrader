@@ -9,6 +9,8 @@ on:
       - "PC_ENGINE/storage/**"
       - "PC_ENGINE/services/paper_market_collector.py"
       - "tests/test_engine_paper_e2e.py"
+      - "scripts/benchmark_paper_engine_observer_load.py"
+      - "tests/test_paper_engine_observer_load_benchmark.py"
       - "tests/test_engine_restart_recovery.py"
       - "tests/test_engine_unknown_outcome.py"
       - "tests/test_recovery_integrity.py"
