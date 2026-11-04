@@ -117,3 +117,20 @@ def test_order_entry_boundary_blocks_before_touching_execution_dependencies():
     assert len(events) == 1
     assert events[0][0] == "HEALTH_ISOLATION_ORDER_BLOCK"
     assert events[0][1]["symbol"] == "BTC/USDT"
+
+
+def test_fail_safe_health_refresh_supports_partial_recovery_engine_instances():
+    from PC_ENGINE.core.engine import RuntimeState
+
+    engine = object.__new__(SovereignEngine)
+    engine.state = RuntimeState()
+    engine.mode = "PAPER"
+    engine.real_operational = False
+    engine.learning_memory = None
+    engine.log = lambda *args, **kwargs: None
+
+    engine._enter_safe_state("synthetic_recovery_failure")
+
+    assert engine.state.status == "SAFE_MODE"
+    assert engine.state.health_isolation["state"] == "quarantined"
+    assert engine.state.health_isolation["allow_new_tasks"] is False
