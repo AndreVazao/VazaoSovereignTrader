@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import PC_ENGINE.api.server as server_module
+import PC_ENGINE.core.engine as engine_module
 from scripts.benchmark_runtime_observer_load import percentile, run_scenario, summarize
 
 
@@ -31,3 +33,21 @@ def test_observer_load_scenario_runs_without_orders_or_reader_leaks():
     assert result["http_errors"] == 0
     assert result["reader_threads_still_running"] == 0
     assert "no-op _cycle_once" in result["scope_note"].lower()
+
+
+def test_observer_benchmark_restores_and_does_not_write_to_application_data_dir(tmp_path, monkeypatch):
+    sentinel = tmp_path / "must-remain-unused"
+    monkeypatch.setattr(engine_module, "DATA_DIR", sentinel)
+    monkeypatch.setattr(server_module, "DATA_DIR", sentinel)
+
+    result = run_scenario(
+        "isolated_data_dir",
+        duration_seconds=0.2,
+        readers=1,
+        token="observer-load-isolation-token",
+    )
+
+    assert result["http_errors"] == 0
+    assert engine_module.DATA_DIR == sentinel
+    assert server_module.DATA_DIR == sentinel
+    assert not sentinel.exists()
