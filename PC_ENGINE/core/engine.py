@@ -14,7 +14,7 @@ from PC_ENGINE.core.allocator import CapitalAllocator
 from PC_ENGINE.core.opportunity import PaperOpportunityEngine
 from PC_ENGINE.core.config import DATA_DIR, env_value
 from PC_ENGINE.core.owner_context import OwnerContext
-from PC_ENGINE.core.data_vault import default_vault_path, initialize_vault
+from PC_ENGINE.core.data_vault import default_vault_path, initialize_vault, legacy_vault_path
 from PC_ENGINE.core.observer_snapshot import RuntimeObserverSnapshot
 from PC_ENGINE.core.runtime_timing_metrics import RuntimeTimingMetrics
 from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
@@ -93,8 +93,22 @@ class SovereignEngine:
         # Durable user-data vault is outside the versioned installation directory.
         # VST_VAULT_PATH can select a deliberate migration/backup location.
         vault_override = os.environ.get("VST_VAULT_PATH", "").strip()
-        self.vault_root = Path(vault_override).expanduser().resolve() if vault_override else default_vault_path()
-        self.vault_info = initialize_vault(self.vault_root)
+        if vault_override:
+            self.vault_root = Path(vault_override).expanduser().resolve()
+            self.vault_info = initialize_vault(self.vault_root)
+        else:
+            preferred_vault = default_vault_path()
+            legacy_vault = legacy_vault_path()
+            # Preserve an existing pre-separation vault in place. Never silently
+            # copy, move, overwrite, or delete a live SQLite database.
+            if not preferred_vault.exists() and legacy_vault.is_dir():
+                self.vault_root = legacy_vault.resolve()
+                self.vault_info = initialize_vault(self.vault_root)
+                self.vault_info["legacy_location_detected"] = True
+                self.vault_info["migration"] = "preserved_in_place_pending_verified_backup"
+            else:
+                self.vault_root = preferred_vault
+                self.vault_info = initialize_vault(self.vault_root)
         self.owner_context = OwnerContext.from_config(config, DATA_DIR)
         self.owner_id = self.owner_context.owner_id
         config.setdefault("owner", {})["id"] = self.owner_id
