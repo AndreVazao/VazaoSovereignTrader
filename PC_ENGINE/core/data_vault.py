@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 
-VAULT_DIRNAME = "VazaoSovereignTrader"
+VAULT_DIRNAME = "VazaoSovereignTraderData"
 MANIFEST_FILENAME = "vault_manifest.json"
 VAULT_SCHEMA_VERSION = 1
 
