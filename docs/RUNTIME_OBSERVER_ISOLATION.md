@@ -56,3 +56,10 @@ The latest-value mailbox now enforces a strict value-size boundary in addition t
 - Regression coverage supplies oversized text, malformed values and arbitrarily large integers, then checks the bounded contract.
 
 This constrains the in-memory summary's content size. It does not establish a production latency budget, process isolation or a visual circuit breaker.
+
+
+## Concurrent observer stress coverage — 2026-11-04
+
+The concurrency suite now exercises multiple simultaneous publishers and readers against the latest-value mailbox. Each published record carries correlated marker values across its fields; readers assert that they never observe a mixed/torn record. The same load verifies the fixed schema, bounded text, and the invariant that risk-bearing authority is always false.
+
+This is a correctness/concurrency stress test, not a benchmark. It does not establish CPU isolation, a maximum lock-wait time, a p95/p99 latency budget, or behavior under a saturated HTTP server/browser. Those require a separate measured runtime/HTTP load test on representative hardware.
