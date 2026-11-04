@@ -43,6 +43,7 @@ from PC_ENGINE.research.worker import ResearchWorker
 from PC_ENGINE.core.shared_intelligence import SharedIntelligenceStore
 from PC_ENGINE.core.shared_intelligence_sync import SharedIntelligenceSync
 from PC_ENGINE.core.shared_intelligence_sync_worker import SharedIntelligenceSyncWorker
+from PC_ENGINE.tools.health_isolation import HealthSignal, Severity, evaluate_health
 from PC_ENGINE.core.vercel_shared_intelligence import VercelSharedIntelligenceProvider
 
 
@@ -74,6 +75,7 @@ class RuntimeState:
     watchdog: Dict[str, str | bool | int] = field(default_factory=dict)
     human_bridge: Dict[str, object] = field(default_factory=dict)
     operational: Dict[str, object] = field(default_factory=dict)
+    health_isolation: Dict[str, object] = field(default_factory=dict)
     preflight: Dict[str, object] = field(default_factory=dict)
     account_reconciliation: Dict[str, object] = field(default_factory=dict)
     financial_reconciliation: Dict[str, object] = field(default_factory=dict)
@@ -1122,6 +1124,60 @@ class SovereignEngine:
             if self.stop_event.wait(interval):
                 break
 
+    def _refresh_health_isolation(self) -> dict:
+        """Apply the fail-closed health policy to new-entry authorization.
+
+        Health policy never grants trading authority. It can only reduce
+        autonomy; existing-position risk-reducing exits remain available.
+        """
+        signals: list[HealthSignal] = []
+        status = str(getattr(self.state, "status", "OFF")).upper()
+        if status in {"SAFE_MODE", "KILL_SWITCH", "STOPPING"}:
+            signals.append(HealthSignal(
+                f"runtime_{status.lower()}", Severity.CRITICAL,
+                "Runtime safety state blocks new entries",
+            ))
+
+        watchdog = getattr(self.state, "watchdog", {}) or {}
+        if isinstance(watchdog, dict) and watchdog.get("ok") is False:
+            signals.append(HealthSignal(
+                "watchdog_check_failed", Severity.CRITICAL,
+                "Connectivity watchdog has a failed latest check",
+            ))
+
+        learning_cfg = dict(self.config.get("learning_memory", {}))
+        if bool(learning_cfg.get("enabled", True)) and getattr(self, "learning_memory", None) is None:
+            signals.append(HealthSignal(
+                "learning_memory_unavailable", Severity.ERROR,
+                "Learning memory is enabled but its durable store is unavailable",
+            ))
+
+        if str(getattr(self, "mode", "PAPER")).upper() == "REAL" and not bool(getattr(self, "real_operational", False)):
+            signals.append(HealthSignal(
+                "real_runtime_not_operational", Severity.CRITICAL,
+                "REAL mode is not operational",
+            ))
+
+        decision = evaluate_health(signals)
+        report = {
+            "state": decision.state.value,
+            "isolate": decision.isolate,
+            "allow_new_tasks": decision.allow_new_tasks,
+            "allow_risk_bearing_actions": False,
+            "reasons": list(decision.reasons),
+            "checked_at": int(time.time()),
+            "policy": "fail_closed_new_entries_only",
+        }
+        previous = getattr(self.state, "health_isolation", {}) or {}
+        self.state.health_isolation = report
+        if previous.get("state") != report["state"] or previous.get("reasons") != report["reasons"]:
+            self.log("HEALTH_ISOLATION_DECISION", {
+                "state": report["state"],
+                "allow_new_tasks": report["allow_new_tasks"],
+                "reasons": report["reasons"],
+            })
+        return report
+
     def _watchdog_gate(self, exchange: CcxtExchangeClient) -> bool:
         self.cycle_count += 1
         interval = int(self.config.get("watchdog", {}).get("internet_check_interval_cycles", 3))
@@ -2048,6 +2104,7 @@ class SovereignEngine:
         self.refresh_human_bridge_operational_state()
         if not self._watchdog_gate(exchange):
             return
+        self._refresh_health_isolation()
         if self.mode == "PAPER" and self._maybe_autonomous_real_promotion():
             exchange = self._main_exchange()
             if exchange is None:
@@ -2138,6 +2195,12 @@ class SovereignEngine:
                 )
 
         for decision in allocations:
+            if not bool(self.state.health_isolation.get("allow_new_tasks", True)):
+                self.log("HEALTH_ISOLATION_NEW_ENTRY_BLOCK", {
+                    "state": self.state.health_isolation.get("state", "UNKNOWN"),
+                    "reasons": self.state.health_isolation.get("reasons", []),
+                })
+                break
             symbol = decision.symbol
             if symbol in self.state.open_positions:
                 continue
