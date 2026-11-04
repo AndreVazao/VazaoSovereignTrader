@@ -80,7 +80,7 @@ def test_observer_snapshot_normalizes_counts_and_keeps_fixed_schema():
     assert payload["open_positions_count"] == 0
     assert payload["opportunities_count"] == 4
     assert payload["health_state"] == "None"
-    assert payload["allow_new_tasks"] is True
+    assert payload["allow_new_tasks"] is False
     assert payload["allow_risk_bearing_actions"] is False
     assert payload["health_checked_at_ms"] == 0
     assert all(
