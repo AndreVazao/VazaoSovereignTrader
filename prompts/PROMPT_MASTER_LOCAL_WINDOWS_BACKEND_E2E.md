@@ -46,7 +46,7 @@ Do not work on the visual office, Android APK, DGM-MAT, Obscura, or unrelated pr
 1. Run the verified installer normally, without elevation unless the installer clearly requires it and the reason is recorded. If UAC requests elevation, pause and ask the owner before approving.
 2. Record each installer page, option, install path (redact personal path segments), selected components, and any warning/error. Choose the minimal default install; do not enable REAL trading, external network exposure, autostart with elevated privileges, or optional components that are not necessary.
 3. Confirm the install completes. Record installed version/build, EXE path, file version, and SHA-256. If installation fails, stop and collect the exact error and logs; do not repeatedly reinstall.
-4. Confirm install/uninstall directories are distinct from the user vault. Never select a vault path inside the versioned install directory.
+4. Confirm install/uninstall directories are distinct from the new user vault. If the legacy vault exists inside the install root, do not uninstall or migrate it in this run; continue only non-destructive diagnostics and record the migration as BLOCKED.
 
 ## Phase 3 — PAPER-only startup and diagnostics
 
