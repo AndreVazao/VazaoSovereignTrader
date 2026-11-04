@@ -118,15 +118,27 @@ if ($startupSummary.found) {
     else { Add-Check "startup_health" "FAIL" "At least one owner-scoped startup report is invalid or not READY/PAPER." }
 } else { Add-Check "startup_health" "NOT RUN" "No owner-scoped startup_health.json found; no report was fabricated." }
 
-$vaultRoot = Join-Path $InstallRoot "vault"
-$vaultSummary = @{ path_relative = "vault"; exists = (Test-Path -LiteralPath $vaultRoot -PathType Container); directories = @{}; files = @{} }
+$preferredVaultRoot = Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData\vault"
+$legacyVaultRoot = Join-Path $InstallRoot "vault"
+$vaultRoot = $preferredVaultRoot
+$vaultLocation = "separate_user_data"
+if (-not (Test-Path -LiteralPath $preferredVaultRoot -PathType Container) -and (Test-Path -LiteralPath $legacyVaultRoot -PathType Container)) {
+    $vaultRoot = $legacyVaultRoot
+    $vaultLocation = "legacy_inside_install_root"
+}
+$vaultSummary = @{ location = $vaultLocation; path = $vaultRoot; exists = (Test-Path -LiteralPath $vaultRoot -PathType Container); directories = @{}; files = @{} }
 foreach ($name in @("learning", "backups", "imports", "exports", "logs")) {
     $dir = Join-Path $vaultRoot $name
     $vaultSummary.directories[$name] = Test-Path -LiteralPath $dir -PathType Container
     $vaultSummary.files[$name] = if (Test-Path -LiteralPath $dir -PathType Container) { @(Get-ChildItem -LiteralPath $dir -File -Recurse -ErrorAction SilentlyContinue).Count } else { 0 }
 }
-if ($vaultSummary.exists) { Add-Check "vault_presence" "PASS" "Vault directory exists; only directory names and file counts were recorded." }
-else { Add-Check "vault_presence" "CHECK" "Vault directory not found. Audit does not create or migrate vault data." }
+if (-not $vaultSummary.exists) {
+    Add-Check "vault_presence" "CHECK" "Neither the separated vault nor the legacy vault was found; audit did not create or migrate data."
+} elseif ($vaultLocation -eq "legacy_inside_install_root") {
+    Add-Check "vault_presence" "CHECK" "Legacy vault detected inside the installation root and preserved in place; do not uninstall until a verified migration/backup is completed."
+} else {
+    Add-Check "vault_presence" "PASS" "Separate user-data vault exists; only directory names and file counts were recorded."
+}
 
 $taskSummary = @{}
 foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
