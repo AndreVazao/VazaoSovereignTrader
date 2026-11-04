@@ -140,3 +140,17 @@ Return a concise status plus the full report path. State which tests passed, fai
 The engine now uses interruptible waits for paused, normal-cycle, and exception-backoff delays. A graceful stop must join the engine and research workers within the configured bounded timeout (`engine.shutdown_timeout_seconds`, default 8 seconds, capped at 60). Runtime status remains `STOPPING` while any tracked producer is alive and becomes `OFF` only after all tracked workers have exited. SAFE_MODE remains latched. Terminal `close()` must leave the learning-memory SQLite connection open and report `DEFERRED_ACTIVE_WORKERS` if any engine, research, market collector, or shared-intelligence worker remains alive.
 
 During local validation, inspect `snapshot.operational.shutdown`, `snapshot.status`, and `snapshot.operational.learning_memory_shutdown` after stop. Require `STOPPED`, an empty `active_workers` list, and `learning_memory_shutdown.state=CLOSED` only after confirmed worker termination. If the runtime reports `STOPPING`, do not kill the process tree or delete runtime/vault files; capture the sanitized report and investigate the named worker.
+
+
+## Runtime health enforcement — 2026-11-04
+
+The runtime now publishes `snapshot.health_isolation`. Inspect these fields during local PAPER validation:
+
+- `state`: `healthy`, `degraded`, or `quarantined`.
+- `allow_new_tasks`: must be false when the durable learning store is configured but unavailable, when the watchdog's latest check failed, or when runtime is in SAFE_MODE/KILL_SWITCH/STOPPING.
+- `allow_risk_bearing_actions`: always false; health status never grants trading authority.
+- `reasons`: structured policy reasons; no secrets should appear.
+
+The enforcement applies to **new position entries only**. Existing-position exits that reduce risk must remain available. Confirm that a learning-memory failure blocks new entries without suppressing exit management. Human Bridge disconnection is not a trading-health failure and must not be used to block the engine. A healthy report is not proof of REAL readiness or permission to trade live.
+
+Record the health-isolation snapshot before start, during a normal PAPER cycle, and after an injected synthetic learning-store failure in tests only. Do not damage or rename the actual vault/database to simulate failure. Confirm the authenticated `/status` route exposes `health_isolation`.
