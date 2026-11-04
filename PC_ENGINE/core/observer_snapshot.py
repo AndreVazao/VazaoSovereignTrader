@@ -63,7 +63,7 @@ class RuntimeObserverSnapshot:
             "opportunities_count": max(0, int(opportunities_count)),
             "updated_at_ms": int(updated_at_ms or time.time_ns() // 1_000_000),
             "health_state": str(health_state),
-            "allow_new_tasks": bool(allow_new_tasks),
+            "allow_new_tasks": allow_new_tasks is True,
             "allow_risk_bearing_actions": False,
             "health_checked_at_ms": max(0, int(health_checked_at_ms)),
         }
