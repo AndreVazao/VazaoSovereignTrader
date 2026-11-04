@@ -39,7 +39,7 @@ def test_linux_vault_respects_xdg_data_home(tmp_path: Path):
         system="Linux",
         home=tmp_path,
     )
-    assert path == tmp_path / "xdg" / "vazaosovereigntrader" / "vault"
+    assert path == tmp_path / "xdg" / "vazaosovereigntraderdata" / "vault"
 
 
 def test_initialize_vault_creates_layout_and_validates(tmp_path: Path):
