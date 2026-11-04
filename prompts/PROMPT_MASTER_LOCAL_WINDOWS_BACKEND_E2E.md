@@ -133,3 +133,10 @@ When blocked, do not improvise a risky workaround. Record the condition and cont
 ## Final response from Desktop Commander
 
 Return a concise status plus the full report path. State which tests passed, failed, were blocked, or were not run. Include the exact build SHA and installer SHA-256. Do not claim full end-to-end readiness unless every required lifecycle and safety gate has reproducible evidence.
+
+
+## Runtime shutdown supervision — 2026-11-04
+
+The engine now uses interruptible waits for paused, normal-cycle, and exception-backoff delays. A graceful stop must join the engine and research workers within the configured bounded timeout (`engine.shutdown_timeout_seconds`, default 8 seconds, capped at 60). Runtime status remains `STOPPING` while any tracked producer is alive and becomes `OFF` only after all tracked workers have exited. SAFE_MODE remains latched. Terminal `close()` must leave the learning-memory SQLite connection open and report `DEFERRED_ACTIVE_WORKERS` if any engine, research, market collector, or shared-intelligence worker remains alive.
+
+During local validation, inspect `snapshot.operational.shutdown`, `snapshot.status`, and `snapshot.operational.learning_memory_shutdown` after stop. Require `STOPPED`, an empty `active_workers` list, and `learning_memory_shutdown.state=CLOSED` only after confirmed worker termination. If the runtime reports `STOPPING`, do not kill the process tree or delete runtime/vault files; capture the sanitized report and investigate the named worker.
