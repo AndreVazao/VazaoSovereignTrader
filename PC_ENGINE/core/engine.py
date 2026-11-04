@@ -754,7 +754,7 @@ class SovereignEngine:
             self.research_thread.start()
         if self.paper and self.paper_collector is not None:
             self.paper_collector.start()
-        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread = threading.Thread(target=self._loop, name="vst-engine-loop", daemon=True)
         self.thread.start()
         self.log("ENGINE_STARTED", {"mode": self.mode})
 
@@ -927,39 +927,78 @@ class SovereignEngine:
         self.log("ENGINE_PAUSED" if paused else "ENGINE_RESUMED")
         return True
 
+    def _shutdown_timeout(self) -> float:
+        """Return a bounded worker-join budget for graceful shutdown."""
+        try:
+            configured = float(self.config.get("engine", {}).get("shutdown_timeout_seconds", 8.0))
+        except (TypeError, ValueError, OverflowError):
+            configured = 8.0
+        return max(0.1, min(configured, 60.0))
+
+    def _active_worker_names(self) -> list[str]:
+        """List runtime producers that have not confirmed termination."""
+        workers = [
+            ("engine", getattr(self, "thread", None)),
+            ("research", getattr(self, "research_thread", None)),
+            ("paper_market_collector", getattr(getattr(self, "paper_collector", None), "thread", None)),
+            ("shared_intelligence_sync", getattr(getattr(self, "shared_intelligence_worker", None), "thread", None)),
+        ]
+        return [
+            name for name, worker in workers
+            if worker is not None and worker.is_alive()
+        ]
+
     def stop(self) -> None:
+        """Request shutdown and report STOPPING until every producer has exited."""
         self.stop_event.set()
         self.research_stop_event.set()
         self._stop_shared_intelligence()
         if self.paper_collector is not None:
             self.paper_collector.stop()
-        if self.research_thread is not None and self.research_thread.is_alive():
-            self.research_thread.join(timeout=1.0)
+
+        current = threading.current_thread()
+        timeout = self._shutdown_timeout()
+        for worker in (self.thread, self.research_thread):
+            if worker is not None and worker.is_alive() and worker is not current:
+                worker.join(timeout=timeout)
+
+        active = self._active_worker_names()
         with self.lock:
             # Stopping workers is allowed from SAFE_MODE, but stopping must never
             # clear the safety latch. Only recover_from_safe_mode() may exit it.
             if self.state.status != "SAFE_MODE":
-                self.state.status = "OFF"
+                self.state.status = "STOPPING" if active else "OFF"
             self.state.paper_collector = self.paper_collector.snapshot() if self.paper_collector else {"running": False}
+            self.state.operational["shutdown"] = {
+                "state": "STOPPING" if active else "STOPPED",
+                "active_workers": active,
+                "timeout_seconds": timeout,
+                "checked_at": time.time(),
+            }
         self._publish_observer_snapshot()
         self._persist_recovery()
-        self.log("ENGINE_STOPPED")
+        self.log("ENGINE_STOPPING" if active else "ENGINE_STOPPED", {
+            "active_workers": active,
+            "timeout_seconds": timeout,
+        })
 
     def close(self) -> bool:
-        """Terminal process shutdown: stop producers before closing durable memory.
-
-        Unlike stop(), close() is not restartable. If a worker remains alive after
-        bounded joins, keep SQLite open rather than racing an active producer.
-        """
+        """Terminal shutdown; keep durable stores open while any producer remains alive."""
         if getattr(self, "_closed", False):
             return True
         self.stop()
         current = threading.current_thread()
-        workers = (self.thread, self.research_thread)
+        timeout = self._shutdown_timeout()
+        workers = (
+            getattr(self, "thread", None),
+            getattr(self, "research_thread", None),
+            getattr(getattr(self, "paper_collector", None), "thread", None),
+            getattr(getattr(self, "shared_intelligence_worker", None), "thread", None),
+        )
         for worker in workers:
             if worker is not None and worker.is_alive() and worker is not current:
-                worker.join(timeout=5.0)
-        active = [worker.name for worker in workers if worker is not None and worker.is_alive()]
+                worker.join(timeout=timeout)
+        active = self._active_worker_names()
         if active:
             self.state.operational["learning_memory_shutdown"] = {
                 "state": "DEFERRED_ACTIVE_WORKERS",
@@ -1056,7 +1095,8 @@ class SovereignEngine:
     def _loop(self) -> None:
         while not self.stop_event.is_set():
             if self.state.status == "PAUSED":
-                time.sleep(1)
+                if self.stop_event.wait(1.0):
+                    break
                 continue
             try:
                 self.cycle()
@@ -1064,9 +1104,15 @@ class SovereignEngine:
                 self._enter_safe_state("engine_exception", {"error": str(exc)})
                 self.log("ENGINE_ERROR_SAFE_MODE", {"error": str(exc)})
                 self._persist_recovery()
-                time.sleep(15)
+                if self.stop_event.wait(15.0):
+                    break
                 continue
-            time.sleep(float(self.config["engine"].get("cycle_seconds", 20)))
+            try:
+                interval = max(0.0, float(self.config["engine"].get("cycle_seconds", 20)))
+            except (TypeError, ValueError, OverflowError):
+                interval = 20.0
+            if self.stop_event.wait(interval):
+                break
 
     def _watchdog_gate(self, exchange: CcxtExchangeClient) -> bool:
         self.cycle_count += 1
