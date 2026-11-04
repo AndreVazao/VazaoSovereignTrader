@@ -82,7 +82,7 @@ def summarize(values: Iterable[int]) -> dict[str, int]:
     }
 
 
-def _benchmark_config() -> dict:
+def _benchmark_config(isolated_root: Path) -> dict:
     config_path = Path(__file__).resolve().parents[1] / "PC_ENGINE" / "config" / "config.example.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
     config.setdefault("owner", {})["id"] = "paper-observer-load-benchmark"
@@ -100,7 +100,7 @@ def _benchmark_config() -> dict:
     config.setdefault("autonomous_execution", {})["enabled"] = False
     config["autonomous_execution"]["allow_real"] = False
     config["autonomous_execution"]["auto_promote_real"] = False
-    config.setdefault("opportunity", {})["data_dir"] = "PC_ENGINE/data/observer-load-benchmark"
+    opportunity = config.setdefault("opportunity", {})\n    opportunity["data_dir"] = str(isolated_root / "market-state")\n    opportunity["learning_path"] = str(isolated_root / "learning.jsonl")\n    opportunity["latency_path"] = str(isolated_root / "latency.jsonl")\n    opportunity["external_latency_profile_path"] = str(isolated_root / "external-latency.jsonl")
     config.setdefault("market_data_quality", {})["max_age_seconds"] = 120
     config["market_data_quality"]["max_gap_seconds"] = 180
     return config
@@ -109,16 +109,16 @@ def _benchmark_config() -> dict:
 def run_scenario(name: str, *, duration_seconds: float, readers: int, token: str) -> dict:
     previous_engine_data_dir = engine_module.DATA_DIR
     previous_server_data_dir = server_module.DATA_DIR
-    previous_token = os.environ.get("VST_LOCAL_TOKEN")
+    previous_token = os.environ.get("VST_LOCAL_TOKEN")\n    previous_vault_path = os.environ.get("VST_VAULT_PATH")
     engine = None
     with tempfile.TemporaryDirectory(prefix="vst-paper-observer-benchmark-") as temporary_dir:
         isolated_root = Path(temporary_dir)
         isolated_data_dir = isolated_root / "data"
         engine_module.DATA_DIR = isolated_data_dir
         server_module.DATA_DIR = isolated_data_dir
-        os.environ["VST_LOCAL_TOKEN"] = token
+        os.environ["VST_LOCAL_TOKEN"] = token\n        os.environ["VST_VAULT_PATH"] = str(isolated_root / "vault")
         try:
-            engine = SovereignEngine(_benchmark_config())
+            engine = SovereignEngine(_benchmark_config(isolated_root))
             # Constructor starts its normal supervisor. Stop it before attaching
             # the synthetic adapter, then run cycles synchronously in this harness.
             engine.stop()
