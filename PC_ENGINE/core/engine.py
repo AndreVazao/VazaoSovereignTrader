@@ -244,6 +244,7 @@ class SovereignEngine:
         self.shared_intelligence_worker: SharedIntelligenceSyncWorker | None = None
         self._build_shared_intelligence_sync()
         self._load_recovery_state()
+        self._refresh_health_isolation()
         self._publish_observer_snapshot()
 
     def _authorize_order_side_effect(self, exchange_name: str, symbol: str, side: str, quantity: float, client_order_id: str | None) -> bool:
