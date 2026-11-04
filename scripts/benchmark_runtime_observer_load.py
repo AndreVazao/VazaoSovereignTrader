@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Iterable
 
 import PC_ENGINE.core.engine as engine_module
+import PC_ENGINE.api.server as server_module
 from PC_ENGINE.api.server import create_app
 from PC_ENGINE.core.engine import SovereignEngine
 
@@ -56,9 +57,12 @@ def run_scenario(name: str, *, duration_seconds: float, readers: int, token: str
     config["exchanges"] = {}
 
     previous_data_dir = engine_module.DATA_DIR
+    previous_server_data_dir = server_module.DATA_DIR
     previous_token = os.environ.get("VST_LOCAL_TOKEN")
     with tempfile.TemporaryDirectory(prefix="vst-observer-benchmark-") as temporary_dir:
-        engine_module.DATA_DIR = Path(temporary_dir) / "data"
+        isolated_data_dir = Path(temporary_dir) / "data"
+        engine_module.DATA_DIR = isolated_data_dir
+        server_module.DATA_DIR = isolated_data_dir
         os.environ["VST_LOCAL_TOKEN"] = token
         try:
             engine = SovereignEngine(config)
@@ -120,7 +124,12 @@ def run_scenario(name: str, *, duration_seconds: float, readers: int, token: str
                 "scope_note": "No-op _cycle_once; no strategy, market-data fetch, or order execution. This isolates observer-path contention only.",
             }
         finally:
-            engine_module.DATA_DIR = previous_data_dir
+            try:
+                if "engine" in locals():
+                    engine.close()
+            finally:
+                engine_module.DATA_DIR = previous_data_dir
+                server_module.DATA_DIR = previous_server_data_dir
             if previous_token is None:
                 os.environ.pop("VST_LOCAL_TOKEN", None)
             else:
