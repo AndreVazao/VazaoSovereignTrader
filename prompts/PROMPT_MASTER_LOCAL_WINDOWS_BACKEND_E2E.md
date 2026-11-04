@@ -154,3 +154,8 @@ The runtime now publishes `snapshot.health_isolation`. Inspect these fields duri
 The enforcement applies to **new position entries only**. Existing-position exits that reduce risk must remain available. Confirm that a learning-memory failure blocks new entries without suppressing exit management. Human Bridge disconnection is not a trading-health failure and must not be used to block the engine. A healthy report is not proof of REAL readiness or permission to trade live.
 
 Record the health-isolation snapshot before start, during a normal PAPER cycle, and after an injected synthetic learning-store failure in tests only. Do not damage or rename the actual vault/database to simulate failure. Confirm the authenticated `/status` route exposes `health_isolation`.
+
+
+### Exit-management limitation during quarantine
+
+Do not assume automated exits remain available merely because the health gate is documented as new-entry-only. The runtime cycle may return before position management on watchdog failure or SAFE_MODE/KILL_SWITCH, and connectivity failures can make market data/execution unavailable. During PAPER validation, inspect the cycle path and record whether exits are attempted only when the cycle reaches position management with usable exchange data. Never bypass watchdog, SAFE_MODE, or execution gates to force an exit. If connectivity blocks management, report BLOCKED and require supported exchange-side protections or manual reconciliation; do not claim exit-path availability without evidence.

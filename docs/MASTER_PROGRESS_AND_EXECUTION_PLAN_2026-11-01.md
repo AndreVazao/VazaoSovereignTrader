@@ -384,3 +384,8 @@ A falha Android e a não execução do Snyk permanecem visíveis. O merge da PR 
 - Novo campo observável: `snapshot.health_isolation`. O estado é recalculado no arranque e em cada ciclo. Testes sintéticos cobrem memória indisponível, SAFE_MODE, watchdog, REAL não operacional e auditoria de transições.
 - Prompt Master atualizado com verificações locais PAPER/read-only para health isolation.
 - Próximo gate: CI completo no HEAD deste ramo, incluindo Windows EXE/installer. Teste físico no PC ainda não executado; não declarar validação end-to-end antes do relatório local.
+
+
+## Correção de precisão — limites de saídas durante isolamento (2026-11-04)
+
+A política `health_isolation` bloqueia novas entradas, mas isso **não garante** que saídas redutoras de risco consigam ser processadas em qualquer estado. A ordem atual do ciclo pode terminar antes do gestor de posições quando o watchdog falha ou quando o motor já está em `SAFE_MODE`/`KILL_SWITCH`; além disso, uma falha de conectividade pode impedir dados de mercado ou execução. Portanto, não declarar que as saídas permanecem sempre disponíveis durante quarentena. As saídas só são tentadas quando o ciclo alcança o gestor de posições e existem dados/exchange operacionais. Manter stops/proteções suportados pela exchange quando aplicável e exigir reconciliação/manual intervention quando a conectividade impedir gestão automática. Não contornar watchdog, SAFE_MODE ou execution gates para forçar uma saída.
