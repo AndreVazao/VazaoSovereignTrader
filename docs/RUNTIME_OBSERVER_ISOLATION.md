@@ -41,3 +41,16 @@ The authenticated `/observer/summary` route reads a detached copy from that mail
 - The snapshot is intentionally eventually consistent: the office may see the last published state until the next cycle or lifecycle transition.
 - This does not isolate CPU/process resources from the browser, and no quantitative latency budget or saturation benchmark has yet been demonstrated.
 - Next acceptance work: measure publication lock wait/hold time and cycle duration; stress slow readers and repeated refreshes; compare Runtime latency with office absent/normal/saturated; add a measured visual circuit breaker without changing trading/risk policy.
+
+
+## Bounded observer payload hardening — 2026-11-04
+
+The latest-value mailbox now enforces a strict value-size boundary in addition to its fixed field schema:
+
+- `status`, `mode` and `health_state` are stringified and capped at 48 characters each.
+- Count and timestamp fields normalize malformed, negative or overflowing inputs to safe nonnegative integers; invalid counts become zero and an invalid update timestamp falls back to the current timestamp.
+- `allow_new_tasks` remains true only for the literal boolean `True`.
+- `allow_risk_bearing_actions` remains hard-coded to false, regardless of caller input.
+- Regression coverage supplies oversized text and malformed numeric values and checks that the serialized payload remains primitive-only and bounded.
+
+This constrains the in-memory summary's content size. It does not establish a production latency budget, process isolation or a visual circuit breaker.
