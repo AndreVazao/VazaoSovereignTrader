@@ -357,3 +357,14 @@ O teste local pode começar sem aceitar o escritório Android como concluído: a
 Entregar o instalador acima para validação local **não destrutiva, PAPER/read-only** no PC. Usar o Prompt Master atualizado em `prompts/PROMPT_MASTER_LOCAL_WINDOWS_BACKEND_E2E.md`. Confirmar primeiro identidade do artefacto, instalação existente, configuração e localização do vault. Não fornecer credenciais reais, não abrir portas públicas, não executar ordens/transferências reais e não alterar/desinstalar a instalação existente sem backup e autorização explícita.
 
 A falha Android e a não execução do Snyk permanecem visíveis. O merge da PR #522 não é declarado nem executado nesta atualização.
+
+
+## Atualização operacional — 2026-11-04: merge e shutdown supervisionado
+
+- PR #522 foi integrada por squash no commit `eb8ff8904dad7ceb263a33297d595e33db511175`. A base headless/PAPER e o handoff Windows estão agora em `main`. O teste físico no PC continua pendente.
+- Ramo de trabalho único: `feat/runtime-supervision-recovery-2026-11-04`, criado a partir do merge commit.
+- Em desenvolvimento: esperas interruptíveis no loop do motor; timeout configurável e limitado para junção dos workers; estado `STOPPING` enquanto existir produtor ativo; preservação do estado SAFE_MODE; fecho da memória SQLite adiado enquanto existirem workers ativos.
+- Testes sintéticos adicionados em `tests/test_engine_shutdown_supervision.py` para paragem cooperativa, worker sem resposta, proteção da memória e SAFE_MODE. CI ainda pendente.
+- Prompt Master atualizado para exigir inspeção de `operational.shutdown`, lista de workers ativos e estado do fecho da memória.
+- Android Emulator UI Smoke permanece falho e isolado do backend. Snyk permanece sem análise disponível por quota; não classificar como aprovação de segurança.
+- Próximo marco: validar o novo HEAD em CI, produzir instalador Windows desse HEAD e entregar teste PC PAPER/read-only. Não fazer uninstall/reinstall nem migração de vault nesta fase.
