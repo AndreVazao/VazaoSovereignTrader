@@ -1006,6 +1006,14 @@ class SovereignEngine:
             }
             self.log("ENGINE_CLOSE_DEFERRED_ACTIVE_WORKERS", {"workers": active})
             return False
+        with self.lock:
+            if self.state.status != "SAFE_MODE":
+                self.state.status = "OFF"
+            shutdown = dict(self.state.operational.get("shutdown") or {})
+            shutdown.update({"state": "STOPPED", "active_workers": []})
+            self.state.operational["shutdown"] = shutdown
+        self._publish_observer_snapshot()
+        self._persist_recovery()
         memory = getattr(self, "learning_memory", None)
         if memory is not None:
             memory.close()
