@@ -37,6 +37,17 @@ def test_observer_snapshot_remains_bounded_under_concurrent_readers_and_publishe
                 failures.append("negative normalized count")
                 stop.set()
                 return
+            if payload["allow_risk_bearing_actions"] is not False:
+                failures.append("observer exposed risk authority")
+                stop.set()
+                return
+            if any(
+                len(payload[key]) > 48
+                for key in ("status", "mode", "health_state")
+            ):
+                failures.append("text field exceeded its bound")
+                stop.set()
+                return
 
     readers = [threading.Thread(target=reader, daemon=True) for _ in range(4)]
     for thread in readers:
@@ -62,6 +73,69 @@ def test_observer_snapshot_remains_bounded_under_concurrent_readers_and_publishe
             thread.join(timeout=1)
 
     assert all(not thread.is_alive() for thread in readers)
-    # The mailbox is latest-value only: its retained payload has a fixed schema
-    # regardless of how many updates were published.
     assert set(mailbox.read()) == schema
+
+
+def test_observer_snapshot_never_exposes_torn_values_under_multi_writer_load():
+    mailbox = RuntimeObserverSnapshot()
+    failures: list[str] = []
+    stop = threading.Event()
+    mailbox.publish(
+        status="writer-0",
+        mode="mode-0",
+        open_positions_count=0,
+        opportunities_count=0,
+        updated_at_ms=1,
+        health_state="health-0",
+        allow_new_tasks=True,
+        allow_risk_bearing_actions=True,
+        health_checked_at_ms=2,
+    )
+
+    def writer(writer_id: int) -> None:
+        for index in range(1, 3001):
+            marker = writer_id * 10_000 + index
+            mailbox.publish(
+                status=f"writer-{marker}",
+                mode=f"mode-{marker}",
+                open_positions_count=marker,
+                opportunities_count=marker,
+                updated_at_ms=marker + 1,
+                health_state=f"health-{marker}",
+                allow_new_tasks=True,
+                allow_risk_bearing_actions=True,
+                health_checked_at_ms=marker + 2,
+            )
+
+    def reader() -> None:
+        while not stop.is_set():
+            payload = mailbox.read()
+            try:
+                marker = int(payload["status"].removeprefix("writer-"))
+                assert payload["mode"] == f"mode-{marker}"
+                assert payload["health_state"] == f"health-{marker}"
+                assert payload["open_positions_count"] == marker
+                assert payload["opportunities_count"] == marker
+                assert payload["updated_at_ms"] == marker + 1
+                assert payload["health_checked_at_ms"] == marker + 2
+                assert payload["allow_risk_bearing_actions"] is False
+            except (AssertionError, ValueError) as exc:
+                failures.append(f"torn or unsafe snapshot: {exc}")
+                stop.set()
+                return
+
+    readers = [threading.Thread(target=reader, daemon=True) for _ in range(4)]
+    writers = [threading.Thread(target=writer, args=(index,), daemon=True) for index in range(3)]
+    for thread in readers + writers:
+        thread.start()
+
+    for thread in writers:
+        thread.join(timeout=5)
+    stop.set()
+    for thread in readers:
+        thread.join(timeout=1)
+
+    assert all(not thread.is_alive() for thread in writers + readers)
+    assert not failures
+    final_payload = mailbox.read()
+    assert final_payload["allow_risk_bearing_actions"] is False
