@@ -1149,7 +1149,8 @@ class SovereignEngine:
                 "Connectivity watchdog has a failed latest check",
             ))
 
-        learning_cfg = dict(self.config.get("learning_memory", {}))
+        config = getattr(self, "config", {}) or {}
+        learning_cfg = dict(config.get("learning_memory", {}))
         if bool(learning_cfg.get("enabled", True)) and getattr(self, "learning_memory", None) is None:
             signals.append(HealthSignal(
                 "learning_memory_unavailable", Severity.ERROR,
