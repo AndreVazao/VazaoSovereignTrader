@@ -2303,7 +2303,8 @@ class SovereignEngine:
         stop_pct: float, tp_pct: float, reason: str, spread_pct: float = 0.0,
         execution_checks: dict | None = None,
     ) -> None:
-        health = getattr(self.state, "health_isolation", {}) or {}
+        runtime_state = getattr(self, "state", None)
+        health = getattr(runtime_state, "health_isolation", {}) or {}
         if not bool(health.get("allow_new_tasks", True)):
             self.log("HEALTH_ISOLATION_ORDER_BLOCK", {
                 "symbol": symbol,
