@@ -48,9 +48,11 @@ The authenticated `/observer/summary` route reads a detached copy from that mail
 The latest-value mailbox now enforces a strict value-size boundary in addition to its fixed field schema:
 
 - `status`, `mode` and `health_state` are stringified and capped at 48 characters each.
-- Count and timestamp fields normalize malformed, negative or overflowing inputs to safe nonnegative integers; invalid counts become zero and an invalid update timestamp falls back to the current timestamp.
+- Position/opportunity counts are clamped to the range 0–2,147,483,647.
+- Millisecond timestamps are clamped to the range 0–9,223,372,036,854,775,807.
+- Malformed and negative counts normalize to zero. Invalid update timestamps fall back to the current timestamp; invalid health timestamps become zero.
 - `allow_new_tasks` remains true only for the literal boolean `True`.
 - `allow_risk_bearing_actions` remains hard-coded to false, regardless of caller input.
-- Regression coverage supplies oversized text and malformed numeric values and checks that the serialized payload remains primitive-only and bounded.
+- Regression coverage supplies oversized text, malformed values and arbitrarily large integers, then checks the bounded contract.
 
 This constrains the in-memory summary's content size. It does not establish a production latency budget, process isolation or a visual circuit breaker.
