@@ -106,6 +106,8 @@ def test_close_keeps_learning_memory_open_until_all_workers_exit() -> None:
     engine.thread.join(timeout=1)
     assert engine.close() is True
     assert engine.learning_memory is None
+    assert engine.state.status == "OFF"
+    assert engine.state.operational["shutdown"]["state"] == "STOPPED"
     assert engine.state.operational["learning_memory"]["state"] == "CLOSED"
 
 
