@@ -87,3 +87,32 @@ def test_observer_snapshot_normalizes_counts_and_keeps_fixed_schema():
         isinstance(payload[key], (str, int, bool))
         for key in payload
     )
+
+
+def test_observer_snapshot_bounds_text_and_normalizes_invalid_numbers():
+    mailbox = RuntimeObserverSnapshot()
+    oversized = "x" * 10_000
+
+    mailbox.publish(
+        status=oversized,
+        mode=oversized,
+        open_positions_count="not-a-number",
+        opportunities_count=None,
+        updated_at_ms="invalid",
+        health_state=oversized,
+        allow_new_tasks=True,
+        allow_risk_bearing_actions=True,
+        health_checked_at_ms="invalid",
+    )
+
+    payload = mailbox.read()
+    assert payload["status"] == "x" * 48
+    assert payload["mode"] == "x" * 48
+    assert payload["health_state"] == "x" * 48
+    assert payload["open_positions_count"] == 0
+    assert payload["opportunities_count"] == 0
+    assert payload["updated_at_ms"] > 0
+    assert payload["health_checked_at_ms"] == 0
+    assert payload["allow_new_tasks"] is True
+    assert payload["allow_risk_bearing_actions"] is False
+    assert sum(len(value) for value in payload.values() if isinstance(value, str)) <= 144
