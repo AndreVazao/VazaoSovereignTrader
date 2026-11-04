@@ -478,3 +478,75 @@ def test_learning_memory_runtime_endpoint_requires_auth_and_reports_missing_memo
     assert payload["execution_authorized"] is False
     assert payload["orders_submitted"] is False
     assert payload["learning_quality_verified"] is False
+
+
+
+def test_observer_timing_requires_private_state_auth_and_returns_bounded_metrics(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+
+    class FakeTimingMetrics:
+        def snapshot(self):
+            return {
+                "runtime_cycle": {
+                    "count": 900,
+                    "sample_count": 512,
+                    "p50_ns": 100,
+                    "p95_ns": 200,
+                    "p99_ns": 300,
+                    "max_ns": 400,
+                },
+                "observer_lock_wait": {
+                    "count": 10,
+                    "sample_count": 10,
+                    "p50_ns": 1,
+                    "p95_ns": 2,
+                    "p99_ns": 3,
+                    "max_ns": 4,
+                },
+                "observer_lock_hold": {
+                    "count": 10,
+                    "sample_count": 10,
+                    "p50_ns": 5,
+                    "p95_ns": 6,
+                    "p99_ns": 7,
+                    "max_ns": 8,
+                },
+            }
+
+    engine = FakeEngine()
+    engine.runtime_timing_metrics = FakeTimingMetrics()
+    client = create_app(engine, token_env="VST_TEST_TOKEN").test_client()
+
+    assert client.get("/observer/timing").status_code == 401
+
+    response = client.get(
+        "/observer/timing",
+        headers={"X-Token": "secret-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["metrics"]["runtime_cycle"]["sample_count"] == 512
+    assert payload["metrics"]["runtime_cycle"]["p99_ns"] == 300
+    assert set(payload["metrics"]) == {
+        "runtime_cycle",
+        "observer_lock_wait",
+        "observer_lock_hold",
+    }
+
+
+def test_observer_timing_reports_unavailable_without_metrics(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+    client = create_app(FakeEngine(), token_env="VST_TEST_TOKEN").test_client()
+
+    response = client.get(
+        "/observer/timing",
+        headers={"X-Token": "secret-token"},
+    )
+
+    assert response.status_code == 503
+    assert response.get_json() == {
+        "ok": False,
+        "error": "timing_metrics_unavailable",
+    }
