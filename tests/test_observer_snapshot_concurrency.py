@@ -89,7 +89,7 @@ def test_observer_snapshot_never_exposes_torn_values_under_multi_writer_load():
         health_state="health-0",
         allow_new_tasks=True,
         allow_risk_bearing_actions=True,
-        health_checked_at_ms=1,
+        health_checked_at_ms=2,
     )
 
     def writer(writer_id: int) -> None:
