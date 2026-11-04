@@ -42,6 +42,23 @@ def default_vault_path(
     return Path(home or Path.home()).expanduser() / ".local" / "share" / VAULT_DIRNAME.lower() / "vault"
 
 
+
+def legacy_vault_path(*, environ: dict[str, str] | None = None, system: str | None = None, home: str | Path | None = None) -> Path:
+    """Return the pre-separation vault location for non-destructive discovery."""
+    env = os.environ if environ is None else environ
+    os_name = (system or platform.system()).lower()
+    if os_name == "windows":
+        base = env.get("LOCALAPPDATA") or env.get("APPDATA")
+        if base:
+            return Path(base).expanduser() / "VazaoSovereignTrader" / "vault"
+    if os_name == "darwin":
+        return Path(home or Path.home()).expanduser() / "Library" / "Application Support" / "VazaoSovereignTrader" / "vault"
+    xdg = env.get("XDG_DATA_HOME")
+    if xdg:
+        return Path(xdg).expanduser() / "vazaosovereigntrader" / "vault"
+    return Path(home or Path.home()).expanduser() / ".local" / "share" / "vazaosovereigntrader" / "vault"
+
+
 def vault_layout(root: str | Path) -> dict[str, Path]:
     """Canonical data layout shared by app versions."""
     base = Path(root).expanduser().resolve()
