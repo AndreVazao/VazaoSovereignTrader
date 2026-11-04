@@ -45,14 +45,16 @@ class PaperMarketCollector:
         self.timeframe = str(settings.get("timeframe", "1m"))
         self.candles_limit = max(30, int(settings.get("candles_limit", 120)))
         self.data_dir = Path(settings.get("data_dir", "PC_ENGINE/data/radar"))
+        self.polling_exchanges = list(settings.get(
+            "polling_exchanges",
+            ["binance", "bingx", "okx", "bybit", "coinbase"],
+        ))
         self.radar = MarketRadar(
-            exchanges=settings.get(
-                "polling_exchanges",
-                ["binance", "bingx", "okx", "bybit", "coinbase"],
-            ),
+            exchanges=self.polling_exchanges,
             symbols=self.symbols,
             data_dir=str(self.data_dir),
         )
+        self._radar_closed = False
         self.confluence = PaperConfluenceRuntime(settings.get("confluence", {}))
         self.patterns = CandlestickPatternEngine(settings.get("candlestick", {}))
         self.stop_event = threading.Event()
@@ -144,6 +146,13 @@ class PaperMarketCollector:
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
             return
+        if self._radar_closed:
+            self.radar = MarketRadar(
+                exchanges=self.polling_exchanges,
+                symbols=self.symbols,
+                data_dir=str(self.data_dir),
+            )
+            self._radar_closed = False
         self.stop_event.clear()
         self.thread = threading.Thread(
             target=self._loop,
@@ -152,12 +161,19 @@ class PaperMarketCollector:
         )
         self.thread.start()
 
-    def stop(self) -> None:
+    def stop(self) -> bool:
+        """Stop collection; retain live thread/radar references after a timeout."""
         self.stop_event.set()
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=max(2.0, self.interval_seconds + 1.0))
-        self.radar.close()
+        thread = self.thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=max(2.0, self.interval_seconds + 1.0))
+        if thread is not None and thread.is_alive():
+            return False
+        if not self._radar_closed:
+            self.radar.close()
+            self._radar_closed = True
         self.thread = None
+        return True
 
     def snapshot(self) -> dict:
         return {

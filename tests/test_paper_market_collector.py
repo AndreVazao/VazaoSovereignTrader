@@ -197,3 +197,73 @@ def test_collector_blocks_stale_ohlcv_with_freshness_gate(tmp_path: Path):
         assert collector.snapshot()["errors"] >= 1
     finally:
         collector.stop()
+
+
+def test_collector_retains_live_worker_after_shutdown_timeout(tmp_path: Path, monkeypatch):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocked_fetcher(symbol, timeframe, limit):
+        entered.set()
+        release.wait(5)
+        return _ohlcv()
+
+    collector = PaperMarketCollector(
+        settings={
+            "interval_seconds": 2,
+            "polling_exchanges": [],
+            "data_dir": str(tmp_path),
+            "confluence": {
+                "data_dir": str(tmp_path),
+                "derivatives": {"enabled": False, "observational_only": True},
+            },
+        },
+        symbols=["BTC/USDT"],
+        ohlcv_fetcher=blocked_fetcher,
+        strategy=FakeStrategy(),
+    )
+    collector.start()
+    assert entered.wait(1)
+    worker = collector.thread
+    assert worker is not None
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(threading.Thread, "join", lambda self, timeout=None: None)
+        assert collector.stop() is False
+
+    assert collector.thread is worker
+    assert worker.is_alive()
+    assert collector._radar_closed is False
+
+    release.set()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+    assert collector.stop() is True
+    assert collector.thread is None
+    assert collector._radar_closed is True
+
+
+def test_collector_rebuilds_closed_radar_on_restart(tmp_path: Path):
+    collector = PaperMarketCollector(
+        settings={
+            "polling_exchanges": [],
+            "data_dir": str(tmp_path),
+            "confluence": {
+                "data_dir": str(tmp_path),
+                "derivatives": {"enabled": False, "observational_only": True},
+            },
+        },
+        symbols=["BTC/USDT"],
+        ohlcv_fetcher=lambda symbol, timeframe, limit: _ohlcv(),
+        strategy=FakeStrategy(),
+    )
+    original_radar = collector.radar
+    assert collector.stop() is True
+    assert collector._radar_closed is True
+
+    collector.start()
+    assert collector.radar is not original_radar
+    assert collector._radar_closed is False
+    assert collector.stop() is True
