@@ -7,6 +7,7 @@ from PC_ENGINE.core.data_vault import (
     MANIFEST_FILENAME,
     VAULT_DIRNAME,
     default_vault_path,
+    legacy_vault_path,
     initialize_vault,
     validate_vault,
 )
@@ -18,8 +19,18 @@ def test_windows_vault_is_outside_install_and_uses_stable_user_data_path(tmp_pat
         system="Windows",
         home=tmp_path,
     )
-    assert path == tmp_path / "AppData" / "Local" / VAULT_DIRNAME / "vault"
+    assert path == tmp_path / "AppData" / "Local" / "VazaoSovereignTraderData" / "vault"
+    assert path != tmp_path / "AppData" / "Local" / "VazaoSovereignTrader" / "vault"
     assert "Program Files" not in str(path)
+
+
+
+def test_legacy_windows_vault_is_discoverable_without_being_the_new_default(tmp_path: Path):
+    env = {"LOCALAPPDATA": str(tmp_path / "AppData" / "Local")}
+    current = default_vault_path(environ=env, system="Windows", home=tmp_path)
+    legacy = legacy_vault_path(environ=env, system="Windows", home=tmp_path)
+    assert legacy == tmp_path / "AppData" / "Local" / "VazaoSovereignTrader" / "vault"
+    assert current != legacy
 
 
 def test_linux_vault_respects_xdg_data_home(tmp_path: Path):
