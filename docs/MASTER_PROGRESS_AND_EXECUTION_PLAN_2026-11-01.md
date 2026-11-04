@@ -322,3 +322,38 @@ O teste local pode começar sem aceitar o escritório Android como concluído: a
 - Inspecionar o detalhe Snyk, sem assumir falso positivo.
 - Se os gates Windows/Python/PAPER passarem, entregar o artefacto e Prompt Master para validação não destrutiva no PC.
 - Depois do relatório local, corrigir problemas observados antes de qualquer promoção ou execução REAL.
+
+
+## Atualização de execução — 2026-11-04: Windows instalável e handoff local
+
+**Esta secção substitui os estados de CI/artefactos anteriores.** Distinguir o commit de código validado do commit posterior que só atualiza documentação.
+
+- Commit de código validado: `80e370e65876e7cfda7c5d5da69e8f94ed513672`.
+- Follow-up documental: `c6b948ee09f846255f530ea43de3ac7ca7f594f1`; compare GitHub confirma que altera apenas `prompts/PROMPT_MASTER_LOCAL_WINDOWS_BACKEND_E2E.md`. Runtime, instalador e código de execução permanecem idênticos ao commit de código testado.
+- Python tests: PASS.
+- Trading Engine PAPER lifecycle/safety smoke: PASS.
+- Windows EXE build + smoke: PASS.
+- Windows installer build: PASS.
+- Instalação silenciosa descartável, arranque PAPER, health check loopback e uninstall smoke: PASS.
+- PowerShell audit parser validation: PASS.
+- Obscura cloud smoke e Diorama VM isolado: PASS; não certificam prontidão de trading.
+- Android APK build: PASS. Android Emulator UI Smoke: FAIL no fluxo Maestro, porque o seletor textual `USAR ESCRITÓRIO VIRTUAL` não foi encontrado. Emulador arrancou, APK instalou e aplicação abriu. Falha isolada da validação Windows.
+- Snyk: análise privada não executada por quota (`You have used your limit of private tests`); não classificar como vulnerabilidade nem como aprovação de segurança.
+
+### Artefactos Windows do commit de código validado
+
+- Installer run `41777379447`, artifact `13297941982`, `vazaosovereigntrader-windows-installer`, SHA-256 ZIP: `3feb757af43549450000614d1fb145a76a02eb960cd20c144ada4dc51ceb7e8b`.
+- Portable EXE ZIP, artifact `13297393310`, SHA-256: `1077516f18fd8640a42de39b212a32ac0d2015477d4a1d41b64451dd8eb0650d`.
+- Run: https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/41777379447
+
+### Vault e uninstall — limites da evidência
+
+- Novo caminho Windows: `%LOCALAPPDATA%\\VazaoSovereignTraderData\\vault`, fora da pasta de instalação.
+- Caminho legacy: `%LOCALAPPDATA%\\VazaoSovereignTrader\\vault`; se existir sem o vault novo, preservar no local e bloquear uninstall/migração até backup verificado e plano explícito.
+- O Inno Setup declara remoção explícita apenas de `{app}\\data\\browser\\profiles`. O smoke de uninstall CI usa diretório descartável sem dados de vault; não prova preservação de dados reais de utilizador. Não executar uninstall/reinstall no PC durante o primeiro teste.
+
+### Próximo passo autorizado
+
+Entregar o instalador acima para validação local **não destrutiva, PAPER/read-only** no PC. Usar o Prompt Master atualizado em `prompts/PROMPT_MASTER_LOCAL_WINDOWS_BACKEND_E2E.md`. Confirmar primeiro identidade do artefacto, instalação existente, configuração e localização do vault. Não fornecer credenciais reais, não abrir portas públicas, não executar ordens/transferências reais e não alterar/desinstalar a instalação existente sem backup e autorização explícita.
+
+A falha Android e a não execução do Snyk permanecem visíveis. O merge da PR #522 não é declarado nem executado nesta atualização.
