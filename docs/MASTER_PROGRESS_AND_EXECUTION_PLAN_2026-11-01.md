@@ -371,3 +371,16 @@ A falha Android e a não execução do Snyk permanecem visíveis. O merge da PR 
 
 
 - Complemento da supervisão: o coletor PAPER agora conserva a referência da thread se o timeout expirar, fecha o radar apenas depois de a thread terminar e reconstrói o radar no próximo start. Foram acrescentados testes de timeout e restart do coletor.
+
+
+## Atualização operacional — 2026-11-04: PR #523 integrada e enforcement de health
+
+- PR #523 foi integrada por squash no commit `5578884cd233f445af1144b805e10d1093cff82a`.
+- Validação no HEAD exato do PR: Python tests PASS; PAPER smoke PASS; build EXE + smoke PASS; build do instalador PASS; instalação silenciosa, arranque, health e uninstall smoke em ambiente descartável PASS.
+- Artefactos desse HEAD: instalador ID `13300528406`, SHA-256 ZIP `1a31366427f8f6b30e282b94eb311d6ad05604ab5fb3fbcc2e3adffb9a4f9149`; portátil ID `13300298023`, SHA-256 ZIP `a1ed01fa57cec1187af7d7ae7f303ee101a174ffb7007f73fdafe1a271444ed5`. Run `41784189297`.
+- Snyk continua sem executar por quota privada. Não é um resultado limpo nem um finding confirmado.
+- Novo ramo único: `feat/control-plane-health-enforcement-2026-11-04`, criado a partir do merge commit.
+- Em desenvolvimento: integrar `evaluate_health` no controlo real do motor. SAFE_MODE, KILL_SWITCH, STOPPING, watchdog falhado ou memória de aprendizagem configurada mas indisponível bloqueiam novas entradas; gestão de saídas redutoras de risco permanece disponível. A política nunca concede autoridade REAL.
+- Novo campo observável: `snapshot.health_isolation`. O estado é recalculado no arranque e em cada ciclo. Testes sintéticos cobrem memória indisponível, SAFE_MODE, watchdog, REAL não operacional e auditoria de transições.
+- Prompt Master atualizado com verificações locais PAPER/read-only para health isolation.
+- Próximo gate: CI completo no HEAD deste ramo, incluindo Windows EXE/installer. Teste físico no PC ainda não executado; não declarar validação end-to-end antes do relatório local.
