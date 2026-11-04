@@ -116,3 +116,19 @@ def test_stop_never_clears_safe_mode_latch() -> None:
 
     assert engine.state.status == "SAFE_MODE"
     assert engine.state.operational["shutdown"]["state"] == "STOPPED"
+
+
+
+def test_engine_cycle_wait_is_interruptible_on_stop() -> None:
+    engine = _engine(timeout=0.5)
+    cycle_started = threading.Event()
+    engine.config["engine"]["cycle_seconds"] = 30
+    engine.cycle = lambda: cycle_started.set()
+    worker = threading.Thread(target=engine._loop, name="vst-engine-loop-test", daemon=True)
+
+    worker.start()
+    assert cycle_started.wait(1)
+    engine.stop_event.set()
+    worker.join(timeout=1)
+
+    assert not worker.is_alive()
