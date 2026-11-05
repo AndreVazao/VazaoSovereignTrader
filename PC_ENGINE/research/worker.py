@@ -109,6 +109,10 @@ class ResearchWorker:
                 final_status = evaluation["status"]
                 evidence_available = final_status != "INSUFFICIENT_DATA"
                 terminal_status = "COMPLETED" if (result["interesting"] or evidence_available) else "DISCARDED"
+                if not self.inbox.renew_lease(
+                    item.request_id, self.lease_owner, lease_seconds=self.lease_seconds
+                ):
+                    raise RuntimeError("research_lease_lost_before_publication")
                 if not self.knowledge.has_hypothesis(item.request_id):
                     self.knowledge.record(
                         title=f"Research: {item.message[:100]}",
