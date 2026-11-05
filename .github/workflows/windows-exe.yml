@@ -130,7 +130,7 @@ jobs:
 
           # Seed the stable per-user learning vault before installation. The
           # installer and uninstaller must preserve this data across upgrades.
-          $vaultRoot = Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData\\vault"
+          $vaultRoot = Join-Path (Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData") "vault"
           $vaultLearning = Join-Path $vaultRoot "learning"
           New-Item -ItemType Directory -Force $vaultLearning | Out-Null
           $vaultMarker = Join-Path $vaultLearning "installer-preservation-smoke.txt"
