@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+import subprocess
+import sys
 
 import pytest
 
@@ -266,3 +269,66 @@ def test_backup_verification_rejects_invalid_manifest(tmp_path):
     assert result["status"] == "degraded"
     assert result["manifest_status"] == "invalid"
     assert result["reason"] == "backup_manifest_invalid"
+
+
+def _run_backup_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "PC_ENGINE.learning.memory_backup", *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_operator_cli_backup_and_verify_are_explicit_and_machine_readable(tmp_path):
+    source = tmp_path / "owner" / "learning.sqlite3"
+    backup = tmp_path / "backups" / "learning.snapshot.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        memory.put(
+            key="cli.record", value={"safe": True}, department="test", provenance="cli-test"
+        )
+
+    created = _run_backup_cli(
+        "backup", "--source", str(source), "--destination", str(backup)
+    )
+    assert created.returncode == 0, created.stderr
+    payload = json.loads(created.stdout)
+    assert payload["operation"] == "backup"
+    assert payload["verification"]["status"] == "healthy"
+    assert backup.is_file()
+    assert backup.with_name(backup.name + ".manifest.json").is_file()
+
+    verified = _run_backup_cli("verify", "--backup", str(backup))
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(verified.stdout)["manifest_status"] == "verified"
+
+
+def test_operator_cli_restore_requires_a_new_destination(tmp_path):
+    source = tmp_path / "owner" / "learning.sqlite3"
+    backup = tmp_path / "backups" / "learning.sqlite3"
+    destination = tmp_path / "recovery" / "restored.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        memory.put(
+            key="cli.restore", value={"revision": 4}, department="test", provenance="cli-test"
+        )
+    assert _run_backup_cli(
+        "backup", "--source", str(source), "--destination", str(backup)
+    ).returncode == 0
+
+    restored = _run_backup_cli(
+        "restore", "--backup", str(backup), "--destination", str(destination)
+    )
+    assert restored.returncode == 0, restored.stderr
+    payload = json.loads(restored.stdout)
+    assert payload["operation"] == "restore"
+    assert payload["verification"]["status"] == "healthy"
+    with SQLiteLearningMemory(destination) as memory:
+        assert memory.get("cli.restore").value == {"revision": 4}
+
+
+def test_operator_cli_returns_nonzero_for_corrupt_backup(tmp_path):
+    corrupt = tmp_path / "corrupt.sqlite3"
+    corrupt.write_bytes(b"not sqlite")
+    result = _run_backup_cli("verify", "--backup", str(corrupt))
+    assert result.returncode == 2
+    assert json.loads(result.stdout)["status"] == "degraded"
