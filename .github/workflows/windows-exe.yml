@@ -112,43 +112,66 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
-      - name: Build one-click installer
-        shell: pwsh
-        run: .\scripts\build_windows_installer.ps1
-      - name: Silent install, launch, health and uninstall smoke test
+      - name: Build previous-version installer
         shell: pwsh
         run: |
-          $installerCandidates = @(Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE "installer-output") -Filter "VazaoSovereignTrader-Setup-*.exe" -File)
-          if ($installerCandidates.Count -ne 1) {
-            throw "Expected exactly one versioned installer artifact; found $($installerCandidates.Count)."
+          .\\scripts\\build_windows_installer.ps1 -AppVersion "2026.10.1"
+          $old = Join-Path $env:GITHUB_WORKSPACE "installer-output\\VazaoSovereignTrader-Setup-2026.10.1.exe"
+          if (-not (Test-Path $old)) { throw "Previous-version installer was not produced." }
+          Copy-Item $old (Join-Path $env:RUNNER_TEMP "VST-Installer-Old.exe") -Force
+      - name: Build upgrade installer
+        shell: pwsh
+        run: |
+          .\\scripts\\build_windows_installer.ps1 -AppVersion "2026.11.1"
+          $new = Join-Path $env:GITHUB_WORKSPACE "installer-output\\VazaoSovereignTrader-Setup-2026.11.1.exe"
+          if (-not (Test-Path $new)) { throw "Upgrade installer was not produced." }
+      - name: Install, upgrade, launch, health, uninstall and vault preservation smoke test
+        shell: pwsh
+        run: |
+          $oldInstaller = Join-Path $env:RUNNER_TEMP "VST-Installer-Old.exe"
+          $newInstaller = Join-Path $env:GITHUB_WORKSPACE "installer-output\\VazaoSovereignTrader-Setup-2026.11.1.exe"
+          foreach ($path in @($oldInstaller, $newInstaller)) {
+            if (-not (Test-Path $path)) { throw "Required installer missing: $path" }
+            Write-Host "$([System.IO.Path]::GetFileName($path)) SHA256: $((Get-FileHash $path -Algorithm SHA256).Hash)"
           }
-          $installer = $installerCandidates[0].FullName
-          Write-Host "Installer SHA256: $((Get-FileHash $installer -Algorithm SHA256).Hash)"
 
           $testDir = Join-Path $env:RUNNER_TEMP "VST-Installer-Smoke"
           if (Test-Path $testDir) { Remove-Item $testDir -Recurse -Force }
 
-          # Seed the stable per-user learning vault before installation. The
-          # installer and uninstaller must preserve this data across upgrades.
+          # Seed the durable per-user vault before v1 installation. Neither
+          # installation, in-place version upgrade nor uninstall may alter it.
           $vaultRoot = Join-Path (Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData") "vault"
           $vaultLearning = Join-Path $vaultRoot "learning"
           New-Item -ItemType Directory -Force $vaultLearning | Out-Null
-          $vaultMarker = Join-Path $vaultLearning "installer-preservation-smoke.txt"
-          $vaultMarkerContent = "VST vault preservation smoke $(Get-Date -Format o)"
-          Set-Content -Path $vaultMarker -Value $vaultMarkerContent -Encoding utf8
+          $vaultMarker = Join-Path $vaultLearning "installer-upgrade-preservation-smoke.bin"
+          $vaultBytes = [System.Text.Encoding]::UTF8.GetBytes("VST vault upgrade preservation $(Get-Date -Format o)")
+          [System.IO.File]::WriteAllBytes($vaultMarker, $vaultBytes)
+          $expectedHash = (Get-FileHash $vaultMarker -Algorithm SHA256).Hash
+
           $installArgs = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=$testDir"
-          $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Silent installer failed with exit code $($install.ExitCode)." }
+          $firstInstall = Start-Process -FilePath $oldInstaller -ArgumentList $installArgs -Wait -PassThru
+          if ($firstInstall.ExitCode -ne 0) { throw "Previous-version silent install failed: $($firstInstall.ExitCode)." }
+          if (-not (Test-Path (Join-Path $testDir "VazaoSovereignTrader.exe"))) {
+            throw "Previous-version engine was not installed."
+          }
+          if (-not (Test-Path $vaultMarker)) { throw "Initial install removed the existing learning vault." }
+
+          # Install a newer AppVersion with the same stable AppId and path.
+          $upgrade = Start-Process -FilePath $newInstaller -ArgumentList $installArgs -Wait -PassThru
+          if ($upgrade.ExitCode -ne 0) { throw "In-place version upgrade failed: $($upgrade.ExitCode)." }
 
           $engine = Join-Path $testDir "VazaoSovereignTrader.exe"
-          $configPath = Join-Path $testDir "config\config.local.json"
+          $configPath = Join-Path $testDir "config\\config.local.json"
           $uninstaller = Join-Path $testDir "unins000.exe"
-          if (-not (Test-Path $engine)) { throw "Installed engine EXE missing." }
-          if (-not (Test-Path $configPath)) { throw "Installed local config missing." }
-          if (-not (Test-Path $uninstaller)) { throw "Installed uninstaller missing." }
+          if (-not (Test-Path $engine)) { throw "Upgraded engine EXE missing." }
+          if (-not (Test-Path $configPath)) { throw "Upgraded local config missing." }
+          if (-not (Test-Path $uninstaller)) { throw "Upgraded uninstaller missing." }
+          if ((Get-FileHash $vaultMarker -Algorithm SHA256).Hash -ne $expectedHash) {
+            throw "Learning vault changed during in-place version upgrade."
+          }
           foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
             if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
-              throw "Scheduled task was not installed: $taskName"
+              throw "Scheduled task missing after upgrade: $taskName"
             }
           }
 
@@ -187,14 +210,14 @@ jobs:
             $ready = $false
             for ($i = 0; $i -lt 60; $i++) {
               $proc.Refresh()
-              if ($proc.HasExited) { throw "Installed EXE exited before health check (exit code $($proc.ExitCode))." }
+              if ($proc.HasExited) { throw "Upgraded EXE exited before health check (exit code $($proc.ExitCode))." }
               try {
                 $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18765/health -TimeoutSec 2
                 if ($response.StatusCode -eq 200) { $ready = $true; break }
               } catch { }
               Start-Sleep -Seconds 1
             }
-            if (-not $ready) { throw "Installed EXE health endpoint did not become ready." }
+            if (-not $ready) { throw "Upgraded EXE health endpoint did not become ready." }
           } finally {
             if ($proc) {
               $proc.Refresh()
@@ -204,21 +227,18 @@ jobs:
           }
 
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstaller failed with exit code $($uninstall.ExitCode)." }
+          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstaller failed: $($uninstall.ExitCode)." }
           if (Test-Path $engine) { throw "Engine EXE remained after uninstall." }
           foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
             if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
               throw "Scheduled task remained after uninstall: $taskName"
             }
           }
-          if (-not (Test-Path $vaultMarker)) {
-            throw "Learning vault marker was deleted by uninstall: $vaultMarker"
+          if (-not (Test-Path $vaultMarker)) { throw "Learning vault was deleted by uninstall." }
+          if ((Get-FileHash $vaultMarker -Algorithm SHA256).Hash -ne $expectedHash) {
+            throw "Learning vault bytes changed during uninstall."
           }
-          $preservedVaultContent = (Get-Content -Path $vaultMarker -Raw).Trim()
-          if ($preservedVaultContent -ne $vaultMarkerContent) {
-            throw "Learning vault marker content changed during install/uninstall."
-          }
-          Write-Host "Silent install, PAPER launch/health, uninstall and learning-vault preservation smoke passed."
+          Write-Host "v1 install -> v2 in-place upgrade -> PAPER health -> uninstall -> vault SHA256 preservation passed."
       - uses: actions/upload-artifact@v4
         with:
           name: vazaosovereigntrader-windows-installer
