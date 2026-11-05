@@ -1,5 +1,7 @@
 #define AppName "VazaoSovereignTrader"
-#define AppVersion "2026.10.1"
+#ifndef AppVersion
+  #define AppVersion "2026.10.1"
+#endif
 #define AppPublisher "VazaoSovereignTrader"
 #define AppExeName "VazaoSovereignTrader.exe"
 #define CollectorExeName "VazaoSovereignTrader-MarketData.exe"
