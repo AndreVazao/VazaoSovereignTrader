@@ -1106,12 +1106,58 @@ class SovereignEngine:
         exchanges = getattr(self, "exchanges", {}) or {}
         return next(iter(exchanges.values()), None)
 
+    def _supervise_research_worker(self) -> dict:
+        """Expose research-worker liveness without granting it trading authority."""
+        research_cfg = dict(getattr(self, "config", {}).get("research", {}))
+        if not bool(research_cfg.get("enabled", True)):
+            report = {"state": "DISABLED", "critical": False}
+        else:
+            worker_thread = getattr(self, "research_thread", None)
+            worker = getattr(self, "research_worker", None)
+            stop_event = getattr(self, "research_stop_event", None)
+            if worker_thread is None:
+                report = {"state": "NOT_STARTED", "critical": False}
+            elif not worker_thread.is_alive():
+                stopped = bool(stop_event is not None and stop_event.is_set())
+                report = {
+                    "state": "STOPPED" if stopped else "FAILED",
+                    "critical": False,
+                    "thread_alive": False,
+                }
+            else:
+                snapshot_fn = getattr(worker, "supervision_snapshot", None)
+                snapshot = snapshot_fn() if callable(snapshot_fn) else {}
+                heartbeat = float(snapshot.get("heartbeat_ts", 0.0) or 0.0)
+                try:
+                    interval = max(0.25, float(research_cfg.get("worker_interval_seconds", 2.0)))
+                except (TypeError, ValueError, OverflowError):
+                    interval = 2.0
+                stale_after = max(10.0, interval * 3.0)
+                age = max(0.0, time.time() - heartbeat) if heartbeat else None
+                state = "STARTING" if age is None else (
+                    "STALE" if age > stale_after else "RUNNING"
+                )
+                report = {
+                    "state": state,
+                    "critical": False,
+                    "thread_alive": True,
+                    "heartbeat_age_seconds": age,
+                    "stale_after_seconds": stale_after,
+                    "iterations": int(snapshot.get("iterations", 0) or 0),
+                    "last_success_ts": float(snapshot.get("last_success_ts", 0.0) or 0.0),
+                    "last_error_type": str(snapshot.get("last_error_type", "") or ""),
+                }
+        report["checked_at"] = time.time()
+        self.state.operational["research_worker_supervision"] = report
+        return report
+
     def _loop(self) -> None:
         while not self.stop_event.is_set():
             if self.state.status == "PAUSED":
                 if self.stop_event.wait(1.0):
                     break
                 continue
+            self._supervise_research_worker()
             try:
                 self.cycle()
             except Exception as exc:

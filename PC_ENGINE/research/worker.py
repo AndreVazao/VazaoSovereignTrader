@@ -4,6 +4,7 @@ import ipaddress
 import re
 import socket
 import time
+import threading
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -39,16 +40,40 @@ class ResearchWorker:
         # If no executable or cached model exists, deterministic research remains unchanged.
         self.context_assistant = create_local_context_assistant()
         self.timeout = float(timeout_seconds)
+        self._supervision_lock = threading.Lock()
+        self._heartbeat_ts = 0.0
+        self._last_success_ts = 0.0
+        self._last_error_type = ""
+        self._iterations = 0
+
+    def supervision_snapshot(self) -> dict:
+        with self._supervision_lock:
+            return {
+                "heartbeat_ts": self._heartbeat_ts,
+                "last_success_ts": self._last_success_ts,
+                "last_error_type": self._last_error_type,
+                "iterations": self._iterations,
+            }
 
     def run_forever(self, stop_event, interval_seconds: float = 2.0) -> None:
         """Process research in its own worker thread without blocking market cycles."""
         interval = max(0.25, float(interval_seconds))
         while not stop_event.is_set():
+            with self._supervision_lock:
+                self._heartbeat_ts = time.time()
+                self._iterations += 1
             try:
                 self.process_pending(max_items=1)
-            except Exception:
+                with self._supervision_lock:
+                    self._last_success_ts = time.time()
+                    self._last_error_type = ""
+            except Exception as exc:
                 # Research is non-critical. A broken source must never stop the trader.
-                pass
+                with self._supervision_lock:
+                    self._last_error_type = type(exc).__name__
+            finally:
+                with self._supervision_lock:
+                    self._heartbeat_ts = time.time()
             stop_event.wait(interval)
 
     def process_pending(self, max_items: int = 1) -> dict:
