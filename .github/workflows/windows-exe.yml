@@ -127,6 +127,15 @@ jobs:
 
           $testDir = Join-Path $env:RUNNER_TEMP "VST-Installer-Smoke"
           if (Test-Path $testDir) { Remove-Item $testDir -Recurse -Force }
+
+          # Seed the stable per-user learning vault before installation. The
+          # installer and uninstaller must preserve this data across upgrades.
+          $vaultRoot = Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData\\vault"
+          $vaultLearning = Join-Path $vaultRoot "learning"
+          New-Item -ItemType Directory -Force $vaultLearning | Out-Null
+          $vaultMarker = Join-Path $vaultLearning "installer-preservation-smoke.txt"
+          $vaultMarkerContent = "VST vault preservation smoke $(Get-Date -Format o)"
+          Set-Content -Path $vaultMarker -Value $vaultMarkerContent -Encoding utf8
           $installArgs = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=$testDir"
           $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Silent installer failed with exit code $($install.ExitCode)." }
@@ -202,7 +211,14 @@ jobs:
               throw "Scheduled task remained after uninstall: $taskName"
             }
           }
-          Write-Host "Silent install, PAPER launch/health and uninstall smoke passed."
+          if (-not (Test-Path $vaultMarker)) {
+            throw "Learning vault marker was deleted by uninstall: $vaultMarker"
+          }
+          $preservedVaultContent = (Get-Content -Path $vaultMarker -Raw).Trim()
+          if ($preservedVaultContent -ne $vaultMarkerContent) {
+            throw "Learning vault marker content changed during install/uninstall."
+          }
+          Write-Host "Silent install, PAPER launch/health, uninstall and learning-vault preservation smoke passed."
       - uses: actions/upload-artifact@v4
         with:
           name: vazaosovereigntrader-windows-installer
