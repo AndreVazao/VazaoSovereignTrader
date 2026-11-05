@@ -85,6 +85,14 @@ class ResearchWorker:
             if item is None:
                 break
             processed += 1
+            lease_stop = threading.Event()
+            lease_thread = threading.Thread(
+                target=self._renew_lease_while_processing,
+                args=(item.request_id, lease_stop),
+                name="vst-research-lease-heartbeat",
+                daemon=True,
+            )
+            lease_thread.start()
             try:
                 result = self._process(item.message, item.urls)
                 if self.context_assistant is not None and result.get("pages_read", 0) > 0:
@@ -129,7 +137,18 @@ class ResearchWorker:
                     max_attempts=self.max_attempts,
                 )
                 raise
+            finally:
+                lease_stop.set()
+                lease_thread.join(timeout=2.0)
         return {"processed": processed, "queue": self.inbox.snapshot()}
+
+    def _renew_lease_while_processing(self, request_id: str, stop_event: threading.Event) -> None:
+        # Keep long local-model interpretation/evaluation from expiring a live claim.
+        while not stop_event.wait(30.0):
+            if not self.inbox.renew_lease(
+                request_id, self.lease_owner, lease_seconds=self.lease_seconds
+            ):
+                return
 
     def _process(self, message: str, urls: list[str]) -> dict:
         pages = []
