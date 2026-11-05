@@ -37,7 +37,17 @@ with SQLiteLearningMemory("PC_ENGINE/data/learning/sovereign-learning.sqlite3") 
 
 ## Verified local backup
 
-Use `backup_learning_memory(source_path, destination_path)` from `PC_ENGINE.learning.memory_backup` to create a snapshot:
+Use `backup_learning_memory(source_path, destination_path)` from `PC_ENGINE.learning.memory_backup` to create a snapshot. An explicit operator CLI is also available from the repository root:
+
+```powershell
+python -m PC_ENGINE.learning.memory_backup backup --source "owners/my-owner/learning/sovereign-learning.sqlite3" --destination "backups/sovereign-learning-2026-11-05.sqlite3"
+python -m PC_ENGINE.learning.memory_backup verify --backup "backups/sovereign-learning-2026-11-05.sqlite3"
+python -m PC_ENGINE.learning.memory_backup restore --backup "backups/sovereign-learning-2026-11-05.sqlite3" --destination "recovery/sovereign-learning.sqlite3"
+```
+
+CLI output is machine-readable JSON. Verification exits non-zero for missing or degraded backups. Restore always requires a separate destination and never switches the running engine to that copy.
+
+The Python API remains available for embedding in controlled maintenance workflows:
 
 ```python
 from PC_ENGINE.learning.memory_backup import backup_learning_memory

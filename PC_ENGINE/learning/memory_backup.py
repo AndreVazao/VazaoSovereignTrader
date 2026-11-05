@@ -248,3 +248,48 @@ def restore_learning_memory_backup(
     # Reuse the atomic, no-overwrite SQLite snapshot path only after the
     # independent read-only verifier has accepted the backup.
     return backup_learning_memory(backup, destination)
+
+
+def _operator_cli(argv: list[str] | None = None) -> int:
+    """Explicit operator interface; it never selects or replaces the live vault."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Create, verify, or restore a VST learning-memory backup."
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    backup_parser = commands.add_parser("backup", help="Create a new backup and manifest.")
+    backup_parser.add_argument("--source", required=True, help="SQLite learning database.")
+    backup_parser.add_argument("--destination", required=True, help="New backup file path.")
+    verify_parser = commands.add_parser("verify", help="Read-only backup verification.")
+    verify_parser.add_argument("--backup", required=True, help="Backup SQLite file.")
+    restore_parser = commands.add_parser("restore", help="Restore to a new, separate path.")
+    restore_parser.add_argument("--backup", required=True, help="Verified backup SQLite file.")
+    restore_parser.add_argument("--destination", required=True, help="New recovery database path.")
+    args = parser.parse_args(argv)
+
+    try:
+        if args.command == "backup":
+            created = backup_learning_memory(args.source, args.destination)
+            result = verify_learning_memory_backup(created)
+            print(json.dumps({"operation": "backup", "created": str(created), "verification": result},
+                             ensure_ascii=False, sort_keys=True))
+            return 0 if result["status"] == "healthy" else 2
+        if args.command == "verify":
+            result = verify_learning_memory_backup(args.backup)
+            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            return 0 if result["status"] == "healthy" else 2
+        restored = restore_learning_memory_backup(args.backup, args.destination)
+        result = verify_learning_memory_backup(restored)
+        print(json.dumps({"operation": "restore", "created": str(restored), "verification": result},
+                         ensure_ascii=False, sort_keys=True))
+        return 0 if result["status"] == "healthy" else 2
+    except (OSError, ValueError, sqlite3.DatabaseError) as exc:
+        print(json.dumps({"operation": args.command, "error": str(exc)}, ensure_ascii=False,
+                         sort_keys=True), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(_operator_cli())
