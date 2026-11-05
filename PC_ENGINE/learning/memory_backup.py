@@ -44,9 +44,9 @@ def _publish_manifest(backup: Path) -> None:
     )
     temporary = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\\n") as stream:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             json.dump(manifest, stream, ensure_ascii=False, sort_keys=True, indent=2)
-            stream.write("\\n")
+            stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.link(temporary, destination)
