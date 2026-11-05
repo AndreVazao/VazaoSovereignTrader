@@ -21,6 +21,19 @@ class ResearchKnowledge:
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / "knowledge.jsonl"
 
+    def has_hypothesis(self, hypothesis_id: str) -> bool:
+        """Check the append-only journal for a previously published result."""
+        if not hypothesis_id or not self.path.exists():
+            return False
+        with self.path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    if json.loads(line).get("hypothesis_id") == hypothesis_id:
+                        return True
+                except (json.JSONDecodeError, AttributeError):
+                    continue
+        return False
+
     def record(self, *, title: str, category: str, status: str,
                evidence: str, source_urls: Iterable[str] = (),
                metrics: dict | None = None, tags: Iterable[str] = (),
@@ -40,6 +53,7 @@ class ResearchKnowledge:
         }
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+            fh.flush()
         return row
 
     def search(self, text: str = "", category: str | None = None) -> list[dict]:
