@@ -59,6 +59,8 @@ By default, `SovereignEngine` opens `owners/<owner-id>/learning/sovereign-learni
 - Define a bounded backup cadence and retention/rotation policy based on available disk space.
 - Add backup age/health reporting to runtime operational state without exposing private learning payloads.
 - Exercise restore on a separate copy and document a safe operator runbook.
+- Keep a Windows installer/uninstaller smoke test that seeds the stable per-user vault and verifies its marker bytes survive uninstall; this validates preservation behavior without deleting or migrating user data.
+- Keep a restart-continuity regression that reinitializes the vault and reopens the SQLite store, checking record versions and append-only event history.
 - Validate multi-process writers/recovery and onboard additional departments deliberately.
 
 ## Validation boundary
