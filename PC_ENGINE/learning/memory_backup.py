@@ -5,13 +5,56 @@ never deletes source data, and never enables cloud sync or execution authority.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import sqlite3
 import tempfile
+import time
 from pathlib import Path
 
 
 _REQUIRED_TABLES = {"learning_records", "learning_events"}
+_MANIFEST_SCHEMA_VERSION = 1
+
+
+def _manifest_path(backup: Path) -> Path:
+    return backup.with_name(backup.name + ".manifest.json")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _publish_manifest(backup: Path) -> None:
+    manifest = {
+        "schema_version": _MANIFEST_SCHEMA_VERSION,
+        "backup_filename": backup.name,
+        "size_bytes": backup.stat().st_size,
+        "sha256": _sha256_file(backup),
+        "created_at_unix": int(time.time()),
+    }
+    destination = _manifest_path(backup)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\\n") as stream:
+            json.dump(manifest, stream, ensure_ascii=False, sort_keys=True, indent=2)
+            stream.write("\\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, destination)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def backup_learning_memory(
@@ -72,6 +115,11 @@ def backup_learning_memory(
         # destination created concurrently by another backup process.
         os.link(temporary, destination)
         temporary.unlink()
+        try:
+            _publish_manifest(destination)
+        except Exception:
+            destination.unlink(missing_ok=True)
+            raise
         return destination
     finally:
         if backup_db is not None:
@@ -99,6 +147,8 @@ def verify_learning_memory_backup(path: str | Path) -> dict[str, object]:
         "integrity": None,
         "learning_records": None,
         "learning_events": None,
+        "checksum": None,
+        "manifest_status": "missing",
         "reason": "backup_not_found",
     }
     if not backup.exists() or not backup.is_file():
@@ -106,6 +156,33 @@ def verify_learning_memory_backup(path: str | Path) -> dict[str, object]:
 
     result["status"] = "degraded"
     result["reason"] = "backup_not_verified"
+    manifest_path = _manifest_path(backup)
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if (not isinstance(manifest, dict)
+                    or manifest.get("schema_version") != _MANIFEST_SCHEMA_VERSION
+                    or manifest.get("backup_filename") != backup.name
+                    or not isinstance(manifest.get("size_bytes"), int)
+                    or not isinstance(manifest.get("sha256"), str)):
+                result["manifest_status"] = "invalid"
+                result["reason"] = "backup_manifest_invalid"
+                return result
+            actual_size = backup.stat().st_size
+            actual_hash = _sha256_file(backup)
+            if manifest["size_bytes"] != actual_size or manifest["sha256"] != actual_hash:
+                result["manifest_status"] = "mismatch"
+                result["checksum"] = actual_hash
+                result["reason"] = "backup_checksum_mismatch"
+                return result
+            result["manifest_status"] = "verified"
+            result["checksum"] = actual_hash
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+            result["manifest_status"] = "invalid"
+            result["reason"] = "backup_manifest_invalid"
+            return result
+    else:
+        result["manifest_status"] = "legacy_unverified"
     connection: sqlite3.Connection | None = None
     try:
         # mode=ro prevents diagnostics from creating or modifying the database.
