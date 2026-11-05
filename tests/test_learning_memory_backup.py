@@ -118,15 +118,16 @@ def test_backup_verification_reports_healthy_counts_without_modifying_file(tmp_p
 
     before = destination.read_bytes()
     result = verify_learning_memory_backup(destination)
-    assert result == {
-        "status": "healthy",
-        "path": str(destination),
-        "integrity": "ok",
-        "learning_records": 1,
-        "learning_events": 2,
-        "reason": None,
-    }
+    assert result["status"] == "healthy"
+    assert result["path"] == str(destination)
+    assert result["integrity"] == "ok"
+    assert result["learning_records"] == 1
+    assert result["learning_events"] == 2
+    assert len(result["checksum"]) == 64
+    assert result["manifest_status"] == "verified"
+    assert result["reason"] is None
     assert destination.read_bytes() == before
+    assert destination.with_name(destination.name + ".manifest.json").is_file()
 
 
 def test_backup_verification_distinguishes_missing_from_degraded(tmp_path):
@@ -231,3 +232,37 @@ def test_restore_rejects_same_backup_and_destination_path(tmp_path):
 
     with pytest.raises(ValueError, match="restore_destination_must_differ_from_backup"):
         restore_learning_memory_backup(backup, backup)
+
+
+def test_backup_verification_detects_checksum_tampering_and_restore_refuses_it(tmp_path):
+    source = tmp_path / "learning.sqlite3"
+    backup = tmp_path / "backup.sqlite3"
+    destination = tmp_path / "recovery.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        memory.put(key="checksum.protected", value={"safe": True}, department="test", provenance="test")
+        backup_learning_memory(source, backup)
+
+    with backup.open("ab") as stream:
+        stream.write(b"tampered")
+
+    result = verify_learning_memory_backup(backup)
+    assert result["status"] == "degraded"
+    assert result["manifest_status"] == "mismatch"
+    assert result["reason"] == "backup_checksum_mismatch"
+    with pytest.raises(sqlite3.DatabaseError, match="restore_source_not_healthy"):
+        restore_learning_memory_backup(backup, destination)
+    assert not destination.exists()
+
+
+def test_backup_verification_rejects_invalid_manifest(tmp_path):
+    source = tmp_path / "learning.sqlite3"
+    backup = tmp_path / "backup.sqlite3"
+    with SQLiteLearningMemory(source) as memory:
+        memory.put(key="manifest.invalid", value={"ok": True}, department="test", provenance="test")
+        backup_learning_memory(source, backup)
+
+    backup.with_name(backup.name + ".manifest.json").write_text("not-json", encoding="utf-8")
+    result = verify_learning_memory_backup(backup)
+    assert result["status"] == "degraded"
+    assert result["manifest_status"] == "invalid"
+    assert result["reason"] == "backup_manifest_invalid"
