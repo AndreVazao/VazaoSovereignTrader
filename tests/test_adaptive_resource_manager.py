@@ -6,15 +6,7 @@ from PC_ENGINE.core.adaptive_resource_manager import (
 
 
 def snapshot(cpu=2, total=3072, available=900, disk=100000, load=20):
-    return ResourceSnapshot(
-        cpu_count=cpu,
-        memory_total_mb=total,
-        memory_available_mb=available,
-        disk_free_mb=disk,
-        cpu_load_pct=load,
-        os_name="Windows",
-        sampled_at=1.0,
-    )
+    return ResourceSnapshot(cpu, total, available, disk, load, "Windows", 1.0)
 
 
 def test_low_memory_machine_uses_compact_and_defers_heavy_jobs():
@@ -61,14 +53,14 @@ def test_zero_memory_budget_defers_heavy_jobs():
 
 
 def test_manager_refreshes_policy_and_keeps_execution_permissions_separate(tmp_path):
-    current = {"available": 900}
+    current = {"total": 3072, "available": 900}
 
     def sampler(*, root):
-        return snapshot(available=current["available"])
+        return snapshot(total=current["total"], available=current["available"])
 
     manager = AdaptiveResourceManager(root=tmp_path, sampler=sampler)
     first = manager.refresh()
-    current["available"] = 12000
+    current.update(total=16384, available=12000)
     second = manager.refresh()
 
     assert first.profile == "COMPACT"
@@ -78,3 +70,9 @@ def test_manager_refreshes_policy_and_keeps_execution_permissions_separate(tmp_p
     assert status["trading_mode_changed"] is False
     assert status["policy"]["allow_real"] is False
     assert status["policy"]["auto_promote_real"] is False
+
+
+def test_missing_memory_measurements_fail_conservatively():
+    policy = derive_resource_policy(snapshot(total=0, available=0))
+    assert policy.profile == "COMPACT"
+    assert policy.defer_heavy_jobs
