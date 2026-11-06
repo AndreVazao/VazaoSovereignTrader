@@ -11,7 +11,9 @@ def test_public_market_data_verifier_uses_valid_source_install_paths():
     assert 'PC_ENGINE\\.venv\\Scripts\\python.exe' in script
     assert 'PC_ENGINE\\config\\config.local.json' in script
     assert 'PC_ENGINE\\tools\\run_market_data_bootstrap.py' in script
-    assert '--config $config --data-dir $dataDir' in script
+    assert '$bootstrapArgs = @("--config", $config, "--data-dir", $dataDir)' in script
+    assert '& $python (Join-Path $repo "PC_ENGINE\\tools\\run_market_data_bootstrap.py") @bootstrapArgs' in script
+    assert 'if ($RequireAllExchanges)' in script
     assert 'PC_ENGINE.venvScriptspython.exe' not in script
     assert 'PC_ENGINEconfigconfig.local.json' not in script
 
