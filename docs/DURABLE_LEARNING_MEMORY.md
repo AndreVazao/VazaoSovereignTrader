@@ -69,7 +69,7 @@ By default, `SovereignEngine` opens `owners/<owner-id>/learning/sovereign-learni
 - Define a bounded backup cadence and retention/rotation policy based on available disk space.
 - Add backup age/health reporting to runtime operational state without exposing private learning payloads.
 - Exercise restore on a separate copy and document a safe operator runbook.
-- Keep a Windows installer/uninstaller smoke test that seeds the stable per-user vault and verifies its marker bytes survive uninstall; this validates preservation behavior without deleting or migrating user data.
+- Keep a Windows installer lifecycle smoke test that installs v1, upgrades in place to v2 using the same AppId and install directory, launches the upgraded PAPER engine and checks health, then uninstalls; a pre-seeded stable per-user vault marker is SHA-256 checked after initial install, upgrade and uninstall. This validates preservation without deleting, migrating or auto-restoring user data.
 - Keep a restart-continuity regression that reinitializes the vault and reopens the SQLite store, checking record versions and append-only event history.
 - Exercise abrupt process termination after a committed SQLite write (without `close()` or interpreter cleanup), then reopen from a fresh process and verify both the record and append-only event journal. This proves only committed local SQLite data survives that controlled crash point; it does not prove storage-device failure resilience or cross-process write coordination.
 - Validate multi-process writers/recovery and onboard additional departments deliberately.

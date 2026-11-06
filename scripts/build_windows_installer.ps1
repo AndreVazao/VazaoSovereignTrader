@@ -1,3 +1,7 @@
+param(
+    [string]$AppVersion = "2026.10.1"
+)
+
 $ErrorActionPreference = "Stop"
 
 $repo = Split-Path -Parent $PSScriptRoot
@@ -64,7 +68,7 @@ if (-not $iscc) {
 }
 if (-not $iscc) { throw "Inno Setup ISCC.exe not found." }
 
-& $iscc $iss "/O$repo\installer-output"
+& $iscc $iss "/DAppVersion=$AppVersion" "/O$repo\installer-output"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
 $output = Join-Path $repo "installer-output"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
