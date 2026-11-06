@@ -53,14 +53,18 @@ def test_zero_memory_budget_defers_heavy_jobs():
 
 
 def test_manager_refreshes_policy_and_keeps_execution_permissions_separate(tmp_path):
-    current = {"total": 3072, "available": 900}
+    current = {"cpu": 2, "total": 3072, "available": 900}
 
     def sampler(*, root):
-        return snapshot(total=current["total"], available=current["available"])
+        return snapshot(
+            cpu=current["cpu"],
+            total=current["total"],
+            available=current["available"],
+        )
 
     manager = AdaptiveResourceManager(root=tmp_path, sampler=sampler)
     first = manager.refresh()
-    current.update(total=16384, available=12000)
+    current.update(cpu=8, total=16384, available=12000)
     second = manager.refresh()
 
     assert first.profile == "COMPACT"
