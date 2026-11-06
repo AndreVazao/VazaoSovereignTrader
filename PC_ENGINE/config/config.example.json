@@ -80,10 +80,10 @@
     "enabled": true,
     "owner_private_only": true,
     "allow_cross_owner_transfer": false,
-    "reserve_cash_pct": 0.20,
+    "reserve_cash_pct": 0.2,
     "minimum_transfer_quote": 25,
-    "capital_plus_profit_pct": 0.0,
-    "max_transfer_pct_per_cycle": 0.10,
+    "capital_plus_profit_pct": 0,
+    "max_transfer_pct_per_cycle": 0.1,
     "require_destination_need": true,
     "require_expected_opportunity": true,
     "require_destination_ready": true,
@@ -124,7 +124,7 @@
     "min_evidence_regimes": 2,
     "min_evidence_span_seconds": 21600,
     "min_recent_evidence_records": 3,
-    "min_recent_eligible_ratio": 1.0,
+    "min_recent_eligible_ratio": 1,
     "require_positive_economic_ci": true,
     "require_l2_oos_validation": true,
     "require_paper_reconciliation": true,
@@ -138,13 +138,13 @@
     "trend_min_samples": 10,
     "trend_recent_window": 5,
     "trend_min_span_seconds": 3600,
-    "trend_degradation_threshold": 0.20,
-    "trend_recovery_threshold": 0.20,
+    "trend_degradation_threshold": 0.2,
+    "trend_recovery_threshold": 0.2,
     "trend_required_consecutive_ready": 30,
     "require_temporal_stability": true,
     "scorecard_min_samples": 30,
     "scorecard_recent_window": 10,
-    "scorecard_min_pass_ratio": 1.0,
+    "scorecard_min_pass_ratio": 1,
     "timeline_max_events": 200,
     "notes": "Readiness trend and stability scorecard are PAPER-only evidence analyses. The scorecard decomposes readiness by component and never authorizes orders."
   },
@@ -221,8 +221,9 @@
     "bootstrap": {
       "enabled": true,
       "report_path": "PC_ENGINE/data/radar/market_data_bootstrap.json",
-      "require_all_polling_exchanges": true,
-      "notes": "Public/read-only connectivity and OHLCV quality verification before installation is considered data-ready. No private credentials or orders are used."
+      "require_all_polling_exchanges": false,
+      "notes": "Initial public-data bootstrap requires at least the configured number of fully ready venues; partial/failed optional venues remain visible in the report. Cross-venue research and all trading/readiness gates remain independently enforced.",
+      "minimum_ready_venues": 1
     },
     "lead_lag_min_samples": 100,
     "lead_lag_fee_bps_per_side": 10,
@@ -256,13 +257,22 @@
     "ledger_train_size": 200,
     "ledger_test_size": 100,
     "ledger_step_size": 100,
-    "ledger_horizons_ms": [5000, 15000, 60000],
-    "ledger_costs_bps": [28, 35, 42, 56],
+    "ledger_horizons_ms": [
+      5000,
+      15000,
+      60000
+    ],
+    "ledger_costs_bps": [
+      28,
+      35,
+      42,
+      56
+    ],
     "ledger_min_cost_scenarios": 3,
     "learning_loop": {
       "enabled": true,
       "recent_records": 20,
-      "degradation_threshold": 0.20,
+      "degradation_threshold": 0.2,
       "snapshot_path": "PC_ENGINE/data/radar/evidence_learning_snapshot.json"
     },
     "notes": "PAPER-only verified evidence learning. The loop is descriptive/advisory, fail-closed on invalid ledgers, and never promotes candidates, changes risk, authorizes capital or executes orders."

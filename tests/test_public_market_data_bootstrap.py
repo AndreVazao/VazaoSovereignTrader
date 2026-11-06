@@ -70,3 +70,69 @@ def test_bootstrap_fails_closed_for_invalid_market_data(tmp_path: Path) -> None:
     assert report["status"] == "DEGRADED"
     assert report["ready_venues"] == 0
     assert report["venues"][0]["symbols"]["BTC/USDT"]["status"] == "FAILED"
+
+
+
+class UnavailableClient(FakeClient):
+    def fetch_ticker(self, symbol: str):
+        raise RuntimeError("simulated public venue outage")
+
+
+def test_bootstrap_accepts_minimum_ready_venues_and_reports_optional_failures(tmp_path: Path) -> None:
+    clients = {}
+
+    def factory(name: str):
+        client = FakeClient(name) if name == "binance" else UnavailableClient(name)
+        clients[name] = client
+        return client
+
+    report = bootstrap_public_market_data(
+        exchanges=["binance", "coinbase"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=factory,
+        require_all_exchanges=False,
+        minimum_ready_venues=1,
+    )
+
+    assert report["status"] == "READY"
+    assert report["readiness_policy"] == "MINIMUM_READY_VENUES"
+    assert report["minimum_ready_venues"] == 1
+    assert report["ready_venues"] == 1
+    assert report["degraded_venues"] == ["coinbase"]
+    assert report["all_configured_venues_ready"] is False
+    assert report["venues"][1]["status"] == "DEGRADED"
+    assert all(client.closed for client in clients.values())
+
+    saved = json.loads((tmp_path / "market_data_bootstrap.json").read_text(encoding="utf-8"))
+    assert saved["status"] == "READY"
+    assert saved["degraded_venues"] == ["coinbase"]
+
+
+def test_bootstrap_stays_degraded_when_minimum_ready_venues_is_not_met(tmp_path: Path) -> None:
+    report = bootstrap_public_market_data(
+        exchanges=["binance", "coinbase"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=lambda name: FakeClient(name) if name == "binance" else UnavailableClient(name),
+        require_all_exchanges=False,
+        minimum_ready_venues=2,
+    )
+
+    assert report["status"] == "DEGRADED"
+    assert report["ready_venues"] == 1
+    assert report["minimum_ready_venues"] == 2
+    assert report["degraded_venues"] == ["coinbase"]
+
+
+def test_bootstrap_rejects_zero_minimum_ready_venues(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="at least 1"):
+        bootstrap_public_market_data(
+            exchanges=["binance"],
+            symbols=["BTC/USDT"],
+            data_dir=tmp_path,
+            minimum_ready_venues=0,
+            require_all_exchanges=False,
+        )

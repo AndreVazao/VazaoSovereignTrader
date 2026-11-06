@@ -23,13 +23,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Android helper PowerShell syntax
+      - name: Validate PowerShell helper syntax
         shell: pwsh
         run: |
           foreach ($scriptPath in @(
             "scripts/android_emulator_headless.ps1",
             "scripts/android_phone_mirror.ps1",
-            "scripts/vst_local_backend_audit.ps1"
+            "scripts/vst_local_backend_audit.ps1",
+            "scripts/verify_pc_install.ps1",
+            "scripts/verify_public_market_data.ps1"
           )) {
             $tokens = $null
             $parseErrors = $null
