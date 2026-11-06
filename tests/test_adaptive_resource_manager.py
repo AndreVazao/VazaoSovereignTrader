@@ -60,19 +60,24 @@ def test_zero_memory_budget_defers_heavy_jobs():
     assert policy.max_backtest_workers == 0
 
 
-def test_manager_refreshes_policy_and_keeps_execution_permissions_separate(tmp_path):
+def test_manager_refreshes_budget_without_ignoring_total_memory_or_permissions(tmp_path):
     current = {"available": 900}
 
     def sampler(*, root):
-        return snapshot(available=current["available"])
+        # Keep the physical RAM fixed at 3 GB; only available memory changes.
+        return snapshot(total=3072, available=current["available"])
 
     manager = AdaptiveResourceManager(root=tmp_path, sampler=sampler)
     first = manager.refresh()
-    current["available"] = 12000
+    current["available"] = 1500
     second = manager.refresh()
 
     assert first.profile == "COMPACT"
-    assert second.profile == "BALANCED"
+    # A 3 GB machine remains COMPACT even when more RAM becomes available.
+    assert second.profile == "COMPACT"
+    assert manager.snapshot is not None
+    assert manager.snapshot.memory_available_mb == 1500
+    assert second.memory_budget_mb == 988
     status = manager.status()
     assert status["permissions_changed"] is False
     assert status["trading_mode_changed"] is False
