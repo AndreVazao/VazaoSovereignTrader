@@ -34,7 +34,6 @@ class ResourcePolicy:
     def to_dict(self) -> dict:
         payload = asdict(self)
         payload["reasons"] = list(self.reasons)
-        # Resource allocation is deliberately separate from execution permissions.
         payload["allow_real"] = False
         payload["auto_promote_real"] = False
         return payload
@@ -104,15 +103,20 @@ def derive_resource_policy(
     load = snapshot.cpu_load_pct
     reasons: list[str] = []
 
-    constrained_memory = total > 0 and total < 6144
-    low_headroom = available > 0 and available < max(1024, reserve_memory_mb * 2)
+    # Unknown memory measurements are treated as constrained, never as spare capacity.
+    constrained_memory = total <= 0 or total < 6144
+    low_headroom = available <= 0 or available < max(1024, reserve_memory_mb * 2)
     constrained_cpu = cpu <= 2
     overloaded = load is not None and load >= 85.0
     disk_constrained = free_disk > 0 and free_disk < 2048
 
-    if constrained_memory:
+    if total <= 0:
+        reasons.append("memory_total_unavailable")
+    elif constrained_memory:
         reasons.append("limited_total_memory")
-    if low_headroom:
+    if available <= 0:
+        reasons.append("memory_available_unavailable")
+    elif low_headroom:
         reasons.append("limited_available_memory")
     if constrained_cpu:
         reasons.append("limited_cpu")
@@ -152,7 +156,7 @@ def derive_resource_policy(
         analysis = min(analysis, cap)
 
     memory_budget = max(0, available - max(0, reserve_memory_mb))
-    if memory_budget == 0 and available > 0:
+    if memory_budget == 0:
         backtests = simulations = analysis = 0
         defer_heavy = True
         if "insufficient_memory_after_reserve" not in reasons:
