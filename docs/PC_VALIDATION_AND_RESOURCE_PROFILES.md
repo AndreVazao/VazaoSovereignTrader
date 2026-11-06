@@ -55,3 +55,29 @@ Both profiles must keep REAL execution disabled and automatic promotion to
 REAL disabled. Market-data collection uses public/read-only endpoints and
 does not require exchange private keys. Profile selection changes resource
 allocation only; it does not change trading permissions.
+
+
+## Public market-data bootstrap
+
+The default Windows verification command accepts a minimum of one fully ready
+polling venue. Other configured venues are still tested and their partial or
+failed symbols remain visible in `market_data_bootstrap.json`; they do not
+prevent the first public-data collection from starting when the minimum is met.
+This is bootstrap readiness only, not cross-venue strategy or trading readiness.
+
+Run the strict all-venues check when needed:
+
+```powershell
+.\scripts\verify_public_market_data.ps1 -RequireAllExchanges
+```
+
+To require more than one fully ready venue:
+
+```powershell
+.\scripts\verify_public_market_data.ps1 -MinimumReadyVenues 2
+```
+
+A `READY` report always records `ready_venues`, `degraded_venues`, and
+`all_configured_venues_ready`. Inspect those fields before interpreting
+cross-exchange coverage. PAPER-only and REAL-disabled safety settings are not
+changed by this bootstrap policy.
