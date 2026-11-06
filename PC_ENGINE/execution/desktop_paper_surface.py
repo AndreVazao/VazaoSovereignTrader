@@ -186,6 +186,12 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             detail="desktop_application_running;" + self._window_observation(),
         )
 
+    def probe(self) -> SurfaceFeedback:
+        return self._probe("desktop-probe")
+
+    def observe(self) -> SurfaceFeedback:
+        return self._probe("desktop-observe")
+
     def _launch(self, request_id: str) -> SurfaceFeedback:
         if self._process is not None and self._process.poll() is None:
             return self._feedback(

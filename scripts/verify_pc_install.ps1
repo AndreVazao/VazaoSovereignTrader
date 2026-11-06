@@ -27,7 +27,7 @@ files = [
     if not any(part in excluded for part in path.relative_to(root).parts)
 ]
 for path in files:
-    py_compile.compile(str(path), doraise=True, quiet=1)
+    py_compile.compile(str(path), doraise=True)
 print(f"Compiled {len(files)} first-party Python files.")
 '@
 & $python -c $compileScript $engine
