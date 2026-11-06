@@ -41,6 +41,8 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
     """
 
     surface = Surface.DESKTOP_APP
+    _LAUNCH_OBSERVATION_TIMEOUT_SECONDS = 0.5
+    _LAUNCH_POLL_INTERVAL_SECONDS = 0.01
 
     def __init__(self, config: DesktopPaperConfig) -> None:
         if not config.venue_id:
@@ -184,12 +186,6 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
             detail="desktop_application_running;" + self._window_observation(),
         )
 
-    def probe(self) -> SurfaceFeedback:
-        return self._probe("desktop-probe")
-
-    def observe(self) -> SurfaceFeedback:
-        return self._probe("desktop-observe")
-
     def _launch(self, request_id: str) -> SurfaceFeedback:
         if self._process is not None and self._process.poll() is None:
             return self._feedback(
@@ -215,22 +211,41 @@ class DesktopPaperSurfaceAdapter(ExecutionSurfaceAdapter):
                 stderr=subprocess.DEVNULL,
                 shell=False,
             )
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            self._process = None
             return self._feedback(
                 request_id,
                 state="DOWN",
                 acknowledged=False,
                 detail=f"launch_failed:{type(exc).__name__}",
             )
-        # Popen only proves process creation was accepted. Detect fast failures.
-        time.sleep(0.05)
+
+        # Popen confirms process creation, not sustained process availability.
+        # Poll for a bounded startup window so fast exits are reported as DOWN.
+        deadline = time.monotonic() + self._LAUNCH_OBSERVATION_TIMEOUT_SECONDS
+        while True:
+            exit_code = self._process.poll()
+            if exit_code is not None:
+                return self._feedback(
+                    request_id,
+                    state="DOWN",
+                    acknowledged=False,
+                    detail=f"launch_process_exited_during_startup:exit_code={exit_code}",
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(self._LAUNCH_POLL_INTERVAL_SECONDS, remaining))
+
+        # Recheck at the observation boundary; CONNECTED means alive at this
+        # final observation, not merely that Popen returned a process handle.
         exit_code = self._process.poll()
         if exit_code is not None:
             return self._feedback(
                 request_id,
                 state="DOWN",
                 acknowledged=False,
-                detail=f"launch_process_exited_immediately:exit_code={exit_code}",
+                detail=f"launch_process_exited_during_startup:exit_code={exit_code}",
             )
         return self._feedback(
             request_id,

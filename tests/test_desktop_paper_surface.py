@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -83,9 +84,22 @@ def test_connect_launches_only_configured_local_process(tmp_path: Path) -> None:
     adapter._process.terminate()  # type: ignore[union-attr]
 
 
-
-def test_connect_reports_fast_exit_as_down(tmp_path: Path) -> None:
+def test_connect_reports_fast_exit_as_down(tmp_path: Path, monkeypatch) -> None:
     executable = Path(sys.executable)
+    poll_results = iter((None, 7))
+    poll_calls = []
+
+    class FastExitProcess:
+        def poll(self):
+            poll_calls.append(True)
+            return next(poll_results)
+
+    process = FastExitProcess()
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda *args, **kwargs: process,
+    )
     adapter = DesktopPaperSurfaceAdapter(
         DesktopPaperConfig(
             venue_id="demo",
@@ -106,6 +120,33 @@ def test_connect_reports_fast_exit_as_down(tmp_path: Path) -> None:
     assert feedback.state == "DOWN"
     assert feedback.acknowledged is False
     assert "exit_code=7" in feedback.detail
+    assert len(poll_calls) == 2
+
+
+def test_connect_reports_spawn_failure_as_down(tmp_path: Path, monkeypatch) -> None:
+    executable = Path(sys.executable)
+
+    def fail_to_spawn(*args, **kwargs):
+        raise OSError("simulated spawn failure")
+
+    monkeypatch.setattr(subprocess, "Popen", fail_to_spawn)
+    adapter = DesktopPaperSurfaceAdapter(
+        DesktopPaperConfig(venue_id="demo", executable_path=str(executable))
+    )
+
+    feedback = adapter.execute(
+        SurfaceAction(
+            request_id="connect-spawn-failure",
+            venue_id="demo",
+            surface=Surface.DESKTOP_APP,
+            action=ActionKind.CONNECT,
+        )
+    )
+
+    assert feedback.state == "DOWN"
+    assert feedback.acknowledged is False
+    assert "launch_failed:OSError" in feedback.detail
+    assert adapter._process is None
 
 
 def test_observe_preserves_request_id_in_persisted_feedback(tmp_path: Path) -> None:
