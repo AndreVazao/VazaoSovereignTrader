@@ -16,6 +16,7 @@ from PC_ENGINE.research.inbox import TraderResearchInbox
 from PC_ENGINE.research.knowledge import ResearchKnowledge
 from PC_ENGINE.research.evaluator import ResearchOwnDataEvaluator
 from PC_ENGINE.research.local_context_assistant import create_local_context_assistant
+from PC_ENGINE.core.adaptive_resource_manager import AdaptiveResourceManager
 
 
 class ResearchWorker:
@@ -31,6 +32,8 @@ class ResearchWorker:
         timeout_seconds: float = 8.0,
         replay_path: str = "PC_ENGINE/data/replay/l2_temporal_replay.json",
         oos_path: str = "PC_ENGINE/data/radar/l2_oos_validation.json",
+        resource_manager: AdaptiveResourceManager | None = None,
+        resource_refresh_interval_seconds: float = 60.0,
     ):
         self.root = Path(data_dir)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -39,6 +42,11 @@ class ResearchWorker:
         self.evaluator = ResearchOwnDataEvaluator(replay_path=replay_path, oos_path=oos_path)
         self.context_assistant = create_local_context_assistant()
         self.timeout = float(timeout_seconds)
+        self.resource_manager = resource_manager
+        self.resource_refresh_interval = max(1.0, float(resource_refresh_interval_seconds))
+        self._resource_policy = None
+        self._resource_error_type = ""
+        self._resource_deferred_cycles = 0
         self.lease_owner = f"{socket.gethostname()}:{os_getpid()}:{uuid.uuid4().hex}"
         self.lease_seconds = 300.0
         self.max_attempts = 3
@@ -55,19 +63,56 @@ class ResearchWorker:
                 "last_success_ts": self._last_success_ts,
                 "last_error_type": self._last_error_type,
                 "iterations": self._iterations,
+                "resource_policy": self._resource_policy.to_dict() if self._resource_policy is not None else None,
+                "resource_error_type": self._resource_error_type,
+                "resource_deferred_cycles": self._resource_deferred_cycles,
             }
 
     def run_forever(self, stop_event, interval_seconds: float = 2.0) -> None:
         interval = max(0.25, float(interval_seconds))
+        last_resource_refresh = 0.0
         while not stop_event.is_set():
             with self._supervision_lock:
                 self._heartbeat_ts = time.time()
                 self._iterations += 1
             try:
-                self.process_pending(max_items=1)
-                with self._supervision_lock:
-                    self._last_success_ts = time.time()
-                    self._last_error_type = ""
+                manager = self.resource_manager
+                if manager is not None and (
+                    self._resource_policy is None
+                    or time.monotonic() - last_resource_refresh >= self.resource_refresh_interval
+                ):
+                    try:
+                        self._resource_policy = manager.refresh()
+                        self._resource_error_type = ""
+                    except Exception as exc:
+                        # Research is optional work: failed resource sampling defers it.
+                        self._resource_policy = None
+                        self._resource_error_type = type(exc).__name__
+                    last_resource_refresh = time.monotonic()
+
+                policy = self._resource_policy
+                if manager is not None and policy is None:
+                    with self._supervision_lock:
+                        self._resource_deferred_cycles += 1
+                        self._last_error_type = self._resource_error_type or "ResourcePolicyUnavailable"
+                elif policy is not None and policy.defer_heavy_jobs:
+                    with self._supervision_lock:
+                        self._resource_deferred_cycles += 1
+                        self._last_success_ts = time.time()
+                        self._last_error_type = ""
+                else:
+                    max_items = 1
+                    if policy is not None:
+                        # The inbox is sequential; this bounds per-cycle batch size.
+                        max_items = max(1, min(
+                            int(policy.max_workers),
+                            int(policy.max_analysis_workers),
+                            4,
+                        ))
+                    self.process_pending(max_items=max_items)
+                    with self._supervision_lock:
+                        self._last_success_ts = time.time()
+                        self._last_error_type = ""
             except Exception as exc:
                 with self._supervision_lock:
                     self._last_error_type = type(exc).__name__
