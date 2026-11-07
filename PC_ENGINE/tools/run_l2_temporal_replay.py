@@ -4,6 +4,7 @@ import argparse
 import json
 
 from PC_ENGINE.replay.l2_temporal import L2TemporalConfig, L2TemporalExecutableReplay
+from PC_ENGINE.core.adaptive_job_runner import run_adaptive_simulation, AdaptiveJobDeferred
 
 
 def main() -> int:
@@ -26,7 +27,11 @@ def main() -> int:
         holding_ms=args.holding_ms,
         max_execution_impact_bps=args.max_impact_bps,
     )
-    print(json.dumps(L2TemporalExecutableReplay(config).run().__dict__, indent=2))
+    try:
+        report = run_adaptive_simulation(lambda: L2TemporalExecutableReplay(config).run())
+    except AdaptiveJobDeferred as exc:
+        raise SystemExit(f"L2 temporal replay deferred safely: {exc}") from exc
+    print(json.dumps(report.__dict__, indent=2))
     return 0
 
 

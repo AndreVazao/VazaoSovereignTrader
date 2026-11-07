@@ -4,6 +4,7 @@ import argparse
 import json
 
 from PC_ENGINE.core.walk_forward import WalkForwardEvaluator
+from PC_ENGINE.core.adaptive_job_runner import run_adaptive_simulation, AdaptiveJobDeferred
 
 
 def main() -> None:
@@ -24,7 +25,11 @@ def main() -> None:
         min_validation_mean_bps=args.min_mean_bps,
         min_validation_win_rate=args.min_win_rate,
     )
-    print(json.dumps(evaluator.evaluate(), indent=2, ensure_ascii=False))
+    try:
+        report = run_adaptive_simulation(evaluator.evaluate)
+    except AdaptiveJobDeferred as exc:
+        raise SystemExit(f"Walk-forward validation deferred safely: {exc}") from exc
+    print(json.dumps(report, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
