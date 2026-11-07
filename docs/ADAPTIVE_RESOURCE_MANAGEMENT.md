@@ -23,3 +23,9 @@ The sampler uses optional psutil when available and standard-library fallbacks.
 Missing measurements fail conservatively. The manager can be refreshed at any
 time; a future runtime integration should call refresh periodically and before
 starting heavy jobs.
+
+## Runtime scheduler integration
+
+The engine creates one adaptive resource manager from the installed runtime configuration and passes it to the research inbox worker. The worker refreshes the policy at the configured interval. COMPACT policy defers optional external research/evaluation work while the core engine loop, public market-data collector, observational radar, PAPER state, persistence and health telemetry continue independently. BALANCED/PERFORMANCE policies bound the sequential inbox batch size using the analysis and general worker budgets (maximum four requests per loop). If resource sampling fails, optional research is deferred rather than running without a trustworthy budget.
+
+The resource policy is exposed in research-worker supervision telemetry. This integration does not interrupt an item already being processed, terminate applications, change trading permissions, or affect risk limits. Other heavy-job entrypoints (backtests and simulations) remain separate integration work and must consume their own budgets before being considered resource-managed.

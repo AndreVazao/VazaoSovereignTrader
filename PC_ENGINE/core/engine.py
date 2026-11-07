@@ -13,6 +13,7 @@ from PC_ENGINE.ai_council.stub import DisabledAICouncil
 from PC_ENGINE.core.allocator import CapitalAllocator
 from PC_ENGINE.core.opportunity import PaperOpportunityEngine
 from PC_ENGINE.core.config import DATA_DIR, env_value
+from PC_ENGINE.core.adaptive_resource_manager import AdaptiveResourceManager
 from PC_ENGINE.core.owner_context import OwnerContext
 from PC_ENGINE.core.data_vault import default_vault_path, initialize_vault, legacy_vault_path
 from PC_ENGINE.core.observer_snapshot import RuntimeObserverSnapshot
@@ -232,10 +233,28 @@ class SovereignEngine:
             dedupe_seconds=float(research_cfg.get("dedupe_seconds", 3600.0)),
             learning_memory=self.learning_memory,
         )
+        adaptive_cfg = dict(config.get("adaptive_resources", {}))
+        self.adaptive_resource_manager: AdaptiveResourceManager | None = None
+        if bool(adaptive_cfg.get("enabled", True)):
+            self.adaptive_resource_manager = AdaptiveResourceManager(
+                root=DATA_DIR,
+                reserve_memory_mb=int(adaptive_cfg.get("reserve_memory_mb", 512)),
+                max_workers_cap=adaptive_cfg.get("max_workers_cap"),
+            )
+            try:
+                self.state.operational["adaptive_resources"] = self.adaptive_resource_manager.status()
+            except Exception as exc:
+                self.state.operational["adaptive_resources"] = {
+                    "state": "DEGRADED",
+                    "error": type(exc).__name__,
+                    "order_authority": False,
+                }
         self.research_worker = ResearchWorker(
             research_dir,
             replay_path=str(research_cfg.get("replay_path", "PC_ENGINE/data/replay/l2_temporal_replay.json")),
             oos_path=str(research_cfg.get("oos_path", "PC_ENGINE/data/radar/l2_oos_validation.json")),
+            resource_manager=self.adaptive_resource_manager,
+            resource_refresh_interval_seconds=float(adaptive_cfg.get("refresh_interval_seconds", 60.0)),
         )
         self.research_stop_event = threading.Event()
         self.research_thread: Optional[threading.Thread] = None
@@ -1146,6 +1165,9 @@ class SovereignEngine:
                     "iterations": int(snapshot.get("iterations", 0) or 0),
                     "last_success_ts": float(snapshot.get("last_success_ts", 0.0) or 0.0),
                     "last_error_type": str(snapshot.get("last_error_type", "") or ""),
+                    "resource_policy": snapshot.get("resource_policy"),
+                    "resource_error_type": str(snapshot.get("resource_error_type", "") or ""),
+                    "resource_deferred_cycles": int(snapshot.get("resource_deferred_cycles", 0) or 0),
                 }
         report["checked_at"] = time.time()
         self.state.operational["research_worker_supervision"] = report

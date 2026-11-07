@@ -101,3 +101,91 @@ def test_live_research_thread_with_old_heartbeat_is_reported_stale():
     finally:
         release.set()
         live_thread.join(timeout=1)
+
+class _FakeResourcePolicy:
+    def __init__(self, *, defer_heavy_jobs, max_workers=1, max_analysis_workers=1):
+        self.defer_heavy_jobs = defer_heavy_jobs
+        self.max_workers = max_workers
+        self.max_analysis_workers = max_analysis_workers
+
+    def to_dict(self):
+        return {
+            "defer_heavy_jobs": self.defer_heavy_jobs,
+            "max_workers": self.max_workers,
+            "max_analysis_workers": self.max_analysis_workers,
+        }
+
+
+class _FakeResourceManager:
+    def __init__(self, policy):
+        self.policy = policy
+        self.refreshes = 0
+
+    def refresh(self):
+        self.refreshes += 1
+        return self.policy
+
+
+def test_compact_resource_policy_defers_optional_research(tmp_path):
+    manager = _FakeResourceManager(_FakeResourcePolicy(defer_heavy_jobs=True))
+    worker = ResearchWorker(str(tmp_path), resource_manager=manager, resource_refresh_interval_seconds=1)
+    calls = []
+    worker.process_pending = lambda max_items=1: calls.append(max_items)
+    stop = threading.Event()
+    thread = threading.Thread(target=worker.run_forever, args=(stop, 0.25), daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 2
+    snapshot = worker.supervision_snapshot()
+    while snapshot["resource_deferred_cycles"] == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+        snapshot = worker.supervision_snapshot()
+    stop.set()
+    thread.join(timeout=1)
+    assert not thread.is_alive()
+    assert manager.refreshes >= 1
+    assert calls == []
+    assert snapshot["resource_policy"]["defer_heavy_jobs"] is True
+    assert snapshot["resource_deferred_cycles"] >= 1
+
+
+def test_balanced_resource_policy_controls_research_batch_size(tmp_path):
+    manager = _FakeResourceManager(
+        _FakeResourcePolicy(defer_heavy_jobs=False, max_workers=3, max_analysis_workers=2)
+    )
+    worker = ResearchWorker(str(tmp_path), resource_manager=manager)
+    calls = []
+    stop = threading.Event()
+
+    def process(max_items=1):
+        calls.append(max_items)
+        stop.set()
+        return {"processed": 0}
+
+    worker.process_pending = process
+    worker.run_forever(stop, 0.25)
+    assert calls == [2]
+    assert manager.refreshes == 1
+
+
+def test_resource_sampling_failure_defers_research_without_crashing(tmp_path):
+    class BrokenManager:
+        def refresh(self):
+            raise OSError("resource probe failed")
+
+    worker = ResearchWorker(str(tmp_path), resource_manager=BrokenManager())
+    calls = []
+    worker.process_pending = lambda max_items=1: calls.append(max_items)
+    stop = threading.Event()
+    thread = threading.Thread(target=worker.run_forever, args=(stop, 0.25), daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 2
+    snapshot = worker.supervision_snapshot()
+    while not snapshot["resource_error_type"] and time.monotonic() < deadline:
+        time.sleep(0.01)
+        snapshot = worker.supervision_snapshot()
+    stop.set()
+    thread.join(timeout=1)
+    assert not thread.is_alive()
+    assert calls == []
+    assert snapshot["resource_error_type"] == "OSError"
+    assert snapshot["resource_deferred_cycles"] >= 1
