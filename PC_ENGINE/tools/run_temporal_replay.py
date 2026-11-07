@@ -4,6 +4,7 @@ import argparse
 import json
 
 from PC_ENGINE.replay.temporal import ReplayConfig, TemporalWebSocketReplay
+from PC_ENGINE.core.adaptive_job_runner import run_adaptive_simulation, AdaptiveJobDeferred
 
 
 def main() -> int:
@@ -14,13 +15,16 @@ def main() -> int:
     parser.add_argument("--holding-ms", type=float, default=1000.0)
     parser.add_argument("--latency-ms", type=float, default=80.0)
     args = parser.parse_args()
-    report = TemporalWebSocketReplay(ReplayConfig(
-        input_path=args.input,
-        output_path=args.output,
-        capital_per_trade=args.capital,
-        holding_ms=args.holding_ms,
-        latency_ms=args.latency_ms,
-    )).run()
+    try:
+        report = run_adaptive_simulation(lambda: TemporalWebSocketReplay(ReplayConfig(
+            input_path=args.input,
+            output_path=args.output,
+            capital_per_trade=args.capital,
+            holding_ms=args.holding_ms,
+            latency_ms=args.latency_ms,
+        )).run())
+    except AdaptiveJobDeferred as exc:
+        raise SystemExit(f"Temporal replay deferred safely: {exc}") from exc
     print(json.dumps(report.__dict__, indent=2))
     return 0
 

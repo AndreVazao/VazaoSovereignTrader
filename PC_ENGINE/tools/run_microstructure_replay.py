@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict
 
 from PC_ENGINE.replay.microstructure_replay import MicrostructureReplay, MicrostructureReplayConfig
+from PC_ENGINE.core.adaptive_job_runner import run_adaptive_simulation, AdaptiveJobDeferred
 
 
 def main() -> int:
@@ -15,13 +16,16 @@ def main() -> int:
     parser.add_argument("--latency-ms", type=float, default=80.0)
     parser.add_argument("--holding-ms", type=float, default=1000.0)
     args = parser.parse_args()
-    report = MicrostructureReplay(MicrostructureReplayConfig(
-        input_path=args.input,
-        output_path=args.output,
-        capital_per_trade=args.capital,
-        latency_ms=args.latency_ms,
-        holding_ms=args.holding_ms,
-    )).run()
+    try:
+        report = run_adaptive_simulation(lambda: MicrostructureReplay(MicrostructureReplayConfig(
+            input_path=args.input,
+            output_path=args.output,
+            capital_per_trade=args.capital,
+            latency_ms=args.latency_ms,
+            holding_ms=args.holding_ms,
+        )).run())
+    except AdaptiveJobDeferred as exc:
+        raise SystemExit(f"Microstructure replay deferred safely: {exc}") from exc
     print(json.dumps(asdict(report), indent=2))
     return 0
 
