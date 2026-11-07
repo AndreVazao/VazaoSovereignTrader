@@ -172,7 +172,7 @@ def compare_paper_policies(states: list[dict[str, Any]], *, horizon_ms: int, cos
     }
 
 
-def run_study(
+def _run_study_unmanaged(
     states: list[dict[str, Any]],
     *,
     horizon_ms: int = 5000,
@@ -209,3 +209,36 @@ def write_report(report: dict[str, Any], path: str | Path) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def run_study(
+    states: list[dict[str, Any]],
+    *,
+    horizon_ms: int = 5000,
+    cost_bps: float = 28.0,
+    folds: int = 5,
+    min_train: int = 100,
+    test_size: int = 50,
+    monte_carlo_iterations: int = 2000,
+    resource_manager=None,
+) -> dict[str, Any]:
+    if resource_manager is None:
+        return _run_study_unmanaged(
+            states, horizon_ms=horizon_ms, cost_bps=cost_bps, folds=folds,
+            min_train=min_train, test_size=test_size,
+            monte_carlo_iterations=monte_carlo_iterations,
+        )
+    from PC_ENGINE.core.adaptive_job_gate import AdaptiveJobDeferred, AdaptiveJobGate
+    with AdaptiveJobGate(resource_manager).slot("simulation") as admitted:
+        if not admitted:
+            raise AdaptiveJobDeferred("PAPER study deferred by adaptive resource policy")
+        report = _run_study_unmanaged(
+            states, horizon_ms=horizon_ms, cost_bps=cost_bps, folds=folds,
+            min_train=min_train, test_size=test_size,
+            monte_carlo_iterations=monte_carlo_iterations,
+        )
+    report["adaptive_resources"] = {
+        "job_kind": "simulation", "admission": "GRANTED",
+        "orders_submitted": False,
+    }
+    return report

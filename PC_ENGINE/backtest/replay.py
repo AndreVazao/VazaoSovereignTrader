@@ -5,6 +5,7 @@ from typing import Dict, List
 
 from PC_ENGINE.core.strategy import TrendEmaAtrStrategy
 from PC_ENGINE.core.preflight import validate_ohlcv_rows
+from PC_ENGINE.core.adaptive_job_gate import AdaptiveJobDeferred, AdaptiveJobGate
 
 
 @dataclass
@@ -19,12 +20,21 @@ class BacktestResult:
 
 
 class ReplayBacktester:
-    def __init__(self, strategy: TrendEmaAtrStrategy, fee_pct: float = 0.001, slippage_pct: float = 0.0005):
+    def __init__(self, strategy: TrendEmaAtrStrategy, fee_pct: float = 0.001, slippage_pct: float = 0.0005, job_gate: AdaptiveJobGate | None = None):
         self.strategy = strategy
         self.fee_pct = fee_pct
         self.slippage_pct = slippage_pct
+        self.job_gate = job_gate
 
     def run(self, symbol: str, candles: List[List[float]]) -> BacktestResult:
+        if self.job_gate is None:
+            return self._run_unmanaged(symbol, candles)
+        with self.job_gate.slot("backtest") as admitted:
+            if not admitted:
+                raise AdaptiveJobDeferred("backtest deferred by adaptive resource policy")
+            return self._run_unmanaged(symbol, candles)
+
+    def _run_unmanaged(self, symbol: str, candles: List[List[float]]) -> BacktestResult:
         quality = validate_ohlcv_rows(candles)
         if not quality.ok:
             raise ValueError(
