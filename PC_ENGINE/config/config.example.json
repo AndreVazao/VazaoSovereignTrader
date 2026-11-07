@@ -65,7 +65,7 @@
   },
   "capital_venue_discovery": {
     "enabled": true,
-    "probe_private_balances": true,
+    "probe_private_balances": false,
     "venues": [
       "binance",
       "bingx",

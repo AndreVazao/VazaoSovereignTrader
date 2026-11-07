@@ -63,8 +63,11 @@ class CapitalVenueDiscovery:
                 out[str(asset).upper()] = amount
         return out
 
-    def discover(self, probe_private_balances: bool = True) -> dict[str, Any]:
+    def discover(self, probe_private_balances: bool | None = None) -> dict[str, Any]:
         cfg = dict(self.config.get("capital_venue_discovery", {}))
+        # Private balance reads are opt-in. An explicit call argument overrides config.
+        if probe_private_balances is None:
+            probe_private_balances = bool(cfg.get("probe_private_balances", False))
         configured_venues = cfg.get("venues") or list(SUPPORTED_CAPITAL_VENUES)
         results: list[dict[str, Any]] = []
         now = int(time.time() * 1000)
