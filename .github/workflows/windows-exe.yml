@@ -53,6 +53,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-pc.txt
           pip install pyinstaller
+      - name: Validate adaptive resource sampling on Windows
+        shell: pwsh
+        run: |
+          python -c "from PC_ENGINE.core.adaptive_resource_manager import detect_system_resources; s = detect_system_resources(); assert s.cpu_count >= 1, 'CPU count unavailable'; assert s.memory_total_mb > 0, 'Total RAM unavailable'; assert s.memory_available_mb > 0, 'Available RAM unavailable'; assert s.disk_free_mb > 0, 'Free disk unavailable'; print(f'Windows resource snapshot: CPU={s.cpu_count}, RAM={s.memory_total_mb}MB, available={s.memory_available_mb}MB, disk_free={s.disk_free_mb}MB, load={s.cpu_load_pct}')"
       - name: Build EXE
         shell: pwsh
         run: |
@@ -117,21 +121,21 @@ jobs:
       - name: Build previous-version installer
         shell: pwsh
         run: |
-          .\\scripts\\build_windows_installer.ps1 -AppVersion "2026.10.1"
-          $old = Join-Path $env:GITHUB_WORKSPACE "installer-output\\VazaoSovereignTrader-Setup-2026.10.1.exe"
+          .\scripts\build_windows_installer.ps1 -AppVersion "2026.10.1"
+          $old = Join-Path $env:GITHUB_WORKSPACE "installer-output\VazaoSovereignTrader-Setup-2026.10.1.exe"
           if (-not (Test-Path $old)) { throw "Previous-version installer was not produced." }
           Copy-Item $old (Join-Path $env:RUNNER_TEMP "VST-Installer-Old.exe") -Force
       - name: Build upgrade installer
         shell: pwsh
         run: |
-          .\\scripts\\build_windows_installer.ps1 -AppVersion "2026.11.1"
-          $new = Join-Path $env:GITHUB_WORKSPACE "installer-output\\VazaoSovereignTrader-Setup-2026.11.1.exe"
+          .\scripts\build_windows_installer.ps1 -AppVersion "2026.11.1"
+          $new = Join-Path $env:GITHUB_WORKSPACE "installer-output\VazaoSovereignTrader-Setup-2026.11.1.exe"
           if (-not (Test-Path $new)) { throw "Upgrade installer was not produced." }
       - name: Install, upgrade, launch, health, uninstall and vault preservation smoke test
         shell: pwsh
         run: |
           $oldInstaller = Join-Path $env:RUNNER_TEMP "VST-Installer-Old.exe"
-          $newInstaller = Join-Path $env:GITHUB_WORKSPACE "installer-output\\VazaoSovereignTrader-Setup-2026.11.1.exe"
+          $newInstaller = Join-Path $env:GITHUB_WORKSPACE "installer-output\VazaoSovereignTrader-Setup-2026.11.1.exe"
           foreach ($path in @($oldInstaller, $newInstaller)) {
             if (-not (Test-Path $path)) { throw "Required installer missing: $path" }
             Write-Host "$([System.IO.Path]::GetFileName($path)) SHA256: $((Get-FileHash $path -Algorithm SHA256).Hash)"
@@ -163,7 +167,7 @@ jobs:
           if ($upgrade.ExitCode -ne 0) { throw "In-place version upgrade failed: $($upgrade.ExitCode)." }
 
           $engine = Join-Path $testDir "VazaoSovereignTrader.exe"
-          $configPath = Join-Path $testDir "config\\config.local.json"
+          $configPath = Join-Path $testDir "config\config.local.json"
           $uninstaller = Join-Path $testDir "unins000.exe"
           if (-not (Test-Path $engine)) { throw "Upgraded engine EXE missing." }
           if (-not (Test-Path $configPath)) { throw "Upgraded local config missing." }

@@ -573,5 +573,12 @@
       "stale_market_action": "CANCEL"
     },
     "notes": "The bot, not the operator, selects eligible opportunities and allocates capital when every gate is satisfied. Multi-venue execution is coordinated, but orders are never assumed to be atomic across venues. This does not guarantee profit or maximize returns mathematically; it maximizes adherence to the measured edge and configured risk constraints."
+  },
+  "adaptive_resources": {
+    "enabled": true,
+    "refresh_interval_seconds": 60,
+    "reserve_memory_mb": 512,
+    "max_workers_cap": null,
+    "notes": "Hardware-aware compute budgets only. Never changes PAPER mode, REAL permission, risk limits or promotion permissions."
   }
 }
