@@ -50,6 +50,17 @@ def _load_config(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _run_study_with_resource_budget(job):
+    """Run optional PAPER study only when the adaptive simulation budget admits it."""
+    from PC_ENGINE.core.adaptive_job_gate import AdaptiveJobDeferred
+    from PC_ENGINE.core.adaptive_job_runner import run_adaptive_simulation
+
+    try:
+        return run_adaptive_simulation(job)
+    except AdaptiveJobDeferred as exc:
+        return {"deferred": True, "reason": str(exc)}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run continuous public market-data collection and PAPER learning."
@@ -253,7 +264,10 @@ def main() -> None:
                 states_path = data_dir / str(study_cfg.get("states_filename", "market_states.jsonl"))
                 report_path = data_dir / str(study_cfg.get("report_filename", "paper_study_report.json"))
                 timing_path = data_dir / str(study_cfg.get("timing_report_filename", "websocket_timing_validation.json"))
-                try:
+
+                def execute_optional_study():
+                    # Keep file loading inside the admission boundary: it can be
+                    # memory-heavy on the constrained installation target.
                     states = load_states(states_path, limit=int(study_cfg.get("max_states", 100000)))
                     report = run_study(
                         states,
@@ -272,19 +286,31 @@ def main() -> None:
                         min_samples=int(study_cfg.get("timing_min_samples", 100)),
                     )
                     write_timing_report(timing, timing_path)
+                    return {
+                        "enabled": True,
+                        "state_samples": len(states),
+                        "outcome_samples": report.get("outcome_samples", 0),
+                        "timing_eligible": timing.get("eligible_for_economic_interpretation", False),
+                        "report_path": str(report_path),
+                        "timing_report_path": str(timing_path),
+                    }
+
+                try:
+                    study_result = _run_study_with_resource_budget(execute_optional_study)
+                    if study_result.get("deferred"):
+                        study_health = {
+                            "enabled": True,
+                            "status": "DEFERRED_RESOURCE_BUDGET",
+                            "reason": study_result.get("reason", "adaptive budget unavailable"),
+                        }
+                    else:
+                        study_health = study_result
                     write_health(
                         "RUNNING",
                         radar=radar.snapshot(),
                         hot_path=hot_path.snapshot(),
                         hot_path_outcomes=outcome_tracker.snapshot(),
-                        study={
-                            "enabled": True,
-                            "state_samples": len(states),
-                            "outcome_samples": report.get("outcome_samples", 0),
-                            "timing_eligible": timing.get("eligible_for_economic_interpretation", False),
-                            "report_path": str(report_path),
-                            "timing_report_path": str(timing_path),
-                        },
+                        study=study_health,
                     )
                 except Exception as exc:
                     write_health(
