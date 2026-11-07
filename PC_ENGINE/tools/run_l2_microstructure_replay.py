@@ -4,6 +4,7 @@ import argparse
 import json
 
 from PC_ENGINE.replay.l2_microstructure import L2MicrostructureReplay
+from PC_ENGINE.core.adaptive_job_runner import run_adaptive_simulation, AdaptiveJobDeferred
 
 
 def main() -> int:
@@ -13,11 +14,14 @@ def main() -> int:
     parser.add_argument("--notional", type=float, default=100.0)
     args = parser.parse_args()
 
-    report = L2MicrostructureReplay(
-        input_path=args.input,
-        output_path=args.output,
-        notional_per_side=args.notional,
-    ).run()
+    try:
+        report = run_adaptive_simulation(lambda: L2MicrostructureReplay(
+            input_path=args.input,
+            output_path=args.output,
+            notional_per_side=args.notional,
+        ).run())
+    except AdaptiveJobDeferred as exc:
+        raise SystemExit(f"L2 microstructure replay deferred safely: {exc}") from exc
     print(json.dumps(report.__dict__, indent=2))
     return 0
 

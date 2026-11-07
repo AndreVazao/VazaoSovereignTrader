@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from PC_ENGINE.radar.l2_oos_validation import L2OutOfSampleValidator
+from PC_ENGINE.core.adaptive_job_runner import run_adaptive_simulation, AdaptiveJobDeferred
 
 
 def main() -> int:
@@ -14,13 +15,16 @@ def main() -> int:
     parser.add_argument("--min-completion", type=float, default=0.55)
     args = parser.parse_args()
 
-    rows = L2OutOfSampleValidator(
-        replay_path=args.input,
-        output_path=args.output,
-        min_in_samples=args.min_in,
-        min_out_samples=args.min_out,
-        min_completion_rate=args.min_completion,
-    ).validate()
+    try:
+        rows = run_adaptive_simulation(lambda: L2OutOfSampleValidator(
+            replay_path=args.input,
+            output_path=args.output,
+            min_in_samples=args.min_in,
+            min_out_samples=args.min_out,
+            min_completion_rate=args.min_completion,
+        ).validate())
+    except AdaptiveJobDeferred as exc:
+        raise SystemExit(f"L2 out-of-sample validation deferred safely: {exc}") from exc
     print(f"Validated L2 relationships: {len(rows)} | stable: {sum(r.stable for r in rows)}")
     return 0
 
