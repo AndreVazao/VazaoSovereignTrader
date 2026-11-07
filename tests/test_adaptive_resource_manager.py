@@ -2,6 +2,7 @@ from PC_ENGINE.core.adaptive_resource_manager import (
     AdaptiveResourceManager,
     ResourceSnapshot,
     derive_resource_policy,
+    detect_system_resources,
 )
 
 
@@ -83,3 +84,13 @@ def test_manager_refreshes_budget_without_ignoring_total_memory_or_permissions(t
     assert status["trading_mode_changed"] is False
     assert status["policy"]["allow_real"] is False
     assert status["policy"]["auto_promote_real"] is False
+
+
+def test_detect_system_resources_reads_host_capacity():
+    measured = detect_system_resources()
+    assert measured.cpu_count >= 1
+    assert measured.memory_total_mb > 0
+    assert measured.memory_available_mb > 0
+    assert measured.disk_free_mb > 0
+    assert measured.os_name
+    assert measured.cpu_load_pct is None or 0.0 <= measured.cpu_load_pct <= 100.0
