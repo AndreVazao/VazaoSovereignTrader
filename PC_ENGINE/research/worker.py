@@ -78,7 +78,7 @@ class ResearchWorker:
             try:
                 manager = self.resource_manager
                 if manager is not None and (
-                    self._resource_policy is None
+                    last_resource_refresh <= 0.0
                     or time.monotonic() - last_resource_refresh >= self.resource_refresh_interval
                 ):
                     try:
