@@ -245,6 +245,52 @@ class SQLiteLearningMemory:
             return LearningRecord(**{**record.__dict__, "status": "stale"})
         return record
 
+    def iter_records(
+        self,
+        *,
+        status: str | None = None,
+        batch_size: int = 128,
+    ):
+        """Yield records in bounded keyset pages instead of materializing the table.
+
+        Pages are read independently, so this is a weakly consistent traversal:
+        records updated during iteration may reflect the newer value, and keys
+        inserted lexically before the current cursor are observed on the next
+        traversal. The database lock is held only while each page is fetched.
+        """
+        if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
+            raise ValueError("batch_size must be a positive integer")
+        if status is not None:
+            status = self._validate_text(status, "status").lower()
+            if status not in VALID_STATUSES:
+                raise ValueError("unsupported validation status")
+
+        after_key: str | None = None
+        now = int(self._clock_ns())
+        while True:
+            with self._lock:
+                if after_key is None:
+                    rows = self._connection.execute(
+                        "SELECT * FROM learning_records ORDER BY key LIMIT ?",
+                        (batch_size,),
+                    ).fetchall()
+                else:
+                    rows = self._connection.execute(
+                        "SELECT * FROM learning_records WHERE key > ? ORDER BY key LIMIT ?",
+                        (after_key, batch_size),
+                    ).fetchall()
+            if not rows:
+                return
+
+            for row in rows:
+                record = self._decode(row)
+                after_key = record.key
+                if record.expires_at_ns is not None and now >= record.expires_at_ns:
+                    if record.status != "stale":
+                        record = LearningRecord(**{**record.__dict__, "status": "stale"})
+                if status is None or record.status == status:
+                    yield record
+
     def list_records(self, *, status: str | None = None) -> tuple[LearningRecord, ...]:
         if status is not None:
             status = self._validate_text(status, "status").lower()
