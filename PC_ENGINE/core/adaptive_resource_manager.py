@@ -128,8 +128,7 @@ def derive_resource_policy(
     if constrained_memory or low_headroom or constrained_cpu or overloaded or disk_constrained:
         profile = "COMPACT"
         workers = 1 if constrained_memory or constrained_cpu else 2
-        backtests = simulations = 0
-        analysis = 1 if not overloaded else 0
+        backtests = simulations = analysis = 0
         defer_heavy = True
     elif total >= 16384 and available >= 8192 and cpu >= 8 and not overloaded:
         profile = "PERFORMANCE"

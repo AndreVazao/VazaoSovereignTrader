@@ -24,6 +24,7 @@ def test_low_memory_machine_uses_compact_and_defers_heavy_jobs():
     assert policy.max_workers == 1
     assert policy.max_backtest_workers == 0
     assert policy.max_simulation_workers == 0
+    assert policy.max_analysis_workers == 0
     assert policy.defer_heavy_jobs
 
 
@@ -32,6 +33,7 @@ def test_powerful_machine_scales_parallel_research():
     assert policy.profile == "PERFORMANCE"
     assert policy.max_workers > 4
     assert policy.max_backtest_workers > 0
+    assert policy.max_analysis_workers > 0
     assert not policy.defer_heavy_jobs
 
 
@@ -39,6 +41,7 @@ def test_high_load_temporarily_throttles_even_powerful_machine():
     policy = derive_resource_policy(snapshot(cpu=16, total=32768, available=20000, load=96))
     assert policy.profile == "COMPACT"
     assert policy.max_backtest_workers == 0
+    assert policy.max_analysis_workers == 0
     assert "high_cpu_load" in policy.reasons
 
 
@@ -59,6 +62,7 @@ def test_zero_memory_budget_defers_heavy_jobs():
     assert policy.memory_budget_mb == 0
     assert policy.defer_heavy_jobs
     assert policy.max_backtest_workers == 0
+    assert policy.max_analysis_workers == 0
 
 
 def test_manager_refreshes_budget_without_ignoring_total_memory_or_permissions(tmp_path):
@@ -79,6 +83,7 @@ def test_manager_refreshes_budget_without_ignoring_total_memory_or_permissions(t
     assert manager.snapshot is not None
     assert manager.snapshot.memory_available_mb == 1500
     assert second.memory_budget_mb == 988
+    assert second.max_analysis_workers == 0
     status = manager.status()
     assert status["permissions_changed"] is False
     assert status["trading_mode_changed"] is False

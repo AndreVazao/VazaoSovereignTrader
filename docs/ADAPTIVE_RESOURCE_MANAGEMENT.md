@@ -8,8 +8,9 @@ changes or runtime load changes.
 Profiles are computed, not fixed product tiers:
 
 - **COMPACT**: preserve core public market-data collection, observational radar,
-  PAPER bookkeeping, persistence and health telemetry; defer backtests,
-  simulations and parallel analysis when headroom is constrained.
+  PAPER bookkeeping, persistence and health telemetry. Set backtest,
+  simulation and analysis worker budgets to zero; defer optional historical
+  studies and other heavy work until the host has sufficient headroom.
 - **BALANCED**: permit modest bounded analysis and one backtest/simulation worker.
 - **PERFORMANCE**: scale research concurrency on machines with substantial
   CPU and memory headroom.
