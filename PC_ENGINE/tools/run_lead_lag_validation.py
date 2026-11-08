@@ -15,14 +15,15 @@ def main() -> None:
     parser.add_argument("--min-out", type=int, default=30)
     parser.add_argument("--cost-bps", type=float, default=28.0)
     args = parser.parse_args()
-    validator = LeadLagValidationEngine(
-        args.data_dir,
-        min_in_samples=args.min_in,
-        min_out_samples=args.min_out,
-        cost_bps=args.cost_bps,
-    )
     try:
-        rows = run_adaptive_analysis(lambda: validator.validate(args.horizon_ms))
+        rows = run_adaptive_analysis(
+            lambda: LeadLagValidationEngine(
+                args.data_dir,
+                min_in_samples=args.min_in,
+                min_out_samples=args.min_out,
+                cost_bps=args.cost_bps,
+            ).validate(args.horizon_ms)
+        )
     except AdaptiveJobDeferred as exc:
         raise SystemExit(f"Lead/lag validation deferred safely: {exc}") from exc
     print(f"Validated relationships: {len(rows)} | stable: {sum(row.stable for row in rows)}")
