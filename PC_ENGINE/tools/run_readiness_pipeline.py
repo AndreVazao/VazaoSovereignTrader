@@ -82,13 +82,14 @@ def run_execution_smoke_test() -> dict:
     }
 
 
-def _evaluate_readiness_analysis(data_root: Path, states: list[dict]):
-    """Compute the optional, CPU-intensive PAPER evidence analysis as one budgeted job."""
+def _evaluate_readiness_analysis(data_root: Path):
+    """Load and compute optional PAPER evidence only after analysis budget admission."""
+    states = _read_jsonl(data_root / "market_states.jsonl")
     outcome_engine = StateOutcomeEngine()
     outcomes = outcome_engine.evaluate(states)
     walk = WalkForwardEvaluator(data_dir=data_root).evaluate()
     regime = RegimeAwareValidator(data_dir=data_root).evaluate()
-    return outcome_engine, outcomes, walk, regime
+    return states, outcome_engine, outcomes, walk, regime
 
 
 def run(data_dir: str | Path | None = None) -> dict:
@@ -97,10 +98,9 @@ def run(data_dir: str | Path | None = None) -> dict:
     data_root.mkdir(parents=True, exist_ok=True)
     validation_dir.mkdir(parents=True, exist_ok=True)
 
-    states = _read_jsonl(data_root / "market_states.jsonl")
     try:
-        outcome_engine, outcomes, walk, regime = run_adaptive_analysis(
-            lambda: _evaluate_readiness_analysis(data_root, states)
+        states, outcome_engine, outcomes, walk, regime = run_adaptive_analysis(
+            lambda: _evaluate_readiness_analysis(data_root)
         )
     except AdaptiveJobDeferred:
         # Do not write partial/stale readiness artifacts when analysis is deferred.
