@@ -12,7 +12,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 from PC_ENGINE.learning.shared_memory import (
     VALID_STATUSES,
@@ -250,7 +250,7 @@ class SQLiteLearningMemory:
         *,
         status: str | None = None,
         batch_size: int = 128,
-    ):
+    ) -> Iterator[LearningRecord]:
         """Yield records in bounded keyset pages instead of materializing the table.
 
         Pages are read independently, so this is a weakly consistent traversal:
