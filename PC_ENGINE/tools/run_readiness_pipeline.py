@@ -10,6 +10,8 @@ from PC_ENGINE.core.exchange_rules import ExchangeRulesEngine
 from PC_ENGINE.core.walk_forward import WalkForwardEvaluator
 from PC_ENGINE.core.regime_validation import RegimeAwareValidator
 from PC_ENGINE.radar.state_outcomes import StateOutcomeEngine
+from PC_ENGINE.core.adaptive_job_gate import AdaptiveJobDeferred
+from PC_ENGINE.core.adaptive_job_runner import run_adaptive_analysis
 
 DATA_DIR = Path("PC_ENGINE/data/radar")
 VALIDATION_DIR = DATA_DIR / "validation"
@@ -46,9 +48,6 @@ def run_execution_smoke_test() -> dict:
     manager = OrderManager(rules, broker)
     checks = {"paper_fill": False, "duplicate_block": False, "invalid_order_block": False}
 
-    # The rules engine needs exchange metadata, so this test intentionally
-    # validates the broker itself plus duplicate/invalid protections through
-    # small fake exchange metadata objects supplied by the rules engine.
     class FakeExchange:
         name = "paper-smoke"
 
@@ -59,8 +58,6 @@ def run_execution_smoke_test() -> dict:
     except Exception:
         checks["paper_fill"] = False
 
-    # Duplicate protection is deterministic at OrderManager level even when
-    # an exchange rejects metadata; the call must never become a real order.
     try:
         manager.last_client_order["paper-smoke:BTC/USDT:buy:0.01:100.0"] = time.monotonic()
         blocked = manager.buy(exchange, "BTC/USDT", 0.01, 100.0, paper=True)
@@ -85,18 +82,31 @@ def run_execution_smoke_test() -> dict:
     }
 
 
+def _evaluate_readiness_analysis(data_root: Path):
+    """Load and compute optional PAPER evidence only after analysis budget admission."""
+    states = _read_jsonl(data_root / "market_states.jsonl")
+    outcome_engine = StateOutcomeEngine()
+    outcomes = outcome_engine.evaluate(states)
+    walk = WalkForwardEvaluator(data_dir=data_root).evaluate()
+    regime = RegimeAwareValidator(data_dir=data_root).evaluate()
+    return states, outcome_engine, outcomes, walk, regime
+
+
 def run(data_dir: str | Path | None = None) -> dict:
     data_root = Path(data_dir) if data_dir is not None else DATA_DIR
     validation_dir = data_root / "validation"
     data_root.mkdir(parents=True, exist_ok=True)
     validation_dir.mkdir(parents=True, exist_ok=True)
 
-    states = _read_jsonl(data_root / "market_states.jsonl")
-    outcome_engine = StateOutcomeEngine()
-    outcomes = outcome_engine.evaluate(states)
-    outcome_engine.save(outcomes, str(data_root / "state_outcomes.jsonl"))
+    try:
+        states, outcome_engine, outcomes, walk, regime = run_adaptive_analysis(
+            lambda: _evaluate_readiness_analysis(data_root)
+        )
+    except AdaptiveJobDeferred:
+        # Do not write partial/stale readiness artifacts when analysis is deferred.
+        raise
 
-    walk = WalkForwardEvaluator(data_dir=data_root).evaluate()
+    outcome_engine.save(outcomes, str(data_root / "state_outcomes.jsonl"))
     walk_results = walk.get("results", [])
     walk_passed = _all_validation_rows_passed(walk_results)
     _write_json(validation_dir / "walk_forward.json", {
@@ -108,7 +118,6 @@ def run(data_dir: str | Path | None = None) -> dict:
         "results": walk_results,
     })
 
-    regime = RegimeAwareValidator(data_dir=data_root).evaluate()
     regime_results = regime.get("results", [])
     regime_passed = _all_validation_rows_passed(regime_results)
     _write_json(validation_dir / "regime_validation.json", {
@@ -137,4 +146,8 @@ def run(data_dir: str | Path | None = None) -> dict:
 
 
 if __name__ == "__main__":
-    print(json.dumps(run(), indent=2, sort_keys=True))
+    try:
+        report = run()
+    except AdaptiveJobDeferred as exc:
+        raise SystemExit(f"Readiness analysis deferred safely: {exc}") from exc
+    print(json.dumps(report, indent=2, sort_keys=True))

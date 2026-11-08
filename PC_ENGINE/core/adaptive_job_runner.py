@@ -30,11 +30,23 @@ def configured_adaptive_job_gate() -> AdaptiveJobGate | None:
         ) from exc
 
 
-def run_adaptive_simulation(job: Callable[[], T]) -> T:
+def _run_with_budget(kind: str, job: Callable[[], T], label: str) -> T:
     gate = configured_adaptive_job_gate()
     if gate is None:
         return job()
-    with gate.slot("simulation") as admitted:
+    with gate.slot(kind) as admitted:
         if not admitted:
-            raise AdaptiveJobDeferred("simulation deferred by adaptive resource policy")
+            raise AdaptiveJobDeferred(
+                f"{label} deferred by adaptive resource policy ({kind} budget unavailable)"
+            )
         return job()
+
+
+def run_adaptive_simulation(job: Callable[[], T]) -> T:
+    """Run optional PAPER simulation only when its current compute budget allows."""
+    return _run_with_budget("simulation", job, "PAPER simulation")
+
+
+def run_adaptive_analysis(job: Callable[[], T]) -> T:
+    """Run offline PAPER analysis only when its current compute budget allows."""
+    return _run_with_budget("analysis", job, "PAPER analysis")
