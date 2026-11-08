@@ -13,11 +13,12 @@ def _defer(job):
 
 
 def test_regime_validation_defers_before_evaluation(monkeypatch):
+    constructed = []
     evaluated = []
 
     class Validator:
         def __init__(self, **kwargs):
-            pass
+            constructed.append(True)
 
         def evaluate(self):
             evaluated.append(True)
@@ -30,15 +31,17 @@ def test_regime_validation_defers_before_evaluation(monkeypatch):
     with pytest.raises(SystemExit, match="deferred safely"):
         run_regime_validation.main()
 
+    assert constructed == []
     assert evaluated == []
 
 
 def test_lead_lag_validation_defers_before_evaluation(monkeypatch):
+    constructed = []
     evaluated = []
 
     class Validator:
         def __init__(self, *args, **kwargs):
-            pass
+            constructed.append(True)
 
         def validate(self, horizon_ms):
             evaluated.append(horizon_ms)
@@ -51,15 +54,33 @@ def test_lead_lag_validation_defers_before_evaluation(monkeypatch):
     with pytest.raises(SystemExit, match="deferred safely"):
         run_lead_lag_validation.main()
 
+    assert constructed == []
     assert evaluated == []
 
 
-def test_readiness_pipeline_does_not_write_partial_artifacts_when_deferred(tmp_path, monkeypatch):
+def test_readiness_pipeline_does_not_read_or_overwrite_artifacts_when_deferred(tmp_path, monkeypatch):
+    validation_dir = tmp_path / "validation"
+    validation_dir.mkdir()
+    state_artifact = tmp_path / "state_outcomes.jsonl"
+    walk_artifact = validation_dir / "walk_forward.json"
+    regime_artifact = validation_dir / "regime_validation.json"
+    state_artifact.write_text("preserve-state\\n", encoding="utf-8")
+    walk_artifact.write_text("preserve-walk\\n", encoding="utf-8")
+    regime_artifact.write_text("preserve-regime\\n", encoding="utf-8")
+
+    read_attempts = []
+
+    def unexpected_read(path):
+        read_attempts.append(path)
+        raise AssertionError("market state history must not be loaded before budget admission")
+
+    monkeypatch.setattr(run_readiness_pipeline, "_read_jsonl", unexpected_read)
     monkeypatch.setattr(run_readiness_pipeline, "run_adaptive_analysis", _defer)
 
     with pytest.raises(AdaptiveJobDeferred):
         run_readiness_pipeline.run(data_dir=tmp_path)
 
-    assert not (tmp_path / "state_outcomes.jsonl").exists()
-    assert not (tmp_path / "validation" / "walk_forward.json").exists()
-    assert not (tmp_path / "validation" / "regime_validation.json").exists()
+    assert read_attempts == []
+    assert state_artifact.read_text(encoding="utf-8") == "preserve-state\\n"
+    assert walk_artifact.read_text(encoding="utf-8") == "preserve-walk\\n"
+    assert regime_artifact.read_text(encoding="utf-8") == "preserve-regime\\n"
