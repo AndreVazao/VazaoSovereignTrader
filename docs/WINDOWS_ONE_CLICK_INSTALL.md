@@ -1,64 +1,85 @@
 # Windows One-Click Installer
 
-The Windows release is distributed as a single Inno Setup installer.
+The Windows package is distributed as a single Inno Setup installer produced by the `Windows EXE` GitHub Actions workflow.
 
 ## What the installer does
 
 1. Installs the frozen PC engine and public market-data collector executables.
 2. Creates the local configuration and runtime directories.
-3. Creates persistent PAPER-only operator exchange folders:
+3. Creates persistent operator exchange folders:
    - `data/operator_exchange/INBOX` — files sent from the mobile cockpit/operator to the PC.
    - `data/operator_exchange/OUTBOX` — reports and artefacts prepared by the PC for download.
-4. Registers two Windows logon tasks:
-   - `VazaoSovereignTrader`
-   - `VazaoSovereignTrader-MarketData`
-5. Starts the PC engine after installation.
-6. Keeps credentials outside the installer and outside the repository.
+4. Creates desktop and Start Menu shortcuts.
+5. Keeps the existing local configuration when upgrading an installation.
 
-The installer is intentionally user-local and does not require administrator elevation.
+The installer is user-local and does not require administrator elevation.
 
-## Runtime location
+## What the installer deliberately does not do
 
-Default install root:
+- It does not start the engine after installation.
+- It does not start the Market Data collector.
+- It does not register Windows scheduled tasks.
+- It does not enable unattended startup or restart policies.
 
-`%LOCALAPPDATA%\VazaoSovereignTrader`
+This manual-first behavior is intentional. The operator must inspect the configuration, validate the local installation and health endpoint, and explicitly start each service. The installer must never begin unattended activity before that validation.
 
-Operator exchange:
+## Runtime locations
 
-`%LOCALAPPDATA%\VazaoSovereignTrader\data\operator_exchange\`
+Application install root:
 
-The API exposes the same exchange through authenticated endpoints so the Android cockpit can list, upload to INBOX, and download files from OUTBOX without exposing the entire filesystem.
+`%LOCALAPPDATA%\\VazaoSovereignTrader`
 
-## Safety
+Local configuration:
 
-The packaged runtime remains PAPER/read-only for market-data collection. The installer does not create exchange credentials, does not submit orders, and does not enable a live execution path.
+`%LOCALAPPDATA%\\VazaoSovereignTrader\\config\\config.local.json`
 
-## Updating
+Default radar data directory:
 
-A later installer can be installed over the same location. Runtime data and operator exchange files remain in place. Configuration is created from `config.example.json` only when `config.local.json` does not already exist.
+`%LOCALAPPDATA%\\VazaoSovereignTrader\\data\\radar`
 
-## First launch and public-data collection
+The durable learning vault is stored separately from the application binaries. The Windows installer lifecycle test verifies that a vault marker under `%LOCALAPPDATA%\\VazaoSovereignTraderData\\vault` retains the same SHA-256 across installation, in-place upgrade and uninstall.
 
-On the final setup page, leave **“Iniciar recolha de dados de mercado (PAPER) agora”** selected to start the scheduled public-data collector immediately. The installer also registers the collector to start at the next Windows logon. The collector uses public market endpoints; exchange API keys are not required for this phase.
+## Safety and first validation
 
-Default data directory:
+The current installation and validation phase is PAPER-only:
 
-`%LOCALAPPDATA%\VazaoSovereignTrader\data\radar`
+- Keep `mode=PAPER`.
+- Keep `autonomous_execution.allow_real=false` and `autonomous_execution.auto_promote_real=false`.
+- Public market-data collection does not require exchange API keys.
+- Do not add private exchange credentials or trading permissions for initial installation or PAPER validation.
+- `VST_LOCAL_TOKEN` is the local API control token; it is not an exchange credential.
 
-Useful local health and learning artefacts include:
+Before starting the engine, inspect `config\\config.local.json`. Set `VST_LOCAL_TOKEN` as a Windows user environment variable before using authenticated API operations. The unauthenticated `GET /health` endpoint can be used for the basic health check.
 
-- `market_data_health.json` — collector state and recent exchange connection health.
-- `observations.jsonl` — market observations.
-- `lead_lag_learning.jsonl` — PAPER analysis of cross-exchange timing relationships.
-- `hot_path_outcomes.jsonl` — PAPER outcomes used for calibration.
+Launch the engine manually using the desktop/Start Menu shortcut, then verify:
 
-Allow the collector to run for a while before interpreting learning outputs; early samples are not evidence of a profitable or executable edge. The collector is observational/PAPER-only and does not submit orders.
+`http://127.0.0.1:8765/health`
 
-To inspect the scheduled tasks in PowerShell:
+Authenticated status and control endpoints require the local token.
+
+## Bounded public collector validation
+
+From PowerShell:
 
 ```powershell
-Get-ScheduledTask -TaskName "VazaoSovereignTrader","VazaoSovereignTrader-MarketData" |
-  Select-Object TaskName, State
+Set-Location "$env:LOCALAPPDATA\\VazaoSovereignTrader"
+.\\VazaoSovereignTrader-MarketData.exe --config ".\\config\\config.local.json" --data-dir ".\\data\\radar" --run-seconds 120
 ```
 
-If the collector does not start, inspect Task Scheduler history and the files under the radar data directory. Do not expose the PC API with a router port-forward.
+The bounded run exits through the collector's normal cleanup path and writes a final STOPPED health state. Inspect:
+
+`data\\radar\\market_data_health.json`
+
+After the bounded test succeeds, the collector can be started manually without `--run-seconds` for continuous observation. Do not configure unattended startup during the initial validation.
+
+## Source-checkout autostart is a separate opt-in
+
+`scripts/install_windows_autostart.ps1` applies only to a source checkout with its Python virtual environment and local configuration. It creates two Windows startup tasks. Run it only after successful local validation and an explicit operator decision. It is not included in or invoked by the packaged installer.
+
+## Updating and uninstalling
+
+A newer installer can be installed over the same application location. Existing `config.local.json` and user data are preserved. Uninstall removes application binaries and cleans up legacy VST scheduled tasks left by older installer versions; it does not delete the separate learning vault.
+
+The CI lifecycle test performs a silent v1 install, silent in-place v2 upgrade, engine launch, HTTP health check, silent uninstall and SHA-256 verification of the vault marker. This is CI evidence; it does not replace validation on the target PC.
+
+Do not expose the PC API with a router port-forward. Use an authenticated private network path when remote access is introduced and validated.

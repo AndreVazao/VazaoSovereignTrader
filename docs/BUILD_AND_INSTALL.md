@@ -2,125 +2,72 @@
 
 ## PC Windows
 
-O workflow Windows EXE pode ser executado manualmente em GitHub Actions ou por uma tag pc-vX.Y.Z.
+O workflow `Windows EXE` pode ser executado manualmente em GitHub Actions ou por uma tag `pc-vX.Y.Z`. Produz um ZIP portátil e um instalador Inno Setup. Os artefactos CI não equivalem, por si só, a uma release formal nem a uma instalação validada no PC de destino.
 
-Artefacto: VazaoSovereignTrader-Windows.zip.
+### Instalação a partir do código-fonte
 
-Para uma instalação a partir do código-fonte, usar:
+Executar na raiz do repositório:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\setup_windows.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\configure_windows_secrets.ps1
+```
 
-Depois:
+O script de configuração recolhe apenas `VST_LOCAL_TOKEN`, usado para autenticar a API local. Não recolhe nem armazena chaves de exchanges. Fechar e reabrir o terminal para carregar a variável de ambiente.
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
-    powershell -ExecutionPolicy Bypass -File .\scripts\verify_pc_install.ps1
-    powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_autostart.ps1
+Depois executar:
 
-O runtime fica preparado em PAPER, com recolha pública de market data e reinício automático no arranque do Windows. A recolha WebSocket não requer API keys.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\verify_pc_install.ps1
+powershell -ExecutionPolicy Bypass -File .\\scripts\\verify_public_market_data.ps1
+```
+
+A verificação leve compila código Python do projeto, valida dependências, Playwright e invariantes PAPER. Não executa a suíte Python completa por defeito. A verificação de market data usa endpoints públicos/read-only e não necessita de API keys.
+
+Iniciar o engine manualmente depois das verificações:
+
+```powershell
+.\\scripts\\windows_run_pc_engine.bat
+```
 
 O dashboard fica no próprio PC em:
 
-    http://127.0.0.1:8765/dashboard
+`http://127.0.0.1:8765/dashboard`
 
-### O que começa a recolher dados
+O instalador empacotado também é manual-first: não inicia engine/collector, não cria tarefas agendadas e não ativa autostart. O script `scripts/install_windows_autostart.ps1` é um opt-in separado para instalações a partir do código-fonte, apenas depois de validação física e decisão explícita. Não o executar durante a primeira validação.
 
-O engine PAPER já possui um PaperMarketCollector integrado para OHLCV, estados de mercado, confluence e outcomes. A tarefa separada VazaoSovereignTrader-MarketData acrescenta o tape WebSocket de trades públicos de Binance, Coinbase e OKX, incluindo candidatos de lead/lag e medições de latência observacional.
+### Collector público
 
-Isto permite ao trader começar a acumular evidência sem ativar contas privadas nem execução REAL.
+Para validar o collector de forma limitada e permitir o encerramento limpo:
+
+```powershell
+.\\PC_ENGINE\\.venv\\Scripts\\python.exe .\\PC_ENGINE\\tools\\run_market_data_collector.py --run-seconds 120
+```
+
+Depois de confirmar o estado final STOPPED em `PC_ENGINE/data/radar/market_data_health.json`, pode ser iniciado manualmente em modo contínuo omitindo `--run-seconds`. A recolha usa dados públicos e permanece observacional/PAPER.
 
 ## Android
 
-O workflow Android APK pode ser executado manualmente ou por uma tag mobile-vX.Y.Z. O APK é publicado como artefacto.
+O workflow Android APK pode ser executado manualmente ou por uma tag `mobile-vX.Y.Z`. O APK é publicado como artefacto.
 
-O Android liga ao PC através do IP Tailscale do PC na rede privada. Não expor a porta do Trader diretamente à Internet.
+O Android liga ao PC através de uma rota privada autenticada, preferencialmente Tailscale. Não expor a porta do Trader diretamente à Internet.
 
 ## Operação fora de casa
 
-PC ligado e sem suspensão. Tailscale ligado no PC e no telefone. O APK usa o endpoint privado do PC.
+O PC deve permanecer ligado e sem suspensão quando for necessário operar continuamente. Tailscale no PC e no telefone é a rota privada prevista; a ligação remota ainda deve ser validada de ponta a ponta. O telefone é um cockpit de comando e não guarda chaves de exchange.
 
-Fluxo:
+## Regras de operação atuais
 
-    telefone -> Tailscale -> API do PC -> engine.
-
-O telefone não guarda chaves de exchange nem executa trades; é cockpit de comando.
-
-## Regras de operação
-
-PAPER primeiro. REAL só depois de validação estatística, replay/PAPER e revisão do Risk Engine.
+O âmbito desta fase é exclusivamente PAPER e recolha pública/read-only. Não configurar chaves privadas de exchange, não ativar REAL/LIVE e não executar operações financeiras. Os requisitos de readiness REAL documentados noutros capítulos são referências arquiteturais futuras, não instruções para a instalação ou validação atuais.
 
 ## Ponte de intervenção humana
 
-O PC e o telefone são independentes. Se o PC encontrar um login, 2FA/OTP, CAPTCHA ou outra barreira humana, cria um pedido persistente no Human Interaction Bridge. Quando o telefone estiver disponível através da Tailscale, mostra o pedido e envia a intervenção de volta ao PC.
+O PC e o telefone são independentes. Se o PC encontrar um login, 2FA/OTP, CAPTCHA ou outra barreira humana, cria um pedido persistente no Human Interaction Bridge. A intervenção é humana e normal; não há bypass de CAPTCHA, 2FA ou anti-bot.
 
-A fila de pedidos é persistente, mas dados sensíveis não são: passwords, OTPs e outros segredos enviados pelo telefone ficam apenas em RAM no processo do PC até serem consumidos. O browser mantém a sessão local no PC. CAPTCHA/2FA são sempre intervenção humana normal, sem bypass.
+## Estudos PAPER
 
+O harness local pode produzir outcomes líquidos de custos, separação cronológica train/test, walk-forward, análise por regime e Monte Carlo. Nenhuma etapa envia ordens, altera risco ou promove REAL. Os relatórios são evidência de investigação, não prova de rentabilidade nem autorização para negociar.
 
-## Estudo estatístico PAPER
+## Diagnóstico
 
-O nó local pode executar `PC_ENGINE/tools/run_paper_study.py` sobre `PC_ENGINE/data/radar/market_states.jsonl`. O harness é observacional e produz `PC_ENGINE/data/radar/paper_study_report.json` com:
-- outcomes líquidos de custos;
-- separação cronológica train/test;
-- walk-forward por folds;
-- análise por regime;
-- Monte Carlo bootstrap com seed determinística;
-- comparação configurável entre todos os sinais e sinais de maior confiança/confluência.
-
-Nenhuma etapa do estudo envia ordens, altera risco ou promove REAL. O objetivo é transformar a acumulação contínua de dados em evidência estatística antes de qualquer decisão de execução.
-
-
-## Validação temporal do WebSocket
-
-Antes de interpretar lead/lag como evidência económica, o nó pode executar `PC_ENGINE/tools/validate_websocket_timing.py`. A validação verifica timestamps de exchange/local, latência de receção, duplicados, eventos fora de ordem e consistência entre `exchange_lag_ms` e `receive_lag_ms`.
-
-O relatório `PC_ENGINE/data/radar/websocket_timing_validation.json` só marca `eligible_for_economic_interpretation` quando os gates temporais configurados passam. Um resultado bloqueado não é transformado em sinal de trading.
-
-
-## Estudos PAPER contínuos
-
-O Market Data Collector passou a executar automaticamente, por defeito a cada 15 minutos, o estudo estatístico local e a validação temporal do WebSocket. Os relatórios ficam em `PC_ENGINE/data/radar/paper_study_report.json` e `PC_ENGINE/data/radar/websocket_timing_validation.json`.
-
-A periodicidade, custos, horizonte, número de folds, Monte Carlo e thresholds temporais são configuráveis em `paper_study` no `config.local.json`. O ciclo continua estritamente PAPER/observacional e falha fechado: relatórios nunca alteram risco nem autorizam REAL.
-
-
-## Gate temporal para REAL
-
-A readiness de REAL agora exige, por defeito, um relatório `websocket_timing_validation.json` **fresco** e com `eligible_for_economic_interpretation=true`. Se o relatório estiver ausente, expirado ou bloqueado, a readiness permanece `LOCKED`.
-
-Isto não ativa REAL nem substitui preflight, reconciliação, Risk Engine ou RealModeGuard; acrescenta apenas uma proteção adicional contra interpretar lead/lag temporalmente inválido como evidência económica.
-
-
-## Estado da investigação no cockpit
-
-O endpoint autenticado `/research/status` expõe, em modo somente leitura, o estado dos relatórios PAPER contínuos (`paper_study_report.json` e `websocket_timing_validation.json`), idade dos artefactos, intervalo configurado e conteúdo estatístico disponível. O endpoint nunca envia ordens, altera risco ou promove REAL.
-
-
-## Relatório de saúde da instalação Windows
-
-`verify_pc_install.ps1` passa a gerar `PC_ENGINE/data/logs/installation_health.json` depois de concluir as verificações. O relatório regista versão do schema, timestamp UTC, runtime Python, configuração PAPER, dependências, Playwright, resultado da suite Python, presença das duas Scheduled Tasks e se o token local está disponível na sessão.
-
-A ausência das Scheduled Tasks é reportada como estado, não como erro, porque o script de verificação pode ser executado antes da instalação do autostart. O relatório é local e não contém tokens ou credenciais.
-
-
-## Cockpit — investigação PAPER
-
-O painel local inclui agora um bloco de investigação contínua com amostras, média líquida em bps, volume do conjunto OOS e estado da validação temporal WebSocket. O resumo detalhado mostra walk-forward, regimes e Monte Carlo. Tudo é somente leitura e não controla execução.
-
-
-## Diagnóstico operacional
-
-O cockpit autenticado inclui **Diagnóstico operacional**, consolidando em modo PAPER:
-- estado do motor, watchdog, preflight e reconciliação;
-- estado e idade do Market Data Collector;
-- eventos por venue e último evento por venue/símbolo;
-- reconnect/error counters;
-- tamanho e crescimento dos dados locais;
-- exportação do snapshot para `vazao-operational-diagnostics.json`.
-
-Endpoints autenticados:
-- `GET /diagnostics` — requer `read_private_state`.
-- `GET /diagnostics/export` — requer `read_private_state`.
-
-O diagnóstico é observacional: não envia ordens, não ativa REAL e não depende de cloud.
-
-
-The current WebSocket collector intentionally records `local_receive_latency_ms=null` until a validated clock-offset model exists. The validator reports unknown receive latency separately from malformed source timestamps and keeps economic interpretation blocked while the required latency evidence is unavailable. It must not infer latency from `local_ts_ms - exchange_ts_ms`, because those timestamps belong to different clock domains.
+O cockpit autenticado pode expor diagnósticos observacionais, incluindo estado do engine, watchdog, preflight, reconciliação, idade do collector, eventos por venue, contadores de reconnect/erro e crescimento de dados. O diagnóstico não envia ordens nem depende da cloud.

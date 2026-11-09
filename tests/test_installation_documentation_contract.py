@@ -1,0 +1,42 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_packaged_installer_documentation_matches_manual_first_installer() -> None:
+    installer = (ROOT / "installer" / "VazaoSovereignTrader.iss").read_text(encoding="utf-8")
+    guide = (ROOT / "docs" / "WINDOWS_ONE_CLICK_INSTALL.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "[Run]" not in installer
+    assert "/Create" not in installer
+    assert "does not start the engine" in guide
+    assert "does not register Windows scheduled tasks" in guide
+    assert "não inicia automaticamente" in readme.lower()
+
+
+def test_first_install_guides_do_not_request_exchange_trading_credentials() -> None:
+    paths = (
+        "README.md",
+        "docs/QUICKSTART_WINDOWS.md",
+        "docs/PC_PRODUCTION_CHECKLIST.md",
+        "docs/PC_INSTALL_AND_DATA_COLLECTION.md",
+    )
+    for path in paths:
+        content = (ROOT / path).read_text(encoding="utf-8").lower()
+        assert "spot trading: ligado" not in content
+        assert "spot trade apenas" not in content
+
+    checklist = (ROOT / "docs" / "PC_PRODUCTION_CHECKLIST.md").read_text(encoding="utf-8")
+    assert "não configurar api keys privadas de exchanges" in checklist.lower()
+
+
+def test_windows_secrets_helper_only_configures_local_api_token() -> None:
+    script = (ROOT / "scripts" / "configure_windows_secrets.ps1").read_text(encoding="utf-8")
+
+    assert "VST_LOCAL_TOKEN" in script
+    assert "-AsSecureString" in script
+    assert "BINANCE_KEY" not in script
+    assert "BINANCE_PRIVATE" not in script
+    assert "API credentials" in script

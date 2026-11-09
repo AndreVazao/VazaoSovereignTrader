@@ -1,67 +1,60 @@
-# Quickstart Windows 10
+# Quickstart Windows 10 — PAPER
 
-## 1. Instalar
+## 1. Instalar dependências
 
-Na raiz da repo, dá duplo clique em:
+Na raiz do repositório, executar:
 
-```text
-scripts/windows_setup.bat
+```powershell
+scripts\\windows_setup.bat
 ```
 
-Isto cria o ambiente Python, instala dependências e cria `PC_ENGINE/config/config.local.json` se ainda não existir.
+Isto cria o ambiente Python, instala as dependências do PC e cria `PC_ENGINE/config/config.local.json` se ainda não existir.
 
-## 2. Arrancar o PC_ENGINE
+## 2. Configurar o token local
 
-Dá duplo clique em:
+Executar:
 
-```text
-scripts/windows_run_pc_engine.bat
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\configure_windows_secrets.ps1
 ```
 
-Depois abre no browser:
+O script pede apenas `VST_LOCAL_TOKEN`, usando entrada segura. Não pede nem guarda chaves de exchange. Fechar esta janela e abrir uma nova PowerShell.
 
-```text
-http://127.0.0.1:8765/dashboard
+## 3. Verificar a instalação
+
+```powershell
+.\\scripts\\verify_pc_install.ps1
+.\\scripts\\verify_public_market_data.ps1
 ```
 
-O painel vai pedir o token local configurado na variável de ambiente `VST_LOCAL_TOKEN`. Se ainda não definiste, usa o valor default apenas para testes locais e altera antes de usar em rede.
+A primeira verificação compila o código do projeto, valida dependências, Playwright e segurança PAPER. Não executa a suíte completa por defeito. A segunda consulta dados públicos/read-only; não precisa de API keys.
 
-## 3. Preflight
+## 4. Iniciar manualmente em PAPER
 
-No dashboard, carrega em:
-
-```text
-PREFLIGHT
+```powershell
+.\\scripts\\windows_run_pc_engine.bat
 ```
 
-O motor verifica exchanges, símbolos, tickers e regras de mercado.
+Depois abrir:
 
-## 4. Iniciar em PAPER
+`http://127.0.0.1:8765/dashboard`
 
-No dashboard:
+Health check básico:
 
-```text
-INICIAR
-```
+`http://127.0.0.1:8765/health`
 
-O modo default é PAPER.
+O estado e os comandos autenticados exigem `VST_LOCAL_TOKEN`.
 
-## 5. Backtest rápido BTC
+## 5. Segurança da fase atual
 
-Dá duplo clique em:
+- Manter `mode=PAPER`.
+- Manter `autonomous_execution.allow_real=false` e `auto_promote_real=false`.
+- Não configurar chaves privadas nem permissões de trading nas exchanges.
+- Não ativar LIVE/REAL nem executar operações financeiras.
+- Não instalar autostart durante a primeira validação.
 
-```text
-scripts/windows_backtest_btc.bat
-```
+O instalador Windows empacotado também não inicia serviços nem cria tarefas agendadas. Qualquer autostart posterior é uma decisão separada, depois de validação local.
 
-Isto usa candles públicos da Binance e imprime um replay simples com P&L, trades, wins/losses, drawdown e profit factor.
+## 6. Backtest local opcional
 
-## 6. Segurança
-
-Antes de REAL:
-
-- rodar PAPER pelo menos 14 dias;
-- confirmar preflight sem erros;
-- validar backtests;
-- usar API com withdraw desligado;
-- não usar futures/leverage na fase inicial.
+O script `scripts/windows_backtest_btc.bat` usa candles públicos e executa um replay local. Continua a ser investigação/PAPER; não envia ordens.
