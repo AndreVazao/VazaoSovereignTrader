@@ -10,7 +10,8 @@ The Windows package is distributed as a single Inno Setup installer produced by 
    - `data/operator_exchange/INBOX` — files sent from the mobile cockpit/operator to the PC.
    - `data/operator_exchange/OUTBOX` — reports and artefacts prepared by the PC for download.
 4. Creates desktop and Start Menu shortcuts.
-5. Keeps the existing local configuration when upgrading an installation.
+5. Keeps the existing local configuration when upgrading.
+6. Installs a Windows PowerShell 5.1-compatible helper to generate the local API token.
 
 The installer is user-local and does not require administrator elevation.
 
@@ -49,9 +50,29 @@ The current installation and validation phase is PAPER-only:
 - Do not add private exchange credentials or trading permissions for initial installation or PAPER validation.
 - `VST_LOCAL_TOKEN` is the local API control token; it is not an exchange credential.
 
-Before starting the engine, inspect `config\config.local.json`. Set `VST_LOCAL_TOKEN` as a Windows user environment variable before using authenticated API operations. The unauthenticated `GET /health` endpoint can be used for the basic health check.
+Before starting the engine, inspect `config\config.local.json`. Generate the local API token with the helper installed by the package:
 
-Launch the engine manually using the desktop/Start Menu shortcut, then verify:
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\VazaoSovereignTrader\scripts\ensure_windows_token.ps1"
+```
+
+The helper creates a cryptographically random token for the current Windows user if one does not already exist, preserves a valid existing token and rejects an existing token shorter than 32 characters. It does not print or log the token. Close PowerShell and open a new window so the user environment variable is loaded.
+
+In the new PowerShell window, the operator can inspect the token locally when needed:
+
+```powershell
+$env:VST_LOCAL_TOKEN
+```
+
+Keep this value private. Do not paste it into GitHub, support messages, screenshots or diagnostic logs.
+
+Start the engine manually from the new PowerShell session so it inherits the configured token:
+
+```powershell
+Start-Process -FilePath "$env:LOCALAPPDATA\VazaoSovereignTrader\VazaoSovereignTrader.exe" -WorkingDirectory "$env:LOCALAPPDATA\VazaoSovereignTrader"
+```
+
+The unauthenticated `GET /health` endpoint can be used for the basic health check:
 
 `http://127.0.0.1:8765/health`
 
