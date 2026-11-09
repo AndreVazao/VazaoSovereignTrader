@@ -47,8 +47,8 @@ Name: "{group}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDi
 Name: "{group}\Pasta de troca - INBOX"; Filename: "{app}\data\operator_exchange\INBOX"
 Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange\OUTBOX"
 
-; Deliberately no [Run] section: installation never starts the engine,
-; launches the collector, or creates unattended scheduled tasks.
+; Installation never starts the engine, launches the collector, or creates
+; unattended scheduled tasks.
 ; Operators may start the backend manually after local validation.
 
 [UninstallRun]
