@@ -27,17 +27,17 @@ This manual-first behavior is intentional. The operator must inspect the configu
 
 Application install root:
 
-`%LOCALAPPDATA%\\VazaoSovereignTrader`
+`%LOCALAPPDATA%\VazaoSovereignTrader`
 
 Local configuration:
 
-`%LOCALAPPDATA%\\VazaoSovereignTrader\\config\\config.local.json`
+`%LOCALAPPDATA%\VazaoSovereignTrader\config\config.local.json`
 
 Default radar data directory:
 
-`%LOCALAPPDATA%\\VazaoSovereignTrader\\data\\radar`
+`%LOCALAPPDATA%\VazaoSovereignTrader\data\radar`
 
-The durable learning vault is stored separately from the application binaries. The Windows installer lifecycle test verifies that a vault marker under `%LOCALAPPDATA%\\VazaoSovereignTraderData\\vault` retains the same SHA-256 across installation, in-place upgrade and uninstall.
+The durable learning vault is stored separately from the application binaries. The Windows installer lifecycle test verifies that a vault marker under `%LOCALAPPDATA%\VazaoSovereignTraderData\vault` retains the same SHA-256 across installation, in-place upgrade and uninstall.
 
 ## Safety and first validation
 
@@ -49,7 +49,7 @@ The current installation and validation phase is PAPER-only:
 - Do not add private exchange credentials or trading permissions for initial installation or PAPER validation.
 - `VST_LOCAL_TOKEN` is the local API control token; it is not an exchange credential.
 
-Before starting the engine, inspect `config\\config.local.json`. Set `VST_LOCAL_TOKEN` as a Windows user environment variable before using authenticated API operations. The unauthenticated `GET /health` endpoint can be used for the basic health check.
+Before starting the engine, inspect `config\config.local.json`. Set `VST_LOCAL_TOKEN` as a Windows user environment variable before using authenticated API operations. The unauthenticated `GET /health` endpoint can be used for the basic health check.
 
 Launch the engine manually using the desktop/Start Menu shortcut, then verify:
 
@@ -62,13 +62,13 @@ Authenticated status and control endpoints require the local token.
 From PowerShell:
 
 ```powershell
-Set-Location "$env:LOCALAPPDATA\\VazaoSovereignTrader"
-.\\VazaoSovereignTrader-MarketData.exe --config ".\\config\\config.local.json" --data-dir ".\\data\\radar" --run-seconds 120
+Set-Location "$env:LOCALAPPDATA\VazaoSovereignTrader"
+.\VazaoSovereignTrader-MarketData.exe --config ".\config\config.local.json" --data-dir ".\data\radar" --run-seconds 120
 ```
 
 The bounded run exits through the collector's normal cleanup path and writes a final STOPPED health state. Inspect:
 
-`data\\radar\\market_data_health.json`
+`data\radar\market_data_health.json`
 
 After the bounded test succeeds, the collector can be started manually without `--run-seconds` for continuous observation. Do not configure unattended startup during the initial validation.
 

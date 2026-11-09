@@ -9,8 +9,8 @@ O workflow `Windows EXE` pode ser executado manualmente em GitHub Actions ou por
 Executar na raiz do repositório:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\setup_windows.ps1
-powershell -ExecutionPolicy Bypass -File .\\scripts\\configure_windows_secrets.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
 ```
 
 O script de configuração recolhe apenas `VST_LOCAL_TOKEN`, usado para autenticar a API local. Não recolhe nem armazena chaves de exchanges. Fechar e reabrir o terminal para carregar a variável de ambiente.
@@ -18,8 +18,8 @@ O script de configuração recolhe apenas `VST_LOCAL_TOKEN`, usado para autentic
 Depois executar:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\verify_pc_install.ps1
-powershell -ExecutionPolicy Bypass -File .\\scripts\\verify_public_market_data.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_pc_install.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_public_market_data.ps1
 ```
 
 A verificação leve compila código Python do projeto, valida dependências, Playwright e invariantes PAPER. Não executa a suíte Python completa por defeito. A verificação de market data usa endpoints públicos/read-only e não necessita de API keys.
@@ -27,7 +27,7 @@ A verificação leve compila código Python do projeto, valida dependências, Pl
 Iniciar o engine manualmente depois das verificações:
 
 ```powershell
-.\\scripts\\windows_run_pc_engine.bat
+.\scripts\windows_run_pc_engine.bat
 ```
 
 O dashboard fica no próprio PC em:
@@ -41,7 +41,7 @@ O instalador empacotado também é manual-first: não inicia engine/collector, n
 Para validar o collector de forma limitada e permitir o encerramento limpo:
 
 ```powershell
-.\\PC_ENGINE\\.venv\\Scripts\\python.exe .\\PC_ENGINE\\tools\\run_market_data_collector.py --run-seconds 120
+.\PC_ENGINE\.venv\Scripts\python.exe .\PC_ENGINE\tools\run_market_data_collector.py --run-seconds 120
 ```
 
 Depois de confirmar o estado final STOPPED em `PC_ENGINE/data/radar/market_data_health.json`, pode ser iniciado manualmente em modo contínuo omitindo `--run-seconds`. A recolha usa dados públicos e permanece observacional/PAPER.

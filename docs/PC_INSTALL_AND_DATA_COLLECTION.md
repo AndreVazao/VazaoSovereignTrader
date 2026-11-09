@@ -11,8 +11,8 @@ Public market-data collection does not require exchange API keys.
 Run from the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\setup_windows.ps1
-powershell -ExecutionPolicy Bypass -File .\\scripts\\configure_windows_secrets.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
 ```
 
 The secrets helper configures only the local API control token `VST_LOCAL_TOKEN`; it does not ask for or store exchange credentials. Close and reopen PowerShell after setting the user environment variable.
@@ -20,8 +20,8 @@ The secrets helper configures only the local API control token `VST_LOCAL_TOKEN`
 Run lightweight verification:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\verify_pc_install.ps1
-powershell -ExecutionPolicy Bypass -File .\\scripts\\verify_public_market_data.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_pc_install.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_public_market_data.ps1
 ```
 
 The installation verifier compiles first-party Python, checks runtime dependencies, Playwright and PAPER safety. It does not run the full Python test suite unless `-RunTests` is explicitly supplied. The public-data check uses read-only endpoints and records per-venue readiness in `market_data_bootstrap.json`.
@@ -29,7 +29,7 @@ The installation verifier compiles first-party Python, checks runtime dependenci
 Start the engine manually after validation:
 
 ```powershell
-.\\scripts\\windows_run_pc_engine.bat
+.\scripts\windows_run_pc_engine.bat
 ```
 
 ## Packaged Windows installer
@@ -41,7 +41,7 @@ The Inno Setup package installs the engine and public collector binaries, config
 For a graceful, time-bounded source-checkout test:
 
 ```powershell
-.\\PC_ENGINE\\.venv\\Scripts\\python.exe .\\PC_ENGINE\\tools\\run_market_data_collector.py --run-seconds 120
+.\PC_ENGINE\.venv\Scripts\python.exe .\PC_ENGINE\tools\run_market_data_collector.py --run-seconds 120
 ```
 
 The collector exits through its normal cleanup path and writes a STOPPED health state. After the bounded test succeeds, it can be started manually in continuous mode by omitting `--run-seconds`.

@@ -5,7 +5,7 @@
 Na raiz do repositório, executar:
 
 ```powershell
-scripts\\windows_setup.bat
+scripts\windows_setup.bat
 ```
 
 Isto cria o ambiente Python, instala as dependências do PC e cria `PC_ENGINE/config/config.local.json` se ainda não existir.
@@ -15,7 +15,7 @@ Isto cria o ambiente Python, instala as dependências do PC e cria `PC_ENGINE/co
 Executar:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\\scripts\\configure_windows_secrets.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
 ```
 
 O script pede apenas `VST_LOCAL_TOKEN`, usando entrada segura. Não pede nem guarda chaves de exchange. Fechar esta janela e abrir uma nova PowerShell.
@@ -23,8 +23,8 @@ O script pede apenas `VST_LOCAL_TOKEN`, usando entrada segura. Não pede nem gua
 ## 3. Verificar a instalação
 
 ```powershell
-.\\scripts\\verify_pc_install.ps1
-.\\scripts\\verify_public_market_data.ps1
+.\scripts\verify_pc_install.ps1
+.\scripts\verify_public_market_data.ps1
 ```
 
 A primeira verificação compila o código do projeto, valida dependências, Playwright e segurança PAPER. Não executa a suíte completa por defeito. A segunda consulta dados públicos/read-only; não precisa de API keys.
@@ -32,7 +32,7 @@ A primeira verificação compila o código do projeto, valida dependências, Pla
 ## 4. Iniciar manualmente em PAPER
 
 ```powershell
-.\\scripts\\windows_run_pc_engine.bat
+.\scripts\windows_run_pc_engine.bat
 ```
 
 Depois abrir:
