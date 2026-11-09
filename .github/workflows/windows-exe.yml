@@ -31,7 +31,8 @@ jobs:
             "scripts/android_phone_mirror.ps1",
             "scripts/vst_local_backend_audit.ps1",
             "scripts/verify_pc_install.ps1",
-            "scripts/verify_public_market_data.ps1"
+            "scripts/verify_public_market_data.ps1",
+            "scripts/configure_windows_secrets.ps1"
           )) {
             $tokens = $null
             $parseErrors = $null
