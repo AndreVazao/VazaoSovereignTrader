@@ -48,6 +48,29 @@ jobs:
               throw ("PowerShell parse errors in ${scriptPath}: " + ($parseErrors | Format-List | Out-String))
             }
           }
+      - name: Validate local token helper on Windows PowerShell 5.1
+        shell: pwsh
+        run: |
+          $windowsPowerShell = Join-Path $env:WINDIR "System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+          if (-not (Test-Path $windowsPowerShell)) { throw "Windows PowerShell 5.1 executable not found." }
+          $previousToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
+          try {
+            [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $null, "User")
+            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "scripts\\ensure_windows_token.ps1" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Windows PowerShell 5.1 token generation failed." }
+            $generatedToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
+            if ([string]::IsNullOrWhiteSpace($generatedToken) -or $generatedToken.Length -lt 32) {
+              throw "Token helper did not persist a sufficiently long token."
+            }
+            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "scripts\\ensure_windows_token.ps1" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Windows PowerShell 5.1 token preservation check failed." }
+            $preservedToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
+            if ($preservedToken -cne $generatedToken) { throw "Token helper replaced an existing valid token." }
+            Write-Host "Windows PowerShell 5.1 token generation and idempotent preservation passed; token value was not logged."
+          }
+          finally {
+            [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $previousToken, "User")
+          }
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -176,6 +199,27 @@ jobs:
           if (-not (Test-Path $engine)) { throw "Upgraded engine EXE missing." }
           if (-not (Test-Path $configPath)) { throw "Upgraded local config missing." }
           if (-not (Test-Path $uninstaller)) { throw "Upgraded uninstaller missing." }
+          $tokenHelper = Join-Path $testDir "scripts\\ensure_windows_token.ps1"
+          if (-not (Test-Path $tokenHelper)) { throw "Packaged Windows PowerShell token helper missing." }
+          $windowsPowerShell = Join-Path $env:WINDIR "System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+          $previousToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
+          try {
+            [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $null, "User")
+            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $tokenHelper | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Packaged token helper failed to generate a token." }
+            $generatedToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
+            if ([string]::IsNullOrWhiteSpace($generatedToken) -or $generatedToken.Length -lt 32) {
+              throw "Packaged token helper did not persist a sufficiently long token."
+            }
+            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $tokenHelper | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Packaged token helper failed its preservation check." }
+            $preservedToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
+            if ($preservedToken -cne $generatedToken) { throw "Packaged token helper replaced an existing valid token." }
+            Write-Host "Installed token helper generation and preservation passed; token value was not logged."
+          }
+          finally {
+            [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $previousToken, "User")
+          }
           if ((Get-FileHash $vaultMarker -Algorithm SHA256).Hash -ne $expectedHash) {
             throw "Learning vault changed during in-place version upgrade."
           }
