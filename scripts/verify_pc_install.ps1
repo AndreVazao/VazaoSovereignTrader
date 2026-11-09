@@ -10,27 +10,15 @@ $engine = Join-Path $repo "PC_ENGINE"
 $python = Join-Path $engine ".venv\Scripts\python.exe"
 $config = Join-Path $engine "config\config.local.json"
 $report = Join-Path $engine "data\logs\installation_health.json"
+$compileHelper = Join-Path $PSScriptRoot "compile_first_party.py"
 
 if (-not (Test-Path $python)) { throw "Virtual environment missing. Run scripts\setup_windows.ps1 first." }
 if (-not (Test-Path $config)) { throw "config.local.json missing. Run scripts\setup_windows.ps1 first." }
+if (-not (Test-Path $compileHelper)) { throw "First-party compile helper is missing: $compileHelper" }
 
-# Compile only first-party Python files. Never recurse into .venv or installed packages.
-$compileScript = @'
-import pathlib
-import py_compile
-import sys
-
-root = pathlib.Path(sys.argv[1])
-excluded = {".venv", "venv", "__pycache__", ".git", "node_modules"}
-files = [
-    path for path in root.rglob("*.py")
-    if not any(part in excluded for part in path.relative_to(root).parts)
-]
-for path in files:
-    py_compile.compile(str(path), doraise=True)
-print(f"Compiled {len(files)} first-party Python files.")
-'@
-& $python -c $compileScript $engine
+# Execute a real helper file instead of passing a multiline Python program
+# through PowerShell's native-command argument parser (which strips quotes).
+& $python $compileHelper $engine
 if ($LASTEXITCODE -ne 0) { throw "First-party Python compile check failed." }
 
 & $python -c "import ccxt, flask, pydantic, requests, websocket, playwright; print('Python runtime dependencies: OK')"
@@ -76,7 +64,7 @@ foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData
 }
 
 $health = [ordered]@{
-    schema_version = 2
+    schema_version = 3
     timestamp_utc = [DateTime]::UtcNow.ToString("o")
     repository = $repo
     python = [ordered]@{"path"=$python; "exists"=(Test-Path $python)}
