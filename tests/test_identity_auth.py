@@ -89,7 +89,6 @@ def test_scope_override_is_enforced():
     assert not principal.has("trade_real")
 
 
-
 def test_empty_scope_list_does_not_grant_real_by_default():
     config = {
         "owner": {"id": "andre"},
@@ -123,3 +122,55 @@ def test_real_scope_requires_explicit_owner_configuration():
     auth = IdentityAuthenticator(config, _env({"ANDRE_TOKEN": "secret"}))
     principal = auth.authenticate("secret")
     assert principal.has("trade_real")
+
+
+def test_local_control_token_works_without_optional_tailscale_identity():
+    config = {
+        "owner": {"id": "andre"},
+        "server": {"local_control_token_env": "VST_LOCAL_TOKEN"},
+        "identity": {
+            "mode": "local",
+            "require_device_identity": False,
+            "trusted_tailscale_ingress": False,
+            "owners": {
+                "andre": {
+                    "user_id": "andre",
+                    "token_env": "ANDRE_TOKEN",
+                    "device_id": "andre-pc-01",
+                    "tailscale_identity": "andre-pc-01",
+                    "scopes": ["read_private_state", "trade_paper"],
+                }
+            },
+        },
+    }
+    auth = IdentityAuthenticator(
+        config,
+        _env({"VST_LOCAL_TOKEN": "local-secret"}),
+        fallback_token_env="VST_LOCAL_TOKEN",
+    )
+
+    principal = auth.authenticate("local-secret")
+
+    assert principal.owner_id == "andre"
+    assert principal.device_id == "andre-pc-01"
+    assert principal.has("read_private_state")
+    assert principal.has("trade_paper")
+    assert not principal.has("trade_real")
+
+
+def test_optional_tailscale_identity_rejects_mismatch_when_supplied():
+    config = {
+        "owner": {"id": "andre"},
+        "identity": {
+            "require_device_identity": False,
+            "owners": {"andre": {"token_env": "ANDRE_TOKEN", "tailscale_identity": "andre-pc-01"}},
+        },
+    }
+    auth = IdentityAuthenticator(config, _env({"ANDRE_TOKEN": "secret"}))
+
+    try:
+        auth.authenticate("secret", tailscale_identity="untrusted-device")
+    except PermissionError as exc:
+        assert "device_identity_mismatch" in str(exc)
+    else:
+        raise AssertionError("a supplied mismatched device identity must be rejected")

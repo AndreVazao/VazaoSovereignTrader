@@ -176,10 +176,14 @@ jobs:
             throw "Learning vault changed during in-place version upgrade."
           }
           foreach ($taskName in @("VazaoSovereignTrader", "VazaoSovereignTrader-MarketData")) {
-            if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
-              throw "Scheduled task missing after upgrade: $taskName"
+            if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+              throw "Installer unexpectedly created an unattended scheduled task: $taskName"
             }
           }
+          $autoStarted = Get-CimInstance Win32_Process | Where-Object {
+            $_.Name -eq "VazaoSovereignTrader.exe" -and $_.ExecutablePath -and $_.ExecutablePath -ieq (Join-Path $testDir "VazaoSovereignTrader.exe")
+          }
+          if ($autoStarted) { throw "Installer unexpectedly launched the engine before operator validation." }
 
           $config = Get-Content $configPath -Raw | ConvertFrom-Json
           $config.mode = "PAPER"
@@ -248,5 +252,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: vazaosovereigntrader-windows-installer
-          path: installer-output
+          path: installer-output/VazaoSovereignTrader-Setup-2026.11.1.exe
           if-no-files-found: error

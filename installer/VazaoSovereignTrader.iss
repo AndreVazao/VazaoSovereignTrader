@@ -21,7 +21,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 Uninstallable=yes
 ArchitecturesInstallIn64BitMode=x64compatible
-CloseApplications=yes
+CloseApplications=no
 RestartApplications=no
 
 [Files]
@@ -47,16 +47,11 @@ Name: "{group}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDi
 Name: "{group}\Pasta de troca - INBOX"; Filename: "{app}\data\operator_exchange\INBOX"
 Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange\OUTBOX"
 
-[Run]
-Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""VazaoSovereignTrader"" /SC ONLOGON /TR ""{app}\{#AppExeName}"" /RL LIMITED /F"; Flags: runhidden
-Filename: "{sys}\schtasks.exe"; Parameters: "/Create /TN ""VazaoSovereignTrader-MarketData"" /SC ONLOGON /TR """"{app}\{#CollectorExeName}"" --config ""{app}\config\config.local.json"" --data-dir ""{app}\data\radar"""" /RL LIMITED /F"; Flags: runhidden
-Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Description: "Iniciar o VazaoSovereignTrader agora"; Flags: nowait postinstall skipifsilent
-Filename: "{sys}\schtasks.exe"; Parameters: "/Run /TN ""VazaoSovereignTrader-MarketData"""; Description: "Iniciar recolha de dados de mercado (PAPER) agora"; Flags: runhidden postinstall skipifsilent
-Filename: "{sys}\explorer.exe"; Parameters: "{app}\data\operator_exchange"; Description: "Abrir pasta de troca (INBOX / OUTBOX)"; Flags: nowait postinstall skipifsilent unchecked
+; Installation never starts the engine, launches the collector, or creates
+; unattended scheduled tasks.
+; Operators may start the backend manually after local validation.
 
 [UninstallRun]
+; Remove only the legacy VST tasks created by older installer versions.
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader-MarketData"" /F"; Flags: runhidden
-
-[UninstallDelete]
-Type: filesandordirs; Name: "{app}\data\browser\profiles"
