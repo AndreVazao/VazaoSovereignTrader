@@ -62,7 +62,7 @@ echo.
 echo Agora podes executar:
 echo   scripts\windows_run_pc_engine.bat
 echo.
-echo Para instalar arranque automatico 24/7:
+echo Arranque automatico 24/7 e OPCIONAL, apenas apos validacao local:
 echo   scripts\install_windows_autostart.ps1
 echo.
 echo O modo inicial e PAPER e a recolha publica nao exige API keys.

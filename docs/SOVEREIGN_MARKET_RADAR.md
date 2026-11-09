@@ -425,7 +425,7 @@ O último comando executa um bootstrap público/read-only contra as exchanges co
 
 O bootstrap não lê API keys, não chama balances, não autentica, não cria/cancela ordens, não altera PAPER/REAL e falha fechado quando uma venue obrigatória ou um símbolo não passa o gate.
 
-Depois da validação, install_windows_autostart.ps1 instala dois processos independentes: o PC Engine, que permanece PAPER por defeito, e o Market Data Collector, que recolhe trades públicos por WebSocket e reconecta após falhas.
+Depois da validação local e apenas se o operador decidir explicitamente manter recolha contínua após reinícios, `install_windows_autostart.ps1` pode instalar dois processos independentes: o PC Engine, que permanece PAPER por defeito, e o Market Data Collector, que recolhe trades públicos por WebSocket e reconecta após falhas. É um opt-in para instalações a partir do código-fonte; não faz parte do instalador empacotado. Na primeira validação, iniciar e parar os processos manualmente.
 
 A recolha contínua grava websocket_events.jsonl, websocket_lead_lag.jsonl, websocket_latency_edges.jsonl e os artefactos PAPER de aprendizagem. O serviço escreve ainda market_data_health.json, permitindo distinguir RUNNING, STOPPED e degradações sem inferir saúde a partir de configuração.
 

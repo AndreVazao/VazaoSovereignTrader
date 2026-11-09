@@ -30,6 +30,9 @@ jobs:
             "scripts/android_emulator_headless.ps1",
             "scripts/android_phone_mirror.ps1",
             "scripts/vst_local_backend_audit.ps1",
+            "scripts/setup_windows.ps1",
+            "scripts/ensure_windows_token.ps1",
+            "scripts/install_windows_autostart.ps1",
             "scripts/verify_pc_install.ps1",
             "scripts/verify_public_market_data.ps1",
             "scripts/configure_windows_secrets.ps1"
