@@ -973,6 +973,52 @@ class SovereignEngine:
             if worker is not None and worker.is_alive()
         ]
 
+    def refresh_shutdown_state(self) -> dict:
+        """Settle STOPPING to OFF once every tracked producer has actually exited.
+
+        stop() has a bounded join budget. A producer can finish just after that
+        budget expires, so later status reads must reconcile the state rather
+        than leaving the engine permanently reported as STOPPING.
+        """
+        status = str(getattr(self.state, "status", "OFF")).upper()
+        if status != "STOPPING":
+            return {"status": status, "active_workers": self._active_worker_names()}
+
+        active = self._active_worker_names()
+        checked_at = time.time()
+        with self.lock:
+            if str(getattr(self.state, "status", "OFF")).upper() != "STOPPING":
+                return {
+                    "status": str(getattr(self.state, "status", "OFF")).upper(),
+                    "active_workers": self._active_worker_names(),
+                }
+            shutdown = dict(self.state.operational.get("shutdown") or {})
+            shutdown.update({"active_workers": active, "checked_at": checked_at})
+            if active:
+                shutdown["state"] = "STOPPING"
+                self.state.operational["shutdown"] = shutdown
+                return {"status": "STOPPING", "active_workers": active}
+            self.state.status = "OFF"
+            shutdown.update({
+                "state": "STOPPED",
+                "active_workers": [],
+                "completed_at": checked_at,
+            })
+            self.state.operational["shutdown"] = shutdown
+
+        self._refresh_health_isolation()
+        self._publish_observer_snapshot()
+        try:
+            self._persist_recovery()
+        except Exception as exc:
+            with self.lock:
+                shutdown = dict(self.state.operational.get("shutdown") or {})
+                shutdown["persistence_error"] = type(exc).__name__
+                self.state.operational["shutdown"] = shutdown
+            self.log("ENGINE_SHUTDOWN_PERSIST_FAILED", {"error": type(exc).__name__})
+        self.log("ENGINE_SHUTDOWN_COMPLETED", {"active_workers": []})
+        return {"status": "OFF", "active_workers": []}
+
     def stop(self) -> None:
         """Request shutdown and report STOPPING until every producer has exited."""
         self.stop_event.set()
