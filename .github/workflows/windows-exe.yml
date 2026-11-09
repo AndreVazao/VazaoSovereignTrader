@@ -72,6 +72,7 @@ jobs:
             if ([Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User") -cne "short") {
               throw "Token helper unexpectedly changed a rejected short token."
             }
+            $global:LASTEXITCODE = 0
             Write-Host "Windows PowerShell 5.1 token generation, preservation and weak-token rejection passed; token value was not logged."
           }
           finally {
