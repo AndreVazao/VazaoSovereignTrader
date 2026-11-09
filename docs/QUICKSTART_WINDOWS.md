@@ -15,10 +15,10 @@ Isto cria o ambiente Python, instala as dependências do PC e cria `PC_ENGINE/co
 Executar:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\ensure_windows_token.ps1
 ```
 
-O script pede apenas `VST_LOCAL_TOKEN`, usando entrada segura. Não pede nem guarda chaves de exchange. Fechar esta janela e abrir uma nova PowerShell.
+O script gera um `VST_LOCAL_TOKEN` aleatório se ainda não existir. Se precisares de definir um valor próprio, executa opcionalmente `scripts/configure_windows_secrets.ps1`, que usa entrada segura e não pede chaves de exchange. Fechar esta janela e abrir uma nova PowerShell.
 
 ## 3. Verificar a instalação
 

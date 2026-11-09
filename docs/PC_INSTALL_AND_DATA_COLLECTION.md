@@ -12,10 +12,10 @@ Run from the repository root:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\ensure_windows_token.ps1
 ```
 
-The secrets helper configures only the local API control token `VST_LOCAL_TOKEN`; it does not ask for or store exchange credentials. Close and reopen PowerShell after setting the user environment variable.
+`ensure_windows_token.ps1` generates a random local API control token `VST_LOCAL_TOKEN` when one is not already set. Optionally, `configure_windows_secrets.ps1` lets the operator set a chosen local token using secure input. Neither script asks for or stores exchange credentials. Close and reopen PowerShell after setting the user environment variable.
 
 Run lightweight verification:
 

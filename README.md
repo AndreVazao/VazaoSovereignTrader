@@ -161,7 +161,8 @@ No Windows, a sequência operacional é:
 
 ```powershell
 scripts\setup_windows.ps1
-scripts\configure_windows_secrets.ps1
+scripts\ensure_windows_token.ps1
+# Opcional: configure_windows_secrets.ps1 permite definir um token próprio.
 # Fechar e reabrir PowerShell para carregar VST_LOCAL_TOKEN.
 scripts\verify_pc_install.ps1
 scripts\verify_public_market_data.ps1
@@ -256,7 +257,8 @@ Para preparar um PC Windows a partir do código-fonte, abre PowerShell na raiz d
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup_windows.ps1
-.\scripts\configure_windows_secrets.ps1
+.\scripts\ensure_windows_token.ps1
+# Opcional: .\scripts\configure_windows_secrets.ps1 para definir um token próprio.
 ```
 
 Fecha essa janela de PowerShell e abre uma nova para carregar as variáveis de ambiente guardadas. Depois executa:
@@ -267,7 +269,7 @@ Fecha essa janela de PowerShell e abre uma nova para carregar as variáveis de a
 .\scripts\windows_run_pc_engine.bat
 ```
 
-A verificação de dados públicos não necessita de chaves de exchange. O script `configure_windows_secrets.ps1` configura apenas `VST_LOCAL_TOKEN`; fecha e reabre o terminal antes de iniciar o engine. O autostart não faz parte da validação inicial e só deve ser considerado depois de o operador confirmar o funcionamento local.
+A verificação de dados públicos não necessita de chaves de exchange. `ensure_windows_token.ps1` gera um token local aleatório se ainda não existir. Opcionalmente, `configure_windows_secrets.ps1` permite definir um token próprio com entrada segura. Ambos tratam apenas `VST_LOCAL_TOKEN`, nunca chaves de exchange. Fecha e reabre o terminal antes de iniciar o engine. O autostart não faz parte da validação inicial e só deve ser considerado depois de o operador confirmar o funcionamento local.
 
 Para quem usa o instalador de um clique, segue `docs/WINDOWS_ONE_CLICK_INSTALL.md`; os scripts acima destinam-se à instalação a partir do código-fonte e não devem ser executados dentro da pasta de instalação empacotada.
 

@@ -40,3 +40,34 @@ def test_windows_secrets_helper_only_configures_local_api_token() -> None:
     assert "BINANCE_KEY" not in script
     assert "BINANCE_PRIVATE" not in script
     assert "API credentials" in script
+
+
+
+def test_security_and_remote_guides_match_current_paper_only_scope() -> None:
+    security = (ROOT / "docs" / "SECURITY.md").read_text(encoding="utf-8").lower()
+    remote = (ROOT / "docs" / "REMOTE_MOBILE_SETUP.md").read_text(encoding="utf-8").lower()
+    assert "não configurar api keys privadas" in security
+    assert "setx binance_key" not in security
+    assert "spot trading" not in security
+    assert "paper-only" in remote
+    assert "ainda não estão certificados de ponta a ponta" in remote
+    assert "port-forward da porta 8765" in remote
+
+
+def test_setup_helpers_never_prompt_for_exchange_credentials() -> None:
+    secret_helper = (ROOT / "scripts" / "configure_windows_secrets.ps1").read_text(encoding="utf-8")
+    token_helper = (ROOT / "scripts" / "ensure_windows_token.ps1").read_text(encoding="utf-8")
+    assert "BINANCE_KEY" not in secret_helper
+    assert "BINANCE_PRIVATE" not in secret_helper
+    assert "BINGX_KEY" not in secret_helper
+    assert "VST_LOCAL_TOKEN" in secret_helper
+    assert "VST_LOCAL_TOKEN" in token_helper
+
+
+def test_setup_messages_make_autostart_explicitly_optional() -> None:
+    setup = (ROOT / "scripts" / "setup_windows.ps1").read_text(encoding="utf-8").lower()
+    batch = (ROOT / "scripts" / "windows_setup.bat").read_text(encoding="utf-8").lower()
+    verifier = (ROOT / "scripts" / "verify_public_market_data.ps1").read_text(encoding="utf-8").lower()
+    assert "optional source-checkout autostart only after local validation" in setup
+    assert "opcional, apenas apos validacao local" in batch
+    assert "autostart is optional" in verifier

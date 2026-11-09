@@ -10,10 +10,10 @@ Executar na raiz do repositório:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\ensure_windows_token.ps1
 ```
 
-O script de configuração recolhe apenas `VST_LOCAL_TOKEN`, usado para autenticar a API local. Não recolhe nem armazena chaves de exchanges. Fechar e reabrir o terminal para carregar a variável de ambiente.
+`ensure_windows_token.ps1` gera e guarda um `VST_LOCAL_TOKEN` aleatório se ainda não existir. Se for necessário definir um valor próprio, `configure_windows_secrets.ps1` usa entrada segura e também só trata esse token. Nenhum dos scripts recolhe ou armazena chaves de exchanges. Fechar e reabrir o terminal para carregar a variável de ambiente.
 
 Depois executar:
 
