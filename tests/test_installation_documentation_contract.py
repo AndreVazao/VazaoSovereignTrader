@@ -16,6 +16,19 @@ def test_packaged_installer_documentation_matches_manual_first_installer() -> No
     assert "não inicia automaticamente" in readme.lower()
 
 
+def test_uninstaller_legacy_task_cleanup_entries_have_unique_run_once_ids() -> None:
+    installer = (ROOT / "installer" / "VazaoSovereignTrader.iss").read_text(encoding="utf-8")
+    entries = [
+        line for line in installer.splitlines()
+        if line.startswith('Filename: "{sys}\\schtasks.exe"')
+    ]
+
+    assert len(entries) == 2
+    assert 'RunOnceId: "RemoveLegacyVstEngineTask"' in entries[0]
+    assert 'RunOnceId: "RemoveLegacyVstMarketDataTask"' in entries[1]
+    assert len({entry.split('RunOnceId: "')[1].split('"', 1)[0] for entry in entries}) == 2
+
+
 def test_packaged_installer_contains_a_windows_powershell_compatible_token_helper() -> None:
     build_script = (ROOT / "scripts" / "build_windows_installer.ps1").read_text(encoding="utf-8")
     token_helper = (ROOT / "scripts" / "ensure_windows_token.ps1").read_text(encoding="utf-8")

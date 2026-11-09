@@ -55,5 +55,5 @@ Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange
 
 [UninstallRun]
 ; Remove only the legacy VST tasks created by older installer versions.
-Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden
-Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader-MarketData"" /F"; Flags: runhidden
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstEngineTask"
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader-MarketData"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstMarketDataTask"
