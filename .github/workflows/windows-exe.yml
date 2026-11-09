@@ -248,5 +248,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: vazaosovereigntrader-windows-installer
-          path: installer-output
+          path: installer-output/VazaoSovereignTrader-Setup-2026.11.1.exe
           if-no-files-found: error
