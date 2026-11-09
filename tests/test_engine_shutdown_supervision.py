@@ -134,3 +134,40 @@ def test_engine_cycle_wait_is_interruptible_on_stop() -> None:
     worker.join(timeout=1)
 
     assert not worker.is_alive()
+
+def test_refresh_shutdown_state_settles_after_worker_exits() -> None:
+    engine = _engine(timeout=0.05)
+    engine._refresh_health_isolation = lambda: None
+    release = threading.Event()
+    engine.thread = threading.Thread(
+        target=lambda: release.wait(5),
+        name="synthetic-delayed-shutdown-worker",
+        daemon=True,
+    )
+    engine.thread.start()
+
+    engine.stop()
+
+    assert engine.state.status == "STOPPING"
+    assert engine.state.operational["shutdown"]["active_workers"] == ["engine"]
+
+    release.set()
+    engine.thread.join(timeout=1)
+    assert not engine.thread.is_alive()
+
+    result = engine.refresh_shutdown_state()
+
+    assert result == {"status": "OFF", "active_workers": []}
+    assert engine.state.status == "OFF"
+    assert engine.state.operational["shutdown"]["state"] == "STOPPED"
+    assert engine.state.operational["shutdown"]["active_workers"] == []
+
+
+def test_refresh_shutdown_state_never_clears_safe_mode() -> None:
+    engine = _engine(timeout=0.05, status="SAFE_MODE")
+
+    result = engine.refresh_shutdown_state()
+
+    assert result["status"] == "SAFE_MODE"
+    assert engine.state.status == "SAFE_MODE"
+
