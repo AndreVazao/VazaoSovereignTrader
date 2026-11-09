@@ -2,14 +2,19 @@
 
 ## Instalação e validação inicial
 
-1. Windows 10/11 com Python 3.11+ para instalação a partir do código-fonte.
+Para instalação a partir do código-fonte:
+
+1. Windows 10/11 com Python 3.11+.
 2. Executar `scripts/setup_windows.ps1`.
-3. Executar `scripts/configure_windows_secrets.ps1` para definir apenas `VST_LOCAL_TOKEN`.
-4. Fechar e reabrir PowerShell para carregar a variável de ambiente.
-5. Executar `scripts/verify_pc_install.ps1`.
-6. Executar `scripts/verify_public_market_data.ps1` e inspecionar `market_data_bootstrap.json`, incluindo venues READY e degradadas.
-7. Iniciar manualmente com `scripts/windows_run_pc_engine.bat`.
-8. Confirmar resposta HTTP 200 em `http://127.0.0.1:8765/health`.
+3. Executar `scripts/ensure_windows_token.ps1` para gerar o token local se ainda não existir.
+4. Opcionalmente, executar `scripts/configure_windows_secrets.ps1` para definir um token próprio com entrada segura.
+5. Fechar e reabrir PowerShell para carregar a variável de ambiente.
+6. Executar `scripts/verify_pc_install.ps1`.
+7. Executar `scripts/verify_public_market_data.ps1` e inspecionar `market_data_bootstrap.json`, incluindo venues READY e degradadas.
+8. Iniciar manualmente com `scripts/windows_run_pc_engine.bat`.
+9. Confirmar resposta HTTP 200 em `http://127.0.0.1:8765/health`.
+
+Para instalação pelo pacote Windows, não é necessário instalar Python. O instalador inclui o helper em `%LOCALAPPDATA%\VazaoSovereignTrader\scripts\ensure_windows_token.ps1`. Executá-lo, fechar e reabrir PowerShell e iniciar o EXE a partir dessa nova sessão para herdar `VST_LOCAL_TOKEN`. Consultar `docs/WINDOWS_ONE_CLICK_INSTALL.md` para os comandos completos.
 
 A verificação leve não executa a suíte Python completa por defeito. Usar testes focados e evitar a suíte integral/endurance enquanto o collector estiver ativo numa máquina com pouca memória.
 
