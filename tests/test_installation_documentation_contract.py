@@ -79,3 +79,8 @@ def test_source_setup_keeps_callers_working_directory_and_checks_native_exit_cod
     assert "Set-Location $pc" not in setup
     assert setup.count("$LASTEXITCODE -ne 0") >= 3
     assert "Python virtual environment was not created" in setup
+
+
+def test_manual_token_override_requires_a_long_local_api_token() -> None:
+    script = (ROOT / "scripts" / "configure_windows_secrets.ps1").read_text(encoding="utf-8")
+    assert "$token.Length -lt 32" in script

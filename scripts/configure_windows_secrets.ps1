@@ -8,6 +8,7 @@ try {
     $tokenPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
     $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPtr)
     if ([string]::IsNullOrWhiteSpace($token)) { throw "VST_LOCAL_TOKEN cannot be empty." }
+    if ($token.Length -lt 32) { throw "VST_LOCAL_TOKEN must contain at least 32 characters." }
     [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $token, "User")
 }
 finally {

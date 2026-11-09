@@ -59,7 +59,9 @@ if errorlevel 1 goto :fail
 echo.
 echo SETUP CONCLUIDO.
 echo.
-echo Agora podes executar:
+echo Fecha esta janela e abre uma nova para carregar VST_LOCAL_TOKEN.
+echo.
+echo Depois podes executar:
 echo   scripts\windows_run_pc_engine.bat
 echo.
 echo Arranque automatico 24/7 e OPCIONAL, apenas apos validacao local:
