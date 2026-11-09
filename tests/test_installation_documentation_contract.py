@@ -27,7 +27,7 @@ def test_packaged_installer_contains_a_windows_powershell_compatible_token_helpe
     assert 'RandomNumberGenerator]::Fill(' not in token_helper
     assert 'Copy-Item "scripts\\ensure_windows_token.ps1"' in build_script
     assert 'Source: "build\\scripts\\ensure_windows_token.ps1"; DestDir: "{app}\\scripts"' in installer
-    assert '%LOCALAPPDATA%\\VazaoSovereignTrader\\scripts\\ensure_windows_token.ps1' in guide
+    assert '$env:LOCALAPPDATA\\VazaoSovereignTrader\\scripts\\ensure_windows_token.ps1' in guide
     assert 'VST_LOCAL_TOKEN' in guide
 
 
