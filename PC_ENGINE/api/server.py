@@ -516,6 +516,8 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope("read_private_state")
         if hasattr(engine, "refresh_human_bridge_operational_state"):
             engine.refresh_human_bridge_operational_state()
+        if hasattr(engine, "refresh_shutdown_state"):
+            engine.refresh_shutdown_state()
         payload = engine.snapshot()
         payload["real_mode_guard"] = guard.snapshot()
         return jsonify(payload)
