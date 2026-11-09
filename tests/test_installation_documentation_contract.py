@@ -16,6 +16,21 @@ def test_packaged_installer_documentation_matches_manual_first_installer() -> No
     assert "não inicia automaticamente" in readme.lower()
 
 
+def test_packaged_installer_contains_a_windows_powershell_compatible_token_helper() -> None:
+    build_script = (ROOT / "scripts" / "build_windows_installer.ps1").read_text(encoding="utf-8")
+    token_helper = (ROOT / "scripts" / "ensure_windows_token.ps1").read_text(encoding="utf-8")
+    installer = (ROOT / "installer" / "VazaoSovereignTrader.iss").read_text(encoding="utf-8")
+    guide = (ROOT / "docs" / "WINDOWS_ONE_CLICK_INSTALL.md").read_text(encoding="utf-8")
+
+    assert 'RandomNumberGenerator]::Create()' in token_helper
+    assert '$random.GetBytes($bytes)' in token_helper
+    assert 'RandomNumberGenerator]::Fill(' not in token_helper
+    assert 'Copy-Item "scripts\\ensure_windows_token.ps1"' in build_script
+    assert 'Source: "build\\scripts\\ensure_windows_token.ps1"; DestDir: "{app}\\scripts"' in installer
+    assert '%LOCALAPPDATA%\\VazaoSovereignTrader\\scripts\\ensure_windows_token.ps1' in guide
+    assert 'VST_LOCAL_TOKEN' in guide
+
+
 def test_first_install_guides_do_not_request_exchange_trading_credentials() -> None:
     paths = (
         "README.md",
@@ -30,6 +45,7 @@ def test_first_install_guides_do_not_request_exchange_trading_credentials() -> N
 
     checklist = (ROOT / "docs" / "PC_PRODUCTION_CHECKLIST.md").read_text(encoding="utf-8")
     assert "não configurar api keys privadas de exchanges" in checklist.lower()
+    assert "scripts/ensure_windows_token.ps1" in checklist
 
 
 def test_windows_secrets_helper_only_configures_local_api_token() -> None:
@@ -40,7 +56,6 @@ def test_windows_secrets_helper_only_configures_local_api_token() -> None:
     assert "BINANCE_KEY" not in script
     assert "BINANCE_PRIVATE" not in script
     assert "API credentials" in script
-
 
 
 def test_security_and_remote_guides_match_current_paper_only_scope() -> None:
@@ -72,7 +87,6 @@ def test_setup_messages_make_autostart_explicitly_optional() -> None:
     assert "optional source-checkout autostart only after local validation" in setup
     assert "opcional, apenas apos validacao local" in batch
     assert "autostart is optional" in verifier
-
 
 
 def test_source_setup_keeps_callers_working_directory_and_checks_native_exit_codes() -> None:
