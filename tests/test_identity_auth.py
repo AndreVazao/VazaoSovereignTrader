@@ -136,6 +136,7 @@ def test_local_control_token_works_without_optional_tailscale_identity():
                 "andre": {
                     "user_id": "andre",
                     "token_env": "ANDRE_TOKEN",
+                    "device_id": "andre-pc-01",
                     "tailscale_identity": "andre-pc-01",
                     "scopes": ["read_private_state", "trade_paper"],
                 }
