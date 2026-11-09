@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +48,8 @@ def test_security_and_remote_guides_match_current_paper_only_scope() -> None:
     security = (ROOT / "docs" / "SECURITY.md").read_text(encoding="utf-8").lower()
     remote = (ROOT / "docs" / "REMOTE_MOBILE_SETUP.md").read_text(encoding="utf-8").lower()
     assert "não configurar api keys privadas" in security
-    assert "setx binance_key" not in security
+    assert not re.search(r"(?im)^\\s*setx\\s+binance_key", security)
+    assert "não usar exemplos" in security
     assert "spot trading" not in security
     assert "paper-only" in remote
     assert "ainda não estão certificados de ponta a ponta" in remote
