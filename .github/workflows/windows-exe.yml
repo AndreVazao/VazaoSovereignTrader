@@ -51,18 +51,18 @@ jobs:
       - name: Validate local token helper on Windows PowerShell 5.1
         shell: pwsh
         run: |
-          $windowsPowerShell = Join-Path $env:WINDIR "System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+          $windowsPowerShell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
           if (-not (Test-Path $windowsPowerShell)) { throw "Windows PowerShell 5.1 executable not found." }
           $previousToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
           try {
             [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $null, "User")
-            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "scripts\\ensure_windows_token.ps1" | Out-Null
+            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "scripts\ensure_windows_token.ps1" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "Windows PowerShell 5.1 token generation failed." }
             $generatedToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
             if ([string]::IsNullOrWhiteSpace($generatedToken) -or $generatedToken.Length -lt 32) {
               throw "Token helper did not persist a sufficiently long token."
             }
-            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "scripts\\ensure_windows_token.ps1" | Out-Null
+            & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "scripts\ensure_windows_token.ps1" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "Windows PowerShell 5.1 token preservation check failed." }
             $preservedToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
             if ($preservedToken -cne $generatedToken) { throw "Token helper replaced an existing valid token." }
@@ -199,9 +199,9 @@ jobs:
           if (-not (Test-Path $engine)) { throw "Upgraded engine EXE missing." }
           if (-not (Test-Path $configPath)) { throw "Upgraded local config missing." }
           if (-not (Test-Path $uninstaller)) { throw "Upgraded uninstaller missing." }
-          $tokenHelper = Join-Path $testDir "scripts\\ensure_windows_token.ps1"
+          $tokenHelper = Join-Path $testDir "scripts\ensure_windows_token.ps1"
           if (-not (Test-Path $tokenHelper)) { throw "Packaged Windows PowerShell token helper missing." }
-          $windowsPowerShell = Join-Path $env:WINDIR "System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+          $windowsPowerShell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
           $previousToken = [Environment]::GetEnvironmentVariable("VST_LOCAL_TOKEN", "User")
           try {
             [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $null, "User")
