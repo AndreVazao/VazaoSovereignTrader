@@ -85,10 +85,15 @@ class IdentityAuthenticator:
         selected = selected if isinstance(selected, dict) else {}
         required_ts = str(selected.get("tailscale_identity", "")).strip()
         require_ts = bool(self.identity_cfg.get("require_device_identity", False))
-        if required_ts and ts_identity != required_ts:
-            raise PermissionError("device_identity_mismatch")
+
+        # A configured Tailscale identity is a binding only when the caller
+        # supplies one, unless the deployment explicitly requires device
+        # identity. Local loopback token authentication must remain usable
+        # when optional Tailscale ingress is not configured.
         if require_ts and not ts_identity:
             raise PermissionError("device_identity_required")
+        if ts_identity and required_ts and ts_identity != required_ts:
+            raise PermissionError("device_identity_mismatch")
 
         return AuthenticatedPrincipal(
             user_id=str(selected.get("user_id", configured_owner)),
