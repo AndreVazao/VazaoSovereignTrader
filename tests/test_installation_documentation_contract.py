@@ -71,3 +71,11 @@ def test_setup_messages_make_autostart_explicitly_optional() -> None:
     assert "optional source-checkout autostart only after local validation" in setup
     assert "opcional, apenas apos validacao local" in batch
     assert "autostart is optional" in verifier
+
+
+
+def test_source_setup_keeps_callers_working_directory_and_checks_native_exit_codes() -> None:
+    setup = (ROOT / "scripts" / "setup_windows.ps1").read_text(encoding="utf-8")
+    assert "Set-Location $pc" not in setup
+    assert setup.count("$LASTEXITCODE -ne 0") >= 3
+    assert "Python virtual environment was not created" in setup
