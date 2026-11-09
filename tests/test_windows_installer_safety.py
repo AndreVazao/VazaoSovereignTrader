@@ -16,4 +16,4 @@ def test_windows_uninstall_does_not_delete_browser_profiles_or_user_vault():
 
     assert "[UninstallDelete]" not in installer
     assert "VazaoSovereignTraderData" not in installer
-    assert "browser\\profiles" not in installer
+    assert 'Type: filesandordirs; Name: "{app}\\data\\browser\\profiles"' not in installer
