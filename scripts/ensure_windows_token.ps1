@@ -18,7 +18,7 @@ if ([string]::IsNullOrWhiteSpace($current)) {
     Write-Host "Generated a new local VST_LOCAL_TOKEN for this Windows user." -ForegroundColor Green
 } else {
     if ($current.Length -lt 32) {
-        throw "Existing VST_LOCAL_TOKEN is too short. Set a token with at least 32 characters using configure_windows_secrets.ps1."
+        throw "Existing VST_LOCAL_TOKEN is too short. Replace it with a token of at least 32 characters in the Windows user environment, then rerun this helper."
     }
     Write-Host "Existing VST_LOCAL_TOKEN preserved." -ForegroundColor Green
 }
