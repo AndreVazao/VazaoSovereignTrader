@@ -61,7 +61,7 @@ def _run_study_with_resource_budget(job):
         return {"deferred": True, "reason": str(exc)}
 
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run continuous public market-data collection and PAPER learning."
     )
@@ -72,7 +72,20 @@ def main() -> None:
     parser.add_argument("--data-dir", default=None)
     parser.add_argument("--learn-minutes", type=float, default=5.0)
     parser.add_argument("--study-minutes", type=float, default=None)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--run-seconds",
+        type=float,
+        default=0.0,
+        help="Optional bounded run duration for supervised local validation; 0 runs until SIGINT/SIGTERM.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if args.run_seconds < 0:
+        parser.error("--run-seconds must be greater than or equal to zero")
 
     config = _load_config(_resolve_path(args.config))
     radar_cfg = config.get("radar", {})
@@ -175,6 +188,7 @@ def main() -> None:
         "exchanges": exchanges,
         "data_dir": str(data_dir),
         "paper_only": True,
+        "run_seconds": args.run_seconds,
     }, ensure_ascii=False), flush=True)
 
     study_cfg = dict(config.get("paper_study", {}))
@@ -183,8 +197,12 @@ def main() -> None:
     next_learning = 0.0
     next_study = 0.0
     next_health_heartbeat = time.monotonic() + _health_heartbeat_interval_seconds(radar_cfg)
+    run_deadline = time.monotonic() + args.run_seconds if args.run_seconds > 0 else None
     try:
         while not stop.is_set():
+            if run_deadline is not None and time.monotonic() >= run_deadline:
+                stop.set()
+                break
             now = time.monotonic()
             if now >= next_health_heartbeat:
                 # Refresh liveness independently of slower learning/study cycles.
@@ -321,7 +339,10 @@ def main() -> None:
                         study={"enabled": True, "error": f"{type(exc).__name__}: {exc}"},
                     )
                 next_study = now + max(60.0, study_minutes * 60.0)
-            stop.wait(1.0)
+            wait_seconds = 1.0
+            if run_deadline is not None:
+                wait_seconds = min(wait_seconds, max(0.0, run_deadline - time.monotonic()))
+            stop.wait(wait_seconds)
     finally:
         radar.stop()
         learner.learn()
