@@ -136,3 +136,85 @@ def test_bootstrap_rejects_zero_minimum_ready_venues(tmp_path: Path) -> None:
             minimum_ready_venues=0,
             require_all_exchanges=False,
         )
+
+
+
+def test_bootstrap_rejects_ticker_without_valid_timestamp(tmp_path: Path) -> None:
+    class MissingTimestampClient(FakeClient):
+        def fetch_ticker(self, symbol: str):
+            return {"last": 100.0, "timestamp": None, "datetime": None}
+
+    report = bootstrap_public_market_data(
+        exchanges=["binance"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=lambda _name: MissingTimestampClient("missing-timestamp"),
+    )
+
+    item = report["venues"][0]["symbols"]["BTC/USDT"]
+    assert report["status"] == "DEGRADED"
+    assert item["status"] == "FAILED"
+    assert "ticker timestamp is missing" in item["error"]
+
+
+def test_bootstrap_accepts_iso_datetime_when_ccxt_timestamp_is_absent(tmp_path: Path) -> None:
+    class DatetimeTickerClient(FakeClient):
+        def fetch_ticker(self, symbol: str):
+            return {"last": 100.0, "timestamp": None, "datetime": "2023-11-14T22:13:20.000Z"}
+
+    report = bootstrap_public_market_data(
+        exchanges=["binance"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=lambda _name: DatetimeTickerClient("datetime"),
+    )
+
+    item = report["venues"][0]["symbols"]["BTC/USDT"]
+    assert item["status"] == "READY"
+    assert item["ticker"]["timestamp_ms"] == 1_700_000_000_000
+
+
+def test_bootstrap_excludes_symbol_missing_from_exchange_market_metadata(tmp_path: Path) -> None:
+    class UnsupportedSymbolClient(FakeClient):
+        def __init__(self, name: str) -> None:
+            super().__init__(name)
+            self.fetch_calls = 0
+
+        def load_markets(self):
+            return {"BTC/USD": {"symbol": "BTC/USD", "active": True}}
+
+        def fetch_ticker(self, symbol: str):
+            self.fetch_calls += 1
+            return super().fetch_ticker(symbol)
+
+    client = UnsupportedSymbolClient("coinbase")
+    report = bootstrap_public_market_data(
+        exchanges=["coinbase"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=lambda _name: client,
+    )
+
+    item = report["venues"][0]["symbols"]["BTC/USDT"]
+    assert report["status"] == "DEGRADED"
+    assert item["status"] == "FAILED"
+    assert "unsupported or inactive unified symbol" in item["error"]
+    assert client.fetch_calls == 0
+    assert client.closed
+
+
+def test_bootstrap_rejects_seconds_mistaken_for_milliseconds(tmp_path: Path) -> None:
+    class SecondsTimestampClient(FakeClient):
+        def fetch_ticker(self, symbol: str):
+            return {"last": 100.0, "timestamp": 1_700_000_000}
+
+    report = bootstrap_public_market_data(
+        exchanges=["binance"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=lambda _name: SecondsTimestampClient("seconds"),
+    )
+
+    item = report["venues"][0]["symbols"]["BTC/USDT"]
+    assert item["status"] == "FAILED"
+    assert "not expressed in milliseconds" in item["error"]
