@@ -23,3 +23,7 @@ Collectors are observational. They do not submit, cancel, modify, or sign orders
 ## Operational note
 
 Public WebSocket schemas change. Parsers must be tested against current venue documentation before promoting a collector to production-critical use. Unsupported messages are ignored rather than converted into fabricated events.
+
+## Reconnection policy
+
+The top-of-book service uses bounded exponential retry delays after a WebSocket disconnect: 1, 2, 4, 8, 16, then at most 30 seconds. A connection that remained open for at least 60 seconds is treated as stable and resets the next retry to 1 second. Short-lived connections do not reset the backoff. Connection duration is measured with a monotonic clock and exposed in the collector health snapshot. This policy affects public-data collection only; it does not authorize execution or alter PAPER mode.
