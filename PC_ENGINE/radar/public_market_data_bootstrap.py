@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -14,6 +16,31 @@ from PC_ENGINE.core.preflight import validate_ohlcv_rows
 def _resolve_path(raw: str | Path, root: Path) -> Path:
     path = Path(raw)
     return path if path.is_absolute() else root / path
+
+
+def _ticker_timestamp_ms(ticker: dict[str, Any]) -> int:
+    """Return a validated CCXT ticker timestamp in milliseconds."""
+    raw = ticker.get("timestamp")
+    if raw is None and ticker.get("datetime"):
+        value = str(ticker["datetime"]).strip()
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            raw = int(parsed.timestamp() * 1000)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("ticker datetime is invalid") from exc
+    try:
+        timestamp = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError("ticker timestamp is missing or non-numeric")
+    if not math.isfinite(timestamp) or timestamp <= 0:
+        raise ValueError("ticker timestamp must be a positive finite millisecond value")
+    # CCXT unified ticker timestamps are milliseconds. Reject seconds rather than
+    # silently treating stale/mis-scaled exchange data as current.
+    if timestamp < 100_000_000_000:
+        raise ValueError("ticker timestamp is not expressed in milliseconds")
+    return int(timestamp)
 
 
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -69,19 +96,27 @@ def bootstrap_public_market_data(
         client = None
         try:
             client = factory(exchange_name)
+            markets = None
             try:
-                client.load_markets()
-            except Exception:
-                # Some public endpoints work even when market metadata is temporarily unavailable.
-                pass
+                loaded_markets = client.load_markets()
+                markets = loaded_markets if isinstance(loaded_markets, dict) else None
+            except Exception as exc:
+                # Keep public endpoint probing possible during metadata outages,
+                # but make the missing metadata visible in the manifest.
+                venue["market_metadata_warning"] = f"{type(exc).__name__}: {exc}"
             for symbol in symbol_names:
                 item: dict[str, Any] = {"status": "FAILED"}
                 try:
+                    if markets:
+                        market = markets.get(symbol)
+                        if not isinstance(market, dict) or not market.get("active", True):
+                            raise ValueError(f"unsupported or inactive unified symbol: {symbol}")
                     ticker = client.fetch_ticker(symbol)
                     price = float(ticker.get("last") or 0.0)
+                    ticker_timestamp_ms = _ticker_timestamp_ms(ticker)
                     item["ticker"] = {
                         "price": price,
-                        "timestamp_ms": ticker.get("timestamp"),
+                        "timestamp_ms": ticker_timestamp_ms,
                     }
                     candles = client.fetch_ohlcv(symbol, timeframe=timeframe, limit=candle_limit)
                     quality = validate_ohlcv_rows(
