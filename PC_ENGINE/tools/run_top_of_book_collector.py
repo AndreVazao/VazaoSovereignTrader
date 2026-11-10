@@ -166,11 +166,14 @@ def main() -> None:
                     "collector_error": f"{type(exc).__name__}: {exc}",
                     "paper_only": True,
                 }, ensure_ascii=False), flush=True)
+            if stop.is_set():
+                return
+            duration = float(collector.snapshot().get("last_connection_duration_seconds") or 0.0)
+            delay_seconds = collector.next_reconnect_delay(delay_seconds, duration)
             if stop.wait(delay_seconds):
                 return
             with counters_lock:
                 counters["reconnects"] += 1
-            delay_seconds = min(15.0, delay_seconds * 2.0)
 
     allowed = set(args.venues)
     configs = [
