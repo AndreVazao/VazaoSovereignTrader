@@ -109,9 +109,9 @@ class WebSocketCollectorTests(unittest.TestCase):
 
     def test_reconnect_backoff_grows_after_short_disconnects(self) -> None:
         next_delay = PublicWebSocketCollector.next_reconnect_delay
-        self.assertEqual(next_delay(1.0, 0.2), 1.0)
-        self.assertEqual(next_delay(2.0, 0.2), 2.0)
-        self.assertEqual(next_delay(30.0, 0.2), 30.0)
+        self.assertEqual(next_delay(0.5, 0.2), 1.0)
+        self.assertEqual(next_delay(1.0, 0.2), 2.0)
+        self.assertEqual(next_delay(15.0, 0.2), 30.0)
 
     def test_reconnect_backoff_resets_only_after_stable_connection(self) -> None:
         next_delay = PublicWebSocketCollector.next_reconnect_delay
