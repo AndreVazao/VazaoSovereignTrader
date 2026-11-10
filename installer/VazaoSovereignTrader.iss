@@ -32,6 +32,7 @@ Source: "build\config\config.example.json"; DestDir: "{app}\config"; Flags: igno
 Source: "build\config\config.example.json"; DestDir: "{app}\config"; DestName: "config.local.json"; Flags: ignoreversion onlyifdoesntexist
 Source: "build\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\docs\WINDOWS_ONE_CLICK_INSTALL.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "build\scripts\ensure_windows_token.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\config"
@@ -40,6 +41,7 @@ Name: "{app}\data\logs"
 Name: "{app}\data\browser\profiles"
 Name: "{app}\data\operator_exchange\INBOX"
 Name: "{app}\data\operator_exchange\OUTBOX"
+Name: "{app}\scripts"
 
 [Icons]
 Name: "{autodesktop}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
@@ -53,5 +55,5 @@ Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange
 
 [UninstallRun]
 ; Remove only the legacy VST tasks created by older installer versions.
-Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden
-Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader-MarketData"" /F"; Flags: runhidden
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstEngineTask"
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader-MarketData"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstMarketDataTask"

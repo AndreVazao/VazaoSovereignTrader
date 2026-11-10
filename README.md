@@ -144,7 +144,7 @@ Isto não é aconselhamento financeiro e não garante lucro. Usa apenas APIs ofi
 
 ## Instalação Windows com um clique
 
-A distribuição Windows também pode ser instalada através de um único `.exe` produzido pelo GitHub Actions. O instalador prepara o engine, collector público, Chromium/Playwright, configuração, pastas de dados e arranque automático em Windows sem exigir a sequência manual de PowerShell.
+A distribuição Windows pode ser instalada através de um único `.exe` produzido pelo GitHub Actions. O instalador prepara o engine, o collector público, Chromium/Playwright, a configuração e as pastas locais. Por segurança, **não inicia automaticamente** o engine ou o collector, não cria tarefas agendadas e não ativa autostart. O operador valida primeiro a configuração e o health check e só depois decide iniciar os serviços manualmente.
 
 Depois da instalação, o operador encontra:
 
@@ -161,9 +161,12 @@ No Windows, a sequência operacional é:
 
 ```powershell
 scripts\setup_windows.ps1
+scripts\ensure_windows_token.ps1
+# Opcional: configure_windows_secrets.ps1 permite definir um token próprio.
+# Fechar e reabrir PowerShell para carregar VST_LOCAL_TOKEN.
 scripts\verify_pc_install.ps1
 scripts\verify_public_market_data.ps1
-scripts\install_windows_autostart.ps1
+scripts\windows_run_pc_engine.bat
 ```
 
 `verify_public_market_data.ps1` faz uma verificação pública/read-only de ticker + OHLCV e qualidade dos dados. Não são necessárias API keys para começar a recolher dados públicos. O collector contínuo usa WebSockets públicos para Binance, Coinbase e OKX e permanece PAPER/observational-only.
@@ -194,14 +197,12 @@ buildozer android debug
 
 O APK fala com o PC local através do IP da tua rede.
 
-## Segurança obrigatória
+## Segurança obrigatória — fase atual
 
-Nas exchanges, cria API keys com:
-
-- Read: ligado
-- Spot trading: ligado
-- Withdraw: desligado
-- Futures/leverage: desligado no início
+- O VST permanece PAPER/observational-only durante a instalação e validação atuais.
+- A recolha pública de mercado e os testes PAPER iniciais não precisam de API keys de exchange. Não introduzas credenciais privadas nem permissões de trading nesta fase.
+- `VST_LOCAL_TOKEN` é apenas o token de controlo da API local; não é uma credencial de exchange.
+- Mantém `mode=PAPER`, `autonomous_execution.allow_real=false` e `autonomous_execution.auto_promote_real=false`.
 
 Nunca faças commit de `config.local.json`, `.env`, `*.keystore`, `data/`, `logs/` ou ficheiros com secrets.
 
@@ -232,7 +233,7 @@ Detalhes e estado real dos serviços: `docs/OPTIONAL_LOCAL_AI_AND_SERVICE_LIFECY
 ## PC 24/7 + controlo remoto
 
 - scripts/setup_windows.ps1 prepara o ambiente Windows.
-- scripts/install_windows_autostart.ps1 cria arranque automático e reinício após falhas.
+- `scripts/install_windows_autostart.ps1` é um opt-in separado para instalação a partir do código-fonte, apenas depois de validação local e decisão explícita. O instalador empacotado não cria tarefas nem inicia serviços automaticamente.
 - docs/REMOTE_MOBILE_SETUP.md descreve o acesso remoto pelo Android.
 - O acesso remoto recomendado usa Tailscale; não fazer port-forward da porta 8765.
 - A API exige VST_LOCAL_TOKEN; não existe token de fallback.
@@ -256,7 +257,8 @@ Para preparar um PC Windows a partir do código-fonte, abre PowerShell na raiz d
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup_windows.ps1
-.\scripts\configure_windows_secrets.ps1
+.\scripts\ensure_windows_token.ps1
+# Opcional: .\scripts\configure_windows_secrets.ps1 para definir um token próprio.
 ```
 
 Fecha essa janela de PowerShell e abre uma nova para carregar as variáveis de ambiente guardadas. Depois executa:
@@ -264,10 +266,10 @@ Fecha essa janela de PowerShell e abre uma nova para carregar as variáveis de a
 ```powershell
 .\scripts\verify_pc_install.ps1
 .\scripts\verify_public_market_data.ps1
-.\scripts\install_windows_autostart.ps1
+.\scripts\windows_run_pc_engine.bat
 ```
 
-A verificação de dados públicos não necessita de chaves de exchange. O token `VST_LOCAL_TOKEN` protege a API local; mantém-no privado e não o coloques no GitHub.
+A verificação de dados públicos não necessita de chaves de exchange. `ensure_windows_token.ps1` gera um token local aleatório se ainda não existir. Opcionalmente, `configure_windows_secrets.ps1` permite definir um token próprio com entrada segura. Ambos tratam apenas `VST_LOCAL_TOKEN`, nunca chaves de exchange. Fecha e reabre o terminal antes de iniciar o engine. O autostart não faz parte da validação inicial e só deve ser considerado depois de o operador confirmar o funcionamento local.
 
 Para quem usa o instalador de um clique, segue `docs/WINDOWS_ONE_CLICK_INSTALL.md`; os scripts acima destinam-se à instalação a partir do código-fonte e não devem ser executados dentro da pasta de instalação empacotada.
 

@@ -16,11 +16,14 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 if (Test-Path $build) { Remove-Item $build -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $build, (Join-Path $build "config"), (Join-Path $build "docs") | Out-Null
+New-Item -ItemType Directory -Force -Path $build, (Join-Path $build "config"), (Join-Path $build "docs"), (Join-Path $build "scripts") | Out-Null
 
 & $python -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed." }
 & $python -m pip install -r requirements-pc.txt
+if ($LASTEXITCODE -ne 0) { throw "PC runtime dependency installation failed." }
 & $python -m pip install pyinstaller
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller installation failed." }
 
 $browserBundle = Join-Path $build "ms-playwright"
 if (Test-Path $browserBundle) { Remove-Item $browserBundle -Recurse -Force }
@@ -28,7 +31,6 @@ New-Item -ItemType Directory -Force -Path $browserBundle | Out-Null
 $env:PLAYWRIGHT_BROWSERS_PATH = $browserBundle
 & $python -m playwright install chromium --no-shell
 if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium installation failed." }
-
 
 & $python -m PyInstaller --noconfirm --clean --onefile --noconsole --name VazaoSovereignTrader --paths . --collect-all playwright PC_ENGINE/main.py
 if ($LASTEXITCODE -ne 0) { throw "PC engine EXE build failed." }
@@ -41,6 +43,7 @@ Copy-Item (Join-Path $dist "VazaoSovereignTrader-MarketData.exe") $build
 Copy-Item "PC_ENGINE\config\config.example.json" (Join-Path $build "config\config.example.json")
 Copy-Item "README.md" (Join-Path $build "README.md")
 Copy-Item "docs\WINDOWS_ONE_CLICK_INSTALL.md" (Join-Path $build "docs\WINDOWS_ONE_CLICK_INSTALL.md")
+Copy-Item "scripts\ensure_windows_token.ps1" (Join-Path $build "scripts\ensure_windows_token.ps1")
 
 $iss = Join-Path $repo "installer\VazaoSovereignTrader.iss"
 $iscc = $null

@@ -1,72 +1,55 @@
-# Controlo remoto PC + telemóvel
+# Controlo remoto PC + telemóvel — estado e limites
 
-## Arquitetura
+## Estado atual
 
-    Android APK
-        |
-        | private network (recommended: Tailscale)
-        v
-    PC_ENGINE API :8765
-        |
-        +--> Risk Engine
-        +--> RealModeGuard
-        +--> Order Manager
-        +--> Binance/BingX APIs
+A ligação PC ↔ Android através de Tailscale é a arquitetura pretendida, mas a descoberta automática, o emparelhamento e o controlo remoto ainda não estão certificados de ponta a ponta nesta versão. O APK e o escritório virtual não devem ser tratados como prova de que a ligação operacional está concluída.
 
-As credenciais de exchange ficam exclusivamente no PC. O telemóvel nunca recebe API keys.
+Validar primeiro o backend local no PC. Não expor a API na Internet nem fazer port-forward da porta 8765.
 
-## Acesso remoto recomendado
+## Arquitetura pretendida
 
-Use Tailscale para criar uma rede privada entre o PC e o telemóvel.
+```text
+Android cockpit
+      |
+      | Tailscale / rede privada autenticada
+      v
+PC_ENGINE API :8765
+      |
+      +--> estado e comandos PAPER
+      +--> Risk Engine / persistência / diagnóstico
+      +--> fontes públicas de market data (read-only)
+```
 
-No PC:
-1. Instale Tailscale.
-2. Inicie a tailnet.
-3. Confirme o IP Tailscale.
-4. Defina uma variável de ambiente forte chamada VST_LOCAL_TOKEN.
-5. Inicie o trader.
-6. Teste localmente antes de sair de casa.
+O telefone é um cockpit de observação e comando. Não recebe chaves de exchange nem executa operações financeiras. A cloud não deve transportar ordens nem ser necessária para o motor local continuar a funcionar.
 
-No Android:
-1. Instale Tailscale.
-2. Entre na mesma tailnet.
-3. Instale o APK.
-4. URL do PC: http://100.x.y.z:8765.
-5. Token: o mesmo definido no PC.
+## Pré-requisitos locais no PC
 
-A rede privada fornece a camada de transporte. O header X-Token continua obrigatório.
+1. Instalar e validar o backend local.
+2. Gerar `VST_LOCAL_TOKEN` com `scripts/ensure_windows_token.ps1`, ou definir um valor próprio com `scripts/configure_windows_secrets.ps1`.
+3. Confirmar `GET /health` em `http://127.0.0.1:8765/health`.
+4. Confirmar que os endpoints autenticados rejeitam pedidos sem token.
+5. Manter o engine em PAPER e a API ligada a loopback durante a validação inicial.
 
-## REAL
+## Emparelhamento Android/Tailscale
 
-REAL permanece protegido por duas camadas:
-1. Readiness do sistema;
-2. autorização temporária do RealModeGuard com a frase EU ACEITO O RISCO.
+Quando o cliente e a descoberta estiverem validados:
 
-O APK não pode contornar estas regras.
+1. Instalar Tailscale no PC e no Android e juntá-los à mesma tailnet.
+2. Confirmar a identidade do dispositivo por um mecanismo confiável; um header enviado pelo cliente não prova identidade Tailscale.
+3. Usar o endereço privado do PC e o token local através do canal autenticado.
+4. Testar reconexão, expiração de sessão, dispositivo não autorizado e perda de rede.
+5. Não declarar o controlo remoto pronto até os testes físicos PC/Android passarem.
 
-## 24/7 no Windows
+## Arranque 24/7 no Windows
 
-Use scripts/install_windows_autostart.ps1 para criar uma tarefa de arranque. A tarefa reinicia o processo quando o PC reinicia; o engine continua a ter watchdog, recovery e SAFE_MODE.
+O instalador empacotado não cria tarefas agendadas nem inicia serviços automaticamente. Primeiro validar o arranque manual, o health check, o collector e a recuperação.
 
-Antes de ativar REAL:
-- testar PAPER;
-- validar preflight;
-- confirmar ledger/recovery;
-- validar dados e outcomes;
-- confirmar permissões da API da exchange: Read + Spot Trade apenas;
-- Withdraw desligado;
-- Futures/leverage desligado.
+Para instalações a partir do código-fonte, `scripts/install_windows_autostart.ps1` é um opt-in separado que cria tarefas de arranque para o engine e o collector. Só executar depois de validação física bem-sucedida e decisão explícita do operador.
 
-Nunca abra a porta 8765 no router com port-forward.
+## Limites de segurança atuais
 
-
-## Fluxo remoto operacional
-
-1. PC: executar setup, configurar `VST_LOCAL_TOKEN` e verificar a instalação.
-2. PC: instalar Tailscale e obter o IP `100.x.y.z`.
-3. Android: instalar Tailscale e o APK.
-4. Android: introduzir `http://100.x.y.z:8765` e o mesmo token.
-5. Testar ligação; depois PAPER, preflight e validação.
-6. REAL continua bloqueado até readiness e autorização temporária.
-
-O botão ARM REAL é uma ação explícita do operador. O botão INICIAR em REAL exige nova autorização válida no momento do arranque. Parar o engine desarma REAL.
+- PAPER-only; não ativar REAL/LIVE.
+- Não configurar chaves privadas nem permissões de trading.
+- Não executar ordens, transferências ou levantamentos.
+- Não contornar autenticação, MFA, prompts ou políticas Tailscale.
+- Não abrir a porta 8765 publicamente.

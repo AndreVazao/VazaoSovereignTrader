@@ -1,3 +1,25 @@
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-09
+
+**Este é o estado atual verificado.** As passagens de contexto abaixo deste bloco são históricas e podem conter branches, PRs, SHAs e estados já ultrapassados. Consultar sempre o GitHub antes de agir.
+
+- Repositório exclusivo: `AndreVazao/VazaoSovereignTrader`.
+- `main` após a integração da PR #552: `85487dbfd71052208e56467c2b1edec71c808457`.
+- PR #552 integrada: [fix(runtime): settle engine shutdown and bound Market Data collector runs](https://github.com/AndreVazao/VazaoSovereignTrader/pull/552). HEAD testado: `71b7515e32670c7954852039d4dc920eca47b7c1`; merge commit: `85487dbfd71052208e56467c2b1edec71c808457`.
+- No HEAD exato da PR #552 passaram Python tests, PAPER smoke e Windows EXE/installer. O workflow Windows confirmou instalação silenciosa v1, atualização silenciosa v2, arranque manual do EXE, HTTP health check, desinstalação silenciosa e preservação SHA-256 do Learning Vault.
+- Artefactos CI da execução Windows: instalador ID `13667095348` (~222 MB) e ZIP portátil ID `13665972866` (~62 MB), run [42601453178](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/42601453178). São artefactos de CI, não uma release formal nem prova de instalação no PC do utilizador.
+- PR #553 está ativa para corrigir documentação de instalação e segurança PAPER; verificar sempre o HEAD e os checks atuais: https://github.com/AndreVazao/VazaoSovereignTrader/pull/553.
+- O instalador empacotado é manual-first: não arranca engine/collector, não cria tarefas agendadas e não ativa autostart. O autostart por script é um opt-in separado para source checkout, apenas depois de validação física e decisão explícita.
+- A fase atual é PAPER-only e usa dados públicos/read-only. Não configurar API keys privadas de exchange, não ativar LIVE/REAL e não executar operações financeiras.
+- `VST_LOCAL_TOKEN` é o token da API local, distinto de credenciais de exchange. Os scripts de setup devem configurar apenas este token.
+- Não existe release formal publicada no inventário consultado. A instalação física no PC do utilizador continua a exigir validação local; CI não a substitui.
+- Lacunas globais conhecidas: instalador Linux não validado; Android/APK e Tailscale não certificados fisicamente de ponta a ponta; integração end-to-end prolongada de Market Data → Radar → análise → risco → PAPER → Vault ainda requer evidência operacional.
+- Segurança: sem credenciais, sem ordens, sem transferências/levantamentos, sem LIVE, sem alteração de permissões financeiras e sem acesso público à API.
+- Processo: uma branch/PR de avanço de cada vez; nunca editar `main` diretamente; validar os workflows aplicáveis no SHA exato; não fazer merge com testes aplicáveis pendentes ou falhados.
+
+---
+
+# HISTORICAL HANDOFFS — retained for context only
+
 # CURRENT AUTHORITATIVE HANDOFF — 2026-10-29 (Android office smoke / PR #520)
 
 - Product repo: `AndreVazao/VazaoSovereignTrader`.

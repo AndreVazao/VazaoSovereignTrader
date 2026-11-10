@@ -59,4 +59,6 @@ if (-not [bool]$result.all_configured_venues_ready) {
 }
 Write-Host "Report: $report"
 Write-Host "The check uses public/read-only market data; no exchange API keys are required."
-Write-Host "To begin continuous PAPER/observational collection, run scripts\install_windows_autostart.ps1."
+Write-Host "For a bounded collector check, run: .\PC_ENGINE\.venv\Scripts\python.exe .\PC_ENGINE\tools\run_market_data_collector.py --run-seconds 120"
+Write-Host "After successful local validation, start continuous collection manually by omitting --run-seconds."
+Write-Host "Source-checkout autostart is optional and must be enabled only after physical validation and explicit operator approval."

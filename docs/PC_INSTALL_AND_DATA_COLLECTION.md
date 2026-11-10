@@ -1,70 +1,66 @@
 # PC install + continuous learning data collection
 
-## Objetivo
+## Objective and current safety scope
 
-A instalação do PC deixa o VazaoSovereignTrader preparado para funcionar em PAPER, recolher dados públicos continuamente e construir a base de evidência para os estudos do trader.
+The PC installation prepares VST for public market-data collection, local research and PAPER validation. The current development and installation phase is PAPER-only. Do not configure private exchange API keys, trading permissions or LIVE/REAL execution.
 
-A recolha inicial não precisa de API keys de exchange. O PC observa feeds públicos e guarda os dados localmente.
+Public market-data collection does not require exchange API keys.
 
-## Instalação Windows
+## Source installation on Windows
 
-A partir da raiz do repositório:
+Run from the repository root:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\ensure_windows_token.ps1
+```
 
-O instalador prepara:
+`ensure_windows_token.ps1` generates a random local API control token `VST_LOCAL_TOKEN` when one is not already set. Optionally, `configure_windows_secrets.ps1` lets the operator set a chosen local token using secure input. Neither script asks for or stores exchange credentials. Close and reopen PowerShell after setting the user environment variable.
 
-- ambiente Python isolado;
-- dependências do PC;
-- Chromium do Playwright;
-- config.local.json local, sem secrets;
-- diretórios persistentes de dados, logs e perfis browser.
+Run lightweight verification:
 
-Depois configura o token local da API:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_pc_install.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_public_market_data.ps1
+```
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\configure_windows_secrets.ps1
+The installation verifier compiles first-party Python, checks runtime dependencies, Playwright and PAPER safety. It does not run the full Python test suite unless `-RunTests` is explicitly supplied. The public-data check uses read-only endpoints and records per-venue readiness in `market_data_bootstrap.json`.
 
-Verificação completa:
+Start the engine manually after validation:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\verify_pc_install.ps1
+```powershell
+.\scripts\windows_run_pc_engine.bat
+```
 
-A verificação compila o runtime, valida dependências, verifica os defaults de segurança, executa a suíte Python e confirma a disponibilidade do Playwright.
+## Packaged Windows installer
 
-## Operação 24/7
+The Inno Setup package installs the engine and public collector binaries, configuration and data directories, and shortcuts. It deliberately does not start either executable, create scheduled tasks or enable autostart. Inspect the local configuration and start services manually after validation. See `WINDOWS_ONE_CLICK_INSTALL.md` for the packaged lifecycle.
 
-Depois da verificação:
+## Bounded collector validation
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_autostart.ps1
+For a graceful, time-bounded source-checkout test:
 
-São instaladas duas tarefas do Windows:
+```powershell
+.\PC_ENGINE\.venv\Scripts\python.exe .\PC_ENGINE\tools\run_market_data_collector.py --run-seconds 120
+```
 
-- VazaoSovereignTrader — engine PC, PAPER-first.
-- VazaoSovereignTrader-MarketData — recolha pública WebSocket contínua.
+The collector exits through its normal cleanup path and writes a STOPPED health state. After the bounded test succeeds, it can be started manually in continuous mode by omitting `--run-seconds`.
 
-Ambas reiniciam automaticamente após falhas.
+## Optional autostart
 
-A tarefa de market data é independente do engine: se o engine parar, a fita pública continua a ser recolhida; se um feed cair, os adapters WebSocket fazem reconnect.
+Do not configure autostart during initial validation. For source checkouts only, `scripts/install_windows_autostart.ps1` creates two Windows startup tasks for the engine and public Market Data collector. Run it only after successful physical validation and an explicit operator decision. It is not part of the packaged installer.
 
-## Recolha manual
+## Local artefacts
 
-Para iniciar apenas a recolha WebSocket:
+- `PC_ENGINE/data/radar/websocket_events.jsonl` — normalized public tape.
+- `PC_ENGINE/data/radar/websocket_lead_lag.jsonl` — cross-venue candidates.
+- `PC_ENGINE/data/radar/websocket_latency_edges.jsonl` — observational timing measurements.
+- `PC_ENGINE/data/radar/lead_lag_learning.json` — aggregated PAPER learning.
+- `PC_ENGINE/data/radar/state_signature_learning.jsonl` and `state_outcomes.jsonl` — PAPER learning outputs.
+- `PC_ENGINE/data/radar/market_data_health.json` — collector health and final state.
 
-    .\PC_ENGINE\.venv\Scripts\python.exe .\PC_ENGINE\tools\run_market_data_collector.py
+The collector does not submit orders or move funds. The research pipeline is:
 
-O serviço observa inicialmente Binance, Coinbase e OKX. Não precisa de API keys.
+`collect public data -> learn descriptively -> validate out-of-sample -> assess PAPER outcomes`
 
-## Artefactos
-
-- PC_ENGINE/data/radar/websocket_events.jsonl — tape normalizado.
-- PC_ENGINE/data/radar/websocket_lead_lag.jsonl — candidatos cross-venue.
-- PC_ENGINE/data/radar/websocket_latency_edges.jsonl — medições temporais observacionais.
-- PC_ENGINE/data/radar/lead_lag_learning.json — aprendizagem PAPER agregada.
-- PC_ENGINE/data/radar/state_signature_learning.jsonl e state_outcomes.jsonl — aprendizagem PAPER existente.
-
-O collector não envia ordens, não levanta fundos e não ativa REAL.
-
-## Pipeline
-
-    recolher -> aprender -> validar OOS -> testar PAPER -> revisão de risco -> REAL controlado
-
-Uma relação elegível continua a ser evidência PAPER, não autorização para negociar.
+No result authorizes live trading or changes financial permissions.

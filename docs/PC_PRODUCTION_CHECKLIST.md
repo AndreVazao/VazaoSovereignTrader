@@ -1,43 +1,46 @@
-# PC — checklist de prontidão
+# PC — checklist de prontidão PAPER
 
-## Instalação
+## Instalação e validação inicial
+
+Para instalação a partir do código-fonte:
 
 1. Windows 10/11 com Python 3.11+.
 2. Executar `scripts/setup_windows.ps1`.
-3. Executar `scripts/configure_windows_secrets.ps1`.
-4. Abrir uma nova PowerShell.
-5. Executar `scripts/verify_pc_install.ps1`.
+3. Executar `scripts/ensure_windows_token.ps1` para gerar o token local se ainda não existir.
+4. Opcionalmente, executar `scripts/configure_windows_secrets.ps1` para definir um token próprio com entrada segura.
+5. Fechar e reabrir PowerShell para carregar a variável de ambiente.
+6. Executar `scripts/verify_pc_install.ps1`.
+7. Executar `scripts/verify_public_market_data.ps1` e inspecionar `market_data_bootstrap.json`, incluindo venues READY e degradadas.
+8. Iniciar manualmente com `scripts/windows_run_pc_engine.bat`.
+9. Confirmar resposta HTTP 200 em `http://127.0.0.1:8765/health`.
 
-## PAPER obrigatório antes de REAL
+Para instalação pelo pacote Windows, não é necessário instalar Python. O instalador inclui o helper em `%LOCALAPPDATA%\VazaoSovereignTrader\scripts\ensure_windows_token.ps1`. Executá-lo, fechar e reabrir PowerShell e iniciar o EXE a partir dessa nova sessão para herdar `VST_LOCAL_TOKEN`. Consultar `docs/WINDOWS_ONE_CLICK_INSTALL.md` para os comandos completos.
 
-- Confirmar `mode=PAPER`.
-- Abrir `http://127.0.0.1:8765/dashboard`.
-- Executar PREFLIGHT.
-- LIGAR e deixar o collector trabalhar 24/7.
-- Verificar `market_states.jsonl`, `state_signature_learning.jsonl` e `state_outcomes.jsonl`.
-- Executar a validação PAPER.
-- Não ativar REAL enquanto os gates de readiness estiverem bloqueados.
+A verificação leve não executa a suíte Python completa por defeito. Usar testes focados e evitar a suíte integral/endurance enquanto o collector estiver ativo numa máquina com pouca memória.
 
-## REAL protegido
+## Invariantes obrigatórias nesta fase
 
-- API da exchange: Read + Spot Trade apenas.
-- Withdraw desligado.
-- Futures/leverage desligado.
-- REAL exige readiness atual, preflight atual e autorização temporária.
-- O PC é o único componente que possui chaves de exchange.
-- O telemóvel só envia comandos autenticados; nunca recebe chaves da exchange.
-- Se houver posições recuperadas no arranque, o sistema bloqueia a passagem para REAL até reconciliação manual.
+- `mode=PAPER`.
+- `radar.observational_only=true`.
+- `autonomous_execution.allow_real=false`.
+- `autonomous_execution.auto_promote_real=false`.
+- Não configurar API keys privadas de exchanges.
+- Não conceder permissões de trading, transferências ou levantamento.
+- Market data inicial deve usar apenas endpoints públicos/read-only.
+- O token `VST_LOCAL_TOKEN` protege a API local e não é uma credencial de exchange.
 
-## 24/7
+## Collector público
 
-Executar `scripts/install_windows_autostart.ps1` depois da verificação.
-O watchdog/recovery continuam ativos. O PC deve permanecer ligado à internet.
+Primeiro executar um teste limitado com `--run-seconds 120`. Confirmar encerramento limpo e estado STOPPED em `market_data_health.json`. Só depois iniciar manualmente a recolha contínua, se o operador assim decidir.
+
+## Arranque automático e operação 24/7
+
+Não instalar autostart durante a validação inicial. O instalador Windows empacotado não cria tarefas agendadas nem inicia engine/collector. Para uma instalação a partir do código-fonte, `scripts/install_windows_autostart.ps1` é uma opção separada, que só deve ser executada após validação física bem-sucedida e decisão explícita do operador.
 
 ## Comando remoto
 
-Usar Tailscale entre PC e Android. Não fazer port-forward da porta 8765 no router.
-O token `VST_LOCAL_TOKEN` continua obrigatório mesmo dentro da rede privada.
+Usar uma rota privada autenticada, preferencialmente Tailscale, depois de validar a configuração e identidade do dispositivo. Não fazer port-forward da porta 8765 no router.
 
-## Limite importante
+## Critério de aceitação local
 
-Pronto para usar no PC significa **operacionalmente preparado**, não garantia de lucro nem validação económica de uma estratégia. REAL só deve ser usado depois de dados PAPER suficientes e dos gates passarem.
+A instalação só fica validada no PC quando o operador confirmar manualmente o arranque, health check, leitura de dados públicos, encerramento limpo do collector e preservação dos dados. Um workflow CI verde não substitui esta validação física.

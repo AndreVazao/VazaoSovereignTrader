@@ -1,14 +1,24 @@
 $ErrorActionPreference = "Stop"
 
-$token = Read-Host "VST_LOCAL_TOKEN (long random token)"
-if ([string]::IsNullOrWhiteSpace($token)) { throw "Token cannot be empty." }
-[Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $token, "User")
+$secureToken = Read-Host "VST_LOCAL_TOKEN (long random local API token)" -AsSecureString
+if ($null -eq $secureToken) { throw "VST_LOCAL_TOKEN cannot be empty." }
 
-$binanceKey = Read-Host "BINANCE_KEY (leave empty to skip)"
-$binancePrivate = Read-Host "BINANCE_PRIVATE (leave empty to skip)"
-if ($binanceKey) { [Environment]::SetEnvironmentVariable("BINANCE_KEY", $binanceKey, "User") }
-if ($binancePrivate) { [Environment]::SetEnvironmentVariable("BINANCE_PRIVATE", $binancePrivate, "User") }
+$tokenPtr = [IntPtr]::Zero
+try {
+    $tokenPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPtr)
+    if ([string]::IsNullOrWhiteSpace($token)) { throw "VST_LOCAL_TOKEN cannot be empty." }
+    if ($token.Length -lt 32) { throw "VST_LOCAL_TOKEN must contain at least 32 characters." }
+    [Environment]::SetEnvironmentVariable("VST_LOCAL_TOKEN", $token, "User")
+}
+finally {
+    if ($tokenPtr -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPtr)
+    }
+    if ($secureToken) { $secureToken.Dispose() }
+    $token = $null
+}
 
-Write-Host "Secrets stored as Windows user environment variables."
-Write-Host "Withdraw permission must remain disabled. Futures/leverage must remain disabled."
+Write-Host "VST_LOCAL_TOKEN stored as a Windows user environment variable." -ForegroundColor Green
+Write-Host "This helper does not collect or store exchange API credentials."
 Write-Host "Close this terminal and open a new one before starting the engine."
