@@ -76,7 +76,7 @@ class PublicWebSocketCollector:
         """Reset backoff only after a genuinely stable open connection."""
         if connection_duration_seconds >= stable_connection_seconds:
             return 1.0
-        return min(max(1.0, float(current_delay_seconds)), max_delay_seconds)
+        return min(max(1.0, float(current_delay_seconds) * 2.0), max_delay_seconds)
 
     def _finish_connection_locked(self) -> None:
         if self._connection_started_ns is not None:
