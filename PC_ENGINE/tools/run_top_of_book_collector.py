@@ -174,6 +174,8 @@ def main() -> None:
                 return
             with counters_lock:
                 counters["reconnects"] += 1
+            if duration < 60.0:
+                delay_seconds = min(delay_seconds * 2.0, 30.0)
 
     allowed = set(args.venues)
     configs = [
