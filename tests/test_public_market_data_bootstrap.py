@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PC_ENGINE.radar.public_market_data_bootstrap import bootstrap_public_market_data
@@ -15,10 +17,10 @@ class FakeClient:
         return {}
 
     def fetch_ticker(self, symbol: str):
-        return {"last": 100.0, "timestamp": 1_700_000_000_000}
+        return {"last": 100.0, "timestamp": time.time_ns() // 1_000_000}
 
     def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int):
-        base = 1_700_000_000_000
+        base = time.time_ns() // 1_000_000 - 60 * 60 * 1_000
         return [
             [base + index * 60_000, 100.0, 101.0, 99.0, 100.5, 10.0]
             for index in range(60)
@@ -160,7 +162,11 @@ def test_bootstrap_rejects_ticker_without_valid_timestamp(tmp_path: Path) -> Non
 def test_bootstrap_accepts_iso_datetime_when_ccxt_timestamp_is_absent(tmp_path: Path) -> None:
     class DatetimeTickerClient(FakeClient):
         def fetch_ticker(self, symbol: str):
-            return {"last": 100.0, "timestamp": None, "datetime": "2023-11-14T22:13:20.000Z"}
+            return {
+                "last": 100.0,
+                "timestamp": None,
+                "datetime": datetime.now(timezone.utc).isoformat(),
+            }
 
     report = bootstrap_public_market_data(
         exchanges=["binance"],
@@ -171,7 +177,8 @@ def test_bootstrap_accepts_iso_datetime_when_ccxt_timestamp_is_absent(tmp_path: 
 
     item = report["venues"][0]["symbols"]["BTC/USDT"]
     assert item["status"] == "READY"
-    assert item["ticker"]["timestamp_ms"] == 1_700_000_000_000
+    assert item["ticker"]["timestamp_ms"] > 0
+    assert 0 <= item["ticker"]["age_seconds"] <= 2
 
 
 def test_bootstrap_excludes_symbol_missing_from_exchange_market_metadata(tmp_path: Path) -> None:
@@ -218,3 +225,53 @@ def test_bootstrap_rejects_seconds_mistaken_for_milliseconds(tmp_path: Path) -> 
     item = report["venues"][0]["symbols"]["BTC/USDT"]
     assert item["status"] == "FAILED"
     assert "not expressed in milliseconds" in item["error"]
+
+
+
+def test_bootstrap_rejects_stale_ticker_snapshot(tmp_path: Path) -> None:
+    class StaleTickerClient(FakeClient):
+        def fetch_ticker(self, symbol: str):
+            return {"last": 100.0, "timestamp": 1_600_000_000_000}
+
+    report = bootstrap_public_market_data(
+        exchanges=["binance"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=lambda _name: StaleTickerClient("stale"),
+        max_ticker_age_seconds=300,
+    )
+
+    item = report["venues"][0]["symbols"]["BTC/USDT"]
+    assert report["status"] == "DEGRADED"
+    assert item["status"] == "FAILED"
+    assert "ticker data is stale" in item["error"]
+
+
+def test_bootstrap_rejects_ticker_timestamp_too_far_in_future(tmp_path: Path) -> None:
+    class FutureTickerClient(FakeClient):
+        def fetch_ticker(self, symbol: str):
+            return {"last": 100.0, "timestamp": time.time_ns() // 1_000_000 + 120_000}
+
+    report = bootstrap_public_market_data(
+        exchanges=["binance"],
+        symbols=["BTC/USDT"],
+        data_dir=tmp_path,
+        client_factory=lambda _name: FutureTickerClient("future"),
+    )
+
+    item = report["venues"][0]["symbols"]["BTC/USDT"]
+    assert report["status"] == "DEGRADED"
+    assert item["status"] == "FAILED"
+    assert "more than 30 seconds in the future" in item["error"]
+
+
+def test_bootstrap_rejects_non_positive_ticker_age_limit(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="positive finite"):
+        bootstrap_public_market_data(
+            exchanges=["binance"],
+            symbols=["BTC/USDT"],
+            data_dir=tmp_path,
+            max_ticker_age_seconds=0,
+        )

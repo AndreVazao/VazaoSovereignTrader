@@ -43,6 +43,15 @@ def _ticker_timestamp_ms(ticker: dict[str, Any]) -> int:
     return int(timestamp)
 
 
+def _ticker_age_seconds(timestamp_ms: int, *, now_ms: int | None = None) -> float:
+    """Return ticker age, rejecting timestamps materially in the future."""
+    current_ms = time.time_ns() // 1_000_000 if now_ms is None else int(now_ms)
+    age_seconds = (current_ms - timestamp_ms) / 1000.0
+    if age_seconds < -30.0:
+        raise ValueError("ticker timestamp is more than 30 seconds in the future")
+    return max(0.0, age_seconds)
+
+
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -60,6 +69,7 @@ def bootstrap_public_market_data(
     client_factory: Callable[[str], Any] | None = None,
     require_all_exchanges: bool = True,
     minimum_ready_venues: int = 1,
+    max_ticker_age_seconds: float = 300.0,
 ) -> dict[str, Any]:
     """Verify public market-data access and persist a local bootstrap manifest.
 
@@ -73,6 +83,9 @@ def bootstrap_public_market_data(
     minimum_ready_venues = int(minimum_ready_venues)
     if minimum_ready_venues < 1:
         raise ValueError("minimum_ready_venues must be at least 1")
+    max_ticker_age_seconds = float(max_ticker_age_seconds)
+    if not math.isfinite(max_ticker_age_seconds) or max_ticker_age_seconds <= 0:
+        raise ValueError("max_ticker_age_seconds must be a positive finite number")
 
     exchange_names = list(dict.fromkeys(exchanges))
     symbol_names = list(dict.fromkeys(symbols))
@@ -114,9 +127,16 @@ def bootstrap_public_market_data(
                     ticker = client.fetch_ticker(symbol)
                     price = float(ticker.get("last") or 0.0)
                     ticker_timestamp_ms = _ticker_timestamp_ms(ticker)
+                    ticker_age_seconds = _ticker_age_seconds(ticker_timestamp_ms)
+                    if ticker_age_seconds > max_ticker_age_seconds:
+                        raise ValueError(
+                            f"ticker data is stale: {ticker_age_seconds:.1f}s exceeds "
+                            f"the {max_ticker_age_seconds:.1f}s limit"
+                        )
                     item["ticker"] = {
                         "price": price,
                         "timestamp_ms": ticker_timestamp_ms,
+                        "age_seconds": round(ticker_age_seconds, 3),
                     }
                     candles = client.fetch_ohlcv(symbol, timeframe=timeframe, limit=candle_limit)
                     quality = validate_ohlcv_rows(
@@ -218,6 +238,7 @@ def main() -> int:
     parser.add_argument("--symbols", default=None)
     parser.add_argument("--timeframe", default=None)
     parser.add_argument("--candle-limit", type=int, default=None)
+    parser.add_argument("--max-ticker-age-seconds", type=float, default=None)
     policy = parser.add_mutually_exclusive_group()
     policy.add_argument(
         "--require-all-exchanges",
@@ -260,6 +281,11 @@ def main() -> int:
         candle_limit=int(args.candle_limit or config.get("strategy", {}).get("candles_limit", 120)),
         require_all_exchanges=require_all_exchanges,
         minimum_ready_venues=minimum_ready_venues,
+        max_ticker_age_seconds=float(
+            args.max_ticker_age_seconds
+            if args.max_ticker_age_seconds is not None
+            else bootstrap_cfg.get("max_ticker_age_seconds", 300.0)
+        ),
     )
     print(json.dumps(report, ensure_ascii=False, sort_keys=True))
     return 0 if report["status"] == "READY" else 2
