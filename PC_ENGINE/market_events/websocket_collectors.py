@@ -155,6 +155,7 @@ class PublicWebSocketCollector:
         with self._stats_lock:
             self._connect_attempts += 1
             self._state = "CONNECTING"
+            self._last_connection_duration_seconds = 0.0
 
         def on_message(ws: websocket.WebSocketApp, message: str) -> None:
             with self._stats_lock:
