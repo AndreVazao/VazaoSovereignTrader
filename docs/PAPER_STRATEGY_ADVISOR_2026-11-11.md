@@ -16,7 +16,7 @@ orders.
 3. Inspect
    `PC_ENGINE/data/radar/strategy_advisor_report.json`.
 
-The advisor consumes the report produced by `PC_ENGINE.research.paper_study`.
+The advisor consumes the report produced by `PC_ENGINE.research.paper_study`. The Monte Carlo gate uses the dedicated `monte_carlo_oos` result, never the full-sample bootstrap. Chronological and walk-forward training windows purge any outcome whose forward label crosses the test boundary.
 Missing, malformed, non-PAPER, or inadequate evidence is never interpreted as
 success.
 
@@ -26,7 +26,8 @@ success.
 - At least 30 chronological out-of-sample outcomes.
 - Positive net expectancy in the OOS test after the study's configured costs.
 - At least 60% of available walk-forward test folds with positive mean net bps.
-- Monte Carlo probability of non-positive mean no greater than 25%.
+- OOS-only Monte Carlo bootstrap probability of non-positive mean no greater than 25%.
+- Forward outcome labels that overlap a chronological test boundary are purged from training.
 - At least one regime with 20 or more observations.
 
 Decisions:
