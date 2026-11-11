@@ -386,7 +386,7 @@ def build_chat_cockpit(app):
     def nav(label, key, icon):
         # Keep navigation labels on one line on narrow screens.
         mobile_labels = {"chat": "Chat", "office": "Office", "experience": "Modo",
-                         "pc": "PC", "files": "Files", "human": "Humano", "ready": "Ready"}
+                         "pc": "PC", "files": "Files", "human": "Humano", "ready": "Ready", "market": "Radar"}
         text = mobile_labels.get(key, label) if phone_layout else label
         btn = RoundedButton(text=text, fill=PANEL, size_hint_y=None,
                             height=dp(48 if phone_layout else 58))
@@ -402,6 +402,7 @@ def build_chat_cockpit(app):
     nav("Ficheiros", "files", "F")
     nav("Humano", "human", "!")
     nav("Readiness", "ready", "R")
+    nav("Mercado", "market", "D")
     sidebar_spacer = Widget()
     sidebar.add_widget(sidebar_spacer)
     paper_button = RoundedButton(text="PAPER", fill=(0.12, 0.18, 0.17, 1), size_hint_y=None, height=dp(42))
@@ -873,12 +874,34 @@ def build_chat_cockpit(app):
         page.add_widget(card)
         return page
 
+    def market_page():
+        page = BoxLayout(orientation="vertical", spacing=dp(8))
+        page.add_widget(header("Radar & Dados", "Recolha pública real · estado e qualidade · PAPER"))
+        content = BoxLayout(orientation="vertical", spacing=dp(8), size_hint_y=None)
+        content.bind(minimum_height=content.setter("height"))
+        card = Surface(orientation="vertical", padding=dp(14), spacing=dp(7), size_hint_y=None, height=dp(260))
+        app.market_data_label = _label("A aguardar dados do PC…", size=13, color=TEXT)
+        card.add_widget(app.market_data_label)
+        card.add_widget(_label("Os contadores distinguem pedidos, respostas válidas, rejeições e falhas de gravação. Uma exchange configurada não significa que esteja ligada.", size=11, color=MUTED))
+        card.add_widget(RoundedButton(text="ATUALIZAR DADOS", fill=PANEL_2, size_hint_y=None, height=dp(44), on_release=lambda *_: app.refresh_market_data()))
+        content.add_widget(card)
+        venues = Surface(orientation="vertical", padding=dp(14), spacing=dp(6), size_hint_y=None, height=dp(220))
+        venues.add_widget(_label("ESTADO POR EXCHANGE", size=13, bold=True, size_hint_y=None, height=dp(26)))
+        app.market_venues_label = _label("Sem métricas recebidas.", size=12, color=MUTED)
+        venues.add_widget(app.market_venues_label)
+        content.add_widget(venues)
+        scroll = ScrollView(do_scroll_x=False, bar_width=dp(3))
+        scroll.add_widget(content)
+        page.add_widget(scroll)
+        return page
+
     pages["chat"]=chat_page
     pages["office"]=office_page
     pages["pc"]=pc_page
     pages["files"]=files_page
     pages["human"]=human_page
     pages["ready"]=ready_page
+    pages["market"]=market_page
     page_instances = {}
 
     def show_page(key):
@@ -892,6 +915,8 @@ def build_chat_cockpit(app):
             app.refresh_exchange()
         elif key=="human":
             app.refresh_human(0)
+        elif key=="market":
+            app.refresh_market_data()
 
     def toggle_sidebar():
         sidebar.width = dp(220) if sidebar.width < dp(100) else dp(78)
