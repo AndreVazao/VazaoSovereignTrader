@@ -72,7 +72,10 @@ Delivery sequence:
 ## Incremental delivery and acceptance gates
 
 ### E1 — Secure read-only credential foundation (next implementation increment)
-- [ ] Inventory existing venue configuration, CCXT usage, route factory, scopes and test fixtures.
+- [x] Inventory existing venue configuration, CCXT usage, route factory, scopes and test fixtures.
+- [x] Add per-venue public market request/success/error/quality-rejection and persistence counters to the Radar.
+- [x] Expose collector counters through authenticated `/paper-collector/resources` for PC/mobile observability.
+- [ ] Run exact-head tests and validate metrics against live Windows runtime before treating collector health as proven.
 - [ ] Add Windows DPAPI credential vault with fail-closed cross-platform behavior.
 - [ ] Add explicit Binance/OKX read-only capability registry and permission verifier.
 - [ ] Add authenticated owner-only register, verify, status and revoke routes; no secret echo.
