@@ -267,3 +267,36 @@ def test_collector_rebuilds_closed_radar_on_restart(tmp_path: Path):
     assert collector.radar is not original_radar
     assert collector._radar_closed is False
     assert collector.stop() is True
+
+
+
+def test_collector_stops_between_symbol_requests_when_cancelled(tmp_path: Path):
+    calls = []
+    holder = {}
+
+    def fetcher(symbol, timeframe, limit):
+        calls.append(symbol)
+        holder["collector"].stop_event.set()
+        return _ohlcv()
+
+    collector = PaperMarketCollector(
+        settings={
+            "polling_exchanges": [],
+            "data_dir": str(tmp_path),
+            "confluence": {
+                "data_dir": str(tmp_path),
+                "derivatives": {"enabled": False, "observational_only": True},
+            },
+        },
+        symbols=["BTC/USDT", "ETH/USDT"],
+        ohlcv_fetcher=fetcher,
+        strategy=FakeStrategy(),
+    )
+    holder["collector"] = collector
+
+    recorded = collector.collect_once()
+
+    assert recorded == 0
+    assert calls == ["BTC/USDT"]
+    assert collector.snapshot()["cycles"] == 0
+    assert collector.stop() is True
