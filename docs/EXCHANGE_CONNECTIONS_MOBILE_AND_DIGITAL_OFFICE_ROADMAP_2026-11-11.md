@@ -3,7 +3,7 @@
 **Updated:** 2026-11-11  
 **Baseline:** `main` at `5f73a6d13af42186a2ffade05511fc97d835a8e7`  
 **Working branch:** `feat/exchange-readonly-mobile-office-foundation-2026-11-11`  
-**Status:** architecture contract and implementation gates; no private exchange credentials are accepted by this increment.
+**Status:** architecture contract plus initial DPAPI vault foundation; no credential registration API, UI or live exchange probe is included.
 
 ## Product target
 
