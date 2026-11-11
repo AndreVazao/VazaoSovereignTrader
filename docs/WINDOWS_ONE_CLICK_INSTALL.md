@@ -104,3 +104,13 @@ A newer installer can be installed over the same application location. Existing 
 The CI lifecycle test performs a silent v1 install, silent in-place v2 upgrade, engine launch, HTTP health check, silent uninstall and SHA-256 verification of the vault marker. This is CI evidence; it does not replace validation on the target PC.
 
 Do not expose the PC API with a router port-forward. Use an authenticated private network path when remote access is introduced and validated.
+
+
+### PAPER collector network and shutdown bounds
+
+The PAPER radar and OHLCV collector use the configurable `radar.request_timeout_ms`
+setting (default: 8000 ms, clamped to 1000–60000 ms). The collector checks its
+stop signal between venue and symbol requests. Its shutdown wait is bounded by
+`radar.shutdown_timeout_seconds` (default: 10 seconds). If a request does not
+finish within that window, the worker remains visible as active and the durable
+Learning Vault is not closed underneath it. No worker is force-terminated.
