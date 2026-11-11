@@ -88,6 +88,18 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("HD 3D (futuro)", source)
         self.assertIn("fallback seguro", source)
 
+    def test_mobile_market_page_uses_authenticated_public_data_metrics(self) -> None:
+        ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        main_source = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('nav("Mercado", "market", "D")', ui_source)
+        self.assertIn('pages["market"]=market_page', ui_source)
+        self.assertIn('app.refresh_market_data()', ui_source)
+        self.assertIn('"/paper-collector/resources"', main_source)
+        self.assertIn("successful_observations", main_source)
+        self.assertIn("quality_rejections", main_source)
+        self.assertIn("DADOS ANTIGOS", main_source)
+        self.assertIn("Não assumir que as exchanges estão ligadas.", main_source)
+
     def test_startup_failure_has_local_diagnostic_fallback(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn(
