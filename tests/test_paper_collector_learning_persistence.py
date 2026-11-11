@@ -65,6 +65,9 @@ def test_paper_collector_learning_survives_restart_and_verified_backup_restore(t
 
     try:
         collector._refresh_learning()
+        evidence_snapshot = collector._refresh_evidence_learning()
+        assert evidence_snapshot is not None
+
         first_records = tuple(memory.iter_records())
         learning_records = [
             record for record in first_records
@@ -72,7 +75,7 @@ def test_paper_collector_learning_survives_restart_and_verified_backup_restore(t
         ]
         assert learning_records
         assert {record.value["kind"] for record in learning_records} == {
-            "state_signature", "state_outcome"
+            "state_signature", "state_outcome", "evidence_learning"
         }
         assert all(record.status == "unverified" for record in learning_records)
         assert all(record.confidence == 0.0 for record in learning_records)
@@ -84,6 +87,8 @@ def test_paper_collector_learning_survives_restart_and_verified_backup_restore(t
         persisted_before = collector.durable_learning_persisted
 
         collector._refresh_learning()
+        repeated_snapshot = collector._refresh_evidence_learning()
+        assert repeated_snapshot == evidence_snapshot
 
         refreshed = {
             record.key: record.version
