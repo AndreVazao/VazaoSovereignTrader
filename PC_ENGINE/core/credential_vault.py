@@ -44,19 +44,26 @@ def _dpapi_protect(data: bytes) -> bytes:
 
     crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    crypt32.CryptProtectData.argtypes = [
+        ctypes.POINTER(DATA_BLOB), wintypes.LPCWSTR, ctypes.c_void_p,
+        ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(DATA_BLOB),
+    ]
+    crypt32.CryptProtectData.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel32.LocalFree.restype = ctypes.c_void_p
     source_buffer = ctypes.create_string_buffer(data)
     source = DATA_BLOB(len(data), ctypes.cast(source_buffer, ctypes.POINTER(ctypes.c_byte)))
     output = DATA_BLOB()
     # CRYPTPROTECT_UI_FORBIDDEN; omit LOCAL_MACHINE so data is bound to current user.
     if not crypt32.CryptProtectData(
-        ctypes.byref(source), "VST exchange credential", None, None, None, 0x1,
+        ctypes.byref(source), ctypes.c_wchar_p("VST exchange credential"), None, None, None, 0x1,
         ctypes.byref(output),
     ):
         raise CredentialVaultUnavailable("dpapi_protect_failed")
     try:
         return ctypes.string_at(output.pbData, output.cbData)
     finally:
-        kernel32.LocalFree(output.pbData)
+        kernel32.LocalFree(ctypes.cast(output.pbData, ctypes.c_void_p))
 
 
 def _dpapi_unprotect(data: bytes) -> bytes:
@@ -72,6 +79,13 @@ def _dpapi_unprotect(data: bytes) -> bytes:
 
     crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    crypt32.CryptUnprotectData.argtypes = [
+        ctypes.POINTER(DATA_BLOB), ctypes.POINTER(wintypes.LPWSTR), ctypes.c_void_p,
+        ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(DATA_BLOB),
+    ]
+    crypt32.CryptUnprotectData.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel32.LocalFree.restype = ctypes.c_void_p
     source_buffer = ctypes.create_string_buffer(data)
     source = DATA_BLOB(len(data), ctypes.cast(source_buffer, ctypes.POINTER(ctypes.c_byte)))
     output = DATA_BLOB()
@@ -84,9 +98,9 @@ def _dpapi_unprotect(data: bytes) -> bytes:
     try:
         return ctypes.string_at(output.pbData, output.cbData)
     finally:
-        kernel32.LocalFree(output.pbData)
+        kernel32.LocalFree(ctypes.cast(output.pbData, ctypes.c_void_p))
         if description:
-            kernel32.LocalFree(description)
+            kernel32.LocalFree(ctypes.cast(description, ctypes.c_void_p))
 
 
 class WindowsCredentialVault:
