@@ -52,7 +52,7 @@ def assess_strategy_report(
     overall = report.get("overall") if isinstance(report.get("overall"), dict) else {}
     oos = report.get("chronological_oos") if isinstance(report.get("chronological_oos"), dict) else {}
     test = oos.get("test") if isinstance(oos.get("test"), dict) else {}
-    monte_carlo = report.get("monte_carlo") if isinstance(report.get("monte_carlo"), dict) else {}
+    monte_carlo = report.get("monte_carlo_oos") if isinstance(report.get("monte_carlo_oos"), dict) else {}
     folds = report.get("walk_forward") if isinstance(report.get("walk_forward"), list) else []
     regimes = report.get("regimes") if isinstance(report.get("regimes"), dict) else {}
 
@@ -93,7 +93,7 @@ def assess_strategy_report(
         "minimum_oos_samples": oos_count >= min_oos_samples,
         "positive_oos_net_expectancy": oos_mean > 0,
         "walk_forward_consistency": bool(valid_folds) and positive_fold_ratio >= min_positive_fold_ratio,
-        "monte_carlo_uncertainty": probability_non_positive <= max_probability_non_positive,
+        "oos_monte_carlo_uncertainty": probability_non_positive <= max_probability_non_positive,
         "regime_evidence": any(row["evidence_sufficient"] for row in regime_rows),
     }
     if outcome_count < min_outcomes or oos_count < min_oos_samples or not valid_folds:
@@ -119,7 +119,7 @@ def assess_strategy_report(
             "walk_forward_folds": len(valid_folds),
             "positive_walk_forward_folds": positive_folds,
             "positive_walk_forward_ratio": round(positive_fold_ratio, 6),
-            "monte_carlo_probability_mean_leq_zero": round(probability_non_positive, 6),
+            "oos_monte_carlo_probability_mean_leq_zero": round(probability_non_positive, 6),
         },
         "gates": gates,
         "regimes": regime_rows,
