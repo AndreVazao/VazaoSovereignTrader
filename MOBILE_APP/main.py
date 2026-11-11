@@ -658,6 +658,21 @@ class MobileCockpit(App):
                 )
             if hasattr(self, "market_venues_label"):
                 self.market_venues_label.text = "\n".join(rows) if rows else "Ainda sem respostas por exchange."
+            if hasattr(self, "market_evidence_label"):
+                try:
+                    evidence_response = self._request("GET", "/evidence-scorecard", timeout=5)
+                    if evidence_response.status_code != 200:
+                        raise RuntimeError(f"HTTP {evidence_response.status_code}")
+                    evidence = evidence_response.json()
+                    missing = evidence.get("requirements_missing") or []
+                    lines = [
+                        f"Requisitos de evidência presentes: {evidence.get('requirements_met', 0)}/{evidence.get('requirements_total', 0)}",
+                        f"Por cumprir: {', '.join(str(item) for item in missing[:5]) or 'nenhum requisito em falta'}",
+                        "PAPER only · ordens submetidas: não · autorização REAL: não",
+                    ]
+                    self.market_evidence_label.text = "\n".join(lines)
+                except Exception as evidence_exc:
+                    self.market_evidence_label.text = f"Scorecard indisponível: {type(evidence_exc).__name__}"
         except Exception as exc:
             if hasattr(self, "market_data_label"):
                 self.market_data_label.text = f"Estado de recolha indisponível\n{type(exc).__name__}: {exc}"
