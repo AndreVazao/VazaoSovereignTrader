@@ -135,6 +135,10 @@ When blocked, do not improvise a risky workaround. Record the condition and cont
 Return a concise status plus the full report path. State which tests passed, failed, were blocked, or were not run. Include the exact build SHA and installer SHA-256. Do not claim full end-to-end readiness unless every required lifecycle and safety gate has reproducible evidence.
 
 
+## Adaptive PAPER collector resource diagnostics — 2026-11-11
+
+The current main includes adaptive resource budgeting in `PaperMarketCollector` and an authenticated diagnostic endpoint. During local validation, query `GET /paper-collector/resources` using the supported authenticated client and `read_private_state` scope. Never print the token. Record only sanitized fields: resource profile (NORMAL/COMPACT), resource probe status, effective collection cadence, learning interval, `defer_heavy_jobs`, worker-alive/shutdown state, and PAPER safety flags. Confirm `paper_only=true`, `execution_authorized=false`, and `order_authority=false`. Under COMPACT or degraded resource probes, public market-data collection and PAPER bookkeeping/persistence must remain enabled while optional heavy learning/evidence work is deferred. Do not infer correct runtime behavior from the API response alone; correlate with process/memory and collector logs.
+
 ## Runtime shutdown supervision — 2026-11-04
 
 The engine now uses interruptible waits for paused, normal-cycle, and exception-backoff delays. A graceful stop must join the engine and research workers within the configured bounded timeout (`engine.shutdown_timeout_seconds`, default 8 seconds, capped at 60). Runtime status remains `STOPPING` while any tracked producer is alive and becomes `OFF` only after all tracked workers have exited. SAFE_MODE remains latched. Terminal `close()` must leave the learning-memory SQLite connection open and report `DEFERRED_ACTIVE_WORKERS` if any engine, research, market collector, or shared-intelligence worker remains alive.
