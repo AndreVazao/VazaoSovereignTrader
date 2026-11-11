@@ -30,6 +30,8 @@ def test_discovery_selects_on_train_and_evaluates_selected_candidate_oos():
     assert result["candidate_count"] == 9
     assert result["eligible_candidate_count"] >= 1
     assert result["split"]["training_signal_end_ms"] < result["split"]["oos_start_ms"]
+    if result["status"] == "OOS_EVALUATED":
+        assert result["selected_candidate"]["training_max_outcome_timestamp_ms"] <= result["split"]["oos_start_ms"]
     assert result["safety"]["parameters_applied_to_runtime"] is False
     assert result["safety"]["real_authorized"] is False
 
