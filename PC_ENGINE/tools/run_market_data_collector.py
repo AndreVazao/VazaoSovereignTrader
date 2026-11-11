@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import signal
+import sys
 import threading
 import time
 from pathlib import Path
@@ -18,7 +19,14 @@ from PC_ENGINE.research.paper_study import load_states, run_study, write_report
 from PC_ENGINE.research.websocket_timing_validation import validate_paths, write_report as write_timing_report
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+def _runtime_root() -> Path:
+    """Resolve packaged paths from the installed app, not the user's profile root."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+REPO_ROOT = _runtime_root()
 
 
 def _resolve_path(raw: str | Path) -> Path:
