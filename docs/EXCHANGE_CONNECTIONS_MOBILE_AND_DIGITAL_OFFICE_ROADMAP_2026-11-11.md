@@ -80,12 +80,14 @@ Delivery sequence:
 - [ ] Add explicit Binance/OKX read-only capability registry and permission verifier.
 - [ ] Add authenticated owner-only register, verify, status and revoke routes; no secret echo.
 - [ ] Add PC Cockpit form and redaction/no-store behavior.
-- [ ] Add contract, security, storage, timeout and negative-permission tests.
+- [x] Add unit/static contract tests for collector counters and Android Radar page wiring.
+- [ ] Add contract, security, storage, timeout and negative-permission tests for credential registration and venue permission verification.
 - [ ] Keep the feature disabled by default; do not ask the owner to create keys until the exact-head CI and security review pass.
 
 ### M1 — Mobile observability and conversation
 - [ ] Map current mobile methods to existing API endpoints and scope requirements.
-- [ ] Add typed, timestamped status models and stale/offline/unknown display.
+- [x] Add an Android Radar page showing authenticated public collector counters, per-venue successes/errors/rejections and last-observation freshness.
+- [ ] Add typed, timestamped status models and stale/offline/unknown display across the remaining mobile views.
 - [ ] Add bounded refresh and reconnect behavior without mutation replay.
 - [ ] Connect chat to authenticated assistant gateway and durable research task IDs.
 - [ ] Add PAPER, Radar, Learning Vault and alert views using real backend data.
