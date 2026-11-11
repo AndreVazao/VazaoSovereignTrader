@@ -69,6 +69,7 @@ def simulate(states: list[dict[str, Any]], *, horizon_ms: int, cost_bps: float, 
         net_bps = signed_bps - float(cost_bps)
         outcomes.append({
             "timestamp_ms": int(row["timestamp_ms"]),
+            "outcome_timestamp_ms": target,
             "symbol": str(row["symbol"]),
             "regime": str(row.get("regime", "UNKNOWN")),
             "action": action,
@@ -103,7 +104,16 @@ def _summary(values: list[float]) -> dict[str, Any]:
 def chronological_split(rows: list[dict[str, Any]], train_ratio: float = 0.7) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     ordered = sorted(rows, key=lambda row: int(row["timestamp_ms"]))
     cut = max(1, min(len(ordered) - 1, int(len(ordered) * float(train_ratio)))) if len(ordered) > 1 else len(ordered)
-    return ordered[:cut], ordered[cut:]
+    test = ordered[cut:]
+    if not test:
+        return ordered, test
+    test_start = int(test[0]["timestamp_ms"])
+    # Purge training labels whose forward outcome window overlaps the test period.
+    train = [
+        row for row in ordered[:cut]
+        if int(row.get("outcome_timestamp_ms", row["timestamp_ms"])) <= test_start
+    ]
+    return train, test
 
 
 def walk_forward(rows: list[dict[str, Any]], *, folds: int = 5, min_train: int = 100, test_size: int = 50) -> list[dict[str, Any]]:
@@ -118,8 +128,13 @@ def walk_forward(rows: list[dict[str, Any]], *, folds: int = 5, min_train: int =
         test_end = min(len(ordered), train_end + test_size)
         if train_end < min_train or test_end <= train_end:
             break
-        train = ordered[:train_end]
         test = ordered[train_end:test_end]
+        test_start = int(test[0]["timestamp_ms"])
+        # Purge overlapping forward labels at every walk-forward boundary.
+        train = [
+            row for row in ordered[:train_end]
+            if int(row.get("outcome_timestamp_ms", row["timestamp_ms"])) <= test_start
+        ]
         reports.append({
             "fold": fold + 1,
             "train_samples": len(train),
@@ -200,6 +215,7 @@ def _run_study_unmanaged(
         "walk_forward": walk_forward(outcomes, folds=folds, min_train=min_train, test_size=test_size),
         "regimes": regime_breakdown(outcomes),
         "monte_carlo": monte_carlo(outcomes, iterations=monte_carlo_iterations),
+        "monte_carlo_oos": monte_carlo(test, iterations=monte_carlo_iterations, seed=43),
         "policy_comparison": compare_paper_policies(states, horizon_ms=horizon_ms, cost_bps=cost_bps),
     }
     return report
