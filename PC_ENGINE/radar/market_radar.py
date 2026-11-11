@@ -141,6 +141,15 @@ class MarketRadar:
 
     def snapshot(self, stop_event=None) -> tuple[list[VenueSnapshot], list[LeadLagObservation]]:
         """Poll public tickers with a bounded request timeout and cooperative cancellation."""
+        # Keep __new__-constructed test doubles and restored instances compatible.
+        defaults = {
+            "request_attempts": 0, "successful_observations": 0, "request_errors": 0,
+            "persistence_batches": 0, "persistence_errors": 0, "last_observation_ms": None,
+            "per_venue_metrics": {},
+        }
+        for name, value in defaults.items():
+            if not hasattr(self, name):
+                setattr(self, name, value.copy() if isinstance(value, dict) else value)
         snapshots: list[VenueSnapshot] = []
         cancellation = stop_event if stop_event is not None else getattr(self, "stop_event", None)
         for exchange_name, client in self.clients.items():
@@ -179,6 +188,7 @@ class MarketRadar:
                         exchange_ts_ms=exchange_ts_ms,
                     ):
                         self.quality_rejections += 1
+                        venue_metrics["quality_rejections"] += 1
                         continue
 
                     previous = self.previous.get((exchange_name, symbol))
@@ -191,6 +201,7 @@ class MarketRadar:
                         # Duplicate or out-of-order source timestamp: do not let
                         # it create a fresh return or a false lead/lag event.
                         self.quality_rejections += 1
+                        venue_metrics["quality_rejections"] += 1
                         continue
 
                     timing_quality = (
