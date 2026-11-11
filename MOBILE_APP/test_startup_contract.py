@@ -99,6 +99,9 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("quality_rejections", main_source)
         self.assertIn("DADOS ANTIGOS", main_source)
         self.assertIn("Não assumir que as exchanges estão ligadas.", main_source)
+        self.assertIn('"/evidence-scorecard"', main_source)
+        self.assertIn("requirements_missing", main_source)
+        self.assertIn("market_evidence_label", ui_source)
 
     def test_startup_failure_has_local_diagnostic_fallback(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
