@@ -87,6 +87,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-pc.txt
           pip install pyinstaller pytest
+      - name: Validate native DPAPI CurrentUser credential vault
+        shell: pwsh
+        run: |
+          python -m pytest tests/test_credential_vault_windows.py tests/test_credential_vault.py -q
       - name: Validate constrained-memory PAPER resource policy on Windows
         shell: pwsh
         run: |
