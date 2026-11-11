@@ -363,6 +363,7 @@ def test_degraded_resource_probe_fails_conservatively_without_disabling_market_d
         settings={
             "polling_exchanges": [],
             "data_dir": str(tmp_path),
+            "learning_interval_cycles": 1,
             "adaptive_resources": {"enabled": True, "compact_interval_seconds": 12},
             "confluence": {
                 "data_dir": str(tmp_path),
@@ -374,6 +375,10 @@ def test_degraded_resource_probe_fails_conservatively_without_disabling_market_d
         strategy=FakeStrategy(),
         resource_manager=BrokenManager(),
     )
+    heavy_calls = []
+    collector._refresh_learning = lambda: heavy_calls.append("learning")
+    collector._refresh_evidence_ledger = lambda: heavy_calls.append("ledger")
+    collector._refresh_evidence_learning = lambda: heavy_calls.append("evidence")
     try:
         assert collector.collect_once() == 1
         state = collector.snapshot()
@@ -381,5 +386,6 @@ def test_degraded_resource_probe_fails_conservatively_without_disabling_market_d
         assert state["adaptive_resources"]["state"] == "DEGRADED"
         assert state["adaptive_resources"]["defer_heavy_jobs"] is True
         assert state["effective_interval_seconds"] == 12
+        assert heavy_calls == []
     finally:
         collector.stop()
