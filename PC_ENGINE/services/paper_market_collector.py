@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import threading
@@ -10,6 +11,8 @@ from PC_ENGINE.core.candlestick_patterns import CandlestickPatternEngine
 from PC_ENGINE.core.preflight import validate_ohlcv_rows
 from PC_ENGINE.core.confluence_runtime import PaperConfluenceRuntime
 from PC_ENGINE.learning.state_signature import StateSignatureLearningEngine
+from PC_ENGINE.learning.shared_memory import VersionConflict
+from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 from PC_ENGINE.learning.evidence_learning_loop import PaperEvidenceLearningLoop
 from PC_ENGINE.radar.evidence_ledger import EvidenceLedger
 from PC_ENGINE.radar.paper_evidence_ledger_builder import PaperEvidenceLedgerBuilder
@@ -35,12 +38,18 @@ class PaperMarketCollector:
         ohlcv_fetcher: Callable[[str, str, int], list[list[float]]],
         strategy,
         on_error: Callable[[str, dict], None] | None = None,
+        learning_memory: SQLiteLearningMemory | None = None,
     ) -> None:
         self.settings = settings
         self.symbols = list(dict.fromkeys(symbols))
         self.ohlcv_fetcher = ohlcv_fetcher
         self.strategy = strategy
         self.on_error = on_error
+        self.learning_memory = learning_memory
+        self.durable_learning_persisted = 0
+        self.durable_learning_duplicates = 0
+        self.durable_learning_errors = 0
+        self.durable_learning_last_error: str | None = None
         self.interval_seconds = max(2.0, float(settings.get("interval_seconds", 5.0)))
         self.timeframe = str(settings.get("timeframe", "1m"))
         self.candles_limit = max(30, int(settings.get("candles_limit", 120)))
@@ -205,6 +214,15 @@ class PaperMarketCollector:
                 "errors": self.evidence_learning_errors,
                 "snapshot": self.last_evidence_learning_snapshot,
             },
+            "durable_learning": {
+                "enabled": self.learning_memory is not None,
+                "persisted": self.durable_learning_persisted,
+                "duplicates": self.durable_learning_duplicates,
+                "errors": self.durable_learning_errors,
+                "last_error": self.durable_learning_last_error,
+                "status_policy": "unverified_only",
+                "order_authority": False,
+            },
             "champion_challenger": self.champion_runtime.snapshot(),
         }
 
@@ -303,6 +321,81 @@ class PaperMarketCollector:
         tmp.replace(path)
         return len(rows)
 
+    def _persist_durable_learning(self, kind: str, identity: dict, observation: dict) -> bool:
+        """Upsert one owner-private PAPER learning fact without granting authority."""
+        memory = self.learning_memory
+        if memory is None:
+            return False
+        try:
+            identity_json = json.dumps(
+                identity, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+            )
+            observation_json = json.dumps(
+                observation, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+            )
+            digest = hashlib.sha256(identity_json.encode("utf-8")).hexdigest()
+            key = f"paper.market_state.{kind}.{digest}"
+            value = {
+                "schema_version": 1,
+                "kind": kind,
+                "identity": identity,
+                "observation": json.loads(observation_json),
+                "paper_only": True,
+                "execution_authorized": False,
+            }
+            current = memory.get(key)
+            if current is not None and current.value == value:
+                self.durable_learning_duplicates += 1
+                return True
+            expected_version = current.version if current is not None else 0
+            try:
+                memory.put(
+                    key=key,
+                    value=value,
+                    department="market_radar",
+                    provenance=f"paper_market_collector:{kind}:v1",
+                    status="unverified",
+                    confidence=0.0,
+                    expected_version=expected_version,
+                )
+            except VersionConflict:
+                latest = memory.get(key)
+                if latest is not None and latest.value == value:
+                    self.durable_learning_duplicates += 1
+                    return True
+                memory.put(
+                    key=key,
+                    value=value,
+                    department="market_radar",
+                    provenance=f"paper_market_collector:{kind}:v1",
+                    status="unverified",
+                    confidence=0.0,
+                    expected_version=latest.version if latest is not None else 0,
+                )
+            self.durable_learning_persisted += 1
+            self.durable_learning_last_error = None
+            return True
+        except Exception as exc:
+            self.durable_learning_errors += 1
+            self.durable_learning_last_error = type(exc).__name__
+            return False
+
+    def _persist_learning_rows(self, kind: str, rows, identity_fields: tuple[str, ...]) -> int:
+        persisted = 0
+        for row in rows:
+            observation = dict(row.__dict__)
+            identity = {field: observation[field] for field in identity_fields}
+            if self._persist_durable_learning(kind, identity, observation):
+                persisted += 1
+        return persisted
+
+    def _persist_evidence_learning_snapshot(self, payload: dict) -> None:
+        self._persist_durable_learning(
+            "evidence_learning",
+            {"scope": "latest_snapshot"},
+            payload,
+        )
+
     def _refresh_evidence_ledger(self) -> int:
         """Materialize current PAPER observations into the immutable evidence ledger."""
         try:
@@ -338,6 +431,7 @@ class PaperMarketCollector:
                 handle.flush()
             tmp.replace(self.evidence_learning_snapshot_path)
             self.last_evidence_learning_snapshot = payload
+            self._persist_evidence_learning_snapshot(payload)
             return payload
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             self.evidence_learning_errors += 1
@@ -362,6 +456,9 @@ class PaperMarketCollector:
             horizons_ms=self.learning_horizons_ms,
         )
         self.last_learning_stats = self._atomic_save(signature_stats, self.learning_path)
+        self._persist_learning_rows(
+            "state_signature", signature_stats, ("signature", "horizon_ms")
+        )
 
         outcome_engine = StateOutcomeEngine(
             cost_bps=self.learning_cost_bps,
@@ -372,6 +469,9 @@ class PaperMarketCollector:
             horizons_ms=self.learning_horizons_ms,
         )
         self.last_outcome_stats = self._atomic_save(outcome_stats, self.outcome_path)
+        self._persist_learning_rows(
+            "state_outcome", outcome_stats, ("symbol", "action", "regime", "horizon_ms")
+        )
 
         self.learning_cycles += 1
         self.outcome_cycles += 1
