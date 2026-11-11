@@ -581,6 +581,8 @@
     "refresh_interval_seconds": 60,
     "reserve_memory_mb": 512,
     "max_workers_cap": null,
+    "compact_interval_seconds": 15,
+    "compact_learning_interval_multiplier": 4,
     "notes": "Hardware-aware compute budgets only. Never changes PAPER mode, REAL permission, risk limits or promotion permissions."
   }
 }
