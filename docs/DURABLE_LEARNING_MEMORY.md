@@ -77,3 +77,8 @@ By default, `SovereignEngine` opens `owners/<owner-id>/learning/sovereign-learni
 ## Validation boundary
 
 This adapter improves persistence and conflict handling; it does not prove that a market hypothesis is correct or profitable. A finding must still pass data-quality checks, replay without look-ahead, realistic costs/latency, out-of-sample validation, and independent risk review. Stale, missing, or unverified evidence must not enable Rapid-Bet or live execution.
+
+
+## PAPER collector durable records
+
+The PAPER market-state collector shares the engine's owner-private SQLite connection. It persists the latest derived state-signature aggregates, state-outcome aggregates and evidence-learning snapshot. Keys are stable per learning dimension, so a repeated identical result is a no-op while a changed result advances the record version and append-only event journal. All such records are stored as `unverified` with zero confidence until a separate validation workflow acts; the collector does not promote evidence, authorize orders, change mode or own the SQLite connection. Existing JSONL files remain available as operational/export artifacts and are not silently removed.
