@@ -69,6 +69,16 @@ class MarketRadar:
         self.previous: dict[tuple[str, str], VenueSnapshot] = {}
         self.last_pressure: dict[str, float] = {}
         self.quality_rejections = 0
+        self.request_attempts = 0
+        self.successful_observations = 0
+        self.request_errors = 0
+        self.persistence_batches = 0
+        self.persistence_errors = 0
+        self.last_observation_ms: int | None = None
+        self.per_venue_metrics = {
+            name: {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0}
+            for name in self.exchanges
+        }
         self.request_timeout_ms = max(1000, min(60000, int(request_timeout_ms)))
         self.stop_event = stop_event
         self._build_clients()
@@ -140,6 +150,11 @@ class MarketRadar:
                 if cancellation is not None and cancellation.is_set():
                     break
                 request_start_ns = time.monotonic_ns()
+                venue_metrics = self.per_venue_metrics.setdefault(
+                    exchange_name, {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0}
+                )
+                self.request_attempts += 1
+                venue_metrics["attempts"] += 1
                 try:
                     ticker = client.fetch_ticker(symbol)
                     request_end_ns = time.monotonic_ns()
@@ -154,6 +169,7 @@ class MarketRadar:
                         exchange_ts_ms = int(exchange_ts) if exchange_ts is not None else None
                     except (TypeError, ValueError, OverflowError):
                         self.quality_rejections += 1
+                        venue_metrics["quality_rejections"] += 1
                         continue
                     if not self._validate_ticker_snapshot(
                         price=price,
@@ -198,13 +214,23 @@ class MarketRadar:
                             observation_status="usable_for_descriptive_analysis_only",
                         )
                     )
+                    self.successful_observations += 1
+                    venue_metrics["successes"] += 1
+                    self.last_observation_ms = local_ts_ms
                 except Exception:
                     # Keep a failed request from becoming a synthetic zero-price observation.
+                    self.request_errors += 1
+                    venue_metrics["errors"] += 1
                     continue
 
         self.last_pressure = self._pressure_from_previous(snapshots)
         leads = self._detect_leads(snapshots)
-        self._persist(snapshots, leads)
+        try:
+            self._persist(snapshots, leads)
+            self.persistence_batches += 1
+        except Exception:
+            self.persistence_errors += 1
+            raise
         for snap in snapshots:
             self.previous[(snap.exchange, snap.symbol)] = snap
         return snapshots, leads
@@ -284,6 +310,23 @@ class MarketRadar:
         }
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+
+    def collection_metrics(self) -> dict[str, Any]:
+        """Operational public-data counters; excludes private account data."""
+        return {
+            "request_attempts": self.request_attempts,
+            "successful_observations": self.successful_observations,
+            "request_errors": self.request_errors,
+            "quality_rejections": self.quality_rejections,
+            "persistence_batches": self.persistence_batches,
+            "persistence_errors": self.persistence_errors,
+            "last_observation_ms": self.last_observation_ms,
+            "configured_venues": list(self.exchanges),
+            "venues": {name: dict(metrics) for name, metrics in sorted(self.per_venue_metrics.items())},
+            "data_source": "public_market_data",
+            "private_account_access": False,
+            "order_authority": False,
+        }
 
     def close(self) -> None:
         for client in self.clients.values():
