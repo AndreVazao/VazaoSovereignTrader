@@ -46,10 +46,24 @@ def _future_index(states: list[dict[str, Any]]) -> dict[str, tuple[list[int], li
     }
 
 
-def simulate(states: list[dict[str, Any]], *, horizon_ms: int, cost_bps: float, min_confluence: float = -1.0, min_confidence: float = 0.0) -> list[dict[str, Any]]:
+def simulate(
+    states: list[dict[str, Any]],
+    *,
+    horizon_ms: int,
+    cost_bps: float,
+    min_confluence: float = -1.0,
+    min_confidence: float = 0.0,
+    signal_start_ms: int | None = None,
+    signal_end_ms: int | None = None,
+) -> list[dict[str, Any]]:
     index = _future_index(states)
     outcomes: list[dict[str, Any]] = []
     for row in states:
+        signal_timestamp = int(row["timestamp_ms"])
+        if signal_start_ms is not None and signal_timestamp < int(signal_start_ms):
+            continue
+        if signal_end_ms is not None and signal_timestamp > int(signal_end_ms):
+            continue
         action = str(row["action"]).upper()
         confluence = abs(float(row.get("confluence_score", 0.0)))
         confidence = float(row.get("confluence_confidence", 0.0))
