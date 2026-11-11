@@ -87,7 +87,7 @@ Set-Location "$env:LOCALAPPDATA\VazaoSovereignTrader"
 .\VazaoSovereignTrader-MarketData.exe --config ".\config\config.local.json" --data-dir ".\data\radar" --run-seconds 120
 ```
 
-The bounded run exits through the collector's normal cleanup path and writes a final STOPPED health state. Inspect:
+The frozen executable resolves relative `--config` and `--data-dir` paths from its installation directory. The bounded run exits through the collector's normal cleanup path and writes a final STOPPED health state. Inspect:
 
 `data\radar\market_data_health.json`
 
