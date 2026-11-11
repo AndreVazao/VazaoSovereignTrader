@@ -52,7 +52,15 @@ class MarketRadar:
     exchange event order, and wall-clock differences are not called latency.
     """
 
-    def __init__(self, exchanges: list[str], symbols: list[str], data_dir: str | Path = "PC_ENGINE/data/radar"):
+    def __init__(
+        self,
+        exchanges: list[str],
+        symbols: list[str],
+        data_dir: str | Path = "PC_ENGINE/data/radar",
+        *,
+        request_timeout_ms: int = 8000,
+        stop_event=None,
+    ):
         self.exchanges = list(dict.fromkeys(exchanges))
         self.symbols = list(dict.fromkeys(symbols))
         self.data_dir = Path(data_dir)
@@ -61,13 +69,18 @@ class MarketRadar:
         self.previous: dict[tuple[str, str], VenueSnapshot] = {}
         self.last_pressure: dict[str, float] = {}
         self.quality_rejections = 0
+        self.request_timeout_ms = max(1000, min(60000, int(request_timeout_ms)))
+        self.stop_event = stop_event
         self._build_clients()
 
     def _build_clients(self) -> None:
         for name in self.exchanges:
             try:
                 exchange_cls = getattr(ccxt, name)
-                self.clients[name] = exchange_cls({"enableRateLimit": True})
+                self.clients[name] = exchange_cls({
+                    "enableRateLimit": True,
+                    "timeout": self.request_timeout_ms,
+                })
                 try:
                     self.clients[name].load_markets()
                 except Exception:
@@ -116,10 +129,16 @@ class MarketRadar:
                 return False
         return True
 
-    def snapshot(self) -> tuple[list[VenueSnapshot], list[LeadLagObservation]]:
+    def snapshot(self, stop_event=None) -> tuple[list[VenueSnapshot], list[LeadLagObservation]]:
+        """Poll public tickers with a bounded request timeout and cooperative cancellation."""
         snapshots: list[VenueSnapshot] = []
+        cancellation = stop_event if stop_event is not None else getattr(self, "stop_event", None)
         for exchange_name, client in self.clients.items():
+            if cancellation is not None and cancellation.is_set():
+                break
             for symbol in self.symbols:
+                if cancellation is not None and cancellation.is_set():
+                    break
                 request_start_ns = time.monotonic_ns()
                 try:
                     ticker = client.fetch_ticker(symbol)
