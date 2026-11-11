@@ -164,7 +164,6 @@ class SovereignEngine:
         self.market_states = MarketStateStore(config.get("opportunity", {}).get("data_dir", "PC_ENGINE/data/radar"))
         self.exchanges = self._build_exchanges()
         self.paper_collector: PaperMarketCollector | None = None
-        self._build_paper_collector()
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
@@ -233,6 +232,8 @@ class SovereignEngine:
             dedupe_seconds=float(research_cfg.get("dedupe_seconds", 3600.0)),
             learning_memory=self.learning_memory,
         )
+        # Build the PAPER collector only after the owner-private durable memory exists.
+        self._build_paper_collector()
         adaptive_cfg = dict(config.get("adaptive_resources", {}))
         self.adaptive_resource_manager: AdaptiveResourceManager | None = None
         if bool(adaptive_cfg.get("enabled", True)):
@@ -382,6 +383,7 @@ class SovereignEngine:
             ohlcv_fetcher=self._fetch_ohlcv_for_collector,
             strategy=getattr(self, "strategy", None),
             on_error=self.log,
+            learning_memory=getattr(self, "learning_memory", None),
         )
 
     def _fetch_ohlcv_for_collector(self, symbol: str, timeframe: str, limit: int) -> list[list[float]]:
