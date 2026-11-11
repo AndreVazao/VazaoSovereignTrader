@@ -59,6 +59,14 @@ def test_non_paper_report_is_refused():
         assess_strategy_report(study)
 
 
+def test_invalid_oos_monte_carlo_probability_is_fail_closed():
+    study = _study()
+    study["monte_carlo_oos"]["probability_mean_leq_zero"] = -0.5
+    result = assess_strategy_report(study)
+    assert result["gates"]["oos_monte_carlo_uncertainty"] is False
+    assert result["metrics"]["oos_monte_carlo_probability_mean_leq_zero"] == 1.0
+
+
 def test_missing_oos_monte_carlo_is_fail_closed():
     study = _study()
     study.pop("monte_carlo_oos")
