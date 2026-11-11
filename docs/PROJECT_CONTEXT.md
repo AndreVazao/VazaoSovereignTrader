@@ -2,9 +2,10 @@
 
 **Verified baseline:** main `5f73a6d13af42186a2ffade05511fc97d835a8e7`. No open pull requests at the time of inspection.  
 **Current work branch:** `feat/exchange-readonly-mobile-office-foundation-2026-11-11`.  
-**Scope of this increment:** product/security contract and staged delivery plan; no credential vault, exchange account UI or new mobile functionality has yet been implemented by this branch.
+**Scope of this increment:** product/security contract plus an initial Windows DPAPI CurrentUser vault module and focused unit tests. No credential registration API, exchange account UI, live private probe or new mobile functionality is implemented yet.
 
 - VST remains a single PC_ENGINE authority. PC cockpit, Android APK and Digital Office are clients; never run a second trading engine on mobile/office.
+- Initial vault foundation now exists at `PC_ENGINE/core/credential_vault.py`: Windows DPAPI CurrentUser encryption, strict Binance/OKX field allow-lists, metadata fingerprint only, atomic file writes and fail-closed non-Windows behavior. Focused tests are in `tests/test_credential_vault.py`; DPAPI native behavior still needs Windows CI/runtime verification.
 - Next exchange phase starts with Binance and OKX read-only account access. Secure form belongs on PC cockpit under Exchanges → Ligações e Contas. Never request exchange secrets in chat or mobile.
 - Credentials must be encrypted at rest with Windows DPAPI CurrentUser, fail closed where unavailable, never enter normal config, Git, logs, snapshots, Learning Vault, browser storage, URLs, telemetry or Vercel.
 - First exchange capability is read-only only. Reject trade/withdraw permissions. No order placement/cancellation, REAL, transfers or withdrawals.
