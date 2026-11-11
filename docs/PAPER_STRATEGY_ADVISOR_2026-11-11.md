@@ -14,7 +14,10 @@ orders.
 2. Assess its report:
    `python -m PC_ENGINE.tools.run_strategy_advisor`
 3. Inspect
-   `PC_ENGINE/data/radar/strategy_advisor_report.json`.
+   `PC_ENGINE/data/radar/strategy_advisor_report.json` and
+   `PC_ENGINE/data/radar/strategy_discovery_report.json`.
+
+The command also runs `PC_ENGINE.research.strategy_discovery` under the adaptive simulation resource gate. It searches a small, deterministic grid of confidence/confluence filters on a purged training window, selects one candidate using training results only, and evaluates that candidate once on the untouched chronological OOS window. It records a baseline OOS result and an OOS-only bootstrap. The candidate is a research hypothesis; its parameters are never applied to runtime.
 
 The advisor consumes the report produced by `PC_ENGINE.research.paper_study`. The Monte Carlo gate uses the dedicated `monte_carlo_oos` result, never the full-sample bootstrap. Chronological and walk-forward training windows purge any outcome whose forward label crosses the test boundary.
 Missing, malformed, non-PAPER, or inadequate evidence is never interpreted as
@@ -29,6 +32,7 @@ success.
 - OOS-only Monte Carlo bootstrap probability of non-positive mean no greater than 25%.
 - Forward outcome labels that overlap a chronological test boundary are purged from training.
 - At least one regime with 20 or more observations.
+- Discovery candidate thresholds are selected on training data only; forward labels crossing the OOS boundary are purged.
 
 Decisions:
 
