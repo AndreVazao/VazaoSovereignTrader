@@ -227,6 +227,7 @@ class PaperMarketCollector:
             "errors": self.errors,
             "last_cycle_ms": self.last_cycle_ms,
             "data_dir": str(self.data_dir),
+            "market_data_collection": self.radar.collection_metrics(),
             "learning_cycles": self.learning_cycles,
             "learning_interval_cycles": self.learning_interval_cycles,
             "learning_path": str(self.learning_path),
