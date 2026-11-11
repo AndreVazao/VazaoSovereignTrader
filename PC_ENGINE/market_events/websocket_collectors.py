@@ -35,6 +35,8 @@ class PublicWebSocketCollector:
         self._last_error: str | None = None
         self._last_close_code: int | None = None
         self._last_close_message: str | None = None
+        self._connection_started_ns: int | None = None
+        self._last_connection_duration_seconds = 0.0
 
     def _set_state(self, state: str) -> None:
         with self._stats_lock:
@@ -57,10 +59,30 @@ class PublicWebSocketCollector:
                 "last_error": self._last_error,
                 "last_close_code": self._last_close_code,
                 "last_close_message": self._last_close_message,
+                "last_connection_duration_seconds": self._last_connection_duration_seconds,
                 "paper_only": True,
                 "orders_submitted": False,
                 "execution_authorized": False,
             }
+
+    @staticmethod
+    def next_reconnect_delay(
+        current_delay_seconds: float,
+        connection_duration_seconds: float,
+        *,
+        stable_connection_seconds: float = 60.0,
+        max_delay_seconds: float = 30.0,
+    ) -> float:
+        """Reset backoff only after a genuinely stable open connection."""
+        if connection_duration_seconds >= stable_connection_seconds:
+            return 1.0
+        return min(max(1.0, float(current_delay_seconds) * 2.0), max_delay_seconds)
+
+    def _finish_connection_locked(self) -> None:
+        if self._connection_started_ns is not None:
+            elapsed_ns = max(0, time.monotonic_ns() - self._connection_started_ns)
+            self._last_connection_duration_seconds = elapsed_ns / 1_000_000_000
+            self._connection_started_ns = None
 
     def _emit(self, event: MarketEvent) -> None:
         if not self._stop.is_set():
@@ -133,6 +155,7 @@ class PublicWebSocketCollector:
         with self._stats_lock:
             self._connect_attempts += 1
             self._state = "CONNECTING"
+            self._last_connection_duration_seconds = 0.0
 
         def on_message(ws: websocket.WebSocketApp, message: str) -> None:
             with self._stats_lock:
@@ -145,7 +168,9 @@ class PublicWebSocketCollector:
                 return
 
         def on_open(ws: websocket.WebSocketApp) -> None:
-            self._set_state("RUNNING")
+            with self._stats_lock:
+                self._state = "RUNNING"
+                self._connection_started_ns = time.monotonic_ns()
             if self.config.venue == "binance":
                 return
             if self.config.venue == "okx":
@@ -160,7 +185,7 @@ class PublicWebSocketCollector:
         def on_error(ws: websocket.WebSocketApp, error: object) -> None:
             with self._stats_lock:
                 self._state = "ERROR"
-                self._last_error = f"{type(error).__name__}: {error}"
+                self._last_error = type(error).__name__
 
         def on_close(
             ws: websocket.WebSocketApp,
@@ -168,6 +193,7 @@ class PublicWebSocketCollector:
             close_msg: str | None,
         ) -> None:
             with self._stats_lock:
+                self._finish_connection_locked()
                 self._state = "STOPPED" if self._stop.is_set() else "DISCONNECTED"
                 self._last_close_code = close_status_code
                 self._last_close_message = str(close_msg) if close_msg is not None else None
@@ -179,7 +205,13 @@ class PublicWebSocketCollector:
             on_error=on_error,
             on_close=on_close,
         )
-        self._socket.run_forever()
+        try:
+            self._socket.run_forever()
+        finally:
+            with self._stats_lock:
+                self._finish_connection_locked()
+                if not self._stop.is_set() and self._state in {"CONNECTING", "RUNNING", "ERROR"}:
+                    self._state = "DISCONNECTED"
 
     def stop(self) -> None:
         self._stop.set()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import patch
 
 from PC_ENGINE.market_events.websocket_collectors import (
     PublicWebSocketCollector,
@@ -105,6 +106,50 @@ class WebSocketCollectorTests(unittest.TestCase):
         self.assertIsNotNone(snapshot["last_event_age_ms"])
         self.assertIsNone(snapshot["last_error"])
 
+
+    def test_reconnect_backoff_grows_after_short_disconnects(self) -> None:
+        next_delay = PublicWebSocketCollector.next_reconnect_delay
+        self.assertEqual(next_delay(0.5, 0.2), 1.0)
+        self.assertEqual(next_delay(1.0, 0.2), 2.0)
+        self.assertEqual(next_delay(15.0, 0.2), 30.0)
+
+    def test_reconnect_backoff_resets_only_after_stable_connection(self) -> None:
+        next_delay = PublicWebSocketCollector.next_reconnect_delay
+        self.assertEqual(next_delay(30.0, 59.9), 30.0)
+        self.assertEqual(next_delay(30.0, 60.0), 1.0)
+
+    def test_snapshot_reports_connection_duration_metric(self) -> None:
+        collector = PublicWebSocketCollector(
+            WebSocketMarketConfig("binance", "BTC/USDT", "wss://example"), lambda _: None
+        )
+        self.assertEqual(collector.snapshot()["last_connection_duration_seconds"], 0.0)
+
+    def test_failed_attempt_does_not_reuse_previous_stable_uptime(self) -> None:
+        class FailedBeforeOpenWebSocketApp:
+            def __init__(self, url, on_open=None, on_message=None, on_error=None, on_close=None):
+                self.on_error = on_error
+
+            def run_forever(self):
+                if self.on_error:
+                    self.on_error(self, RuntimeError("simulated"))
+
+            def close(self):
+                return None
+
+        collector = PublicWebSocketCollector(
+            WebSocketMarketConfig("binance", "BTC/USDT", "wss://example"), lambda _: None
+        )
+        collector._last_connection_duration_seconds = 60.0
+        with patch(
+            "PC_ENGINE.market_events.websocket_collectors.websocket.WebSocketApp",
+            FailedBeforeOpenWebSocketApp,
+        ):
+            collector.run_forever()
+
+        snapshot = collector.snapshot()
+        self.assertEqual(snapshot["last_connection_duration_seconds"], 0.0)
+        self.assertEqual(snapshot["state"], "DISCONNECTED")
+        self.assertEqual(snapshot["last_error"], "RuntimeError")
 
 if __name__ == "__main__":
     unittest.main()
