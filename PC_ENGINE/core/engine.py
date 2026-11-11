@@ -232,8 +232,7 @@ class SovereignEngine:
             dedupe_seconds=float(research_cfg.get("dedupe_seconds", 3600.0)),
             learning_memory=self.learning_memory,
         )
-        # Build the PAPER collector only after the owner-private durable memory exists.
-        self._build_paper_collector()
+        # Initialize the shared adaptive resource manager before constructing the PAPER collector.
         adaptive_cfg = dict(config.get("adaptive_resources", {}))
         self.adaptive_resource_manager: AdaptiveResourceManager | None = None
         if bool(adaptive_cfg.get("enabled", True)):
@@ -250,6 +249,7 @@ class SovereignEngine:
                     "error": type(exc).__name__,
                     "order_authority": False,
                 }
+        self._build_paper_collector()
         self.research_worker = ResearchWorker(
             research_dir,
             replay_path=str(research_cfg.get("replay_path", "PC_ENGINE/data/replay/l2_temporal_replay.json")),
@@ -377,6 +377,7 @@ class SovereignEngine:
         collector_cfg["candles_limit"] = self.config.get("strategy", {}).get("candles_limit", 120)
         collector_cfg["data_dir"] = self.config.get("confluence", {}).get("data_dir", "PC_ENGINE/data/radar")
         collector_cfg["request_timeout_ms"] = int(radar_cfg.get("request_timeout_ms", 8000))
+        collector_cfg["adaptive_resources"] = dict(self.config.get("adaptive_resources", {}))
         collector_cfg["shutdown_timeout_seconds"] = float(radar_cfg.get("shutdown_timeout_seconds", 10.0))
         collector_cfg["market_data_quality"] = dict(self.config.get("market_data_quality", {}))
         collector_cfg["evidence"] = dict(self.config.get("evidence", {}))
@@ -387,6 +388,7 @@ class SovereignEngine:
             strategy=getattr(self, "strategy", None),
             on_error=self.log,
             learning_memory=getattr(self, "learning_memory", None),
+            resource_manager=getattr(self, "adaptive_resource_manager", None),
         )
 
     def _fetch_ohlcv_for_collector(self, symbol: str, timeframe: str, limit: int) -> list[list[float]]:

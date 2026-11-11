@@ -86,7 +86,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-pc.txt
-          pip install pyinstaller
+          pip install pyinstaller pytest
+      - name: Validate constrained-memory PAPER resource policy on Windows
+        shell: pwsh
+        run: |
+          python -m pytest tests/test_adaptive_resource_manager.py tests/test_paper_market_collector.py -q
       - name: Validate adaptive resource sampling on Windows
         shell: pwsh
         run: |

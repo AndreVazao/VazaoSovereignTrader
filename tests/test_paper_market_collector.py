@@ -300,3 +300,92 @@ def test_collector_stops_between_symbol_requests_when_cancelled(tmp_path: Path):
     assert calls == ["BTC/USDT"]
     assert collector.snapshot()["cycles"] == 0
     assert collector.stop() is True
+
+
+
+def test_compact_resource_policy_preserves_collection_and_defers_heavy_learning(tmp_path: Path):
+    from types import SimpleNamespace
+
+    class CompactManager:
+        def refresh(self):
+            return SimpleNamespace(profile="COMPACT", defer_heavy_jobs=True)
+
+        def status(self):
+            return {"snapshot": {"memory_available_mb": 400}, "policy": {"profile": "COMPACT"}}
+
+    settings = {
+        "interval_seconds": 5,
+        "learning_interval_cycles": 1,
+        "polling_exchanges": [],
+        "data_dir": str(tmp_path),
+        "adaptive_resources": {
+            "enabled": True,
+            "refresh_interval_seconds": 5,
+            "compact_interval_seconds": 15,
+            "compact_learning_interval_multiplier": 4,
+        },
+        "confluence": {
+            "data_dir": str(tmp_path),
+            "derivatives": {"enabled": False, "observational_only": True},
+        },
+    }
+    collector = PaperMarketCollector(
+        settings=settings,
+        symbols=["BTC/USDT"],
+        ohlcv_fetcher=lambda symbol, timeframe, limit: _ohlcv(),
+        strategy=FakeStrategy(),
+        resource_manager=CompactManager(),
+    )
+    heavy_calls = []
+    collector._refresh_learning = lambda: heavy_calls.append("learning")
+    collector._refresh_evidence_ledger = lambda: heavy_calls.append("ledger")
+    collector._refresh_evidence_learning = lambda: heavy_calls.append("evidence")
+
+    try:
+        assert collector.collect_once() == 1
+        state = collector.snapshot()
+        assert state["cycles"] == 1
+        assert state["adaptive_resources"]["profile"] == "COMPACT"
+        assert state["effective_interval_seconds"] == 15
+        assert state["adaptive_resources"]["defer_heavy_jobs"] is True
+        assert heavy_calls == []
+        assert state["durable_learning"]["order_authority"] is False
+    finally:
+        collector.stop()
+
+
+def test_degraded_resource_probe_fails_conservatively_without_disabling_market_data(tmp_path: Path):
+    class BrokenManager:
+        def refresh(self):
+            raise OSError("resource probe unavailable")
+
+    collector = PaperMarketCollector(
+        settings={
+            "polling_exchanges": [],
+            "data_dir": str(tmp_path),
+            "learning_interval_cycles": 1,
+            "adaptive_resources": {"enabled": True, "compact_interval_seconds": 12},
+            "confluence": {
+                "data_dir": str(tmp_path),
+                "derivatives": {"enabled": False, "observational_only": True},
+            },
+        },
+        symbols=["BTC/USDT"],
+        ohlcv_fetcher=lambda symbol, timeframe, limit: _ohlcv(),
+        strategy=FakeStrategy(),
+        resource_manager=BrokenManager(),
+    )
+    heavy_calls = []
+    collector._refresh_learning = lambda: heavy_calls.append("learning")
+    collector._refresh_evidence_ledger = lambda: heavy_calls.append("ledger")
+    collector._refresh_evidence_learning = lambda: heavy_calls.append("evidence")
+    try:
+        assert collector.collect_once() == 1
+        state = collector.snapshot()
+        assert state["cycles"] == 1
+        assert state["adaptive_resources"]["state"] == "DEGRADED"
+        assert state["adaptive_resources"]["defer_heavy_jobs"] is True
+        assert state["effective_interval_seconds"] == 12
+        assert heavy_calls == []
+    finally:
+        collector.stop()

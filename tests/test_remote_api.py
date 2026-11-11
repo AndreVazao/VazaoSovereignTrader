@@ -550,3 +550,63 @@ def test_observer_timing_reports_unavailable_without_metrics(monkeypatch):
         "ok": False,
         "error": "timing_metrics_unavailable",
     }
+
+
+
+def test_paper_collector_resource_diagnostics_require_auth_and_are_read_only(monkeypatch):
+    monkeypatch.setenv("VST_TEST_TOKEN", "secret-token")
+
+    class ResourceDiagnosticsEngine(FakeEngine):
+        def snapshot(self):
+            return {
+                "status": "OFF",
+                "mode": "PAPER",
+                "paper_collector": {
+                    "running": False,
+                    "cycles": 7,
+                    "errors": 1,
+                    "effective_interval_seconds": 15.0,
+                    "adaptive_resources": {
+                        "state": "READY",
+                        "profile": "COMPACT",
+                        "defer_heavy_jobs": True,
+                        "effective_interval_seconds": 15.0,
+                        "effective_learning_interval_cycles": 48,
+                        "snapshot": {"memory_total_mb": 3072, "memory_available_mb": 400},
+                        "policy": {
+                            "profile": "COMPACT",
+                            "defer_heavy_jobs": True,
+                            "allow_real": False,
+                            "auto_promote_real": False,
+                        },
+                        "order_authority": False,
+                    },
+                    "shutdown": {
+                        "requested": True,
+                        "worker_alive": False,
+                        "timeout_seconds": 10.0,
+                        "request_timeout_ms": 8000,
+                        "radar_closed": True,
+                    },
+                },
+            }
+
+    client = create_app(ResourceDiagnosticsEngine(), token_env="VST_TEST_TOKEN").test_client()
+    assert client.get("/paper-collector/resources").status_code == 401
+
+    response = client.get(
+        "/paper-collector/resources",
+        headers={"X-Token": "secret-token"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["component"] == "paper_market_collector"
+    assert payload["adaptive_resources"]["profile"] == "COMPACT"
+    assert payload["adaptive_resources"]["snapshot"]["memory_available_mb"] == 400
+    assert payload["adaptive_resources"]["policy"]["allow_real"] is False
+    assert payload["adaptive_resources"]["policy"]["auto_promote_real"] is False
+    assert payload["shutdown"]["worker_alive"] is False
+    assert payload["paper_only"] is True
+    assert payload["execution_authorized"] is False
+    assert payload["order_authority"] is False
+    assert "learning_path" not in payload

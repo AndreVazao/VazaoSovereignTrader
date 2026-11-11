@@ -39,6 +39,7 @@ class PaperMarketCollector:
         strategy,
         on_error: Callable[[str, dict], None] | None = None,
         learning_memory: SQLiteLearningMemory | None = None,
+        resource_manager=None,
     ) -> None:
         self.settings = settings
         self.symbols = list(dict.fromkeys(symbols))
@@ -46,6 +47,17 @@ class PaperMarketCollector:
         self.strategy = strategy
         self.on_error = on_error
         self.learning_memory = learning_memory
+        self.resource_manager = resource_manager
+        adaptive_cfg = dict(settings.get("adaptive_resources", {}))
+        self.adaptive_enabled = bool(adaptive_cfg.get("enabled", resource_manager is not None))
+        self.resource_refresh_interval_seconds = max(5.0, float(adaptive_cfg.get("refresh_interval_seconds", 60.0)))
+        configured_interval = max(2.0, float(settings.get("interval_seconds", 5.0)))
+        self.compact_interval_seconds = max(configured_interval, float(adaptive_cfg.get("compact_interval_seconds", 15.0)))
+        self.compact_learning_multiplier = max(1, int(adaptive_cfg.get("compact_learning_interval_multiplier", 4)))
+        self._resource_last_refresh = 0.0
+        self._resource_status = {"state": "UNINITIALIZED", "profile": "BALANCED"}
+        self._resource_policy = None
+        self._effective_interval_seconds = configured_interval
         self.durable_learning_persisted = 0
         self.durable_learning_duplicates = 0
         self.durable_learning_errors = 0
@@ -81,6 +93,7 @@ class PaperMarketCollector:
         self.errors = 0
 
         self.learning_interval_cycles = max(1, int(settings.get("learning_interval_cycles", 12)))
+        self._effective_learning_interval_cycles = self.learning_interval_cycles
         self.learning_state_limit = max(100, int(settings.get("learning_state_limit", 5000)))
         self.learning_horizons_ms = tuple(
             int(x) for x in settings.get("learning_horizons_ms", (5000, 15000, 60000))
@@ -208,6 +221,8 @@ class PaperMarketCollector:
                 "radar_closed": self._radar_closed,
             },
             "interval_seconds": self.interval_seconds,
+            "effective_interval_seconds": self._effective_interval_seconds,
+            "adaptive_resources": dict(self._resource_status),
             "cycles": self.cycles,
             "errors": self.errors,
             "last_cycle_ms": self.last_cycle_ms,
@@ -246,6 +261,33 @@ class PaperMarketCollector:
             "champion_challenger": self.champion_runtime.snapshot(),
         }
 
+    def _refresh_resource_policy(self, *, force: bool = False) -> dict:
+        """Refresh host policy without changing market-data or trading permissions."""
+        now = time.monotonic()
+        if not self.adaptive_enabled or self.resource_manager is None:
+            self._resource_status = {"state": "DISABLED", "profile": "BALANCED", "defer_heavy_jobs": False, "order_authority": False}
+            self._effective_interval_seconds = self.interval_seconds
+            self._effective_learning_interval_cycles = self.learning_interval_cycles
+            return self._resource_status
+        if not force and now - self._resource_last_refresh < self.resource_refresh_interval_seconds:
+            return self._resource_status
+        self._resource_last_refresh = now
+        try:
+            policy = self.resource_manager.refresh()
+            self._resource_policy = policy
+            compact = str(getattr(policy, "profile", "COMPACT")).upper() == "COMPACT"
+            defer_heavy = bool(getattr(policy, "defer_heavy_jobs", compact))
+            self._effective_interval_seconds = self.compact_interval_seconds if compact else self.interval_seconds
+            self._effective_learning_interval_cycles = self.learning_interval_cycles * self.compact_learning_multiplier if defer_heavy else self.learning_interval_cycles
+            status = self.resource_manager.status() if hasattr(self.resource_manager, "status") else {}
+            self._resource_status = {"state": "READY", "profile": str(getattr(policy, "profile", "UNKNOWN")), "defer_heavy_jobs": defer_heavy, "effective_interval_seconds": self._effective_interval_seconds, "effective_learning_interval_cycles": self._effective_learning_interval_cycles, "snapshot": status.get("snapshot") if isinstance(status, dict) else None, "policy": policy.to_dict() if hasattr(policy, "to_dict") else {"profile": str(getattr(policy, "profile", "UNKNOWN")), "defer_heavy_jobs": defer_heavy}, "order_authority": False}
+        except Exception as exc:
+            self._resource_policy = None
+            self._effective_interval_seconds = self.compact_interval_seconds
+            self._effective_learning_interval_cycles = self.learning_interval_cycles * self.compact_learning_multiplier
+            self._resource_status = {"state": "DEGRADED", "profile": "COMPACT", "defer_heavy_jobs": True, "effective_interval_seconds": self._effective_interval_seconds, "effective_learning_interval_cycles": self._effective_learning_interval_cycles, "error": type(exc).__name__, "order_authority": False}
+        return self._resource_status
+
     def _report_error(self, message: str, data: dict) -> None:
         self.errors += 1
         if self.on_error:
@@ -259,9 +301,10 @@ class PaperMarketCollector:
             except Exception as exc:
                 self._report_error("PAPER_COLLECTOR_ERROR", {"error": str(exc)})
             elapsed = time.monotonic() - started
-            self.stop_event.wait(max(0.0, self.interval_seconds - elapsed))
+            self.stop_event.wait(max(0.0, self._effective_interval_seconds - elapsed))
 
     def collect_once(self) -> int:
+        self._refresh_resource_policy()
         if self.stop_event.is_set():
             return 0
         snapshots, _ = self.radar.snapshot(stop_event=self.stop_event)
@@ -333,10 +376,11 @@ class PaperMarketCollector:
 
         self.confluence.resolve_outcomes()
         self.cycles += 1
-        if self.cycles % self.learning_interval_cycles == 0:
-            self._refresh_learning()
-            self._refresh_evidence_ledger()
-            self._refresh_evidence_learning()
+        if self.cycles % self._effective_learning_interval_cycles == 0:
+            if not bool(self._resource_status.get("defer_heavy_jobs", False)):
+                self._refresh_learning()
+                self._refresh_evidence_ledger()
+                self._refresh_evidence_learning()
         self.last_cycle_ms = int(time.time() * 1000)
         return recorded
 
