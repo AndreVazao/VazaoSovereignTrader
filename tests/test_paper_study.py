@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PC_ENGINE.research.paper_study import (
+    chronological_split,
     compare_paper_policies,
     monte_carlo,
     run_study,
@@ -36,6 +37,12 @@ def test_walk_forward_and_oos_are_chronological():
     assert report["orders_submitted"] is False
     assert report["chronological_oos"]["train"]["samples"] > 0
     assert report["chronological_oos"]["test"]["samples"] > 0
+    outcome_rows = simulate(_states(), horizon_ms=1000, cost_bps=10)
+    train_rows, test_rows = chronological_split(outcome_rows)
+    if test_rows:
+        boundary = test_rows[0]["timestamp_ms"]
+        assert all(row["outcome_timestamp_ms"] <= boundary for row in train_rows)
+    assert report["monte_carlo_oos"]["iterations"] == 100
     assert all(fold["test_start_ms"] <= fold["test_end_ms"] for fold in report["walk_forward"])
 
 
