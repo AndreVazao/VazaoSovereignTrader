@@ -21,7 +21,7 @@ def _study(*, positive: bool = True) -> dict:
             {"test_summary": {"samples": 20, "mean_net_bps": mean}}
             for _ in range(5)
         ],
-        "monte_carlo": {"probability_mean_leq_zero": 0.08 if positive else 0.92},
+        "monte_carlo_oos": {"probability_mean_leq_zero": 0.08 if positive else 0.92},
         "regimes": {
             "UP_LOW": {"samples": 40, "mean_net_bps": mean},
             "RANGE_NORMAL": {"samples": 30, "mean_net_bps": 2.0 if positive else -2.0},
@@ -41,7 +41,7 @@ def test_negative_oos_and_monte_carlo_are_rejected():
     result = assess_strategy_report(_study(positive=False))
     assert result["decision"] == "REJECT_OR_REWORK"
     assert result["gates"]["positive_oos_net_expectancy"] is False
-    assert result["gates"]["monte_carlo_uncertainty"] is False
+    assert result["gates"]["oos_monte_carlo_uncertainty"] is False
 
 
 def test_small_sample_is_insufficient_not_a_success():
@@ -59,11 +59,11 @@ def test_non_paper_report_is_refused():
         assess_strategy_report(study)
 
 
-def test_missing_monte_carlo_is_fail_closed():
+def test_missing_oos_monte_carlo_is_fail_closed():
     study = _study()
-    study.pop("monte_carlo")
+    study.pop("monte_carlo_oos")
     result = assess_strategy_report(study)
-    assert result["gates"]["monte_carlo_uncertainty"] is False
+    assert result["gates"]["oos_monte_carlo_uncertainty"] is False
 
 
 def test_report_is_written_atomically(tmp_path):
