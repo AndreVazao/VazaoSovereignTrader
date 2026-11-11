@@ -25,6 +25,8 @@ def test_engine_wires_owner_private_durable_memory_to_autonomous_research(tmp_pa
         assert engine.owner_id in Path(memory.database_path).parts
         assert engine.vault_root in Path(memory.database_path).parents
         assert engine.autonomous_research.learning_memory is memory
+        if engine.paper_collector is not None:
+            assert engine.paper_collector.learning_memory is memory
         assert engine.state.operational["learning_memory"]["state"] == "READY"
         assert engine.state.operational["learning_memory"]["order_authority"] is False
 
