@@ -6,6 +6,7 @@
 
 - VST remains a single PC_ENGINE authority. PC cockpit, Android APK and Digital Office are clients; never run a second trading engine on mobile/office.
 - Initial vault foundation now exists at `PC_ENGINE/core/credential_vault.py`: Windows DPAPI CurrentUser encryption, strict Binance/OKX field allow-lists, metadata fingerprint only, atomic file writes and fail-closed non-Windows behavior. Focused tests are in `tests/test_credential_vault.py`; DPAPI native behavior still needs Windows CI/runtime verification.
+- Public market collection observability now tracks Radar request attempts, usable observations, request errors, quality rejections, persistence batches/errors and per-venue counts. Exposed in collector snapshot and authenticated `/paper-collector/resources`; unit tests cover counter separation and persistence failure. This does not yet prove live PC data flow.
 - Next exchange phase starts with Binance and OKX read-only account access. Secure form belongs on PC cockpit under Exchanges → Ligações e Contas. Never request exchange secrets in chat or mobile.
 - Credentials must be encrypted at rest with Windows DPAPI CurrentUser, fail closed where unavailable, never enter normal config, Git, logs, snapshots, Learning Vault, browser storage, URLs, telemetry or Vercel.
 - First exchange capability is read-only only. Reject trade/withdraw permissions. No order placement/cancellation, REAL, transfers or withdrawals.
