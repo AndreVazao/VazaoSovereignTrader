@@ -314,6 +314,51 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
             recovery=getattr(getattr(engine, "recovery", None), "diagnostics", lambda: {})(),
         ))
 
+    @app.get("/paper-collector/resources")
+    def paper_collector_resources():
+        """Return bounded PAPER collector resource diagnostics to the authenticated owner."""
+        require_scope("read_private_state")
+        engine_snapshot = engine.snapshot()
+        collector = engine_snapshot.get("paper_collector", {})
+        collector = collector if isinstance(collector, dict) else {}
+        adaptive = collector.get("adaptive_resources", {})
+        adaptive = adaptive if isinstance(adaptive, dict) else {}
+        shutdown = collector.get("shutdown", {})
+        shutdown = shutdown if isinstance(shutdown, dict) else {}
+        resource_snapshot = adaptive.get("snapshot")
+        resource_snapshot = resource_snapshot if isinstance(resource_snapshot, dict) else None
+        policy = adaptive.get("policy")
+        policy = policy if isinstance(policy, dict) else None
+        return jsonify({
+            "ok": True,
+            "component": "paper_market_collector",
+            "running": bool(collector.get("running", False)),
+            "cycles": int(collector.get("cycles", 0) or 0),
+            "errors": int(collector.get("errors", 0) or 0),
+            "effective_interval_seconds": collector.get("effective_interval_seconds"),
+            "adaptive_resources": {
+                "state": adaptive.get("state", "UNKNOWN"),
+                "profile": adaptive.get("profile", "UNKNOWN"),
+                "defer_heavy_jobs": bool(adaptive.get("defer_heavy_jobs", False)),
+                "effective_interval_seconds": adaptive.get("effective_interval_seconds"),
+                "effective_learning_interval_cycles": adaptive.get("effective_learning_interval_cycles"),
+                "snapshot": resource_snapshot,
+                "policy": policy,
+                "error": adaptive.get("error"),
+                "order_authority": False,
+            },
+            "shutdown": {
+                "requested": bool(shutdown.get("requested", False)),
+                "worker_alive": bool(shutdown.get("worker_alive", False)),
+                "timeout_seconds": shutdown.get("timeout_seconds"),
+                "request_timeout_ms": shutdown.get("request_timeout_ms"),
+                "radar_closed": bool(shutdown.get("radar_closed", False)),
+            },
+            "paper_only": str(engine_snapshot.get("mode", "PAPER")).upper() == "PAPER",
+            "execution_authorized": False,
+            "order_authority": False,
+        })
+
     @app.post("/evidence-scorecard/refresh")
     def evidence_scorecard_refresh():
         require_scope("read_private_state")
