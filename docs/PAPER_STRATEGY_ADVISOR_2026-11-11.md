@@ -32,7 +32,7 @@ success.
 - OOS-only Monte Carlo bootstrap probability of non-positive mean no greater than 25%.
 - Forward outcome labels that overlap a chronological test boundary are purged from training.
 - At least one regime with 20 or more observations.
-- Discovery candidate thresholds are selected on training data only; forward labels crossing the OOS boundary are purged.
+- Discovery candidate thresholds are selected on training data only; forward labels crossing the OOS boundary are purged using the actual timestamp of the future market observation that resolves each label (not merely the requested horizon timestamp).
 
 Decisions:
 
