@@ -75,6 +75,12 @@ def discover_strategy(
                 signal_start_ms=unique_times[0],
                 signal_end_ms=train_signal_end_ms,
             )
+            # Irregular market observations can resolve a target horizon after
+            # the OOS boundary; purge by the actual future observation timestamp.
+            outcomes = [
+                row for row in outcomes
+                if int(row["outcome_timestamp_ms"]) <= oos_start_ms
+            ]
             summary = _summary([float(row["net_bps"]) for row in outcomes])
             candidates.append({
                 "min_confidence": float(confidence),
@@ -110,6 +116,19 @@ def discover_strategy(
             -float(candidate["min_confluence"]),
         ),
     )
+    selected_train_outcomes = simulate(
+        ordered,
+        horizon_ms=horizon_ms,
+        cost_bps=cost_bps,
+        min_confidence=selected["min_confidence"],
+        min_confluence=selected["min_confluence"],
+        signal_start_ms=unique_times[0],
+        signal_end_ms=train_signal_end_ms,
+    )
+    selected_train_outcomes = [
+        row for row in selected_train_outcomes
+        if int(row["outcome_timestamp_ms"]) <= oos_start_ms
+    ]
     oos_outcomes = simulate(
         ordered,
         horizon_ms=horizon_ms,
@@ -136,6 +155,10 @@ def discover_strategy(
             "min_confidence": selected["min_confidence"],
             "min_confluence": selected["min_confluence"],
             "training": selected["training"],
+            "training_max_outcome_timestamp_ms": max(
+                (int(row["outcome_timestamp_ms"]) for row in selected_train_outcomes),
+                default=0,
+            ),
         },
         "oos_selected_candidate": _summary([float(row["net_bps"]) for row in oos_outcomes]),
         "oos_baseline": _summary([float(row["net_bps"]) for row in baseline_oos]),
