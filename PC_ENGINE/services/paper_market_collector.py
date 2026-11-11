@@ -51,12 +51,13 @@ class PaperMarketCollector:
         adaptive_cfg = dict(settings.get("adaptive_resources", {}))
         self.adaptive_enabled = bool(adaptive_cfg.get("enabled", resource_manager is not None))
         self.resource_refresh_interval_seconds = max(5.0, float(adaptive_cfg.get("refresh_interval_seconds", 60.0)))
-        self.compact_interval_seconds = max(self.interval_seconds, float(adaptive_cfg.get("compact_interval_seconds", 15.0)))
+        configured_interval = max(2.0, float(settings.get("interval_seconds", 5.0)))
+        self.compact_interval_seconds = max(configured_interval, float(adaptive_cfg.get("compact_interval_seconds", 15.0)))
         self.compact_learning_multiplier = max(1, int(adaptive_cfg.get("compact_learning_interval_multiplier", 4)))
         self._resource_last_refresh = 0.0
         self._resource_status = {"state": "UNINITIALIZED", "profile": "BALANCED"}
         self._resource_policy = None
-        self._effective_interval_seconds = self.interval_seconds
+        self._effective_interval_seconds = configured_interval
         self.durable_learning_persisted = 0
         self.durable_learning_duplicates = 0
         self.durable_learning_errors = 0
