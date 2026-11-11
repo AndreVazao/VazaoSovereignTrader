@@ -9,13 +9,23 @@ from .base import ExchangeClient
 
 
 class CcxtExchangeClient(ExchangeClient):
-    def __init__(self, name: str, key_env: str, private_env: str, paper: bool = True):
+    def __init__(
+        self,
+        name: str,
+        key_env: str,
+        private_env: str,
+        paper: bool = True,
+        timeout_ms: int = 8000,
+    ):
         self.name = name
         self.paper = paper
         exchange_cls = getattr(ccxt, name)
         key = os.getenv(key_env, "")
         private = os.getenv(private_env, "")
-        params: Dict[str, Any] = {"enableRateLimit": True}
+        params: Dict[str, Any] = {
+            "enableRateLimit": True,
+            "timeout": max(1000, min(60000, int(timeout_ms))),
+        }
         if key and private:
             params.update({"apiKey": key, "secret": private})
         self.client = exchange_cls(params)

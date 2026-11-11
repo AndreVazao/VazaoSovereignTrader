@@ -360,6 +360,7 @@ class SovereignEngine:
                 key_env=cfg.get("key_env", ""),
                 private_env=cfg.get("private_env", ""),
                 paper=self.paper,
+                timeout_ms=int(self.config.get("radar", {}).get("request_timeout_ms", 8000)),
             )
         return out
 
@@ -375,6 +376,8 @@ class SovereignEngine:
         collector_cfg["timeframe"] = self.config.get("strategy", {}).get("timeframe", "1m")
         collector_cfg["candles_limit"] = self.config.get("strategy", {}).get("candles_limit", 120)
         collector_cfg["data_dir"] = self.config.get("confluence", {}).get("data_dir", "PC_ENGINE/data/radar")
+        collector_cfg["request_timeout_ms"] = int(radar_cfg.get("request_timeout_ms", 8000))
+        collector_cfg["shutdown_timeout_seconds"] = float(radar_cfg.get("shutdown_timeout_seconds", 10.0))
         collector_cfg["market_data_quality"] = dict(self.config.get("market_data_quality", {}))
         collector_cfg["evidence"] = dict(self.config.get("evidence", {}))
         self.paper_collector = PaperMarketCollector(

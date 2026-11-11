@@ -184,6 +184,8 @@
     "enabled": true,
     "observational_only": true,
     "interval_seconds": 5,
+    "request_timeout_ms": 8000,
+    "shutdown_timeout_seconds": 10,
     "polling_exchanges": [
       "binance",
       "bingx",

@@ -54,6 +54,13 @@ class PaperMarketCollector:
         self.timeframe = str(settings.get("timeframe", "1m"))
         self.candles_limit = max(30, int(settings.get("candles_limit", 120)))
         self.data_dir = Path(settings.get("data_dir", "PC_ENGINE/data/radar"))
+        self.request_timeout_ms = max(1000, min(60000, int(settings.get("request_timeout_ms", 8000))))
+        self.shutdown_timeout_seconds = max(
+            1.0,
+            float(settings.get("shutdown_timeout_seconds", self.request_timeout_ms / 1000.0 + 2.0)),
+        )
+        self.stop_event = threading.Event()
+        self.stop_requested_at: float | None = None
         self.polling_exchanges = list(settings.get(
             "polling_exchanges",
             ["binance", "bingx", "okx", "bybit", "coinbase"],
@@ -62,11 +69,12 @@ class PaperMarketCollector:
             exchanges=self.polling_exchanges,
             symbols=self.symbols,
             data_dir=str(self.data_dir),
+            request_timeout_ms=self.request_timeout_ms,
+            stop_event=self.stop_event,
         )
         self._radar_closed = False
         self.confluence = PaperConfluenceRuntime(settings.get("confluence", {}))
         self.patterns = CandlestickPatternEngine(settings.get("candlestick", {}))
-        self.stop_event = threading.Event()
         self.thread: threading.Thread | None = None
         self.last_cycle_ms = 0
         self.cycles = 0
@@ -160,8 +168,11 @@ class PaperMarketCollector:
                 exchanges=self.polling_exchanges,
                 symbols=self.symbols,
                 data_dir=str(self.data_dir),
+                request_timeout_ms=self.request_timeout_ms,
+                stop_event=self.stop_event,
             )
             self._radar_closed = False
+        self.stop_requested_at = None
         self.stop_event.clear()
         self.thread = threading.Thread(
             target=self._loop,
@@ -172,10 +183,11 @@ class PaperMarketCollector:
 
     def stop(self) -> bool:
         """Stop collection; retain live thread/radar references after a timeout."""
+        self.stop_requested_at = self.stop_requested_at or time.time()
         self.stop_event.set()
         thread = self.thread
         if thread is not None and thread.is_alive():
-            thread.join(timeout=max(2.0, self.interval_seconds + 1.0))
+            thread.join(timeout=self.shutdown_timeout_seconds)
         if thread is not None and thread.is_alive():
             return False
         if not self._radar_closed:
@@ -187,6 +199,14 @@ class PaperMarketCollector:
     def snapshot(self) -> dict:
         return {
             "running": bool(self.thread and self.thread.is_alive()),
+            "shutdown": {
+                "requested": self.stop_event.is_set(),
+                "requested_at": self.stop_requested_at,
+                "worker_alive": bool(self.thread and self.thread.is_alive()),
+                "timeout_seconds": self.shutdown_timeout_seconds,
+                "request_timeout_ms": self.request_timeout_ms,
+                "radar_closed": self._radar_closed,
+            },
             "interval_seconds": self.interval_seconds,
             "cycles": self.cycles,
             "errors": self.errors,
@@ -242,14 +262,22 @@ class PaperMarketCollector:
             self.stop_event.wait(max(0.0, self.interval_seconds - elapsed))
 
     def collect_once(self) -> int:
-        snapshots, _ = self.radar.snapshot()
+        if self.stop_event.is_set():
+            return 0
+        snapshots, _ = self.radar.snapshot(stop_event=self.stop_event)
+        if self.stop_event.is_set():
+            return 0
         prices = {snap.symbol: snap.price for snap in snapshots}
         pressure = self.radar.pressure(snapshots)
         recorded = 0
 
         for symbol in self.symbols:
+            if self.stop_event.is_set():
+                break
             try:
                 ohlcv = self.ohlcv_fetcher(symbol, self.timeframe, self.candles_limit)
+                if self.stop_event.is_set():
+                    break
                 quality_cfg = self.settings.get("market_data_quality", {})
                 quality = validate_ohlcv_rows(
                     ohlcv,
@@ -298,6 +326,10 @@ class PaperMarketCollector:
                     "PAPER_SYMBOL_COLLECTION_ERROR",
                     {"symbol": symbol, "error": str(exc)},
                 )
+
+        if self.stop_event.is_set():
+            self.last_cycle_ms = int(time.time() * 1000)
+            return recorded
 
         self.confluence.resolve_outcomes()
         self.cycles += 1

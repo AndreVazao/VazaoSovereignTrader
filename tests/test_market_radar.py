@@ -109,5 +109,60 @@ class MarketRadarTests(unittest.TestCase):
         )
 
 
+    def test_ccxt_clients_receive_clamped_request_timeout(self) -> None:
+        class Client:
+            def __init__(self, options):
+                self.options = options
+
+            def load_markets(self):
+                return {}
+
+        captured = {}
+
+        def factory(options):
+            captured.update(options)
+            return Client(options)
+
+        with tempfile.TemporaryDirectory() as tmp, patch("PC_ENGINE.radar.market_radar.ccxt.binance", factory):
+            MarketRadar(
+                exchanges=["binance"],
+                symbols=[],
+                data_dir=tmp,
+                request_timeout_ms=999999,
+            )
+
+        self.assertEqual(captured["timeout"], 60000)
+        self.assertTrue(captured["enableRateLimit"])
+
+    def test_snapshot_stops_before_starting_another_request(self) -> None:
+        import threading
+
+        class Client:
+            def __init__(self):
+                self.calls = 0
+
+            def fetch_ticker(self, _symbol):
+                self.calls += 1
+                raise AssertionError("cancelled radar must not start a request")
+
+        event = threading.Event()
+        event.set()
+        client = Client()
+        radar = MarketRadar.__new__(MarketRadar)
+        radar.clients = {"binance": client}
+        radar.symbols = ["BTC/USDT"]
+        radar.previous = {}
+        radar.last_pressure = {}
+        radar.quality_rejections = 0
+        radar.stop_event = event
+        radar._persist = lambda _snapshots, _leads: None
+
+        snapshots, leads = radar.snapshot()
+
+        self.assertEqual(snapshots, [])
+        self.assertEqual(leads, [])
+        self.assertEqual(client.calls, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
