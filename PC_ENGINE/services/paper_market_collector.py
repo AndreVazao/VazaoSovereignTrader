@@ -377,7 +377,7 @@ class PaperMarketCollector:
         self.confluence.resolve_outcomes()
         self.cycles += 1
         if self.cycles % self._effective_learning_interval_cycles == 0:
-            if not bool(getattr(self._resource_policy, "defer_heavy_jobs", False)):
+            if not bool(self._resource_status.get("defer_heavy_jobs", False)):
                 self._refresh_learning()
                 self._refresh_evidence_ledger()
                 self._refresh_evidence_learning()
