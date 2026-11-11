@@ -172,6 +172,7 @@ class PaperMarketCollector:
                 stop_event=self.stop_event,
             )
             self._radar_closed = False
+        self.stop_requested_at = None
         self.stop_event.clear()
         self.thread = threading.Thread(
             target=self._loop,
