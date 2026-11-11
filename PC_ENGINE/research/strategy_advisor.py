@@ -60,6 +60,8 @@ def assess_strategy_report(
     oos_count = _count(test)
     oos_mean = _number(test.get("mean_net_bps"))
     probability_non_positive = _number(monte_carlo.get("probability_mean_leq_zero"), 1.0)
+    if not 0.0 <= probability_non_positive <= 1.0:
+        probability_non_positive = 1.0  # malformed probability fails closed
     valid_folds = [
         fold for fold in folds
         if isinstance(fold, dict) and isinstance(fold.get("test_summary"), dict)
