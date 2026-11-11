@@ -23,11 +23,11 @@ Do not work on the visual office, Android APK, DGM-MAT, Obscura, or unrelated pr
 ## Phase 0 — establish identity and exact build
 
 1. Confirm Desktop Commander is connected to the intended old Windows PC. Record Windows edition/build, architecture, available disk space, current date/time and timezone, and whether the current session is elevated. Do not include the Windows account's full personal path in the report; redact it as `<USER>`.
-2. Inspect the repository/PR and identify the exact current PR #522 HEAD at `https://github.com/AndreVazao/VazaoSovereignTrader/pull/522`. Record commit SHA and CI statuses for that exact SHA. Do not reuse CI results from earlier commits.
-3. Fetch the PR branch `fix/android-office-layout-2026-10-30` from `origin` and verify the fetched commit SHA matches the PR HEAD before running repository tools. Check `git status` first; never overwrite or reset local changes. If the checkout is dirty or on another task, use a separate clean worktree/clone rather than forcing a checkout. Do not merge PR #522 locally or change the user's active branch.
-4. Look for the Windows EXE installer/artifact built for that exact SHA. Verify its origin, artifact name, build workflow result, checksum if supplied, and whether it is a debug/test or production installer.
-5. **Do not install a stale, unverified, or mismatched artifact.** If the exact-HEAD Windows build is missing, red, or cannot be authenticated, mark installation tests BLOCKED, save the evidence, and perform only safe read-only machine/repository preflight checks. Do not substitute an old installer without explicitly documenting the mismatch.
-6. Record the exact EXE filename, artifact/run identifier, SHA-256, file size, and source URL. Do not run unknown downloaded binaries.
+2. Inspect `https://github.com/AndreVazao/VazaoSovereignTrader` and identify the current `main` HEAD. Record its full commit SHA and latest merged PR. Never pin this procedure to an old PR number or branch.
+3. Fetch the exact current `main` commit into a clean worktree/clone. Check `git status` first; never overwrite or reset local changes. If the checkout is dirty or on another task, use a separate clean worktree/clone rather than forcing a checkout. Confirm local HEAD equals the GitHub `main` SHA before running repository tools.
+4. Find the Windows EXE/installer workflow run triggered for that exact `main` SHA (or the exact release build explicitly designated by the project). Verify every applicable required workflow for that SHA: Python tests, PAPER smoke when triggered, Windows EXE/smoke and Windows installer lifecycle. Vercel previews and Snyk are not code-test gates. The installer lifecycle must include install, upgrade, launch, health check, uninstall and Learning Vault preservation.
+5. **Do not install a stale, unverified, or mismatched artifact.** If the exact-main Windows build is missing, red, or cannot be authenticated, mark installation tests BLOCKED, save the evidence, and perform only safe read-only machine/repository preflight checks. Do not substitute an old installer.
+6. Record the exact EXE filename, artifact/run identifier, source commit SHA, SHA-256, file size, workflow URL and artifact source. Do not run unknown downloaded binaries.
 
 ## Phase 1 — pre-install machine and safety preflight
 
@@ -40,7 +40,8 @@ Do not work on the visual office, Android APK, DGM-MAT, Obscura, or unrelated pr
    - Expected layout includes `learning\`, `backups\`, `imports\`, `exports\`, and `logs\`.
 4. Record whether the vault and legacy learning SQLite database already exist, their sizes and timestamps, and whether SQLite files have matching WAL/SHM sidecars. Do not delete or alter them.
 5. Create a dated local evidence folder outside the install directory and outside the vault, preferably `%USERPROFILE%\Documents\VST-Local-Validation\<timestamp>\`. If a repository checkout is available, also prepare `artifacts/local-validation/<timestamp>/` for sanitized copies. Do not store credentials or raw secret-bearing configs there.
-6. If a vault already exists, create a consistent SQLite backup using SQLite's backup mechanism or a documented app-supported backup. If a safe backup cannot be made, do not perform any operation that could replace or migrate the database.
+6. Before any install, upgrade, migration, start/stop lifecycle test or other state-changing operation, create a separate, verified backup set covering: repository checkout (including tracked and untracked state), sanitized non-secret configuration, active and legacy Learning Vaults, `artifacts/`, and relevant installer/runtime evidence. Generate a SHA-256 manifest and verify every copied file. Preserve original paths and data. If any category cannot be backed up and verified, restrict this session to read-only inspection and mark state-changing tests BLOCKED.
+7. If a vault already exists, create a consistent SQLite backup using SQLite's backup mechanism or a documented app-supported backup. If a safe backup cannot be made, do not perform any operation that could replace or migrate the database.
 
 ## Phase 2 — install (only after Phase 0 passes)
 
