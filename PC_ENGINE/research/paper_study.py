@@ -83,7 +83,7 @@ def simulate(
         net_bps = signed_bps - float(cost_bps)
         outcomes.append({
             "timestamp_ms": int(row["timestamp_ms"]),
-            "outcome_timestamp_ms": target,
+            "outcome_timestamp_ms": int(timestamps[pos]),
             "symbol": str(row["symbol"]),
             "regime": str(row.get("regime", "UNKNOWN")),
             "action": action,
