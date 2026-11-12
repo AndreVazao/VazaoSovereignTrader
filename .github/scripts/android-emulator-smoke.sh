@@ -43,7 +43,7 @@ raw = subprocess.check_output(
     text=True,
     stderr=subprocess.DEVNULL,
 )
-rows = list(csv.DictReader(raw.splitlines(), delimiter="\t"))
+rows = list(csv.DictReader(raw.splitlines(), delimiter=chr(9)))
 def normalize(value):
     value = unicodedata.normalize("NFKD", value or "")
     return "".join(ch for ch in value if not unicodedata.combining(ch)).upper()
