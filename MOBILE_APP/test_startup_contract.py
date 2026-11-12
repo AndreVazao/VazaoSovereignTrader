@@ -125,7 +125,7 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn('struct.unpack(">II", data[16:24])', script)
         self.assertIn("takeScreenshot: vst-android-office-chooser", office_flow)
         self.assertIn("tesseract", script)
-        self.assertIn('delimiter="\\t"', script)
+        self.assertIn("delimiter=chr(9)", script)
         self.assertIn('"USAR" in tokens', script)
         self.assertIn('"VIRTUAL" in tokens', script)
         self.assertIn('adb shell input tap "$CTA_X" "$CTA_Y"', script)
