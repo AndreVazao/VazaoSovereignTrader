@@ -51,16 +51,13 @@ def test_virtual_office_runtime_summary_uses_authenticated_backend_data(tmp_path
     assert 'id="vstRuntimeMode"' in html
     assert 'id="vstRuntimeMarket"' in html
     assert 'id="vstRuntimeUpdated"' in html
-    assert "updateRuntimeSummary(firstData,marketData)" in html
-    assert 'snapshot.status||snapshot.state||"Estado desconhecido"' in html
-    assert "PAPER*</strong>" not in html
-    assert "Aguardar dados do motor" not in html
+    assert "function updateRuntimeSummary(snapshot)" in html
+    assert 'snapshot.status||snapshot.state||"Estado desconhecido"' not in html
     assert "async function boundedFetch(url,options={},timeoutMs=2500)" in html
     assert "abortVisualRequests();currentToken" in html
-    assert '/learning-memory/runtime' in html
-    assert '/learning-memory/health' in html
+    assert 'window.location.origin+"/office/snapshot"' in html
+    assert 'headers:{"X-Token":currentToken,"Accept":"application/json"}' in html
     assert 'window.setInterval(pollRuntimeStatus,10000)' in html
-    assert '["Saúde dos dados de mercado","/market-data-health"]' in html
     assert "activeRequests=new Set()" in html
     assert 'id="vstConnectionBadge"' in html
     assert "DEMONSTRAÇÃO · NÃO LIGADO" in html
@@ -68,8 +65,9 @@ def test_virtual_office_runtime_summary_uses_authenticated_backend_data(tmp_path
     assert "vst-department-change" in html
     assert 'body:JSON.stringify({message,department:selectedDepartment})' in html
     assert "conversationHistory=Object.create(null)" in html
-
-
+    assert "/learning-memory/runtime" not in html
+    assert "/learning-memory/health" not in html
+    assert "/market-data-health" not in html
 def test_observer_summary_requires_authentication(tmp_path, monkeypatch):
     client = _app(tmp_path, monkeypatch)
 
