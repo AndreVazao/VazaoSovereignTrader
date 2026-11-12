@@ -71,6 +71,14 @@ Delivery sequence:
 
 ## Incremental delivery and acceptance gates
 
+### E1.1 — Explicit read-only capability policy (2026-11-12)
+- [x] Add a fail-closed Binance/OKX Spot policy with an explicit unified-method allow-list (`fetch_balance`, `fetch_accounts`).
+- [x] Reject order, cancellation, transfer, withdrawal, positions and unreviewed operations at the policy boundary.
+- [x] Normalize permission snapshots to strict booleans; block missing, malformed, trade-enabled, withdrawal-enabled and transfer-enabled permissions.
+- [ ] Connect venue-specific permission probes to the policy; no live permission probe is implemented in this slice.
+- [ ] Wrap authenticated CCXT clients so callers cannot bypass the allow-list; this module is policy-only and does not instantiate clients.
+- [ ] Add owner-only API routes and PC form after adapter, scope, CSRF/origin, no-store, redaction and timeout design is tested.
+
 ### E1 — Secure read-only credential foundation (next implementation increment)
 - [x] Inventory existing venue configuration, CCXT usage, route factory, scopes and test fixtures.
 - [x] Add per-venue public market request/success/error/quality-rejection and persistence counters to the Radar.
