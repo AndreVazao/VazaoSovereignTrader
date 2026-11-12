@@ -2,8 +2,10 @@ appId: pt.andrevazao.vazaosovereigntrader
 ---
 - launchApp
 - waitForAnimationToEnd
-# Prefer the visible CTA label over fixed screen coordinates; Android viewport and status/navigation bars can shift percentage taps.
+# Kivy canvas labels are not exposed consistently to Android accessibility.
+# The first-run chooser is vertically stacked; use a viewport-relative tap
+# on the virtual-office CTA, then let the shell OCR assert the resulting page.
 - tapOn:
-    text: "USAR ESCRITÓRIO VIRTUAL"
+    point: "50%, 62%"
 - waitForAnimationToEnd
 - takeScreenshot: vst-android-office
