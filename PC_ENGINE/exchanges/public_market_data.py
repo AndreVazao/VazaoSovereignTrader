@@ -81,7 +81,7 @@ class CcxtPublicMarketDataAdapter:
         if not isinstance(request, Mapping):
             raise PublicExchangeAdapterError("invalid_request")
         operation = request.get("operation")
-        if operation not in _ALLOWED_OPERATIONS:
+        if not isinstance(operation, str) or operation not in _ALLOWED_OPERATIONS:
             raise PublicExchangeAdapterError("operation_not_allowed")
         symbol = self._symbol(request)
         timeout = float(timeout_seconds)
