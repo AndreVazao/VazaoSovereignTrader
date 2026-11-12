@@ -25,12 +25,13 @@ def test_virtual_office_runtime_poll_is_authenticated_bounded_and_read_only() ->
     # The observer may read status, but must not invent work or issue trading mutations.
     assert "async function pollRuntimeStatus()" in SHELL
     assert "if(!currentToken||busy||document.hidden)return;" in SHELL
-    assert 'headers={"X-Token":currentToken,"Accept":"application/json"}' in SHELL
+    assert 'window.location.origin+"/office/snapshot"' in SHELL
+    assert 'headers:{"X-Token":currentToken,"Accept":"application/json"}' in SHELL
     assert 'method:"GET"' in SHELL
     assert 'cache:"no-store",credentials:"omit"' in SHELL
-    assert 'setInterval(pollRuntimeStatus,10000)' in SHELL
-    assert "/learning-memory/runtime" in SHELL
-    assert "/learning-memory/health" in SHELL
-    assert "/market-data-health" in SHELL
+    assert 'window.setInterval(pollRuntimeStatus,10000)' in SHELL
+    assert "/learning-memory/runtime" not in SHELL
+    assert "/learning-memory/health" not in SHELL
+    assert "/market-data-health" not in SHELL
     assert "boundedFetch" in SHELL
     assert "currentToken=\"\"" in SHELL
