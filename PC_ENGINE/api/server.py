@@ -31,6 +31,7 @@ from PC_ENGINE.diagnostics.learning_memory_runtime import build_learning_memory_
 from PC_ENGINE.execution.surface_runtime_manager import ExecutionSurfaceRuntimeManager
 from PC_ENGINE.api.operator_exchange import OperatorExchange
 from PC_ENGINE.api.assistant_gateway import OperatorAssistantGateway
+from PC_ENGINE.api.office_snapshot import register_office_snapshot
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -140,6 +141,14 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         if not any(principal.has(scope) for scope in scopes):
             raise PermissionError("scope_required")
         return principal
+
+    register_office_snapshot(
+        app,
+        engine,
+        require_scope=require_scope,
+        readiness=readiness,
+        market_data_reader=read_market_data_health_for_assistant,
+    )
 
     @app.errorhandler(PermissionError)
     def handle_unauthorized(_: PermissionError):
