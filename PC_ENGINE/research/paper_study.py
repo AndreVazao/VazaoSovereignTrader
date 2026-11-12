@@ -125,7 +125,7 @@ def chronological_split(rows: list[dict[str, Any]], train_ratio: float = 0.7) ->
     # Purge training labels whose forward outcome window overlaps the test period.
     train = [
         row for row in ordered[:cut]
-        if int(row.get("outcome_timestamp_ms", row["timestamp_ms"])) <= test_start
+        if int(row.get("outcome_timestamp_ms", row["timestamp_ms"])) < test_start
     ]
     return train, test
 
@@ -147,7 +147,7 @@ def walk_forward(rows: list[dict[str, Any]], *, folds: int = 5, min_train: int =
         # Purge overlapping forward labels at every walk-forward boundary.
         train = [
             row for row in ordered[:train_end]
-            if int(row.get("outcome_timestamp_ms", row["timestamp_ms"])) <= test_start
+            if int(row.get("outcome_timestamp_ms", row["timestamp_ms"])) < test_start
         ]
         reports.append({
             "fold": fold + 1,
