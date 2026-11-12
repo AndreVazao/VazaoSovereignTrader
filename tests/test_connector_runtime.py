@@ -68,6 +68,13 @@ def test_registry_denies_unverified_provider():
     assert adapter.calls == []
 
 
+def test_registry_rejects_malformed_capability_without_raising():
+    registry, adapter = registry_for()
+    result = registry.execute_read("uhodler.app", ["balances.read"])
+    assert result.error == "capability_not_read_only"
+    assert adapter.calls == []
+
+
 def test_registry_denies_mutations_before_adapter_call():
     registry, adapter = registry_for()
     result = registry.execute_read("uhodler.app", "orders.create")
