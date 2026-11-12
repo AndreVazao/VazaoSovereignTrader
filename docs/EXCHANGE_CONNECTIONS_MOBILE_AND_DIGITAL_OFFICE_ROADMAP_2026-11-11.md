@@ -118,3 +118,12 @@ Delivery sequence:
 ## Explicit non-goals for this phase
 
 No live order placement/cancellation, no REAL activation, no transfers/withdrawals, no public API exposure, no paid mandatory cloud service, no credential collection in chat/mobile, no second engine and no claims of profitability.
+
+
+## Universal platform coverage and Android virtualization (2026-11-12)
+
+The Binance/OKX work is a first security proving ground, not the product boundary. VST must support a provider-neutral connector registry for exchanges, brokers, fintech/banking/portfolio services (including owner-selected services such as U-Hodler), wallets, web/desktop apps and Android apps. Every connector declares access method, capability manifest, scopes, region/terms, freshness, limits, health and evidence. Prefer official APIs/OAuth/SDK; use UI automation only where appropriate and authorized; otherwise use manual handoff. Unknown capabilities fail closed.
+
+A pluggable Android Session Orchestrator must support local emulators, self-hosted farms and optional cloud Android providers behind one interface. Cloud execution is useful when the home PC is constrained or the owner is away. Requirements: isolated sessions, encrypted streaming, short-lived tokens, private device-control channel (never public ADB), explicit cost/runtime caps, region and retention controls, redacted evidence, revocation and human handoff for MFA/OTP/CAPTCHA/biometrics/consent/payment/security prompts. No provider is mandatory and no app is considered integrated until its workflow contract and acceptance tests pass.
+
+Detailed architecture and phased gates: docs/UNIVERSAL_PLATFORM_AND_ANDROID_VIRTUALIZATION_ARCHITECTURE_2026-11-12.md.
