@@ -134,55 +134,44 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
   const summaryEl=()=>document.getElementById("vstLiveSummary");
   function state(label,detail){const el=stateEl();el.replaceChildren();const a=document.createElement("span");a.textContent=label;const b=document.createElement("span");b.className="tag";b.textContent=detail;el.append(a,b)}
   function safeSummary(rows){summaryEl().textContent=rows.map(([label,value])=>label+": "+value).join("\n")}
-  function updateRuntimeSummary(snapshot, marketData){
+  function updateRuntimeSummary(snapshot){
     const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value===null||value===undefined||value===""?"Não fornecido":String(value)};
-    set("vstRuntimeEngine",snapshot.status||snapshot.state||"Estado desconhecido");
-    set("vstRuntimeEngineDetail","Loop: "+(snapshot.engine_loop||"UNKNOWN")+" · investigação: "+(snapshot.research_worker||"UNKNOWN"));
-    set("vstRuntimeMode",snapshot.memory_consumer_wired===true?"Memória ligada":snapshot.memory_consumer_wired===false?"Memória desligada":"Memória desconhecida");
-    set("vstRuntimeModeDetail","Diagnóstico de memória/workers; não comprova qualidade de aprendizagem nem autoriza execução.");
-    const market=marketData||{};
+    const engine=snapshot.engine||{},market=snapshot.market_data||{},risk=snapshot.risk||{},safety=snapshot.safety||{};
+    set("vstRuntimeEngine",engine.status||"Desconhecido");
+    set("vstRuntimeEngineDetail","Fonte: backend VST · "+(engine.running===true?"motor ativo":"motor não ativo"));
+    set("vstRuntimeMode",engine.mode||"Desconhecido");
+    set("vstRuntimeModeDetail","Risco: "+(risk.status||"UNKNOWN")+" · PAPER only: "+(safety.paper_only===true?"sim":"não confirmado"));
     set("vstRuntimeMarket",market.status||"Desconhecido");
     set("vstRuntimeMarketDetail",market.stale===true?"Dados desatualizados":market.ok===true?"Feed reportado como atual":"Saúde do feed não confirmada");
-    set("vstRuntimeUpdated",new Date().toLocaleTimeString());
-    set("vstRuntimeUpdatedDetail","Leitura autenticada; atualização automática a cada 10 segundos");
+    set("vstRuntimeUpdated",new Date(snapshot.generated_at||Date.now()).toLocaleTimeString());
+    set("vstRuntimeUpdatedDetail","Snapshot autenticado · atualização a cada 10 segundos");
   }
-  function describe(value){if(value===null||value===undefined)return "não fornecido";if(typeof value==="string"||typeof value==="number"||typeof value==="boolean")return String(value);return JSON.stringify(value).slice(0,900)}
   async function pollRuntimeStatus(){
     if(!currentToken||busy||document.hidden)return;
-    const base=window.location.origin;
     try{
-      const headers={"X-Token":currentToken,"Accept":"application/json"};
-      const [runtimeResponse,healthResponse,marketResponse]=await Promise.all([
-        boundedFetch(base+"/learning-memory/runtime",{method:"GET",headers,cache:"no-store",credentials:"omit"}),
-        boundedFetch(base+"/learning-memory/health",{method:"GET",headers,cache:"no-store",credentials:"omit"}),
-        boundedFetch(base+"/market-data-health",{method:"GET",headers,cache:"no-store",credentials:"omit"})
-      ]);
-      if([runtimeResponse,healthResponse,marketResponse].some(r=>r.status===401||r.status===403)){
+      const response=await boundedFetch(window.location.origin+"/office/snapshot",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+      if(response.status===401||response.status===403){
         currentToken="";document.getElementById("vstApiToken").value="";
-        setBadge("AUTENTICAÇÃO NECESSÁRIA");state("Sessão terminada","Volta a autenticar para continuar.");
-        if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);
-        return;
+        setBadge("AUTENTICAÇÃO NECESSÁRIA");state("Sessão terminada","Token inválido ou sem permissão read_private_state.");
+        if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);return;
       }
-      if(!runtimeResponse.ok)throw new Error("Estado do motor indisponível (HTTP "+runtimeResponse.status+")");
-      const runtime=await runtimeResponse.json();
-      const health=healthResponse.ok?await healthResponse.json():{status:"UNKNOWN"};
-      const market=marketResponse.ok?await marketResponse.json():{status:"UNKNOWN"};
-      updateRuntimeSummary(runtime,market);
+      if(!response.ok)throw new Error("Snapshot indisponível (HTTP "+response.status+")");
+      const snapshot=await response.json();
+      if(snapshot.ok!==true||snapshot.schema_version!==1||snapshot.source!=="vst_backend")throw new Error("Formato de snapshot não reconhecido");
+      updateRuntimeSummary(snapshot);
+      const engine=snapshot.engine||{},market=snapshot.market_data||{},risk=snapshot.risk||{},safety=snapshot.safety||{};
       safeSummary([
-        ["Motor / workers",runtime.status||"UNKNOWN"],
-        ["Loop do motor",runtime.engine_loop||"UNKNOWN"],
-        ["Worker de investigação",runtime.research_worker||"UNKNOWN"],
-        ["Memória persistente",health.status||"UNKNOWN"],
-        ["Dados de mercado",market.status||"UNKNOWN"],
-        ["Qualidade de aprendizagem verificada",String(runtime.learning_quality_verified===true)],
-        ["Execução autorizada",String(runtime.execution_authorized===true)],
-        ["Última leitura",new Date().toLocaleString()]
+        ["Origem","Backend VST · snapshot autenticado"],["Motor",engine.status||"UNKNOWN"],["Modo",engine.mode||"UNKNOWN"],
+        ["Dados de mercado",market.status||"UNKNOWN"],["Feed atual",market.ok===true&&!market.stale?"sim":"não confirmado"],
+        ["Risco",risk.status||"UNKNOWN"],["PAPER only",safety.paper_only===true?"confirmado":"não confirmado"],
+        ["REAL permitido",safety.allow_real===true?"sim":"não"],["Promoção automática REAL",safety.auto_promote_real===true?"sim":"não"],
+        ["Tarefas verificadas",(snapshot.verified_tasks||[]).length],["Última leitura",new Date(snapshot.generated_at||Date.now()).toLocaleString()]
       ]);
-      state("Ligado ao backend","Estado autenticado; consulta automática a cada 10 segundos.");
-      setBadge("LIGADO · LEITURA AUTENTICADA",true);
+      state("Ligado ao backend","Snapshot read-only autenticado; atualização automática a cada 10 segundos.");
+      setBadge("LIGADO · ESTADO REAL",true);
       if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(true,false,false);
     }catch(e){
-      state("Estado indisponível","Falha de leitura; os dados anteriores não devem ser considerados atuais.");
+      state("Estado indisponível","Dados anteriores considerados desatualizados; a reconexão continuará.");
       setBadge("ESTADO DESCONHECIDO");
       if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);
     }
@@ -195,43 +184,37 @@ document.getElementById("chatForm").addEventListener("submit",e=>{e.preventDefau
     if(busy)return;busy=true;
     const token=document.getElementById("vstApiToken").value.trim();
     if(!token){currentToken="";setBadge("DESLIGADO");state("Ligação bloqueada","Introduz o token; não foi enviado nada.");busy=false;return}
-    const base=window.location.origin;
-    if(!/^https?:\/\//i.test(base)||base==="null"){currentToken="";setBadge("SEM LIGAÇÃO");state("Ligação bloqueada","Abre /virtual-office através do servidor do PC.");busy=false;return}
-    currentToken=token;
-    state("A verificar autenticação","A testar resumo leve autenticado…");
-    const endpoints=[
-      ["Saúde da memória","/learning-memory/health"],
-      ["Saúde dos dados de mercado","/market-data-health"]
-    ];
-    const rows=[];
+    if(!window.location.origin.startsWith("http")){currentToken="";setBadge("SEM LIGAÇÃO");state("Ligação bloqueada","Abre o cockpit através do servidor VST no PC.");busy=false;return}
+    currentToken=token;state("A verificar autenticação","A solicitar snapshot read-only do backend…");
     try{
-      const first=await boundedFetch(base+"/learning-memory/runtime",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
-      if(first.status===401||first.status===403){currentToken="";document.getElementById("vstApiToken").value="";setBadge("ACESSO RECUSADO");state("Acesso recusado","Token inválido ou sem permissão de leitura.");safeSummary([]);busy=false;return}
-      if(!first.ok)throw new Error("GET /learning-memory/runtime respondeu HTTP "+first.status);
-      const firstData=await first.json();
-      rows.push(["Estado do motor e workers",describe(firstData.status||"UNKNOWN")]);
-      rows.push(["Loop do motor",describe(firstData.engine_loop)]);
-      rows.push(["Worker de investigação",describe(firstData.research_worker)]);
-      rows.push(["Memória ligada",describe(firstData.memory_consumer_wired)]);
-      rows.push(["Qualidade de aprendizagem verificada",describe(firstData.learning_quality_verified)]);
-      rows.push(["Última leitura",new Date().toLocaleString()]);
-      let marketData=null;
-      for(const [label,path] of endpoints.slice(1)){
-        try{
-          const response=await boundedFetch(base+path,{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
-          if(response.status===401||response.status===403){rows.push([label,"Sem autorização"]);continue}
-          if(!response.ok){rows.push([label,"HTTP "+response.status]);continue}
-          const data=await response.json();
-          if(path==="/market-data-health") marketData=data;
-          let count;
-          if(path==="/learning-memory/health")count=data.status||"UNKNOWN";
-          rows.push([label,count===null||count===undefined?"Resposta recebida":"Registos: "+count]);
-        }catch(e){rows.push([label,"Indisponível: "+String(e.message||e).slice(0,100)])}
+      const response=await boundedFetch(window.location.origin+"/office/snapshot",{method:"GET",headers:{"X-Token":currentToken,"Accept":"application/json"},cache:"no-store",credentials:"omit"});
+      if(response.status===401||response.status===403){
+        currentToken="";document.getElementById("vstApiToken").value="";setBadge("ACESSO RECUSADO");
+        state("Acesso recusado","Token inválido ou sem permissão read_private_state.");safeSummary([]);return;
       }
-      updateRuntimeSummary(firstData,marketData);if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(true,false,false);
-      safeSummary(rows);state("Ligado ao backend","Estado autenticado; atualização automática a cada 10 segundos.");setBadge("LIGADO · LEITURA AUTENTICADA",true);startRuntimePolling();document.getElementById("messages").replaceChildren();conversationHistory[selectedDepartment]=[];addChatMessage("SISTEMA · LIGAÇÃO","Ligação autenticada ao backend. A resposta depende das capacidades existentes no gateway; os departamentos sem agente independente serão identificados como tal.","system");
-    }catch(e){currentToken="";document.getElementById("vstApiToken").value="";setBadge("SEM LIGAÇÃO");state("Falha de ligação",String(e.message||e).slice(0,150));if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);safeSummary([["Nota","Confirma que estás a abrir esta página através do servidor VST (Vazão Sovereign Trader) no PC, por LAN ou Tailscale."]])}
-    finally{busy=false}
+      if(!response.ok)throw new Error("GET /office/snapshot respondeu HTTP "+response.status);
+      const snapshot=await response.json();
+      if(snapshot.ok!==true||snapshot.schema_version!==1||snapshot.source!=="vst_backend")throw new Error("Snapshot inválido");
+      updateRuntimeSummary(snapshot);
+      const engine=snapshot.engine||{},market=snapshot.market_data||{},risk=snapshot.risk||{},safety=snapshot.safety||{};
+      safeSummary([
+        ["Origem","Backend VST · snapshot autenticado"],["Motor",engine.status||"UNKNOWN"],["Modo",engine.mode||"UNKNOWN"],
+        ["Dados de mercado",market.status||"UNKNOWN"],["Feed atual",market.ok===true&&!market.stale?"sim":"não confirmado"],
+        ["Risco",risk.status||"UNKNOWN"],["PAPER only",safety.paper_only===true?"confirmado":"não confirmado"],
+        ["REAL permitido",safety.allow_real===true?"sim":"não"],["Promoção automática REAL",safety.auto_promote_real===true?"sim":"não"],
+        ["Tarefas verificadas",(snapshot.verified_tasks||[]).length],["Última leitura",new Date(snapshot.generated_at||Date.now()).toLocaleString()]
+      ]);
+      state("Ligado ao backend","Estado autenticado; atualização automática a cada 10 segundos.");
+      setBadge("LIGADO · ESTADO REAL",true);
+      if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(true,false,false);
+      startRuntimePolling();document.getElementById("messages").replaceChildren();conversationHistory[selectedDepartment]=[];
+      addChatMessage("SISTEMA · LIGAÇÃO","Ligação autenticada ao snapshot read-only do backend. Apenas tarefas confirmadas pelo motor serão apresentadas como trabalho.","system");
+    }catch(e){
+      currentToken="";document.getElementById("vstApiToken").value="";setBadge("SEM LIGAÇÃO");
+      state("Falha de ligação",String(e.message||e).slice(0,150));
+      if(window.vstSetAmbientBackendState)window.vstSetAmbientBackendState(false,false,false);
+      safeSummary([["Nota","Confirma que estás a abrir esta página através do servidor VST no PC, por LAN ou Tailscale."]]);
+    }finally{busy=false}
   }
   const conversationHistory=Object.create(null);
   let selectedDepartment=window.vstSelectedDepartment||"brain";
