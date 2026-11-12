@@ -68,14 +68,14 @@ def test_public_adapter_bounds_order_book_depth(adapter):
     assert result["asks"] == [[10.1, 3.0]]
 
 
-@pytest.mark.parametrize("request", [
+@pytest.mark.parametrize("payload", [
     {"operation": "create_order", "symbol": "BTC/USDT"},
     {"operation": "fetch_balance", "symbol": "BTC/USDT"},
     {"operation": "cancel_order", "symbol": "BTC/USDT"},
 ])
-def test_private_and_mutating_operations_are_not_exposed(adapter, request):
+def test_private_and_mutating_operations_are_not_exposed(adapter, payload):
     with pytest.raises(module.PublicExchangeAdapterError, match="operation_not_allowed"):
-        adapter.read("public_market_data.read", request, timeout_seconds=3)
+        adapter.read("public_market_data.read", payload, timeout_seconds=3)
 
 
 def test_unknown_capability_is_rejected(adapter):
@@ -83,15 +83,15 @@ def test_unknown_capability_is_rejected(adapter):
         adapter.read("balances.read", {"operation": "ticker", "symbol": "BTC/USDT"}, timeout_seconds=3)
 
 
-@pytest.mark.parametrize("request", [
+@pytest.mark.parametrize("payload", [
     {"operation": "ticker", "symbol": "../../account"},
     {"operation": "ohlcv", "symbol": "BTC/USDT", "timeframe": "1s", "limit": 10},
     {"operation": "ohlcv", "symbol": "BTC/USDT", "timeframe": "1h", "limit": 501},
     {"operation": "order_book", "symbol": "BTC/USDT", "limit": 1000},
 ])
-def test_invalid_symbols_timeframes_and_limits_fail_closed(adapter, request):
+def test_invalid_symbols_timeframes_and_limits_fail_closed(adapter, payload):
     with pytest.raises(module.PublicExchangeAdapterError):
-        adapter.read("public_market_data.read", request, timeout_seconds=3)
+        adapter.read("public_market_data.read", payload, timeout_seconds=3)
 
 
 def test_factory_supports_multiple_ccxt_venues(monkeypatch):
