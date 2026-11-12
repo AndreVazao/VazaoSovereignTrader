@@ -41,9 +41,21 @@ def test_walk_forward_and_oos_are_chronological():
     train_rows, test_rows = chronological_split(outcome_rows)
     if test_rows:
         boundary = test_rows[0]["timestamp_ms"]
-        assert all(row["outcome_timestamp_ms"] <= boundary for row in train_rows)
+        assert all(row["outcome_timestamp_ms"] < boundary for row in train_rows)
     assert report["monte_carlo_oos"]["iterations"] == 100
     assert all(fold["test_start_ms"] <= fold["test_end_ms"] for fold in report["walk_forward"])
+
+
+def test_chronological_split_purges_labels_resolved_exactly_at_test_start():
+    rows = [
+        {"timestamp_ms": 10, "outcome_timestamp_ms": 15, "net_bps": 1.0},
+        {"timestamp_ms": 15, "outcome_timestamp_ms": 20, "net_bps": 2.0},
+        {"timestamp_ms": 20, "outcome_timestamp_ms": 21, "net_bps": 3.0},
+    ]
+    train, test = chronological_split(rows, train_ratio=0.7)
+    boundary = test[0]["timestamp_ms"]
+    assert boundary == 20
+    assert all(row["outcome_timestamp_ms"] < boundary for row in train)
 
 
 def test_regime_breakdown_and_policy_comparison_are_present():
