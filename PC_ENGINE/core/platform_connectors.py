@@ -72,7 +72,7 @@ DISABLED_CAPABILITIES = frozenset({
 })
 
 _PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
-_CAPABILITY = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+_CAPABILITY = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 
 
 @dataclass(frozen=True)
