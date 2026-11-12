@@ -1,16 +1,14 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-12 (PR #564 integrated)
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-12 (universal platform architecture)
 
-**Verified VST main:** 8414091f475c726b8cde720b7e9efcc9573141a1 (squash merge of PR #564).  
-**PR #564:** CLOSED/MERGED; tested head d7c3d4c38eadb746555c84ca4e5731d1f856e383. Recheck open PRs before new work.
-
-- Exact-head CI: Python tests PASS (run 43181588502); Trading Engine PAPER smoke PASS (43181588435); Android Emulator UI Smoke PASS (43181588546); Windows EXE PASS and Windows installer lifecycle PASS (run 43181588446); Android APK PASS (43181588492).
-- Windows EXE workflow explicitly ran native DPAPI CurrentUser vault tests on Windows and passed. Installer job passed previous-version build, upgrade, install/launch/health/uninstall and Learning Vault preservation.
-- Android emulator artifact vst-android-emulator-smoke (artifact 13927602112; SHA-256 8df0eb43d37190264ad68201ad1e98213a7172ba50e0a3ddc0e1d59f1a2e4a36) was downloaded and inspected. OCR confirms chooser and office UI; captures passed portrait/landscape/tablet dimensions. Office still explicitly identifies itself as DEMO OFFLINE — ESCRITÓRIO SEM MOTOR; this is an offline visual smoke only, not proof of live PC/backend integration or physical-device acceptance.
-- PR #564 adds DPAPI CurrentUser credential vault foundation for Binance/OKX (not yet wired into runtime/API), Radar public collection counters and authenticated /paper-collector/resources, Android Mercado/Radar page and PAPER evidence scorecard, plus roadmap. No exchange credential registration/verification/revocation API, no PC credentials form, no live private account probe, no REAL authority.
-- Android emulator UI is green; no UI smoke failure remains on this exact SHA. Physical Android validation remains pending.
-- VST remains PAPER-only; public market data only. No secrets entered, no PC runtime changed, no install/upgrade/start/stop performed.
-- The branch had one commit behind main, but the only main-side commit added the exact same roadmap blob; GitHub reported mergeable and squash merge succeeded. PR closed and merge SHA verified.
-- Continue one active PR at a time. Next engineering increment should complete secure exchange read-only capability registry and owner-only API routes only after reviewing existing CCXT client construction, scopes, secret redaction, no-store/CSRF/origin, bounded requests and negative permission tests. Keep credentials out of mobile/chat. Keep physical PC retest blocked until inventory+SHA256 backup reviewed and explicit authorization for state-changing actions.
+**Verified VST main before PR #566:** 09b803a2ce0bba10de895b800fd8950a60e739a1 (PR #565 merged).
+**PR #565:** CLOSED/MERGED. Exact HEAD bb9792b252bdd10396560b046edcc4f64c3b8fcd. Python tests PASS (run 43205252171), PAPER lifecycle/safety PASS (run 43205226035), Windows EXE and installer jobs PASS (run 43205252789). One earlier duplicate run was cancelled and is not a failure of the final rerun.
+**PR #566:** OPEN, not merged, branch feat/universal-platform-android-virtualization-2026-11-12. It records provider-neutral integration architecture and cloud/local Android virtualization; documentation only. Recheck exact current HEAD and PR state before acting.
+- VST is not limited to Binance/OKX. These are first connector examples only. Future connector catalogue covers exchanges, brokers, fintech/banking, wallets, portfolio/payment apps, Android, web, desktop and cloud services, with explicit per-operation capabilities and fail-closed permissions.
+- Android virtualization must support local emulator, self-hosted farm and optional cloud providers behind a provider-neutral session orchestrator. No mandatory vendor or paid cloud service. Cloud use is opt-in, isolated, encrypted, region/retention controlled and cost-capped.
+- Official APIs/OAuth/SDK preferred. UI automation is fallback only where authorized and safe. Human handoff required for MFA/OTP/CAPTCHA/biometrics/consent/payment/security prompts. No bypass, public ADB or unattended financial mutation.
+- U-Hodler and other user-selected applications are candidate integrations, not implemented/verified connectors. Inspect official access methods and provider terms before implementation.
+- No cloud Android provider provisioned, no costs incurred, no external credentials or accounts used. No PC physical runtime actions. Remain PAPER-only; no REAL authority.
+- Next engineering work after PR #566 review: inventory connector construction points and Android automation contracts; define typed provider-neutral connector manifest/capability registry; build fake adapter contract tests; then implement a local Android session adapter and compare cloud options before provisioning.
 
 ---
 
