@@ -1,22 +1,16 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-11 (exchange + mobile + digital office)
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-12 (PR #564 integrated)
 
-**Verified baseline:** main `5f73a6d13af42186a2ffade05511fc97d835a8e7`. No open pull requests at the time of inspection.  
-**Current work branch:** `feat/exchange-readonly-mobile-office-foundation-2026-11-11`.  
-**Scope of this increment:** product/security contract plus an initial Windows DPAPI CurrentUser vault module and focused unit tests. No credential registration API, exchange account UI, live private probe or new mobile functionality is implemented yet.
+**Verified VST main:** 8414091f475c726b8cde720b7e9efcc9573141a1 (squash merge of PR #564).  
+**PR #564:** CLOSED/MERGED; tested head d7c3d4c38eadb746555c84ca4e5731d1f856e383. Recheck open PRs before new work.
 
-- VST remains a single PC_ENGINE authority. PC cockpit, Android APK and Digital Office are clients; never run a second trading engine on mobile/office.
-- Initial vault foundation now exists at `PC_ENGINE/core/credential_vault.py`: Windows DPAPI CurrentUser encryption, strict Binance/OKX field allow-lists, metadata fingerprint only, atomic file writes and fail-closed non-Windows behavior. Focused tests are in `tests/test_credential_vault.py`; DPAPI native behavior still needs Windows CI/runtime verification.
-- Public market collection observability now tracks Radar request attempts, usable observations, request errors, quality rejections, persistence batches/errors and per-venue counts. Exposed in collector snapshot and authenticated `/paper-collector/resources`; unit tests cover counter separation and persistence failure. Android APK now has a `Mercado/Radar` page that reads those metrics and displays last-observation age and per-venue outcomes. This does not yet prove live PC data flow or emulator/physical-device behavior.
-- Next exchange phase starts with Binance and OKX read-only account access. Secure form belongs on PC cockpit under Exchanges → Ligações e Contas. Never request exchange secrets in chat or mobile.
-- Credentials must be encrypted at rest with Windows DPAPI CurrentUser, fail closed where unavailable, never enter normal config, Git, logs, snapshots, Learning Vault, browser storage, URLs, telemetry or Vercel.
-- First exchange capability is read-only only. Reject trade/withdraw permissions. No order placement/cancellation, REAL, transfers or withdrawals.
-- Existing Android APK and pairing code are present. Mobile remains a remote client using authenticated private connectivity (Tailscale preferred), Android Keystore token storage and GET-only automatic failover. Existing README describes the office as offline demo; do not claim it is connected to live brain.
-- Mobile target views: status/freshness, markets/Radar, PAPER evidence, Learning Vault, alerts/human interaction, authenticated chat/research task IDs, exchange read-only summary and device settings.
-- Digital Office target: same authenticated API and task/event data as mobile/PC; rooms must reflect real server events, never fabricated agent activity. Compact chat stays a low-resource fallback.
-- API must remain private (loopback default; Tailscale for remote), owner/device/scope checked, auditable, bounded and fail-closed. A timeout after a mutation is UNKNOWN/reconcile, never automatic replay.
-- Operational PC state last recorded in the preceding handoff: VST 2026.11.1 installed; PAPER engine had been started with public market data. Do not infer current process state without checking the PC. REAL remains locked; no exchange private keys have been entered.
-- Full design and acceptance checklist: `docs/EXCHANGE_CONNECTIONS_MOBILE_AND_DIGITAL_OFFICE_ROADMAP_2026-11-11.md`.
-- One branch/PR at a time. Do not merge without exact-head tests, security review and artifact inspection. Do not touch the older local checkout branch without first backing up and inspecting it.
+- Exact-head CI: Python tests PASS (run 43181588502); Trading Engine PAPER smoke PASS (43181588435); Android Emulator UI Smoke PASS (43181588546); Windows EXE PASS and Windows installer lifecycle PASS (run 43181588446); Android APK PASS (43181588492).
+- Windows EXE workflow explicitly ran native DPAPI CurrentUser vault tests on Windows and passed. Installer job passed previous-version build, upgrade, install/launch/health/uninstall and Learning Vault preservation.
+- Android emulator artifact vst-android-emulator-smoke (artifact 13927602112; SHA-256 8df0eb43d37190264ad68201ad1e98213a7172ba50e0a3ddc0e1d59f1a2e4a36) was downloaded and inspected. OCR confirms chooser and office UI; captures passed portrait/landscape/tablet dimensions. Office still explicitly identifies itself as DEMO OFFLINE — ESCRITÓRIO SEM MOTOR; this is an offline visual smoke only, not proof of live PC/backend integration or physical-device acceptance.
+- PR #564 adds DPAPI CurrentUser credential vault foundation for Binance/OKX (not yet wired into runtime/API), Radar public collection counters and authenticated /paper-collector/resources, Android Mercado/Radar page and PAPER evidence scorecard, plus roadmap. No exchange credential registration/verification/revocation API, no PC credentials form, no live private account probe, no REAL authority.
+- Android emulator UI is green; no UI smoke failure remains on this exact SHA. Physical Android validation remains pending.
+- VST remains PAPER-only; public market data only. No secrets entered, no PC runtime changed, no install/upgrade/start/stop performed.
+- The branch had one commit behind main, but the only main-side commit added the exact same roadmap blob; GitHub reported mergeable and squash merge succeeded. PR closed and merge SHA verified.
+- Continue one active PR at a time. Next engineering increment should complete secure exchange read-only capability registry and owner-only API routes only after reviewing existing CCXT client construction, scopes, secret redaction, no-store/CSRF/origin, bounded requests and negative permission tests. Keep credentials out of mobile/chat. Keep physical PC retest blocked until inventory+SHA256 backup reviewed and explicit authorization for state-changing actions.
 
 ---
 
