@@ -26,10 +26,71 @@ adb exec-out screencap -p > "$EVIDENCE/vst-home.png"
 # Capture the first-run chooser before selecting the virtual office.
 adb exec-out screencap -p > "$EVIDENCE/vst-chooser.png"
 
-# Kivy widgets do not consistently expose text to Android accessibility services.
-# Use a stable relative screen point on the visible first-run office button, then
-# verify the resulting screen with OCR rather than a false-negative text selector.
+# Kivy canvas buttons are not reliably exposed through Android accessibility.
+# Locate the actual CTA from OCR word boxes instead of guessing a screen percentage.
 maestro test .maestro/android-office-smoke.yaml
+sleep 2
+adb shell pidof "$PACKAGE" >/dev/null
+adb exec-out screencap -p > "$EVIDENCE/vst-office-chooser.png"
+python - "$EVIDENCE/vst-office-chooser.png" <<'PYCTA'
+import csv
+import subprocess
+import sys
+import unicodedata
+
+image = sys.argv[1]
+raw = subprocess.check_output(
+    ["tesseract", image, "stdout", "tsv"], text=True, stderr=subprocess.DEVNULL
+)
+rows = list(csv.DictReader(raw.splitlines(), delimiter="\t"))
+def norm(value):
+    value = unicodedata.normalize("NFKD", value or "")
+    return "".join(ch for ch in value if not unicodedata.combining(ch)).upper()
+
+lines = {}
+for row in rows:
+    if row.get("level") != "5" or not row.get("text", "").strip():
+        continue
+    key = (row.get("page_num"), row.get("block_num"), row.get("par_num"), row.get("line_num"))
+    lines.setdefault(key, []).append(row)
+
+for words in lines.values():
+    tokens = [norm(word["text"]) for word in words]
+    joined = " ".join(tokens)
+    if "USAR" in tokens and "VIRTUAL" in tokens and "ESCRITORIO" in joined:
+        left = min(int(word["left"]) for word in words)
+        top = min(int(word["top"]) for word in words)
+        right = max(int(word["left"]) + int(word["width"]) for word in words)
+        bottom = max(int(word["top"]) + int(word["height"]) for word in words)
+        print(f"Office CTA OCR bounds: {left},{top} - {right},{bottom}")
+        print(f"{(left + right) // 2} {(top + bottom) // 2}")
+        break
+else:
+    raise SystemExit("FAIL: OCR could not locate the visible virtual-office CTA.")
+PYCTA
+read -r CTA_X CTA_Y < <(python - "$EVIDENCE/vst-office-chooser.png" <<'PYCTA2'
+import csv, subprocess, sys, unicodedata
+raw = subprocess.check_output(["tesseract", sys.argv[1], "stdout", "tsv"], text=True, stderr=subprocess.DEVNULL)
+rows = list(csv.DictReader(raw.splitlines(), delimiter="\t"))
+def norm(s):
+    return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c)).upper()
+lines = {}
+for row in rows:
+    if row.get("level") != "5" or not row.get("text", "").strip(): continue
+    key = (row.get("page_num"), row.get("block_num"), row.get("par_num"), row.get("line_num"))
+    lines.setdefault(key, []).append(row)
+for words in lines.values():
+    tokens = [norm(w["text"]) for w in words]
+    if "USAR" in tokens and "VIRTUAL" in tokens and "ESCRITORIO" in " ".join(tokens):
+        l=min(int(w["left"]) for w in words); t=min(int(w["top"]) for w in words)
+        r=max(int(w["left"])+int(w["width"]) for w in words)
+        b=max(int(w["top"])+int(w["height"]) for w in words)
+        print((l+r)//2, (t+b)//2); break
+else: raise SystemExit("Office CTA not found")
+PYCTA2
+)
+echo "Tapping OCR-located virtual-office CTA at $CTA_X,$CTA_Y"
+adb shell input tap "$CTA_X" "$CTA_Y"
 sleep 3
 adb shell pidof "$PACKAGE" >/dev/null
 adb exec-out screencap -p > "$EVIDENCE/vst-office-entry.png"
