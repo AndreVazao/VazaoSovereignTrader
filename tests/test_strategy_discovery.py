@@ -36,6 +36,22 @@ def test_discovery_selects_on_train_and_evaluates_selected_candidate_oos():
     assert result["safety"]["real_authorized"] is False
 
 
+def test_discovery_purges_training_outcome_equal_to_oos_boundary():
+    states = _states()
+    result = discover_strategy(
+        states,
+        horizon_ms=1000,
+        cost_bps=0.0,
+        confidence_grid=(0.0,),
+        confluence_grid=(0.0,),
+        min_train_samples=1,
+        monte_carlo_iterations=20,
+    )
+    assert result["status"] == "OOS_EVALUATED"
+    boundary = result["split"]["oos_start_ms"]
+    assert result["selected_candidate"]["training_max_outcome_timestamp_ms"] < boundary
+
+
 def test_discovery_fails_closed_when_training_sample_is_too_small():
     result = discover_strategy(
         _states(30), horizon_ms=5000, min_train_samples=100,
