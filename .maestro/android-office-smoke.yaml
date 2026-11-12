@@ -2,8 +2,4 @@ appId: pt.andrevazao.vazaosovereigntrader
 ---
 - launchApp
 - waitForAnimationToEnd
-# Prefer the visible CTA label over fixed screen coordinates; Android viewport and status/navigation bars can shift percentage taps.
-- tapOn:
-    text: "USAR ESCRITÓRIO VIRTUAL"
-- waitForAnimationToEnd
-- takeScreenshot: vst-android-office
+- takeScreenshot: vst-android-office-chooser

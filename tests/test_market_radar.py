@@ -164,5 +164,79 @@ class MarketRadarTests(unittest.TestCase):
         self.assertEqual(client.calls, 0)
 
 
+    def test_collection_metrics_separate_success_quality_rejection_and_request_error(self):
+        class Client:
+            def __init__(self):
+                self.results = iter([
+                    {"last": 100.0, "bid": 99.9, "ask": 100.1, "baseVolume": 12.0, "timestamp": 1700000000000},
+                    {"last": 0.0, "bid": 0.0, "ask": 0.0, "baseVolume": 0.0, "timestamp": 1700000001000},
+                    RuntimeError("venue unavailable"),
+                ])
+
+            def fetch_ticker(self, _symbol):
+                result = next(self.results)
+                if isinstance(result, Exception):
+                    raise result
+                return result
+
+        radar = MarketRadar.__new__(MarketRadar)
+        radar.clients = {"binance": Client()}
+        radar.exchanges = ["binance"]
+        radar.symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+        radar.previous = {}
+        radar.last_pressure = {}
+        radar.quality_rejections = 0
+        radar.request_attempts = 0
+        radar.successful_observations = 0
+        radar.request_errors = 0
+        radar.persistence_batches = 0
+        radar.persistence_errors = 0
+        radar.last_observation_ms = None
+        radar.per_venue_metrics = {
+            "binance": {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0}
+        }
+        persisted = []
+        radar._persist = lambda snapshots, leads: persisted.append((snapshots, leads))
+
+        snapshots, _ = radar.snapshot()
+        metrics = radar.collection_metrics()
+
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(metrics["request_attempts"], 3)
+        self.assertEqual(metrics["successful_observations"], 1)
+        self.assertEqual(metrics["request_errors"], 1)
+        self.assertEqual(metrics["quality_rejections"], 1)
+        self.assertEqual(metrics["persistence_batches"], 1)
+        self.assertEqual(metrics["persistence_errors"], 0)
+        self.assertEqual(metrics["venues"]["binance"]["successes"], 1)
+        self.assertFalse(metrics["private_account_access"])
+        self.assertFalse(metrics["order_authority"])
+        self.assertEqual(len(persisted), 1)
+
+    def test_collection_metrics_count_persistence_failure(self):
+        radar = MarketRadar.__new__(MarketRadar)
+        radar.clients = {}
+        radar.exchanges = []
+        radar.symbols = []
+        radar.previous = {}
+        radar.last_pressure = {}
+        radar.quality_rejections = 0
+        radar.request_attempts = 0
+        radar.successful_observations = 0
+        radar.request_errors = 0
+        radar.persistence_batches = 0
+        radar.persistence_errors = 0
+        radar.last_observation_ms = None
+        radar.per_venue_metrics = {}
+
+        def fail_persist(_snapshots, _leads):
+            raise OSError("disk unavailable")
+
+        radar._persist = fail_persist
+        with self.assertRaises(OSError):
+            radar.snapshot()
+        self.assertEqual(radar.collection_metrics()["persistence_errors"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

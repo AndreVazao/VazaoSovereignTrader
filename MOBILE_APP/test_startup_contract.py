@@ -88,6 +88,21 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("HD 3D (futuro)", source)
         self.assertIn("fallback seguro", source)
 
+    def test_mobile_market_page_uses_authenticated_public_data_metrics(self) -> None:
+        ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")
+        main_source = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('nav("Mercado", "market", "D")', ui_source)
+        self.assertIn('pages["market"]=market_page', ui_source)
+        self.assertIn('app.refresh_market_data()', ui_source)
+        self.assertIn('"/paper-collector/resources"', main_source)
+        self.assertIn("successful_observations", main_source)
+        self.assertIn("quality_rejections", main_source)
+        self.assertIn("DADOS ANTIGOS", main_source)
+        self.assertIn("Não assumir que as exchanges estão ligadas.", main_source)
+        self.assertIn('"/evidence-scorecard"', main_source)
+        self.assertIn("requirements_missing", main_source)
+        self.assertIn("market_evidence_label", ui_source)
+
     def test_startup_failure_has_local_diagnostic_fallback(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn(
@@ -108,7 +123,12 @@ class MobileStartupContractTests(unittest.TestCase):
         self.assertIn("vst-landscape.png", script)
         self.assertIn("vst-tablet-landscape.png", script)
         self.assertIn('struct.unpack(">II", data[16:24])', script)
-        self.assertIn('text: "USAR ESCRITÓRIO VIRTUAL"', office_flow)
+        self.assertIn("takeScreenshot: vst-android-office-chooser", office_flow)
+        self.assertIn("tesseract", script)
+        self.assertIn("delimiter=chr(9)", script)
+        self.assertIn('"USAR" in tokens', script)
+        self.assertIn('"VIRTUAL" in tokens', script)
+        self.assertIn('adb shell input tap "$CTA_X" "$CTA_Y"', script)
         self.assertIn("vst-office-entry.png", script)
         self.assertIn("office-ocr.txt", script)
         ui_source = (ROOT / "ui.py").read_text(encoding="utf-8")

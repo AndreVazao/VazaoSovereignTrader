@@ -622,6 +622,63 @@ class MobileCockpit(App):
         except Exception as exc:
             self.status.text = f"Cancelamento falhou: {exc}"
 
+    def refresh_market_data(self):
+        """Refresh public market collection counters; never treats missing data as zero success."""
+        try:
+            response = self._request("GET", "/paper-collector/resources", timeout=5)
+            if response.status_code != 200:
+                raise RuntimeError(f"HTTP {response.status_code}")
+            payload = response.json()
+            metrics = payload.get("market_data_collection")
+            if not isinstance(metrics, dict):
+                raise RuntimeError("métricas de recolha indisponíveis nesta versão do PC")
+            last_ms = metrics.get("last_observation_ms")
+            age = None if not last_ms else max(0, int(__import__("time").time() * 1000) - int(last_ms)) / 1000.0
+            freshness = "SEM OBSERVAÇÕES" if age is None else (f"última observação há {age:.1f}s" if age < 120 else f"DADOS ANTIGOS · {age/60:.1f} min")
+            summary = (
+                f"Coletor PAPER: {'ATIVO' if payload.get('running') else 'PARADO'}\n"
+                f"Ciclos: {payload.get('cycles', 0)} · Erros: {payload.get('errors', 0)}\n"
+                f"Pedidos públicos: {metrics.get('request_attempts', 0)}\n"
+                f"Observações válidas: {metrics.get('successful_observations', 0)}\n"
+                f"Rejeições de qualidade: {metrics.get('quality_rejections', 0)}\n"
+                f"Falhas de rede: {metrics.get('request_errors', 0)}\n"
+                f"Gravações: {metrics.get('persistence_batches', 0)} · Falhas: {metrics.get('persistence_errors', 0)}\n"
+                f"Freshness: {freshness}\n"
+                f"Fonte: dados públicos · Ordens: NÃO"
+            )
+            if hasattr(self, "market_data_label"):
+                self.market_data_label.text = summary
+            rows = []
+            for venue, counts in sorted((metrics.get("venues") or {}).items()):
+                rows.append(
+                    f"{venue.upper()}: {counts.get('successes', 0)} válidas / "
+                    f"{counts.get('attempts', 0)} pedidos · "
+                    f"{counts.get('errors', 0)} falhas · "
+                    f"{counts.get('quality_rejections', 0)} rejeitadas"
+                )
+            if hasattr(self, "market_venues_label"):
+                self.market_venues_label.text = "\n".join(rows) if rows else "Ainda sem respostas por exchange."
+            if hasattr(self, "market_evidence_label"):
+                try:
+                    evidence_response = self._request("GET", "/evidence-scorecard", timeout=5)
+                    if evidence_response.status_code != 200:
+                        raise RuntimeError(f"HTTP {evidence_response.status_code}")
+                    evidence = evidence_response.json()
+                    missing = evidence.get("requirements_missing") or []
+                    lines = [
+                        f"Requisitos de evidência presentes: {evidence.get('requirements_met', 0)}/{evidence.get('requirements_total', 0)}",
+                        f"Por cumprir: {', '.join(str(item) for item in missing[:5]) or 'nenhum requisito em falta'}",
+                        "PAPER only · ordens submetidas: não · autorização REAL: não",
+                    ]
+                    self.market_evidence_label.text = "\n".join(lines)
+                except Exception as evidence_exc:
+                    self.market_evidence_label.text = f"Scorecard indisponível: {type(evidence_exc).__name__}"
+        except Exception as exc:
+            if hasattr(self, "market_data_label"):
+                self.market_data_label.text = f"Estado de recolha indisponível\n{type(exc).__name__}: {exc}"
+            if hasattr(self, "market_venues_label"):
+                self.market_venues_label.text = "Sem métricas confirmadas. Não assumir que as exchanges estão ligadas."
+
     def refresh(self, _dt):
         try:
             response = self._request("GET", "/status")
@@ -636,6 +693,8 @@ class MobileCockpit(App):
             self.risk.text = f"Dia: {float(data.get('pnl_today_pct', 0))*100:.2f}% | Semana: {float(data.get('pnl_week_pct', 0))*100:.2f}% | DD: {float(data.get('drawdown_pct', 0))*100:.2f}%"
             guard = data.get("real_mode_guard", {})
             self.readiness.text = f"REAL: {'ARMADO' if guard.get('armed') else 'bloqueado'} | {guard.get('remaining_seconds', 0)}s"
+            if getattr(self, "current_page", "") == "market":
+                self.refresh_market_data()
         except Exception:
             self.connection_state = "OFFLINE"
             self.status.text = "PC: offline — reconexão automática a cada 5 s"
