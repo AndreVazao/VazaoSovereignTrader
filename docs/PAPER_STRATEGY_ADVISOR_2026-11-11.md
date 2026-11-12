@@ -19,7 +19,7 @@ orders.
 
 The command also runs `PC_ENGINE.research.strategy_discovery` under the adaptive simulation resource gate. It searches a small, deterministic grid of confidence/confluence filters on a purged training window, selects one candidate using training results only, and evaluates that candidate once on the untouched chronological OOS window. It records a baseline OOS result and an OOS-only bootstrap. The candidate is a research hypothesis; its parameters are never applied to runtime.
 
-The advisor consumes the report produced by `PC_ENGINE.research.paper_study`. The Monte Carlo gate uses the dedicated `monte_carlo_oos` result, never the full-sample bootstrap. Chronological and walk-forward training windows purge any outcome whose forward label crosses the test boundary.
+The advisor consumes the report produced by `PC_ENGINE.research.paper_study`. The Monte Carlo gate uses the dedicated `monte_carlo_oos` result, never the full-sample bootstrap. Chronological and walk-forward training windows purge any outcome whose forward label reaches or crosses the first test timestamp; labels resolved at the exact boundary are excluded because event ordering at an identical timestamp is ambiguous.
 Missing, malformed, non-PAPER, or inadequate evidence is never interpreted as
 success.
 
