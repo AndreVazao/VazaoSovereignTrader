@@ -79,7 +79,7 @@ def discover_strategy(
             # the OOS boundary; purge by the actual future observation timestamp.
             outcomes = [
                 row for row in outcomes
-                if int(row["outcome_timestamp_ms"]) <= oos_start_ms
+                if int(row["outcome_timestamp_ms"]) < oos_start_ms
             ]
             summary = _summary([float(row["net_bps"]) for row in outcomes])
             candidates.append({
@@ -127,7 +127,7 @@ def discover_strategy(
     )
     selected_train_outcomes = [
         row for row in selected_train_outcomes
-        if int(row["outcome_timestamp_ms"]) <= oos_start_ms
+        if int(row["outcome_timestamp_ms"]) < oos_start_ms
     ]
     oos_outcomes = simulate(
         ordered,
