@@ -90,7 +90,7 @@ class ConnectorRegistry:
         if entry is None:
             return ConnectorExecution(False, provider_id, capability,
                                       error="connector_not_found")
-        if capability not in READ_ONLY_CAPABILITIES:
+        if not isinstance(capability, str) or capability not in READ_ONLY_CAPABILITIES:
             return ConnectorExecution(False, provider_id, capability,
                                       error="capability_not_read_only")
         if not authorize_capability(
