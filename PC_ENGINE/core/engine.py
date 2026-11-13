@@ -403,6 +403,7 @@ class SovereignEngine:
         )
         self.connector_registry = registry
         self.connector_registry_status = status
+        self.connector_registry_ready = True
         self.state.operational["public_connectors"] = dict(status)
 
     def _fetch_ohlcv_for_collector(self, symbol: str, timeframe: str, limit: int) -> list[list[float]]:
@@ -799,6 +800,7 @@ class SovereignEngine:
             )
             self.research_thread.start()
         if self.paper and self.paper_collector is not None:
+            self.connector_registry_ready = False
             self.paper_collector.start()
             self._refresh_public_connector_registry()
         self.thread = threading.Thread(target=self._loop, name="vst-engine-loop", daemon=True)
@@ -1047,6 +1049,7 @@ class SovereignEngine:
         self.research_stop_event.set()
         self._stop_shared_intelligence()
         if self.paper_collector is not None:
+            self.connector_registry_ready = False
             self.paper_collector.stop()
 
         current = threading.current_thread()
