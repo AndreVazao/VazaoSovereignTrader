@@ -32,6 +32,7 @@ from PC_ENGINE.execution.surface_runtime_manager import ExecutionSurfaceRuntimeM
 from PC_ENGINE.api.operator_exchange import OperatorExchange
 from PC_ENGINE.api.assistant_gateway import OperatorAssistantGateway
 from PC_ENGINE.api.office_snapshot import register_office_snapshot
+from PC_ENGINE.api.public_connectors import register_public_connector_routes
 
 
 def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> Flask:
@@ -148,6 +149,11 @@ def create_app(engine: SovereignEngine, token_env: str = "VST_LOCAL_TOKEN") -> F
         require_scope=require_scope,
         readiness=readiness,
         market_data_reader=read_market_data_health_for_assistant,
+    )
+    register_public_connector_routes(
+        app,
+        engine,
+        require_scope=require_scope,
     )
 
     @app.errorhandler(PermissionError)
