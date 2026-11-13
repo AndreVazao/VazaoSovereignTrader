@@ -33,6 +33,7 @@ from PC_ENGINE.learning.champion_challenger import ChampionChallenger
 from PC_ENGINE.learning.sqlite_memory import SQLiteLearningMemory
 from PC_ENGINE.learning.memory_backup import backup_learning_memory
 from PC_ENGINE.services.paper_market_collector import PaperMarketCollector
+from PC_ENGINE.services.public_connector_registry import build_public_connector_registry
 from PC_ENGINE.services.watchdog import Watchdog
 from PC_ENGINE.human_bridge.bridge import HumanInteractionBridge
 from PC_ENGINE.human_bridge.watchdog import HumanBridgeWatchdog
@@ -250,6 +251,7 @@ class SovereignEngine:
                     "order_authority": False,
                 }
         self._build_paper_collector()
+        self._refresh_public_connector_registry()
         self.research_worker = ResearchWorker(
             research_dir,
             replay_path=str(research_cfg.get("replay_path", "PC_ENGINE/data/replay/l2_temporal_replay.json")),
@@ -390,6 +392,18 @@ class SovereignEngine:
             learning_memory=getattr(self, "learning_memory", None),
             resource_manager=getattr(self, "adaptive_resource_manager", None),
         )
+
+    def _refresh_public_connector_registry(self) -> None:
+        """Bind read-only connector adapters to the collector's existing public clients."""
+        radar = getattr(self.paper_collector, "radar", None) if self.paper_collector is not None else None
+        registry, status = build_public_connector_registry(
+            self.config,
+            paper_mode=bool(self.paper),
+            market_radar=radar,
+        )
+        self.connector_registry = registry
+        self.connector_registry_status = status
+        self.state.operational["public_connectors"] = dict(status)
 
     def _fetch_ohlcv_for_collector(self, symbol: str, timeframe: str, limit: int) -> list[list[float]]:
         exchange = self._main_exchange()
@@ -786,6 +800,7 @@ class SovereignEngine:
             self.research_thread.start()
         if self.paper and self.paper_collector is not None:
             self.paper_collector.start()
+            self._refresh_public_connector_registry()
         self.thread = threading.Thread(target=self._loop, name="vst-engine-loop", daemon=True)
         self.thread.start()
         self.log("ENGINE_STARTED", {"mode": self.mode})
