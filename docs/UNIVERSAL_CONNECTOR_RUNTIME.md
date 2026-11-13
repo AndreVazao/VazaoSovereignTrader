@@ -10,6 +10,7 @@
 - The first built-in adapter is `CcxtPublicMarketDataAdapter`. It supports bounded public `ticker`, `ohlcv` and `order_book` reads without API keys or private/account methods.
 - The engine registers only venues explicitly present in `radar.polling_exchanges`, while the engine is in PAPER mode and the Radar is observational-only.
 - Registered adapters reuse the existing unauthenticated `MarketRadar` CCXT clients and their per-client locks. The registry therefore does not create a second set of exchange sessions on a constrained PC.
+- On-demand public connector reads are capped at 12 requests/minute per provider, in addition to CCXT's own rate limiter.
 - The connector API is owner-authenticated with `read_private_state`:
   - `GET /connectors` returns safe connector metadata and local registration diagnostics.
   - `POST /connectors/{provider_id}/read` accepts only a read capability and a JSON request. It is a read operation despite using POST for a bounded request body.
