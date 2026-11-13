@@ -152,6 +152,16 @@ def test_connector_api_rejects_unexpected_top_level_fields_and_non_json():
     )
     assert extra.status_code == 400
 
+    unexpected_request_field = client.post(
+        "/connectors/ccxt.binance.spot/read",
+        json={
+            "capability": "public_market_data.read",
+            "request": {"operation": "ticker", "symbol": "BTC/USDT", "comment": "not part of the public schema"},
+        },
+    )
+    assert unexpected_request_field.status_code == 400
+    assert unexpected_request_field.get_json()["error"] == "invalid_request"
+
     non_json = client.post(
         "/connectors/ccxt.binance.spot/read",
         data="capability=public_market_data.read",
