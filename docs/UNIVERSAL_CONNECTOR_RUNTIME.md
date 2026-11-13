@@ -30,8 +30,8 @@ The connector runtime does not connect private exchange accounts and does not gr
 ## Limits and next phases
 
 - The registry is in-process. The manifest timeout is passed to the adapter and CCXT's request timeout is set, but Python cannot forcibly interrupt arbitrary synchronous third-party code. Do not load untrusted adapters into this process.
-- Process isolation, crash supervision and resource leases for third-party providers are still required before enabling external/plugin adapters.
-- OAuth, private account reads, balances, statements, Android UI automation, browser automation and desktop automation are contract categories only; they are not live integrations in this increment.
+- A one-shot spawned-process wrapper now exists in `PC_ENGINE/core/isolated_connector_worker.py`. It uses strict JSON IPC, caps request/response sizes, applies a bounded wait and terminates a worker that does not return in time. Focused tests cover successful IPC, timeout termination and input bounds. This is groundwork only; it is not wired into the live registry or enabled for providers.
+- The worker is not an OS security sandbox. It runs with the same user permissions as VST and currently has no OS-enforced CPU/memory quota, filesystem isolation, network allowlist or Windows Job Object limits. Do not load untrusted third-party code through it. Those controls and Windows/Linux lifecycle validation are prerequisites before production plugin execution.\n- The current wrapper starts a fresh process per read; it is a safety prototype, not yet an optimized persistent worker pool.\n- OAuth, private account reads, balances, statements, Android UI automation, browser automation and desktop automation are contract categories only; they are not live integrations in this increment.
 - U-Hodler is not connected. No Android virtualization provider is provisioned locally or in cloud.
 - Provider-specific terms, permissions and authentication flows must be reviewed before adding any non-public capability. Human handoff remains mandatory for MFA, OTP, CAPTCHA, biometrics, consent and financial/security prompts.
 
@@ -43,6 +43,6 @@ The implementation is covered by unit tests for:
 - reuse of the existing MarketRadar client and lock;
 - read-only capability enforcement;
 - authentication, request bounds, credential-field rejection and no-store responses;
-- rate limiting and rejection of reads during collector shutdown.
+- rate limiting and rejection of reads during collector shutdown;\n- isolated-worker JSON IPC, timeout termination and request bounds.
 
 CI results for a PR must be checked against its exact head SHA. CI does not replace physical Windows, Linux or Android validation.
