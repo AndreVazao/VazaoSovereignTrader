@@ -133,13 +133,6 @@ class MarketRadarTests(unittest.TestCase):
 
         self.assertEqual(captured["timeout"], 60000)
         self.assertTrue(captured["enableRateLimit"])
-        radar = MarketRadar(
-            exchanges=["binance"],
-            symbols=[],
-            data_dir=tmp,
-            request_timeout_ms=8000,
-        ) if False else None
-
     def test_snapshot_uses_shared_client_lock(self) -> None:
         class RecordingLock:
             def __init__(self):
