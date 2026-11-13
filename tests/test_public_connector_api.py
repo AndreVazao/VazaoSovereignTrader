@@ -197,3 +197,21 @@ def test_connector_api_blocks_new_reads_as_collector_shutdown_begins():
     assert response.status_code == 503
     assert response.get_json()["error"] == "engine_not_running"
     assert adapter.calls == []
+
+
+def test_connector_api_blocks_reads_while_registry_is_rebuilding():
+    client, authorized, adapter, engine = _client(status="RUNNING")
+    authorized["value"] = True
+    engine.connector_registry_ready = False
+
+    response = client.post(
+        "/connectors/ccxt.binance.spot/read",
+        json={
+            "capability": "public_market_data.read",
+            "request": {"operation": "ticker", "symbol": "BTC/USDT"},
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "engine_not_running"
+    assert adapter.calls == []
