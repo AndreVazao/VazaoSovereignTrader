@@ -108,3 +108,27 @@ def test_factory_rejects_unknown_exchange(monkeypatch):
     monkeypatch.setattr(module.ccxt, "exchanges", ["binance"])
     with pytest.raises(module.PublicExchangeAdapterError, match="unsupported_exchange"):
         module.build_public_exchange_connector("unknown")
+
+
+def test_public_adapter_reuses_existing_radar_client_and_lock(adapter):
+    from threading import Lock
+
+    existing_client = adapter._client
+    shared_lock = Lock()
+    manifest, shared_adapter = module.build_public_exchange_connector(
+        "binance",
+        timeout_ms=5000,
+        client=existing_client,
+        lock=shared_lock,
+    )
+
+    assert manifest.provider_id == "ccxt.binance.spot"
+    assert shared_adapter._client is existing_client
+    assert shared_adapter._lock is shared_lock
+    result = shared_adapter.read(
+        "public_market_data.read",
+        {"operation": "ticker", "symbol": "BTC/USDT"},
+        timeout_seconds=5,
+    )
+    assert result["venue"] == "binance"
+    assert existing_client.calls[-1] == ("ticker", "BTC/USDT")
