@@ -7,29 +7,11 @@ from flask import Flask, jsonify, request
 
 
 _FORBIDDEN_REQUEST_KEYS = frozenset({
-    "api_key",
-    "apikey",
-    "apisecret",
-    "secret",
-    "api_secret",
-    "password",
-    "passphrase",
-    "authorization",
-    "access_token",
-    "accesstoken",
-    "token",
-    "refresh_token",
-    "refreshtoken",
-    "private_key",
-    "privatekey",
-    "secret_key",
-    "secretkey",
-    "client_secret",
-    "clientsecret",
-    "credential",
-    "credentials",
-    "cookie",
-    "signature",
+    "api_key", "apikey", "apisecret", "secret", "api_secret", "password",
+    "passphrase", "authorization", "access_token", "accesstoken", "token",
+    "refresh_token", "refreshtoken", "private_key", "privatekey", "secret_key",
+    "secretkey", "client_secret", "clientsecret", "credential", "credentials",
+    "cookie", "signature",
 })
 
 
@@ -118,6 +100,14 @@ def register_public_connector_routes(
             return response
 
         capability = payload.get("capability")
+        # Reject non-read capabilities before validating operation-specific fields.
+        # This guarantees mutation attempts cannot be disguised as malformed reads.
+        if capability != "public_market_data.read":
+            response = jsonify({"ok": False, "error": "capability_not_read_only"})
+            response.status_code = 403
+            response.headers["Cache-Control"] = "no-store"
+            return response
+
         connector_request = payload.get("request", {})
         if not isinstance(connector_request, dict):
             response = jsonify({"ok": False, "error": "invalid_request"})
