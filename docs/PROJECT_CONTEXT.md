@@ -1,20 +1,73 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-12 (universal platform architecture)
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-13
 
-**Verified VST main before PR #566:** 09b803a2ce0bba10de895b800fd8950a60e739a1 (PR #565 merged).
-**PR #565:** CLOSED/MERGED. Exact HEAD bb9792b252bdd10396560b046edcc4f64c3b8fcd. Python tests PASS (run 43205252171), PAPER lifecycle/safety PASS (run 43205226035), Windows EXE and installer jobs PASS (run 43205252789). One earlier duplicate run was cancelled and is not a failure of the final rerun.
-**PR #566:** OPEN, not merged, branch feat/universal-platform-android-virtualization-2026-11-12. It records provider-neutral integration architecture and cloud/local Android virtualization; documentation only. Recheck exact current HEAD and PR state before acting.
-- VST is not limited to Binance/OKX. These are first connector examples only. Future connector catalogue covers exchanges, brokers, fintech/banking, wallets, portfolio/payment apps, Android, web, desktop and cloud services, with explicit per-operation capabilities and fail-closed permissions.
-- Android virtualization must support local emulator, self-hosted farm and optional cloud providers behind a provider-neutral session orchestrator. No mandatory vendor or paid cloud service. Cloud use is opt-in, isolated, encrypted, region/retention controlled and cost-capped.
-- Official APIs/OAuth/SDK preferred. UI automation is fallback only where authorized and safe. Human handoff required for MFA/OTP/CAPTCHA/biometrics/consent/payment/security prompts. No bypass, public ADB or unattended financial mutation.
-- U-Hodler and other user-selected applications are candidate integrations, not implemented/verified connectors. Inspect official access methods and provider terms before implementation.
-- No cloud Android provider provisioned, no costs incurred, no external credentials or accounts used. No PC physical runtime actions. Remain PAPER-only; no REAL authority.
-- Next engineering work after PR #566 review: inventory connector construction points and Android automation contracts; define typed provider-neutral connector manifest/capability registry; build fake adapter contract tests; then implement a local Android session adapter and compare cloud options before provisioning.
+**Repository:** `AndreVazao/VazaoSovereignTrader` only.
+
+## Verified GitHub state
+
+- Main after PR #571: `be8ad8744509602b0fcd517cc9b7e0de30a109a2`.
+- PR #571 is CLOSED/MERGED. Merge commit: `be8ad8744509602b0fcd517cc9b7e0de30a109a2`.
+- PR #572 is the only active development PR: [public connector runtime/API](https://github.com/AndreVazao/VazaoSovereignTrader/pull/572). Always re-check its exact current HEAD and checks before acting.
+- Main is not protected in GitHub. Never edit it directly; continue using one development branch and one advancement PR at a time.
+- No formal GitHub Release was present in the latest inventory. CI artifacts are not releases and do not prove installation on the user's PC.
+
+## Latest validated integration — PR #571
+
+PR #571 connects the desktop virtual office and Android cockpit to the authenticated read-only `GET /office/snapshot` endpoint. Its exact PR HEAD was `85d66fe92ba5a4f41088c4b5771b9cf031731ffe`.
+
+On that exact PR head, the following GitHub Actions runs completed successfully:
+- Python tests: [43258731297](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43258731297).
+- Windows EXE/installer lifecycle: [43258731411](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43258731411).
+- Android APK: [43258731194](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43258731194).
+- Android Emulator UI Smoke: [43258731157](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43258731157).
+
+The emulator smoke opened the office CTA and verified portrait, landscape and tablet screenshot dimensions. This is hosted-emulator evidence, not a physical Android-device test. The Windows installer lifecycle passed in CI, not on the user's physical PC.
+
+The Snyk external status still reports an error consistent with the free-tier quota exhaustion previously reported by the owner. This is not a vulnerability finding and is not a repository code workflow. The GitHub repository tools used for this work do not administer the external Snyk organization/app settings; do not claim that the integration has been disabled. Vercel preview status is not a code test.
+
+## Active work — PR #572
+
+PR #572 wires the typed connector registry into the backend:
+- Only venues already configured in `radar.polling_exchanges` are registered.
+- The first built-in adapter is public CCXT market data only.
+- It reuses the existing unauthenticated MarketRadar clients and shared per-client locks; it does not create duplicate CCXT sessions.
+- Authenticated routes are `GET /connectors` and `POST /connectors/{provider_id}/read`.
+- Only `public_market_data.read` is enabled for ticker, OHLCV and order-book reads.
+- Credential-shaped request fields, mutation capabilities and reads during collector shutdown are rejected.
+- The runtime is in-process. It does not yet isolate arbitrary third-party adapters.
+
+See [docs/UNIVERSAL_CONNECTOR_RUNTIME.md](UNIVERSAL_CONNECTOR_RUNTIME.md). Wait for Python, PAPER and Windows checks on the exact PR #572 HEAD. Android is not applicable unless mobile paths change.
+
+## Open operational blocker — issue #560
+
+[Issue #560](https://github.com/AndreVazao/VazaoSovereignTrader/issues/560) remains open because the low-memory Windows 10 target-PC lifecycle retest is outstanding. PR #562 integrated adaptive collector budgets and authenticated diagnostics; CI tests cover bounded shutdown, cancellation, Compact behavior and safe recovery. CI does not replace the physical PC retest.
+
+Before any future physical PC work, perform a read-only inventory and a verified SHA-256 backup of checkout, config, Learning Vault, artifacts and untracked files. Do not terminate processes, overwrite data or change the user's PC without explicit authorization.
+
+## Global product gaps still open
+
+- Physical Windows 10 / low-memory PC install, start, health, stop and Vault-preservation retest.
+- Linux installer/package and lifecycle validation.
+- Physical Android-device validation and authenticated LAN/Tailscale reconnect.
+- End-to-end sustained Market Data → Radar → analysis → Risk → PAPER → Learning Vault evidence.
+- Process isolation, crash supervision and global resource leases before loading third-party connector code.
+- Provider-specific integrations beyond public CCXT. U-Hodler is not connected.
+- Android local/cloud virtualization orchestration is architecture only; no provider/session farm is provisioned.
+- Formal release process and reproducible release artifacts for every declared supported platform.
+
+## Safety and operating rules
+
+- Remain PAPER-only. No LIVE activation, orders, transfers, withdrawals, exchange account linking, private exchange credentials or changes to financial permissions.
+- Public market-data adapters must remain unauthenticated and read-only.
+- Never infer that an adapter is remotely connected merely because it is registered.
+- Do not claim physical PC or phone validation from CI evidence.
+- Prioritize security, data integrity, risk, backend stability, resource limits and installability before visual polish.
+- Do not work in DGM-MAT, Office Kit or any other repository.
 
 ---
 
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-09
+# HISTORICAL HANDOFF — 2026-11-09
 
-**Este é o estado atual verificado.** As passagens de contexto abaixo deste bloco são históricas e podem conter branches, PRs, SHAs e estados já ultrapassados. Consultar sempre o GitHub antes de agir.
+Este bloco é histórico. Os estados, branches, PRs e SHAs abaixo podem estar ultrapassados; consultar sempre o GitHub e o handoff atual no início do trabalho.
 
 - Repositório exclusivo: `AndreVazao/VazaoSovereignTrader`.
 - `main` após a integração da PR #552: `85487dbfd71052208e56467c2b1edec71c808457`.
