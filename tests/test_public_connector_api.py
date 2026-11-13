@@ -175,3 +175,25 @@ def test_connector_api_maps_registry_rate_limit_to_http_429():
     assert first.status_code == 200
     assert second.status_code == 429
     assert len(adapter.calls) == 1
+
+
+def test_connector_api_blocks_new_reads_as_collector_shutdown_begins():
+    import threading
+
+    client, authorized, adapter, engine = _client(status="RUNNING")
+    authorized["value"] = True
+    stop_event = threading.Event()
+    stop_event.set()
+    engine.paper_collector = SimpleNamespace(stop_event=stop_event)
+
+    response = client.post(
+        "/connectors/ccxt.binance.spot/read",
+        json={
+            "capability": "public_market_data.read",
+            "request": {"operation": "ticker", "symbol": "BTC/USDT"},
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "engine_not_running"
+    assert adapter.calls == []
