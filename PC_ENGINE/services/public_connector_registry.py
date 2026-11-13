@@ -40,7 +40,7 @@ def build_public_connector_registry(
         return registry, {
             "state": "DISABLED",
             "reason": "paper_observational_runtime_required",
-            "paper_only": True,
+            "paper_only": bool(paper_mode),
             "execution_authority": False,
             "private_credentials_used": False,
             "registered_provider_ids": [],
