@@ -279,3 +279,31 @@ class MarketRadarTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_close_waits_for_shared_client_lock():
+    class RecordingLock:
+        entered = False
+
+        def __enter__(self):
+            self.entered = True
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Client:
+        closed_under_lock = False
+
+        def close(self):
+            self.closed_under_lock = lock.entered
+
+    lock = RecordingLock()
+    client = Client()
+    radar = MarketRadar.__new__(MarketRadar)
+    radar.clients = {"binance": client}
+    radar.client_locks = {"binance": lock}
+
+    radar.close()
+
+    assert client.closed_under_lock is True
