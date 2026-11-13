@@ -143,3 +143,36 @@ def test_factory_rejects_unsafe_public_request_rate(rate_limit, monkeypatch):
         module.build_public_exchange_connector(
             "binance", requests_per_minute=rate_limit
         )
+
+
+def test_public_connector_factory_default_rate_limit_is_enforced(adapter):
+    from threading import Lock
+
+    from PC_ENGINE.core.connector_runtime import ConnectorRegistry
+
+    manifest, public_adapter = module.build_public_exchange_connector(
+        "binance",
+        client=adapter._client,
+        lock=Lock(),
+    )
+    registry = ConnectorRegistry()
+    grants = frozenset({"public_market_data.read"})
+    registry.register(
+        manifest,
+        public_adapter,
+        owner_grants=grants,
+        provider_verified=grants,
+    )
+
+    results = [
+        registry.execute_read(
+            "ccxt.binance.spot",
+            "public_market_data.read",
+            {"operation": "ticker", "symbol": "BTC/USDT"},
+        )
+        for _ in range(13)
+    ]
+
+    assert sum(result.ok for result in results) == 12
+    assert sum(result.error == "rate_limited" for result in results) == 1
+    assert len(adapter._client.calls) == 12
