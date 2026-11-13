@@ -350,8 +350,16 @@ class MarketRadar:
         }
 
     def close(self) -> None:
-        for client in self.clients.values():
+        locks = getattr(self, "client_locks", {})
+        for name, client in self.clients.items():
             try:
-                client.close()
+                client_lock = locks.get(name) if isinstance(locks, dict) else None
+                if client_lock is None:
+                    client.close()
+                else:
+                    # Connector API reads share this lock with the collector.
+                    # Close must wait for an in-flight bounded public read to finish.
+                    with client_lock:
+                        client.close()
             except Exception:
                 pass
