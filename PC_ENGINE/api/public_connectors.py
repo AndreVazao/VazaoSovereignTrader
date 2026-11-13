@@ -15,6 +15,7 @@ _FORBIDDEN_REQUEST_KEYS = frozenset({
     "passphrase",
     "authorization",
     "access_token",
+    "token",
     "refresh_token",
     "private_key",
     "cookie",
@@ -92,7 +93,7 @@ def register_public_connector_routes(
             return response
 
         payload = request.get_json(silent=True)
-        if not isinstance(payload, dict):
+        if not isinstance(payload, dict) or set(payload) - {"capability", "request"}:
             response = jsonify({"ok": False, "error": "invalid_request"})
             response.status_code = 400
             response.headers["Cache-Control"] = "no-store"
