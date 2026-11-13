@@ -30,6 +30,11 @@ try:
 except ImportError:
     from MOBILE_APP.endpoint_selection import endpoint_candidates, normalize_endpoint, can_fail_over_automatically
 
+try:
+    from office_snapshot import summarize_office_snapshot
+except ImportError:
+    from MOBILE_APP.office_snapshot import summarize_office_snapshot
+
 
 
 class _MobileHTTPResponse:
@@ -681,23 +686,47 @@ class MobileCockpit(App):
 
     def refresh(self, _dt):
         try:
-            response = self._request("GET", "/status")
-            if response.status_code != 200:
-                self.status.text = f"PC: acesso recusado ({response.status_code})"
+            response = self._request("GET", "/office/snapshot", timeout=6)
+            if response.status_code in (401, 403):
+                self.connection_state = "AUTH_REQUIRED"
+                self.status.text = "PC: autenticação/permissão necessária"
+                if hasattr(self, "readiness_card"):
+                    self.readiness_card.text = "Acesso recusado. Confirma o emparelhamento e a permissão read_private_state."
                 return
-            data = response.json()
+            if response.status_code != 200:
+                raise RuntimeError(f"Snapshot recusado: HTTP {response.status_code}")
+            summary = summarize_office_snapshot(response.json())
             self.connection_state = "CONNECTED"
             self._save_connection_url(self.base_url())
-            self.status.text = f"PC: ligado | {data.get('status', '---')} | Modo: {data.get('mode', '---')}"
-            self.balance.text = f"Saldo: {float(data.get('balance', 0)):.2f} | Equity: {float(data.get('equity', 0)):.2f}"
-            self.risk.text = f"Dia: {float(data.get('pnl_today_pct', 0))*100:.2f}% | Semana: {float(data.get('pnl_week_pct', 0))*100:.2f}% | DD: {float(data.get('drawdown_pct', 0))*100:.2f}%"
-            guard = data.get("real_mode_guard", {})
-            self.readiness.text = f"REAL: {'ARMADO' if guard.get('armed') else 'bloqueado'} | {guard.get('remaining_seconds', 0)}s"
+            market_state = "ATUAL" if summary["market_ok"] else "DESATUALIZADO / NÃO CONFIRMADO"
+            self.status.text = (
+                f"PC: ligado | Motor: {summary['engine_status']} | "
+                f"Modo: {summary['mode']} | Mercado: {market_state}"
+            )
+            self.readiness.text = (
+                f"Risco: {summary['risk_status']} | PAPER only: "
+                f"{'confirmado' if summary['paper_only'] else 'não confirmado'} | "
+                f"REAL permitido: {'sim' if summary['allow_real'] else 'não'}"
+            )
+            if hasattr(self, "readiness_card"):
+                self.readiness_card.text = (
+                    f"BACKEND VST · {summary['engine_status']}\n"
+                    f"Modo: {summary['mode']} · Motor ativo: {'sim' if summary['running'] else 'não'}\n"
+                    f"Dados de mercado: {summary['market_status']} · {market_state}\n"
+                    f"Risco: {summary['risk_status']}\n"
+                    f"PAPER only: {'confirmado' if summary['paper_only'] else 'não confirmado'}\n"
+                    f"REAL permitido: {'sim' if summary['allow_real'] else 'não'}\n"
+                    f"Promoção automática REAL: {'sim' if summary['auto_promote_real'] else 'não'}\n"
+                    f"Tarefas backend verificadas: {summary['verified_task_count']}\n"
+                    f"Atualizado: {summary['generated_at'] or 'sem timestamp'}"
+                )
             if getattr(self, "current_page", "") == "market":
                 self.refresh_market_data()
-        except Exception:
+        except Exception as exc:
             self.connection_state = "OFFLINE"
-            self.status.text = "PC: offline — reconexão automática a cada 5 s"
+            self.status.text = "PC: offline / snapshot indisponível — reconexão automática a cada 5 s"
+            if hasattr(self, "readiness_card"):
+                self.readiness_card.text = f"Estado indisponível. Não utilizar dados anteriores. ({type(exc).__name__})"
 
 if __name__ == "__main__":
     MobileCockpit().run()

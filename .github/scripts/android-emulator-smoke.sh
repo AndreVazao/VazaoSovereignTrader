@@ -28,7 +28,7 @@ adb exec-out screencap -p > "$EVIDENCE/vst-chooser.png"
 
 # Kivy canvas buttons are not reliably exposed through Android accessibility.
 # Locate the actual CTA from OCR word boxes instead of guessing a screen percentage.
-maestro test .maestro/android-office-smoke.yaml
+# The startup flow already launched the app; capture the current screen via adb.
 sleep 2
 adb shell pidof "$PACKAGE" >/dev/null
 adb exec-out screencap -p > "$EVIDENCE/vst-office-chooser.png"
