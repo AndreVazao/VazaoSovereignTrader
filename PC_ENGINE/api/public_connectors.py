@@ -75,6 +75,7 @@ def register_public_connector_routes(
         if (
             str(getattr(getattr(engine, "state", None), "status", "OFF")).upper() != "RUNNING"
             or collector_stopping
+            or not bool(getattr(engine, "connector_registry_ready", True))
         ):
             response = jsonify({"ok": False, "error": "engine_not_running"})
             response.status_code = 503
