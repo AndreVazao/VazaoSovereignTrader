@@ -101,6 +101,7 @@ def test_factory_supports_multiple_ccxt_venues(monkeypatch):
     manifest, instance = module.build_public_exchange_connector("okx")
     assert manifest.provider_id == "ccxt.okx.spot"
     assert manifest.capabilities == frozenset({"public_market_data.read"})
+    assert manifest.requests_per_minute == 12
     assert instance.venue == "okx"
 
 
@@ -108,3 +109,70 @@ def test_factory_rejects_unknown_exchange(monkeypatch):
     monkeypatch.setattr(module.ccxt, "exchanges", ["binance"])
     with pytest.raises(module.PublicExchangeAdapterError, match="unsupported_exchange"):
         module.build_public_exchange_connector("unknown")
+
+
+def test_public_adapter_reuses_existing_radar_client_and_lock(adapter):
+    from threading import Lock
+
+    existing_client = adapter._client
+    shared_lock = Lock()
+    manifest, shared_adapter = module.build_public_exchange_connector(
+        "binance",
+        timeout_ms=5000,
+        client=existing_client,
+        lock=shared_lock,
+    )
+
+    assert manifest.provider_id == "ccxt.binance.spot"
+    assert shared_adapter._client is existing_client
+    assert shared_adapter._lock is shared_lock
+    result = shared_adapter.read(
+        "public_market_data.read",
+        {"operation": "ticker", "symbol": "BTC/USDT"},
+        timeout_seconds=5,
+    )
+    assert result["venue"] == "binance"
+    assert existing_client.calls[-1] == ("ticker", "BTC/USDT")
+
+
+@pytest.mark.parametrize("rate_limit", [0, -1, 121, "invalid"])
+def test_factory_rejects_unsafe_public_request_rate(rate_limit, monkeypatch):
+    monkeypatch.setattr(module.ccxt, "exchanges", ["binance"])
+    monkeypatch.setattr(module.ccxt, "binance", FakeExchange, raising=False)
+    with pytest.raises(module.PublicExchangeAdapterError, match="invalid_rate_limit"):
+        module.build_public_exchange_connector(
+            "binance", requests_per_minute=rate_limit
+        )
+
+
+def test_public_connector_factory_default_rate_limit_is_enforced(adapter):
+    from threading import Lock
+
+    from PC_ENGINE.core.connector_runtime import ConnectorRegistry
+
+    manifest, public_adapter = module.build_public_exchange_connector(
+        "binance",
+        client=adapter._client,
+        lock=Lock(),
+    )
+    registry = ConnectorRegistry()
+    grants = frozenset({"public_market_data.read"})
+    registry.register(
+        manifest,
+        public_adapter,
+        owner_grants=grants,
+        provider_verified=grants,
+    )
+
+    results = [
+        registry.execute_read(
+            "ccxt.binance.spot",
+            "public_market_data.read",
+            {"operation": "ticker", "symbol": "BTC/USDT"},
+        )
+        for _ in range(13)
+    ]
+
+    assert sum(result.ok for result in results) == 12
+    assert sum(result.error == "rate_limited" for result in results) == 1
+    assert len(adapter._client.calls) == 12

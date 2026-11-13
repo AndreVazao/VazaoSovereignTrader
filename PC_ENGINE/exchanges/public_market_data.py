@@ -31,7 +31,14 @@ class CcxtPublicMarketDataAdapter:
     request contract. Use official exchange endpoints through CCXT's public API.
     """
 
-    def __init__(self, venue: str, *, timeout_ms: int = 8_000) -> None:
+    def __init__(
+        self,
+        venue: str,
+        *,
+        timeout_ms: int = 8_000,
+        client: Any | None = None,
+        lock: Any | None = None,
+    ) -> None:
         venue_id = str(venue or "").strip().lower()
         if venue_id not in ccxt.exchanges:
             raise PublicExchangeAdapterError("unsupported_exchange")
@@ -42,12 +49,14 @@ class CcxtPublicMarketDataAdapter:
             raise PublicExchangeAdapterError("unsupported_exchange")
         self.provider_id = f"ccxt.{venue_id}.spot"
         self.venue = venue_id
-        self._client = exchange_type({
+        # Production runtime may inject the already-public MarketRadar client.
+        # Sharing it avoids duplicate CCXT sessions on constrained PCs.
+        self._client = client if client is not None else exchange_type({
             "enableRateLimit": True,
             "timeout": int(timeout_ms),
             "options": {"defaultType": "spot"},
         })
-        self._lock = Lock()
+        self._lock = lock if lock is not None else Lock()
 
     @staticmethod
     def _symbol(request: Mapping[str, object]) -> str:
@@ -156,17 +165,30 @@ class CcxtPublicMarketDataAdapter:
 
 
 def build_public_exchange_connector(
-    venue: str, *, timeout_ms: int = 8_000
+    venue: str,
+    *,
+    timeout_ms: int = 8_000,
+    client: Any | None = None,
+    lock: Any | None = None,
+    requests_per_minute: int = 12,
 ) -> tuple[ConnectorManifest, CcxtPublicMarketDataAdapter]:
     """Build a provider-neutral manifest and a public-only adapter for any CCXT venue."""
-    adapter = CcxtPublicMarketDataAdapter(venue, timeout_ms=timeout_ms)
+    try:
+        rate_limit = int(requests_per_minute)
+    except (TypeError, ValueError, OverflowError):
+        raise PublicExchangeAdapterError("invalid_rate_limit") from None
+    if not 1 <= rate_limit <= 120:
+        raise PublicExchangeAdapterError("invalid_rate_limit")
+    adapter = CcxtPublicMarketDataAdapter(
+        venue, timeout_ms=timeout_ms, client=client, lock=lock
+    )
     manifest = ConnectorManifest(
         provider_id=adapter.provider_id,
         display_name=f"{adapter.venue.upper()} public market data",
         category=ConnectorCategory.MARKET_DATA,
         access_method=AccessMethod.OFFICIAL_API,
         capabilities=frozenset({"public_market_data.read"}),
-        requests_per_minute=60,
+        requests_per_minute=rate_limit,
         request_timeout_seconds=min(60.0, max(0.1, timeout_ms / 1000)),
         health=ConnectorHealth.AVAILABLE,
         adapter_version="1",

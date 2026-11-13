@@ -5,6 +5,7 @@ import math
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import ccxt
@@ -66,6 +67,7 @@ class MarketRadar:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.clients: dict[str, Any] = {}
+        self.client_locks: dict[str, Lock] = {}
         self.previous: dict[tuple[str, str], VenueSnapshot] = {}
         self.last_pressure: dict[str, float] = {}
         self.quality_rejections = 0
@@ -91,6 +93,7 @@ class MarketRadar:
                     "enableRateLimit": True,
                     "timeout": self.request_timeout_ms,
                 })
+                self.client_locks[name] = Lock()
                 try:
                     self.clients[name].load_markets()
                 except Exception:
@@ -165,7 +168,14 @@ class MarketRadar:
                 self.request_attempts += 1
                 venue_metrics["attempts"] += 1
                 try:
-                    ticker = client.fetch_ticker(symbol)
+                    client_lock = getattr(self, "client_locks", {}).get(exchange_name)
+                    if client_lock is None:
+                        ticker = client.fetch_ticker(symbol)
+                    else:
+                        with client_lock:
+                            if cancellation is not None and cancellation.is_set():
+                                break
+                            ticker = client.fetch_ticker(symbol)
                     request_end_ns = time.monotonic_ns()
                     local_ts_ms = time.time_ns() // 1_000_000
                     request_duration_ms = max(0.0, (request_end_ns - request_start_ns) / 1_000_000)
@@ -340,8 +350,16 @@ class MarketRadar:
         }
 
     def close(self) -> None:
-        for client in self.clients.values():
+        locks = getattr(self, "client_locks", {})
+        for name, client in self.clients.items():
             try:
-                client.close()
+                client_lock = locks.get(name) if isinstance(locks, dict) else None
+                if client_lock is None:
+                    client.close()
+                else:
+                    # Connector API reads share this lock with the collector.
+                    # Close must wait for an in-flight bounded public read to finish.
+                    with client_lock:
+                        client.close()
             except Exception:
                 pass
