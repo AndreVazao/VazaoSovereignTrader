@@ -133,6 +133,52 @@ class MarketRadarTests(unittest.TestCase):
 
         self.assertEqual(captured["timeout"], 60000)
         self.assertTrue(captured["enableRateLimit"])
+        radar = MarketRadar(
+            exchanges=["binance"],
+            symbols=[],
+            data_dir=tmp,
+            request_timeout_ms=8000,
+        ) if False else None
+
+    def test_snapshot_uses_shared_client_lock(self) -> None:
+        class RecordingLock:
+            def __init__(self):
+                self.entered = False
+
+            def __enter__(self):
+                self.entered = True
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        class Client:
+            def fetch_ticker(self, _symbol):
+                return {
+                    "last": 100.0, "bid": 99.9, "ask": 100.1,
+                    "baseVolume": 12.0, "timestamp": 1_700_000_000_000,
+                }
+
+        radar = MarketRadar.__new__(MarketRadar)
+        lock = RecordingLock()
+        radar.clients = {"binance": Client()}
+        radar.client_locks = {"binance": lock}
+        radar.symbols = ["BTC/USDT"]
+        radar.previous = {}
+        radar.last_pressure = {}
+        radar.quality_rejections = 0
+        radar.request_attempts = 0
+        radar.successful_observations = 0
+        radar.request_errors = 0
+        radar.persistence_batches = 0
+        radar.persistence_errors = 0
+        radar.last_observation_ms = None
+        radar.per_venue_metrics = {}
+        radar._persist = lambda _snapshots, _leads: None
+
+        radar.snapshot()
+
+        self.assertTrue(lock.entered)
 
     def test_snapshot_stops_before_starting_another_request(self) -> None:
         import threading
