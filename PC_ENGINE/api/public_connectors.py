@@ -68,7 +68,14 @@ def register_public_connector_routes(
     def public_connector_read(provider_id: str):
         require_scope("read_private_state")
 
-        if str(getattr(getattr(engine, "state", None), "status", "OFF")).upper() != "RUNNING":
+        collector = getattr(engine, "paper_collector", None)
+        collector_stopping = bool(
+            getattr(getattr(collector, "stop_event", None), "is_set", lambda: False)()
+        )
+        if (
+            str(getattr(getattr(engine, "state", None), "status", "OFF")).upper() != "RUNNING"
+            or collector_stopping
+        ):
             response = jsonify({"ok": False, "error": "engine_not_running"})
             response.status_code = 503
             response.headers["Cache-Control"] = "no-store"
