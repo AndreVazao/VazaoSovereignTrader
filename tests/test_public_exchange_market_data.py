@@ -101,6 +101,7 @@ def test_factory_supports_multiple_ccxt_venues(monkeypatch):
     manifest, instance = module.build_public_exchange_connector("okx")
     assert manifest.provider_id == "ccxt.okx.spot"
     assert manifest.capabilities == frozenset({"public_market_data.read"})
+    assert manifest.requests_per_minute == 12
     assert instance.venue == "okx"
 
 
@@ -132,3 +133,13 @@ def test_public_adapter_reuses_existing_radar_client_and_lock(adapter):
     )
     assert result["venue"] == "binance"
     assert existing_client.calls[-1] == ("ticker", "BTC/USDT")
+
+
+@pytest.mark.parametrize("rate_limit", [0, -1, 121, "invalid"])
+def test_factory_rejects_unsafe_public_request_rate(rate_limit, monkeypatch):
+    monkeypatch.setattr(module.ccxt, "exchanges", ["binance"])
+    monkeypatch.setattr(module.ccxt, "binance", FakeExchange, raising=False)
+    with pytest.raises(module.PublicExchangeAdapterError, match="invalid_rate_limit"):
+        module.build_public_exchange_connector(
+            "binance", requests_per_minute=rate_limit
+        )
