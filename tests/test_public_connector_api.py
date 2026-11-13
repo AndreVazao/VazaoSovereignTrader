@@ -123,6 +123,18 @@ def test_connector_api_rejects_mutation_capabilities_and_credentials():
     )
     assert credential.status_code == 400
     assert credential.get_json()["error"] == "credential_fields_not_accepted"
+
+    for field in ("privateKey", "accessToken", "clientSecret"):
+        response = client.post(
+            "/connectors/ccxt.binance.spot/read",
+            json={
+                "capability": "public_market_data.read",
+                "request": {"operation": "ticker", "symbol": "BTC/USDT", field: "must-not-be-accepted"},
+            },
+        )
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "credential_fields_not_accepted"
+
     assert adapter.calls == []
 
 
