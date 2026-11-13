@@ -130,6 +130,26 @@ def register_public_connector_routes(
             response.headers["Cache-Control"] = "no-store"
             return response
 
+        operation = connector_request.get("operation")
+        allowed_fields = {
+            "ticker": {"operation", "symbol"},
+            "ohlcv": {"operation", "symbol", "timeframe", "limit"},
+            "order_book": {"operation", "symbol", "limit"},
+        }.get(operation)
+        symbol = connector_request.get("symbol")
+        if (
+            allowed_fields is None
+            or set(connector_request) - allowed_fields
+            or not isinstance(symbol, str)
+            or not symbol.strip()
+            or ("timeframe" in connector_request and not isinstance(connector_request["timeframe"], str))
+            or ("limit" in connector_request and type(connector_request["limit"]) is not int)
+        ):
+            response = jsonify({"ok": False, "error": "invalid_request"})
+            response.status_code = 400
+            response.headers["Cache-Control"] = "no-store"
+            return response
+
         result = registry.execute_read(provider_id, capability, connector_request)
         status_codes = {
             "connector_not_found": 404,
