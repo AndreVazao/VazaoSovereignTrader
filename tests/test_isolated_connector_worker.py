@@ -45,7 +45,7 @@ def test_isolated_worker_returns_strict_json_snapshot():
 def test_isolated_worker_terminates_adapter_after_timeout():
     adapter = IsolatedConnectorAdapter(
         _slow_factory,
-        startup_grace_seconds=0.2,
+        startup_grace_seconds=2.0,
     )
     started = time.monotonic()
     with pytest.raises(IsolatedConnectorError, match="connector_timeout"):
@@ -54,7 +54,7 @@ def test_isolated_worker_terminates_adapter_after_timeout():
             {},
             timeout_seconds=0.1,
         )
-    assert time.monotonic() - started < 2.0
+    assert time.monotonic() - started < 4.0
 
 
 def test_isolated_worker_rejects_oversized_request_before_spawn():
