@@ -34,7 +34,7 @@ Implementation requirements:
 - Enforces authentication, device pairing/revocation, command permissions, server-side risk checks, rate limits, and auditable operator actions.
 
 ### 2. Local PC cockpit
-- A lightweight control surface installed on the backend PC for connection/service status, PAPER/REAL mode, readiness, alerts, logs, start/pause/resume/stop requests and pending human intervention.
+- A lightweight control surface installed on the backend PC for connection/service status, PAPER mode/readiness, alerts, logs, start/pause/resume/stop requests and pending human intervention. The current release exposes no REAL/LIVE authorization or activation controls.
 - Closing the cockpit window must not stop the configured backend service.
 - UI controls never bypass server-side authorization or risk checks.
 
@@ -78,7 +78,7 @@ Audit the existing routes before adding new ones. The contract should cover heal
 5. Build the desktop client in chat/compact mode, connecting to a local or remote backend.
 6. Connect office rooms to real API state/events; keep 2D/2.5D optional and chat-only fallback always available.
 7. Add adaptive visual profiles and optional 3D only after functional and performance tests.
-8. Validate client disconnects, backend restart, stale data, duplicate commands, revoked devices, pending human intervention and unknown execution outcomes before any REAL use.
+8. Validate client disconnects, backend restart, stale data, duplicate commands, revoked devices, pending human intervention and unknown execution outcomes before any future non-PAPER capability is considered.
 
 ## Acceptance criteria
 - Backend runs headlessly with no cockpit, office or phone open.

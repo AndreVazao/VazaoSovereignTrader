@@ -28,7 +28,7 @@ This is a route-level starting inventory, not a claim that every route has been 
 - `GET /status`, diagnostics, venue health and evidence endpoints require the `read_private_state` scope in the current route factory.
 - Execution-surface lifecycle endpoints above require `trade_paper`; don't infer permissions from menu visibility.
 - The route factory has explicit `require_token()` / `require_scope()` handling. The new client must use the existing authentication contract and must never put owner tokens in URLs, logs, browser local storage or the office's visual layer.
-- Current HTML includes state-changing buttons for start/pause/resume/stop/mode/REAL authorization. Before wiring these into the new shell, inspect each route's exact method, scope, guard, confirmation semantics and tests. No blanket generic command endpoint.
+- The current PC cockpit exposes PAPER lifecycle controls only. It does not expose REAL/LIVE authorization or activation. Any future non-PAPER interface must be separately reviewed against exact route methods, scopes, server guards, confirmation semantics and tests; no blanket generic command endpoint.
 - A transport timeout after a mutation must produce an **outcome unknown / reconcile** state, not automatic POST replay.
 
 ## Implementation gates
@@ -38,7 +38,7 @@ This is a route-level starting inventory, not a claim that every route has been 
 3. First integrate read-only `/status`, `/diagnostics`, `/venue-health`, `/evidence-scorecard` and pending-interaction display with timeouts, polling cancellation and freshness metadata.
 4. Add contract tests for unauthenticated/insufficient-scope responses, offline/stale data, revoked devices, malformed payloads and server restart.
 5. Integrate research conversation and human intervention next; mutation controls remain disabled until each exact route's guard and outcome semantics are verified.
-6. Keep all REAL readiness, preflight, risk and human-authorization gates in the engine/server. The UI cannot grant authority.
+6. The current release remains PAPER-only. Any future non-PAPER capability must remain gated in the engine/server; the UI cannot grant authority.
 
 ## Non-goals
 

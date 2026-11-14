@@ -241,11 +241,12 @@ Detalhes e estado real dos serviços: `docs/OPTIONAL_LOCAL_AI_AND_SERVICE_LIFECY
 
 ## APK Android
 
-O cockpit Android inclui:
-- INICIAR / PAUSAR / RETOMAR / PARAR;
-- PAPER;
-- ARM REAL / REAL / DESARMAR;
-- estado, equity, P&L, drawdown, watchdog e logs.
+O cockpit Android disponibiliza:
+- INICIAR / PAUSAR / RETOMAR / PARAR, sempre sob a política PAPER-only;
+- consulta do estado, equity simulada, P&L PAPER, drawdown, watchdog e logs;
+- leitura de Radar, evidência e pedidos de intervenção humana.
+
+A versão atual não expõe autorização nem ativação REAL/LIVE. Não configurar credenciais privadas nem permissões financeiras.
 
 O workflow .github/workflows/android-apk.yml cria um APK debug como artefacto quando executado manualmente ou quando é criado um tag mobile-v*.
 
