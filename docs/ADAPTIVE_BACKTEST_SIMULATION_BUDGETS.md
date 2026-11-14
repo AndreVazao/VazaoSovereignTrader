@@ -23,4 +23,7 @@ when the lease store cannot be used.
 
 This protects only the backtest, simulation and analysis entrypoints that use
 the gate. It does not limit unrelated processes or terminate a running job
-after the host becomes constrained.
+after the host becomes constrained. The gate is active while
+`adaptive_resources.enabled` is true (the shipped default); disabling that
+setting bypasses resource admission and is not recommended on constrained
+machines.
