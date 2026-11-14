@@ -14,6 +14,7 @@ _ADMISSION_TIMEOUT_SECONDS = 2.0
 
 _PROCESS_STATE_LOCK = threading.Lock()
 _PROCESS_ACTIVE: dict[tuple[str, str], int] = {}
+_PROCESS_ACTIVE_SLOTS: dict[tuple[str, str], set[int]] = {}
 _PROCESS_ADMISSION_LOCKS: dict[tuple[str, str], threading.Lock] = {}
 
 
@@ -101,18 +102,28 @@ class ProcessResourceLease:
             raise ValueError("unsupported_resource_lease_kind")
         if isinstance(limit, bool) or not isinstance(limit, int):
             raise ValueError("invalid_resource_lease_limit")
-        if not 1 <= limit <= max_slots <= _MAX_SLOTS:
+        if (
+            isinstance(max_slots, bool)
+            or not isinstance(max_slots, int)
+            or not 1 <= max_slots <= _MAX_SLOTS
+            or not 1 <= limit <= max_slots
+        ):
             raise ValueError("invalid_resource_lease_limit")
-        if not 0.1 <= float(admission_timeout_seconds) <= 10.0:
+        try:
+            admission_timeout = float(admission_timeout_seconds)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("invalid_resource_lease_timeout") from None
+        if not 0.1 <= admission_timeout <= 10.0:
             raise ValueError("invalid_resource_lease_timeout")
 
         self.root = Path(root)
         self.kind = kind
         self.limit = limit
         self.max_slots = max_slots
-        self.admission_timeout_seconds = float(admission_timeout_seconds)
+        self.admission_timeout_seconds = admission_timeout
         self._key = (str(self.root.resolve()), self.kind)
         self._lease_handle: BinaryIO | None = None
+        self._slot_index: int | None = None
         self._reserved = False
 
     def acquire(self) -> bool:
@@ -147,26 +158,45 @@ class ProcessResourceLease:
                 ):
                     return False
 
-                free_handles: list[BinaryIO] = []
+                free_handles: list[tuple[int, BinaryIO]] = []
                 busy_slots = 0
                 try:
+                    with _PROCESS_STATE_LOCK:
+                        locally_held_slots = set(
+                            _PROCESS_ACTIVE_SLOTS.get(self._key, set())
+                        )
+
                     for slot in range(self.max_slots):
+                        if slot in locally_held_slots:
+                            busy_slots += 1
+                            continue
+
                         slot_path = self.root / f"{self.kind}-{slot:02d}.lock"
                         handle = slot_path.open("a+b")
-                        _ensure_lock_byte(handle)
-                        if _try_lock(handle):
-                            free_handles.append(handle)
-                        else:
-                            busy_slots += 1
+                        try:
+                            _ensure_lock_byte(handle)
+                            if _try_lock(handle):
+                                free_handles.append((slot, handle))
+                            else:
+                                busy_slots += 1
+                                handle.close()
+                        except Exception:
                             handle.close()
+                            raise
 
                     if busy_slots >= self.limit or not free_handles:
                         return False
 
-                    self._lease_handle = free_handles.pop(0)
+                    selected_slot, selected_handle = free_handles.pop(0)
+                    with _PROCESS_STATE_LOCK:
+                        _PROCESS_ACTIVE_SLOTS.setdefault(
+                            self._key, set()
+                        ).add(selected_slot)
+                    self._slot_index = selected_slot
+                    self._lease_handle = selected_handle
                     return True
                 finally:
-                    for handle in free_handles:
+                    for _, handle in free_handles:
                         _unlock_and_close(handle)
                     _unlock(admission)
         except OSError:
@@ -187,6 +217,14 @@ class ProcessResourceLease:
         if not self._reserved:
             return
         with _PROCESS_STATE_LOCK:
+            if self._slot_index is not None:
+                slots = _PROCESS_ACTIVE_SLOTS.get(self._key)
+                if slots is not None:
+                    slots.discard(self._slot_index)
+                    if not slots:
+                        _PROCESS_ACTIVE_SLOTS.pop(self._key, None)
+                self._slot_index = None
+
             active = _PROCESS_ACTIVE.get(self._key, 0)
             if active <= 1:
                 _PROCESS_ACTIVE.pop(self._key, None)
