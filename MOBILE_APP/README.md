@@ -29,7 +29,7 @@ Para o assistente de configuração inicial por USB e o estado exato das funcion
 3. No APK, coloque http://100.x.y.z:8765.
 4. Coloque o mesmo VST_LOCAL_TOKEN no campo Token.
 5. Comece sempre em PAPER.
-6. Para REAL, execute a validação no PC e só depois use ARM REAL + a frase exata de confirmação.
+6. Esta versão é exclusivamente PAPER: não existem ações REAL/LIVE no APK e não devem ser configuradas credenciais privadas ou permissões financeiras.
 
 ## Build
 

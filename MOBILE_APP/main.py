@@ -46,8 +46,6 @@ class _MobileHTTPResponse:
         return json.loads(self.content.decode("utf-8"))
 
 
-REAL_PHRASE = "EU ACEITO O RISCO"
-
 class MobileCockpit(App):
     """Remote cockpit. Exchange credentials never live in this app."""
     def build(self):
@@ -555,26 +553,15 @@ class MobileCockpit(App):
         except Exception as exc:
             self.status.text = f"PC: offline — {exc}"
 
-    def arm_real(self):
-        if self.device_token:
-            self.status.text = "Bloqueado: tokens de dispositivo móvel não podem armar REAL."
-            return
-        try:
-            self._request("POST", "/real/arm", json={"phrase": REAL_PHRASE})
-            self.refresh(0)
-        except Exception as exc:
-            self.status.text = f"ARM erro: {exc}"
-
     def set_mode(self, mode):
-        if self.device_token and str(mode).upper() == "REAL":
-            self.status.text = "Bloqueado: tokens de dispositivo móvel não podem mudar para REAL."
+        if str(mode).strip().upper() != "PAPER":
+            self.status.text = "Bloqueado: a aplicação móvel só suporta PAPER nesta versão."
             return
         try:
-            self._request("POST", "/mode", json={"mode": mode})
+            self._request("POST", "/mode", json={"mode": "PAPER"})
             self.refresh(0)
         except Exception as exc:
             self.status.text = f"Modo erro: {exc}"
-
     def heartbeat(self, _dt=0):
         try:
             self._request("POST", "/human-interaction/heartbeat", json={"source": "mobile"})
