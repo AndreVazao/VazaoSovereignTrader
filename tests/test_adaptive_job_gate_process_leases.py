@@ -142,14 +142,17 @@ def test_current_lower_budget_counts_existing_process_leases(tmp_path):
     assert second.exitcode == 0
 
 
-def test_gate_instances_in_one_process_share_the_lease_budget(tmp_path):
-    first_gate = AdaptiveJobGate(_Manager(1), lease_root=tmp_path)
-    second_gate = AdaptiveJobGate(_Manager(1), lease_root=tmp_path)
+def test_gate_instances_in_one_process_use_distinct_slots(tmp_path):
+    first_gate = AdaptiveJobGate(_Manager(2), lease_root=tmp_path)
+    second_gate = AdaptiveJobGate(_Manager(2), lease_root=tmp_path)
+    third_gate = AdaptiveJobGate(_Manager(2), lease_root=tmp_path)
 
     with first_gate.slot("backtest") as first:
         assert first is True
         with second_gate.slot("backtest") as second:
-            assert second is False
+            assert second is True
+            with third_gate.slot("backtest") as third:
+                assert third is False
 
     assert first_gate.snapshot()["active"]["backtest"] == 0
     assert first_gate.snapshot()["process_wide_leases"] is True
