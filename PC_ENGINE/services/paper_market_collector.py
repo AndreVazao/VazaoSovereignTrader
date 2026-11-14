@@ -270,7 +270,11 @@ class PaperMarketCollector:
             self._effective_interval_seconds = self.interval_seconds
             self._effective_learning_interval_cycles = self.learning_interval_cycles
             return self._resource_status
-        if not force and now - self._resource_last_refresh < self.resource_refresh_interval_seconds:
+        if (
+            not force
+            and self._resource_last_refresh > 0
+            and now - self._resource_last_refresh < self.resource_refresh_interval_seconds
+        ):
             return self._resource_status
         self._resource_last_refresh = now
         try:

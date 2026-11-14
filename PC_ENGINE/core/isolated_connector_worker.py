@@ -18,10 +18,24 @@ def _worker_entry(
     timeout_seconds: float,
     max_response_bytes: int,
 ) -> None:
-    """Spawn target. Only strict JSON crosses the process boundary."""
+    """Spawn target. Startup and execution are bounded independently."""
     try:
         request = json.loads(request_bytes.decode("utf-8"))
         adapter = adapter_factory()
+    except BaseException:
+        # Startup errors are deliberately sanitized; never expose exception text.
+        try:
+            send_connection.send_bytes(
+                b'{"ok":false,"error":"connector_startup_failed"}'
+            )
+        except (BrokenPipeError, EOFError, OSError):
+            pass
+        finally:
+            send_connection.close()
+        return
+
+    try:
+        send_connection.send_bytes(b'{"ready":true}')
         result = adapter.read(
             capability,
             request,
@@ -36,13 +50,17 @@ def _worker_entry(
             separators=(",", ":"),
         ).encode("utf-8")
         if len(response) > max_response_bytes:
-            send_connection.send_bytes(b'{"ok":false,"error":"response_too_large"}')
+            send_connection.send_bytes(
+                b'{"ok":false,"error":"response_too_large"}'
+            )
         else:
             send_connection.send_bytes(b'{"ok":true,"data":' + response + b"}")
     except BaseException:
         # Never serialize exception text, traceback, URLs, headers or secrets.
         try:
-            send_connection.send_bytes(b'{"ok":false,"error":"connector_execution_failed"}')
+            send_connection.send_bytes(
+                b'{"ok":false,"error":"connector_execution_failed"}'
+            )
         except (BrokenPipeError, EOFError, OSError):
             pass
     finally:
@@ -125,8 +143,16 @@ class IsolatedConnectorAdapter:
         try:
             process.start()
             send_connection.close()
-            wait_seconds = min(60.0, timeout + self._startup_grace_seconds)
-            if not receive_connection.poll(wait_seconds):
+            if not receive_connection.poll(self._startup_grace_seconds):
+                raise IsolatedConnectorError("connector_startup_timeout")
+            try:
+                startup_raw = receive_connection.recv_bytes(128)
+                startup = json.loads(startup_raw.decode("utf-8"))
+            except (EOFError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+                raise IsolatedConnectorError("connector_startup_failed") from None
+            if not isinstance(startup, dict) or startup.get("ready") is not True:
+                raise IsolatedConnectorError("connector_startup_failed")
+            if not receive_connection.poll(timeout):
                 raise IsolatedConnectorError("connector_timeout")
             try:
                 raw = receive_connection.recv_bytes(self._max_response_bytes + 128)

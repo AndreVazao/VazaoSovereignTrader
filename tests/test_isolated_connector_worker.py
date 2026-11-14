@@ -29,6 +29,10 @@ def _slow_factory():
     return _SlowAdapter()
 
 
+def _broken_factory():
+    raise RuntimeError("must_not_leak")
+
+
 def test_isolated_worker_returns_strict_json_snapshot():
     adapter = IsolatedConnectorAdapter(_echo_factory)
     result = adapter.read(
@@ -55,6 +59,17 @@ def test_isolated_worker_terminates_adapter_after_timeout():
             timeout_seconds=0.1,
         )
     assert time.monotonic() - started < 4.0
+
+
+def test_isolated_worker_sanitizes_startup_failure():
+    adapter = IsolatedConnectorAdapter(_broken_factory)
+    with pytest.raises(IsolatedConnectorError, match="connector_startup_failed") as error:
+        adapter.read(
+            "public_market_data.read",
+            {},
+            timeout_seconds=1,
+        )
+    assert "must_not_leak" not in str(error.value)
 
 
 def test_isolated_worker_rejects_oversized_request_before_spawn():
