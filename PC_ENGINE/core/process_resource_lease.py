@@ -209,9 +209,11 @@ class ProcessResourceLease:
     def release(self) -> None:
         handle = self._lease_handle
         self._lease_handle = None
-        if handle is not None:
-            _unlock_and_close(handle)
-        self._release_process_reservation()
+        try:
+            if handle is not None:
+                _unlock_and_close(handle)
+        finally:
+            self._release_process_reservation()
 
     def _release_process_reservation(self) -> None:
         if not self._reserved:
