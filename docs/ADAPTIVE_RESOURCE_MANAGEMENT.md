@@ -53,3 +53,7 @@ does not terminate an active job. The gate applies only to VST entrypoints that
 use it. It does not constrain arbitrary external processes, provide CPU/memory
 sandbox quotas or authorize trading. All these workloads remain PAPER/research
 only and cannot change risk or execution permissions.
+
+This admission control is active when `adaptive_resources.enabled` is true
+(the shipped default). Explicitly disabling that setting bypasses the heavy-job
+gate and is not recommended on constrained machines.
