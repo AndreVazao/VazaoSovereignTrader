@@ -86,3 +86,52 @@ def test_isolated_worker_rejects_invalid_timeout():
     adapter = IsolatedConnectorAdapter(_echo_factory)
     with pytest.raises(IsolatedConnectorError, match="invalid_timeout"):
         adapter.read("public_market_data.read", {}, timeout_seconds=0)
+
+
+
+class _EnvironmentAdapter:
+    def read(self, capability, request, *, timeout_seconds):
+        return {
+            "credential_present": bool(os.environ.get("VST_TEST_API_TOKEN")),
+            "ordinary_value": os.environ.get("VST_TEST_NON_SECRET"),
+        }
+
+
+def _environment_factory():
+    return _EnvironmentAdapter()
+
+
+def test_worker_removes_credential_shaped_environment_before_adapter(monkeypatch):
+    monkeypatch.setenv("VST_TEST_API_TOKEN", "must_not_reach_adapter")
+    monkeypatch.setenv("VST_TEST_NON_SECRET", "kept")
+    adapter = IsolatedConnectorAdapter(_environment_factory)
+    result = adapter.read(
+        "public_market_data.read",
+        {},
+        timeout_seconds=2,
+    )
+    assert result == {
+        "credential_present": False,
+        "ordinary_value": "kept",
+    }
+
+
+def test_worker_rejects_out_of_range_os_resource_limits():
+    with pytest.raises(ValueError, match="invalid_worker_memory_limit"):
+        IsolatedConnectorAdapter(_echo_factory, memory_limit_mb=63)
+    with pytest.raises(ValueError, match="invalid_worker_cpu_limit"):
+        IsolatedConnectorAdapter(_echo_factory, cpu_time_limit_seconds=0)
+
+
+def test_worker_accepts_explicit_bounded_os_resource_limits():
+    adapter = IsolatedConnectorAdapter(
+        _echo_factory,
+        memory_limit_mb=512,
+        cpu_time_limit_seconds=20,
+    )
+    result = adapter.read(
+        "public_market_data.read",
+        {"value": "bounded"},
+        timeout_seconds=2,
+    )
+    assert result["value"] == "bounded"
