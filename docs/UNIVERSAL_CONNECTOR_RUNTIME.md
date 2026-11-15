@@ -31,7 +31,8 @@ The connector runtime does not connect private exchange accounts and does not gr
 
 - The registry is in-process. The manifest timeout is passed to the adapter and CCXT's request timeout is set, but Python cannot forcibly interrupt arbitrary synchronous third-party code. Do not load untrusted adapters into this process.
 - A one-shot spawned-process wrapper now exists in `PC_ENGINE/core/isolated_connector_worker.py`. It uses strict JSON IPC, caps request/response sizes, applies a bounded wait and terminates a worker that does not return in time. Focused tests cover successful IPC, timeout termination and input bounds. This is groundwork only; it is not wired into the live registry or enabled for providers.
-- The worker is not an OS security sandbox. It runs with the same user permissions as VST and currently has no OS-enforced CPU/memory quota, filesystem isolation, network allowlist or Windows Job Object limits. Do not load untrusted third-party code through it. Those controls and Windows/Linux lifecycle validation are prerequisites before production plugin execution.
+- The worker now applies OS-enforced resource ceilings before adapter code runs: POSIX `RLIMIT_AS` and `RLIMIT_CPU`, or a Windows Job Object with per-process memory and CPU-time limits plus kill-on-close. If the required platform limits cannot be installed, the worker fails closed. The worker also removes credential-shaped environment variables before invoking the adapter factory.
+- These controls bound worker memory and CPU time; they do not isolate filesystem access, restrict network egress, prevent access to other files owned by the same user, or provide a complete security sandbox. Do not load untrusted third-party code through it. Filesystem isolation, provider-specific network allowlists, stronger supervision/incident telemetry and Windows/Linux lifecycle validation remain prerequisites before production plugin execution.
 - The current wrapper starts a fresh process per read; it is a safety prototype, not yet an optimized persistent worker pool.
 - OAuth, private account reads, balances, statements, Android UI automation, browser automation and desktop automation are contract categories only; they are not live integrations in this increment.
 - U-Hodler is not connected. No Android virtualization provider is provisioned locally or in cloud.
@@ -46,6 +47,6 @@ The implementation is covered by unit tests for:
 - read-only capability enforcement;
 - authentication, request bounds, credential-field rejection and no-store responses;
 - rate limiting and rejection of reads during collector shutdown;
-- isolated-worker JSON IPC, timeout termination and request bounds.
+- isolated-worker JSON IPC, timeout termination, request/response bounds, credential-shaped environment cleanup and OS-enforced worker resource limits.
 
 CI results for a PR must be checked against its exact head SHA. CI does not replace physical Windows, Linux or Android validation.
