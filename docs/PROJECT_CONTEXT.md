@@ -34,9 +34,10 @@ Snyk still reports an external integration/quota error. It is not a repository t
 
 ### Connector worker boundary
 - PR #573 added `PC_ENGINE/core/isolated_connector_worker.py`: one spawned process per read, strict JSON IPC, request/response size limits, bounded startup/execution wait, sanitized errors and termination on timeout.
-- This worker is not wired into the live ConnectorRegistry.
-- It is not a security sandbox: it inherits the host user's permissions and has no OS-enforced CPU/RAM quotas, filesystem isolation, network egress allowlist or Windows Job Object controls.
-- Do not load untrusted third-party connector code. OS-level resource enforcement, lifecycle supervision and platform validation are prerequisites.
+- The current development branch adds POSIX `RLIMIT_AS`/`RLIMIT_CPU`, Windows Job Object per-process memory/CPU-time limits with kill-on-close, and removes credential-shaped environment variables before adapter factory execution.
+- This worker remains disabled from the live ConnectorRegistry. The new OS-limit implementation is not yet validated by CI on this branch.
+- It is still not a complete security sandbox: filesystem isolation and network egress allowlists are absent; the worker otherwise runs under the host user's identity. Do not load untrusted third-party connector code.
+- The Windows workflow now explicitly runs the worker boundary tests; Linux/POSIX and Windows exact-head CI must pass before considering the resource boundary validated.
 
 ### Adaptive resource admission
 - PR #575 adds OS-backed cross-process lock leases for optional backtest, simulation and analysis work.
@@ -73,9 +74,9 @@ CI evidence never substitutes for physical validation.
 
 ## Next engineering sequence
 
-1. Complete the connector worker's OS-enforced resource boundary and lifecycle supervision before loading any third-party code.
+1. Validate the current worker resource-boundary branch on exact-head Python, PAPER and Windows workflows; inspect Windows Job Object and POSIX resource-limit tests.
 2. Keep the worker disabled from the live registry until Windows and Linux enforcement tests pass.
-3. Add provider egress policy and filesystem/credential isolation; fail closed where a platform cannot enforce the required controls.
+3. Add provider egress policy and filesystem isolation; fail closed where a platform cannot enforce the required controls.
 4. Integrate only approved, read-only providers after the isolation contract is proven.
 5. Route data through Market Data → Radar → Research with freshness, provenance, source health and confidence.
 6. Build and validate Linux packaging.
