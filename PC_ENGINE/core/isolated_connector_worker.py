@@ -25,7 +25,11 @@ _SECRET_ENV_MARKERS = (
     "CREDENTIAL",
     "API_KEY",
     "APIKEY",
-    "PRIVATE_KEY",
+    "ACCESS_KEY",
+    "PRIVATE",
+    "SIGNING_KEY",
+    "BEARER",
+    "CLIENT_SECRET",
     "AUTHORIZATION",
     "COOKIE",
 )
@@ -272,9 +276,10 @@ class IsolatedConnectorAdapter:
             except OSError:
                 pass
             if process.pid is not None:
+                process.join(timeout=1.0)
                 if process.is_alive():
                     process.terminate()
-                process.join(timeout=2.0)
+                    process.join(timeout=2.0)
                 if process.is_alive() and hasattr(process, "kill"):
                     process.kill()
                     process.join(timeout=2.0)
