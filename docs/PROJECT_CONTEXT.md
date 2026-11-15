@@ -24,9 +24,19 @@ Snyk still reports an external integration/quota error. It is not a repository t
 
 ## Active development — [PR #576](https://github.com/AndreVazao/VazaoSovereignTrader/pull/576)
 
-Branch: `feat/connector-worker-os-resource-boundary-2026-11-15`.
+Branch: `feat/connector-worker-os-resource-boundary-2026-11-15`; current validated HEAD at this handoff: `5b2066bb4f50ceb2c9bdd1f7c7ed3de1a0976084`.
 
-The PR adds POSIX address-space/CPU limits, Windows Job Object memory/CPU-time limits with kill-on-close, and credential-shaped environment cleanup before adapter execution. It also adds explicit Windows workflow coverage and updates the connector-runtime documentation. The worker remains disconnected from the live registry. All exact-head CI results must be rechecked before merge; no third-party code is authorized by this work.
+The worker applies POSIX `RLIMIT_AS`/`RLIMIT_CPU` or Windows Job Object memory/CPU-time limits with kill-on-close before adapter execution. It removes credential-shaped environment variables before adapter factory execution. Worker process trees are terminated on timeout/shutdown (POSIX process groups; Windows Job Object). Tests cover resource bounds, environment cleanup and subprocess termination. The worker remains disconnected from the live ConnectorRegistry.
+
+Exact-head CI on `5b2066bb4f50ceb2c9bdd1f7c7ed3de1a0976084` completed:
+- Python: 1,545 passed, 1 skipped, 96 subtests passed.
+- PAPER smoke: 82 passed.
+- Windows EXE build, startup/health smoke, DPAPI, resource-boundary checks and packaging: passed.
+- Windows installer: previous-version build, upgrade build, install/upgrade/launch/health/uninstall and Learning Vault preservation smoke: passed.
+- Portable Windows artifact: 65,940,265 bytes; artifact SHA-256 `ffb5f86bfae33e3d46bfcc59e1dca9dd6a5384676e8c977bba0e1e1528ebfe76`; [artifact](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43714860030/artifacts/14162590090).
+- Installer bundle: 233,806,132 bytes; artifact SHA-256 `7d6610d4fd448c1464543d6388275dfcef02cd09cce6d6f8e4439cba713d033e`; [artifact](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43714860030/artifacts/14161912173).
+
+The Snyk status remains an external quota error (`You have used your limit of private tests`), not a repository test failure or vulnerability finding. Vercel preview succeeded but is not a code test. The GitHub integration cannot administer/uninstall the external Snyk app. No merge was performed while the external status remains red/unstable. Filesystem isolation and provider-specific network egress allowlists are still absent; do not load untrusted third-party code.
 
 ## Implemented runtime
 
