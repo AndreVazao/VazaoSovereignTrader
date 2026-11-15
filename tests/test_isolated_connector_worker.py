@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -32,6 +35,25 @@ def _slow_factory():
 
 def _broken_factory():
     raise RuntimeError("must_not_leak")
+
+
+class _ChildProcessAdapter:
+    def read(self, capability, request, *, timeout_seconds):
+        marker_path = request["marker_path"]
+        pid_path = request["pid_path"]
+        child_script = (
+            "import pathlib,sys,time; "
+            "time.sleep(2.0); "
+            "pathlib.Path(sys.argv[1]).write_text('child-survived', encoding='utf-8')"
+        )
+        child = subprocess.Popen([sys.executable, "-c", child_script, marker_path])
+        Path(pid_path).write_text(str(child.pid), encoding="ascii")
+        time.sleep(5.0)
+        return {"child_pid": child.pid}
+
+
+def _child_process_factory():
+    return _ChildProcessAdapter()
 
 
 def test_isolated_worker_returns_strict_json_snapshot():
@@ -136,3 +158,25 @@ def test_worker_accepts_explicit_bounded_os_resource_limits():
         timeout_seconds=2,
     )
     assert result["value"] == "bounded"
+
+
+def test_worker_timeout_terminates_spawned_descendants(tmp_path):
+    marker_path = tmp_path / "child-survived.txt"
+    pid_path = tmp_path / "child.pid"
+    adapter = IsolatedConnectorAdapter(
+        _child_process_factory,
+        startup_grace_seconds=3.0,
+    )
+
+    with pytest.raises(IsolatedConnectorError, match="connector_timeout"):
+        adapter.read(
+            "public_market_data.read",
+            {"marker_path": str(marker_path), "pid_path": str(pid_path)},
+            timeout_seconds=1.5,
+        )
+
+    assert pid_path.exists(), "adapter did not start its child process"
+    deadline = time.monotonic() + 2.5
+    while time.monotonic() < deadline and not marker_path.exists():
+        time.sleep(0.05)
+    assert not marker_path.exists(), "adapter child outlived its worker"
