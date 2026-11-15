@@ -94,7 +94,7 @@ jobs:
       - name: Validate constrained-memory PAPER resource policy on Windows
         shell: pwsh
         run: |
-          python -m pytest tests/test_adaptive_resource_manager.py tests/test_paper_market_collector.py -q
+          python -m pytest tests/test_adaptive_resource_manager.py tests/test_paper_market_collector.py tests/test_adaptive_job_gate.py tests/test_adaptive_job_runner.py tests/test_adaptive_job_gate_process_leases.py -q
       - name: Validate adaptive resource sampling on Windows
         shell: pwsh
         run: |
