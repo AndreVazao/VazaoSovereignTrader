@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 import os
+import signal
 from collections.abc import Mapping
 from typing import Any, Callable
 
@@ -35,6 +36,16 @@ _SECRET_ENV_MARKERS = (
 )
 
 
+def _establish_worker_process_group() -> None:
+    """Give POSIX workers a dedicated group so timeout cleanup reaches children."""
+    if os.name == "nt":
+        return
+    try:
+        os.setsid()
+    except (AttributeError, OSError):
+        raise RuntimeError("worker_process_group_unavailable") from None
+
+
 def _sanitize_worker_environment() -> None:
     """Remove inherited credential-shaped environment variables before adapter code."""
     for name in tuple(os.environ):
@@ -65,6 +76,16 @@ def _worker_entry(
     startup_grace_seconds: float,
 ) -> None:
     """Spawn target. Parent must apply Windows Job Object before releasing it."""
+    try:
+        _establish_worker_process_group()
+    except RuntimeError:
+        _send_error(send_connection, "worker_process_group_unavailable")
+        try:
+            send_connection.close()
+            control_connection.close()
+        finally:
+            return
+
     try:
         send_connection.send_bytes(b'{"ready":"bootstrap"}')
         if not control_connection.poll(startup_grace_seconds):
@@ -219,6 +240,9 @@ class IsolatedConnectorAdapter:
             except (EOFError, OSError, UnicodeDecodeError, json.JSONDecodeError):
                 raise IsolatedConnectorError("connector_startup_failed") from None
             if not isinstance(bootstrap, dict) or bootstrap.get("ready") != "bootstrap":
+                error = bootstrap.get("error") if isinstance(bootstrap, dict) else None
+                if error == "worker_process_group_unavailable":
+                    raise IsolatedConnectorError(error)
                 raise IsolatedConnectorError("connector_startup_failed")
 
             if os.name == "nt":
@@ -276,6 +300,21 @@ class IsolatedConnectorAdapter:
             except OSError:
                 pass
             if process.pid is not None:
+                if os.name != "nt":
+                    try:
+                        # The worker called setsid() before accepting adapter code.
+                        # Kill the whole group before reaping the worker so child
+                        # processes cannot outlive a timeout or completed read.
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    except OSError:
+                        if process.is_alive():
+                            process.terminate()
+                # On Windows, closing the kill-on-close Job Object first also
+                # terminates any subprocesses spawned by the adapter.
+                close_windows_job(windows_job)
+                windows_job = None
                 process.join(timeout=1.0)
                 if process.is_alive():
                     process.terminate()
