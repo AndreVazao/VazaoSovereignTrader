@@ -169,7 +169,8 @@ def assign_windows_job_limits(
         ):
             raise RuntimeError("worker_job_object_configure_failed")
 
-        process_handle = getattr(process, "_handle", None)
+        popen = getattr(process, "_popen", None)
+        process_handle = getattr(popen, "_handle", None)
         if process_handle is None:
             raise RuntimeError("worker_process_handle_unavailable")
         try:
