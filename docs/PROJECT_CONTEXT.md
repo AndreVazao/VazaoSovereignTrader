@@ -22,6 +22,12 @@ PR #575 was validated on exact HEAD `9703ddcb4e04cb151b3bd56355ad470cd4700567`:
 
 Snyk still reports an external integration/quota error. It is not a repository test failure or a vulnerability finding. The available GitHub integration cannot administer the external Snyk installation. Vercel status is not a code test. Android workflows were not applicable to PR #575.
 
+## Active development — [PR #576](https://github.com/AndreVazao/VazaoSovereignTrader/pull/576)
+
+Branch: `feat/connector-worker-os-resource-boundary-2026-11-15`.
+
+The PR adds POSIX address-space/CPU limits, Windows Job Object memory/CPU-time limits with kill-on-close, and credential-shaped environment cleanup before adapter execution. It also adds explicit Windows workflow coverage and updates the connector-runtime documentation. The worker remains disconnected from the live registry. All exact-head CI results must be rechecked before merge; no third-party code is authorized by this work.
+
 ## Implemented runtime
 
 ### Trading safety and connectors
