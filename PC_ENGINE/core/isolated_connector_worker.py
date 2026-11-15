@@ -185,8 +185,7 @@ class IsolatedConnectorAdapter:
 
         context = multiprocessing.get_context("spawn")
         receive_connection, send_connection = context.Pipe(duplex=False)
-        control_connection = context.Pipe(duplex=True)[0]
-        parent_control = context.Pipe(duplex=True)[1]
+        parent_control, control_connection = context.Pipe(duplex=True)
         process = context.Process(
             target=_worker_entry,
             args=(
