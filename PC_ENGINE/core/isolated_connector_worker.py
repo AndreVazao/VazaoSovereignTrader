@@ -283,6 +283,8 @@ class IsolatedConnectorAdapter:
                 if process.is_alive() and hasattr(process, "kill"):
                     process.kill()
                     process.join(timeout=2.0)
+                if not process.is_alive():
+                    process.close()
             try:
                 control_connection.close()
             except OSError:
