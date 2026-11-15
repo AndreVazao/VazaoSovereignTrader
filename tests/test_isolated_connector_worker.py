@@ -94,7 +94,7 @@ class _EnvironmentAdapter:
     def read(self, capability, request, *, timeout_seconds):
         return {
             "credential_present": bool(os.environ.get("VST_TEST_API_TOKEN")),
-            "ordinary_value": os.environ.get("VST_TEST_NON_SECRET"),
+            "ordinary_value": os.environ.get("VST_TEST_ORDINARY_VALUE"),
         }
 
 
@@ -104,7 +104,7 @@ def _environment_factory():
 
 def test_worker_removes_credential_shaped_environment_before_adapter(monkeypatch):
     monkeypatch.setenv("VST_TEST_API_TOKEN", "must_not_reach_adapter")
-    monkeypatch.setenv("VST_TEST_NON_SECRET", "kept")
+    monkeypatch.setenv("VST_TEST_ORDINARY_VALUE", "kept")
     adapter = IsolatedConnectorAdapter(_environment_factory)
     result = adapter.read(
         "public_market_data.read",
