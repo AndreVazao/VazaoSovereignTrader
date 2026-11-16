@@ -36,16 +36,20 @@ Exact-head workflows completed successfully:
 - Portable Windows artifact: 65,939,831 bytes; SHA-256 `d2505057e1b417c62f021388e72e2958f8df29b972f3d08490d0fa040055c299`; [artifact](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43750382299/artifacts/14175717825).
 - Installer artifact: 233,892,549 bytes; SHA-256 `e75b1108ee88694868748b94b1720e95fdeb0264dac7f3df40bbff01d2d3083b`; [artifact](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43750382299/artifacts/14176885090).
 
-### Current unvalidated increment — `5f0391ffc9ddbab0a992b903290928ec94897103`
+### Exact-head validation — code SHA `281c9419810036c39d0d25d024add6a8ca41f7d3`
 
-Changes after the validated SHA:
-- `e610f1654b3d9d39152d37a7f733ec1c5a94bffd`: POSIX worker resource limits now preserve inherited soft and hard ceilings rather than raising an inherited soft limit to the VST-requested value.
-- `26f31c3c854afd1ee35fe793d078612054b45f9e`: regression test verifies stricter inherited POSIX memory/CPU soft limits are never raised.
-- `10a1562743175b345bc0f55953cbb8c26c8764a6` and `5f0391ffc9ddbab0a992b903290928ec94897103`: refresh this handoff and connector runtime documentation; restore the full historical handoff content rather than dropping it.
+The source and test changes on this exact SHA passed all applicable code workflows:
+- [Python tests #43869288128](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869288128): 1,546 passed, 1 skipped, 96 subtests passed.
+- [PAPER smoke #43869288237](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869288237): 82 passed.
+- [Windows EXE/installer #43869287997](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869287997): EXE build/startup/health passed; DPAPI 11 passed; adaptive resource tests 34 passed; isolated worker tests 9 passed and 1 POSIX-only test skipped on Windows. The installer previous-version build, silent install, in-place upgrade, launch, PAPER health check, silent uninstall and Learning Vault SHA-256 preservation all passed.
+- Portable Windows artifact: [ID 14226886719](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869287997/artifacts/14226886719), 65,940,996 bytes, SHA-256 `7afa6cf6cfcf19bcd1a57beb56f95ed148c3fa3544dacbdef03f5c68d6344549`.
+- Installer artifact: [ID 14227047155](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869287997/artifacts/14227047155), 233,819,772 bytes, SHA-256 `f33153e610c05350d3314883b8c4cf9ebc83812a28d79f9d6a2ecf45e74fa751`.
 
-At the last exact-head poll, no Python, PAPER or Windows Actions runs/checks existed for `5f0391ffc9ddbab0a992b903290928ec94897103`. Vercel preview is not a code test. CodeRabbit skipped automatic review because the repository has fewer than 10 stars. The PR remains `unstable`; no merge was performed.
+The exact-head POSIX regression test confirms that an inherited soft memory/CPU limit is never raised. Windows Job Object enforcement and descendant termination passed on the Windows runner.
 
-The external `security/snyk (andrevazao)` status was `error` on preceding HEAD `26f31c3c854afd1ee35fe793d078612054b45f9e`, with the quota-exhaustion condition previously reported by the owner. This is not a vulnerability finding or a repository test failure. No new Snyk result was present in the last combined-status response for `5f0391f`. The GitHub integration cannot administer the external Snyk installation. Vercel status is never a code test.
+This handoff refresh is documentation-only and does not change the source or test files validated on `281c941`. Do not describe any later documentation-only commit as a separately tested code SHA.
+
+The external `security/snyk (andrevazao)` status remains `error` due to the reported quota exhaustion; this is not a vulnerability finding or a repository test failure. The current PR remains `mergeable_state=unstable`, so no merge is performed. Vercel is not counted as a code test. The GitHub integration cannot administer the external Snyk installation.
 
 ### Connector worker boundary
 
