@@ -180,3 +180,34 @@ def test_worker_timeout_terminates_spawned_descendants(tmp_path):
     while time.monotonic() < deadline and not marker_path.exists():
         time.sleep(0.05)
     assert not marker_path.exists(), "adapter child outlived its worker"
+
+def test_posix_worker_limits_never_raise_inherited_soft_limits(monkeypatch):
+    if os.name == "nt":
+        pytest.skip("POSIX resource limits are not available on Windows")
+
+    import resource
+
+    from PC_ENGINE.core.connector_worker_limits import apply_child_resource_limits
+
+    existing = {
+        resource.RLIMIT_AS: (128 * 1024 * 1024, 1024 * 1024 * 1024),
+        resource.RLIMIT_CPU: (5, 20),
+    }
+    applied = {}
+
+    def fake_getrlimit(resource_id):
+        return existing[resource_id]
+
+    def fake_setrlimit(resource_id, limits):
+        applied[resource_id] = limits
+
+    monkeypatch.setattr(resource, "getrlimit", fake_getrlimit)
+    monkeypatch.setattr(resource, "setrlimit", fake_setrlimit)
+
+    apply_child_resource_limits(memory_limit_mb=384, cpu_time_limit_seconds=30)
+
+    assert applied[resource.RLIMIT_AS] == (
+        128 * 1024 * 1024,
+        384 * 1024 * 1024,
+    )
+    assert applied[resource.RLIMIT_CPU] == (5, 20)
