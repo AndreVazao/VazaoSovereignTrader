@@ -28,10 +28,25 @@ def validate_worker_limits(memory_limit_mb: int, cpu_time_limit_seconds: int) ->
         raise ValueError("invalid_worker_cpu_limit")
 
 
-def _bounded_limit(requested: int, existing_hard: int, infinity: int) -> int:
-    if existing_hard == infinity:
-        return requested
-    return min(requested, existing_hard)
+def _bounded_limits(
+    requested_soft: int,
+    requested_hard: int,
+    existing_soft: int,
+    existing_hard: int,
+    infinity: int,
+) -> tuple[int, int]:
+    """Lower inherited limits without ever raising an existing soft or hard cap."""
+    soft = (
+        requested_soft
+        if existing_soft == infinity
+        else min(requested_soft, existing_soft)
+    )
+    hard = (
+        requested_hard
+        if existing_hard == infinity
+        else min(requested_hard, existing_hard)
+    )
+    return min(soft, hard), hard
 
 
 def apply_child_resource_limits(
@@ -55,24 +70,31 @@ def apply_child_resource_limits(
 
     memory_bytes = memory_limit_mb * 1024 * 1024
     memory_soft, memory_hard = resource.getrlimit(resource.RLIMIT_AS)
-    memory_limit = _bounded_limit(
-        memory_bytes, memory_hard, resource.RLIM_INFINITY
+    bounded_memory_soft, bounded_memory_hard = _bounded_limits(
+        memory_bytes,
+        memory_bytes,
+        memory_soft,
+        memory_hard,
+        resource.RLIM_INFINITY,
     )
-    if memory_limit <= 0:
-        raise RuntimeError("worker_resource_limits_unavailable")
-    resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
-
-    cpu_soft, cpu_hard = resource.getrlimit(resource.RLIMIT_CPU)
-    requested_soft = _bounded_limit(
-        cpu_time_limit_seconds, cpu_hard, resource.RLIM_INFINITY
-    )
-    requested_hard = _bounded_limit(
-        cpu_time_limit_seconds + 1, cpu_hard, resource.RLIM_INFINITY
-    )
-    if requested_soft <= 0 or requested_hard < requested_soft:
+    if bounded_memory_soft <= 0 or bounded_memory_hard < bounded_memory_soft:
         raise RuntimeError("worker_resource_limits_unavailable")
     resource.setrlimit(
-        resource.RLIMIT_CPU, (requested_soft, requested_hard)
+        resource.RLIMIT_AS, (bounded_memory_soft, bounded_memory_hard)
+    )
+
+    cpu_soft, cpu_hard = resource.getrlimit(resource.RLIMIT_CPU)
+    bounded_cpu_soft, bounded_cpu_hard = _bounded_limits(
+        cpu_time_limit_seconds,
+        cpu_time_limit_seconds + 1,
+        cpu_soft,
+        cpu_hard,
+        resource.RLIM_INFINITY,
+    )
+    if bounded_cpu_soft <= 0 or bounded_cpu_hard < bounded_cpu_soft:
+        raise RuntimeError("worker_resource_limits_unavailable")
+    resource.setrlimit(
+        resource.RLIMIT_CPU, (bounded_cpu_soft, bounded_cpu_hard)
     )
 
 
