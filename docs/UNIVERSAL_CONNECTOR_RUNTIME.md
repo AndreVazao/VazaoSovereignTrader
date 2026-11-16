@@ -1,6 +1,6 @@
 # Universal Connector Runtime — VST
 
-**Status date:** 2026-11-13  
+**Status date:** 2026-11-16  
 **Scope:** first-party public market-data adapters only. This document describes implemented behavior, not a promise that every platform connector is already available.
 
 ## Implemented
@@ -31,7 +31,7 @@ The connector runtime does not connect private exchange accounts and does not gr
 
 - The registry is in-process. The manifest timeout is passed to the adapter and CCXT's request timeout is set, but Python cannot forcibly interrupt arbitrary synchronous third-party code. Do not load untrusted adapters into this process.
 - A one-shot spawned-process wrapper now exists in `PC_ENGINE/core/isolated_connector_worker.py`. It uses strict JSON IPC, caps request/response sizes, applies a bounded wait and terminates the worker process tree on completion or timeout: POSIX workers enter a dedicated session/process group which the parent kills, while Windows workers are held in a kill-on-close Job Object that is closed before waiting for exit. Focused tests verify that a subprocess spawned by an adapter cannot outlive its worker timeout. This is groundwork only; it is not wired into the live registry or enabled for providers.
-- The worker now applies OS-enforced resource ceilings before adapter code runs: POSIX `RLIMIT_AS` and `RLIMIT_CPU`, or a Windows Job Object with per-process memory and CPU-time limits plus kill-on-close. If the required platform limits cannot be installed, the worker fails closed. The worker also removes credential-shaped environment variables before invoking the adapter factory.
+- The worker now applies OS-enforced resource ceilings before adapter code runs: POSIX `RLIMIT_AS` and `RLIMIT_CPU`, or a Windows Job Object with per-process memory and CPU-time limits plus kill-on-close. If the required platform limits cannot be installed, the worker fails closed. The worker also removes credential-shaped environment variables before invoking the adapter factory. POSIX limits are calculated against both inherited soft and hard ceilings; the worker never raises either inherited limit. A regression test covers an inherited soft memory/CPU ceiling stricter than the VST-requested budget. This last correction is awaiting exact-HEAD CI.
 - These controls bound worker memory and CPU time; they do not isolate filesystem access, restrict network egress, prevent access to other files owned by the same user, or provide a complete security sandbox. Do not load untrusted third-party code through it. Filesystem isolation, provider-specific network allowlists, stronger supervision/incident telemetry and Windows/Linux lifecycle validation remain prerequisites before production plugin execution.
 - The current wrapper starts a fresh process per read; it is a safety prototype, not yet an optimized persistent worker pool.
 - OAuth, private account reads, balances, statements, Android UI automation, browser automation and desktop automation are contract categories only; they are not live integrations in this increment.
