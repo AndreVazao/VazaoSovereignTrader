@@ -52,20 +52,14 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
     assert "--bind" not in argv
     assert argv[-2:] == [str((runtime / "worker").resolve()), "--probe"]
 
-    tmp_index = argv.index("/tmp")
-    work_index = argv.index("/work")
-    assert argv[tmp_index - 3 : tmp_index] == [
-        "--size",
-        str(16 * 1024 * 1024),
-        "--perms",
+    tmpfs_indices = [index for index, item in enumerate(argv) if item == "--tmpfs"]
+    assert len(tmpfs_indices) == 2
+    expected = [
+        ("--size", str(16 * 1024 * 1024), "--perms", "0700", "/tmp"),
+        ("--size", str(64 * 1024 * 1024), "--perms", "0700", "/work"),
     ]
-    assert argv[work_index - 3 : work_index] == [
-        "--size",
-        str(64 * 1024 * 1024),
-        "--perms",
-    ]
-    assert argv[argv.index("--tmpfs", tmp_index - 1) + 1] == "/tmp"
-    assert argv[argv.index("--tmpfs", work_index - 1) + 1] == "/work"
+    for index, values in zip(tmpfs_indices, expected):
+        assert argv[index - 4 : index + 1] == list(values)
 
 
 def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
@@ -83,10 +77,9 @@ def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
 
 
 def test_linux_sandbox_rejects_sensitive_or_broad_runtime_roots(tmp_path):
-    runtime = _private_dir(tmp_path / "runtime")
     with pytest.raises(ValueError, match="sandbox_runtime_root_overlaps_sensitive_path"):
         build_linux_bwrap_command(
-            [str(runtime / "worker")],
+            ["/usr/bin/python3"],
             runtime_roots=[Path("/tmp")],
             bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
         )
