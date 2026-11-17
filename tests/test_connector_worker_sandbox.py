@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import shutil
+import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -22,80 +25,101 @@ def _private_dir(path: Path) -> Path:
     return path
 
 
-def test_linux_sandbox_command_denies_network_and_does_not_mount_host_root(tmp_path):
-    runtime = _private_dir(tmp_path / "runtime")
-    scratch = _private_dir(tmp_path / "scratch")
+def _fake_bwrap(path: Path) -> Path:
+    path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    path.chmod(0o700)
+    return path
+
+
+def _command(runtime: Path, bwrap: Path) -> list[str]:
     executable = runtime / "worker"
     executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o700)
-    bwrap = tmp_path / "bwrap"
-    bwrap.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    bwrap.chmod(0o700)
-
-    argv = build_linux_bwrap_command(
+    return build_linux_bwrap_command(
         [str(executable), "--probe"],
-        runtime_roots=[str(runtime)],
-        scratch_dir=str(scratch),
-        bwrap_path=str(bwrap),
+        runtime_roots=[runtime],
+        bwrap_path=bwrap,
     )
+
+
+def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path):
+    runtime = _private_dir(tmp_path / "runtime")
+    argv = _command(runtime, _fake_bwrap(tmp_path / "bwrap"))
 
     assert "--unshare-net" in argv
+    assert "--unshare-user" in argv
     assert "--clearenv" in argv
-    assert "--tmpfs" in argv
-    assert "/work" in argv
-    assert "--bind" in argv
-    assert not any(
-        argv[index] == "--ro-bind" and argv[index + 1] == "/" and argv[index + 2] == "/"
-        for index in range(len(argv) - 2)
-    )
-    assert argv[-2:] == [str(executable), "--probe"]
+    assert "--bind" not in argv
+    assert argv[-2:] == [str((runtime / "worker").resolve()), "--probe"]
+
+    tmp_index = argv.index("/tmp")
+    work_index = argv.index("/work")
+    assert argv[tmp_index - 3 : tmp_index] == [
+        "--size",
+        str(16 * 1024 * 1024),
+        "--perms",
+    ]
+    assert argv[work_index - 3 : work_index] == [
+        "--size",
+        str(64 * 1024 * 1024),
+        "--perms",
+    ]
+    assert argv[argv.index("--tmpfs", tmp_index - 1) + 1] == "/tmp"
+    assert argv[argv.index("--tmpfs", work_index - 1) + 1] == "/work"
 
 
 def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
     runtime = _private_dir(tmp_path / "runtime")
-    scratch = _private_dir(tmp_path / "scratch")
     outside = tmp_path / "outside"
     outside.write_text("not executable", encoding="utf-8")
     outside.chmod(0o700)
-    bwrap = tmp_path / "bwrap"
-    bwrap.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    bwrap.chmod(0o700)
 
     with pytest.raises(ValueError, match="sandbox_executable_outside_runtime_roots"):
         build_linux_bwrap_command(
             [str(outside)],
-            runtime_roots=[str(runtime)],
-            scratch_dir=str(scratch),
-            bwrap_path=str(bwrap),
+            runtime_roots=[runtime],
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
         )
 
 
-def test_linux_sandbox_rejects_world_accessible_scratch(tmp_path):
+def test_linux_sandbox_rejects_sensitive_or_broad_runtime_roots(tmp_path):
     runtime = _private_dir(tmp_path / "runtime")
-    scratch = tmp_path / "scratch"
-    scratch.mkdir(mode=0o755)
-    scratch.chmod(0o755)
-    executable = runtime / "worker"
-    executable.write_text("x", encoding="utf-8")
-    executable.chmod(0o700)
-    bwrap = tmp_path / "bwrap"
-    bwrap.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    bwrap.chmod(0o700)
+    with pytest.raises(ValueError, match="sandbox_runtime_root_overlaps_sensitive_path"):
+        build_linux_bwrap_command(
+            [str(runtime / "worker")],
+            runtime_roots=[Path("/tmp")],
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
 
-    with pytest.raises(ValueError, match="sandbox_scratch_permissions_too_open"):
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        (0, "sandbox_work_size_out_of_bounds"),
+        (-1, "sandbox_work_size_out_of_bounds"),
+        (257 * 1024 * 1024, "sandbox_work_size_out_of_bounds"),
+        (True, "sandbox_work_size_must_be_integer"),
+    ],
+)
+def test_linux_sandbox_rejects_invalid_work_tmpfs_size(tmp_path, value, message):
+    runtime = _private_dir(tmp_path / "runtime")
+    executable = runtime / "worker"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o700)
+
+    with pytest.raises(ValueError, match=message):
         build_linux_bwrap_command(
             [str(executable)],
-            runtime_roots=[str(runtime)],
-            scratch_dir=str(scratch),
-            bwrap_path=str(bwrap),
+            runtime_roots=[runtime],
+            work_size_bytes=value,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
         )
 
 
 def test_linux_sandbox_fails_closed_when_bwrap_is_missing(tmp_path, monkeypatch):
     runtime = _private_dir(tmp_path / "runtime")
-    scratch = _private_dir(tmp_path / "scratch")
     executable = runtime / "worker"
-    executable.write_text("x", encoding="utf-8")
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o700)
     monkeypatch.setattr(
         "PC_ENGINE.core.connector_worker_sandbox.shutil.which",
@@ -105,6 +129,76 @@ def test_linux_sandbox_fails_closed_when_bwrap_is_missing(tmp_path, monkeypatch)
     with pytest.raises(SandboxUnavailable, match="linux_bwrap_unavailable"):
         build_linux_bwrap_command(
             [str(executable)],
-            runtime_roots=[str(runtime)],
-            scratch_dir=str(scratch),
+            runtime_roots=[runtime],
         )
+
+
+def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_path):
+    bwrap = shutil.which("bwrap")
+    if not bwrap:
+        pytest.skip("Bubblewrap is installed by the dedicated Linux CI workflow")
+
+    host_marker = tmp_path / "host-only-marker.txt"
+    host_marker.write_text("not-mounted-into-sandbox", encoding="utf-8")
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    port = listener.getsockname()[1]
+    work_limit = 64 * 1024 * 1024
+
+    script = (
+        "import os, socket, sys\n"
+        "marker, port, work_limit = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])\n"
+        "try:\n"
+        "    open(marker, 'rb').read()\n"
+        "except FileNotFoundError:\n"
+        "    pass\n"
+        "else:\n"
+        "    raise SystemExit('HOST_FILE_VISIBLE')\n"
+        "client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+        "client.settimeout(1.0)\n"
+        "try:\n"
+        "    client.connect(('127.0.0.1', port))\n"
+        "except OSError:\n"
+        "    pass\n"
+        "else:\n"
+        "    raise SystemExit('HOST_NETWORK_VISIBLE')\n"
+        "finally:\n"
+        "    client.close()\n"
+        "stat = os.statvfs('/work')\n"
+        "capacity = stat.f_frsize * stat.f_blocks\n"
+        "if capacity > work_limit + 4096:\n"
+        "    raise SystemExit('WORK_TMPFS_LIMIT_NOT_ENFORCED')\n"
+        "print('filesystem-network-and-tmpfs-boundaries-enforced')\n"
+    )
+    try:
+        argv = build_linux_bwrap_command(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(host_marker),
+                str(port),
+                str(work_limit),
+            ],
+            runtime_roots=[Path(sys.prefix)],
+            bwrap_path=bwrap,
+            work_size_bytes=work_limit,
+        )
+        result = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    finally:
+        listener.close()
+
+    assert result.returncode == 0, (
+        f"Bubblewrap enforcement failed with exit {result.returncode}: "
+        f"{result.stderr[-2000:]}"
+    )
+    assert "filesystem-network-and-tmpfs-boundaries-enforced" in result.stdout
