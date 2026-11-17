@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -33,6 +34,7 @@ _SENSITIVE_ROOTS = tuple(
 _DEFAULT_TMP_BYTES = 16 * 1024 * 1024
 _DEFAULT_WORK_BYTES = 64 * 1024 * 1024
 _MAX_TMPFS_BYTES = 256 * 1024 * 1024
+_MASKED_SYSTEM_PATHS = ("/usr/local/etc", "/usr/local/var")
 
 
 def _real_directory(value: str | os.PathLike[str], *, label: str) -> Path:
@@ -184,10 +186,17 @@ def build_linux_bwrap_command(
     # /usr is mounted read-only for the interpreter and standard library.
     # Mask mutable/local configuration and state below it so those host paths
     # are not exposed merely because they reside under the system runtime tree.
-    for sensitive_mount in ("/usr/local/etc", "/usr/local/var"):
+    for sensitive_mount in _MASKED_SYSTEM_PATHS:
         sensitive_path = Path(sensitive_mount)
-        if sensitive_path.is_dir() and not sensitive_path.is_symlink():
-            argv.extend(["--perms", "0700", "--tmpfs", sensitive_mount])
+        try:
+            sensitive_mode = sensitive_path.lstat().st_mode
+        except FileNotFoundError:
+            continue
+        except OSError:
+            raise SandboxUnavailable("linux_sensitive_mount_unavailable") from None
+        if stat.S_ISLNK(sensitive_mode) or not stat.S_ISDIR(sensitive_mode):
+            raise ValueError("sandbox_sensitive_mount_must_be_real_directory")
+        argv.extend(["--perms", "0700", "--tmpfs", sensitive_mount])
 
     try:
         certs = Path(_SYSTEM_CERT_DIR).resolve(strict=True)
