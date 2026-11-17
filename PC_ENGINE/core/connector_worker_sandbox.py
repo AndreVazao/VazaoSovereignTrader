@@ -30,6 +30,7 @@ _SENSITIVE_ROOTS = tuple(
         "/media",
     )
 )
+_PRIVATE_TEMP_ROOTS = (Path("/tmp"),)
 _DEFAULT_TMP_BYTES = 16 * 1024 * 1024
 _DEFAULT_WORK_BYTES = 64 * 1024 * 1024
 _MAX_TMPFS_BYTES = 256 * 1024 * 1024
@@ -73,6 +74,18 @@ def _validate_tmpfs_size(value: int, *, label: str) -> int:
     if value <= 0 or value > _MAX_TMPFS_BYTES:
         raise ValueError(f"{label}_out_of_bounds")
     return value
+
+
+def _validate_runtime_root(root: Path) -> None:
+    for sensitive in _SENSITIVE_ROOTS:
+        if root == sensitive or root in sensitive.parents:
+            raise ValueError("sandbox_runtime_root_overlaps_sensitive_path")
+        if sensitive in root.parents:
+            if sensitive not in _PRIVATE_TEMP_ROOTS:
+                raise ValueError("sandbox_runtime_root_overlaps_sensitive_path")
+            mode = root.stat().st_mode & 0o777
+            if mode & 0o077:
+                raise ValueError("sandbox_runtime_root_permissions_too_open")
 
 
 def build_linux_bwrap_command(
@@ -129,15 +142,7 @@ def build_linux_bwrap_command(
     if len(set(roots)) != len(roots):
         raise ValueError("duplicate_sandbox_runtime_root")
     for root in roots:
-        if any(
-            root == sensitive
-            or sensitive in root.parents
-            or root in sensitive.parents
-            for sensitive in _SENSITIVE_ROOTS
-        ):
-            raise ValueError("sandbox_runtime_root_overlaps_sensitive_path")
-        if root == Path("/"):
-            raise ValueError("sandbox_root_mount_forbidden")
+        _validate_runtime_root(root)
 
     system_roots = _system_runtime_roots()
     allowed_exec_roots = [*system_roots, *roots]
