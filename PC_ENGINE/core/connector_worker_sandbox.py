@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -37,10 +38,13 @@ def build_linux_bwrap_command(
 ) -> list[str]:
     """Build a deny-network, minimal-filesystem Bubblewrap invocation.
 
-    This function only constructs the OS boundary. Callers must execute the
-    returned argv without a shell and must keep the scratch directory private.
-    No host home, VST data, credentials, sockets, or network namespace is bound.
+    This function only constructs argv; it does not launch or attest a sandbox.
+    Callers must execute argv without a shell, provision a fresh private scratch
+    directory, and pass only reviewed read-only runtime roots. The returned
+    command has no network namespace, host home, VST data, or credential mounts.
     """
+    if sys.platform != "linux":
+        raise SandboxUnavailable("linux_sandbox_platform_required")
     if not command or any(not isinstance(part, str) or not part for part in command):
         raise ValueError("sandbox_command_required")
     executable = Path(command[0])
@@ -54,9 +58,10 @@ def build_linux_bwrap_command(
     if not binary_path.is_absolute() or not os.access(binary_path, os.X_OK):
         raise SandboxUnavailable("linux_bwrap_not_executable")
 
-    scratch = _real_directory(scratch_dir, label="sandbox_scratch")
-    if scratch.is_symlink():
+    scratch_input = Path(scratch_dir)
+    if scratch_input.is_symlink():
         raise ValueError("sandbox_scratch_must_not_be_symlink")
+    scratch = _real_directory(scratch_input, label="sandbox_scratch")
     try:
         mode = scratch.stat().st_mode & 0o777
     except OSError:
@@ -69,12 +74,16 @@ def build_linux_bwrap_command(
         raise ValueError("sandbox_runtime_roots_required")
     if len(set(roots)) != len(roots):
         raise ValueError("duplicate_sandbox_runtime_root")
+    if Path("/") in roots:
+        raise ValueError("sandbox_root_mount_forbidden")
 
     system_roots = [
         Path(item) for item in _SYSTEM_READ_ONLY_DIRS if Path(item).is_dir()
     ]
     allowed_exec_roots = [*system_roots, *roots]
-    executable_real = executable.resolve(strict=False)
+    executable_real = executable.resolve(strict=True)
+    if not executable.is_file() or not os.access(executable_real, os.X_OK):
+        raise ValueError("sandbox_executable_not_executable")
     if not any(
         executable_real == root or root in executable_real.parents
         for root in allowed_exec_roots
