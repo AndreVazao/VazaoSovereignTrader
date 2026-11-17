@@ -20,7 +20,7 @@ These controls do not isolate filesystem access or restrict network egress. The 
 `PC_ENGINE/core/connector_worker_sandbox.py` builds a Linux Bubblewrap invocation:
 - Uses separate user, PID, IPC, UTS and network namespaces; host network access is denied.
 - Clears the inherited environment and sets only a minimal PATH, HOME and TMPDIR.
-- Mounts selected system/runtime roots read-only; masks existing `/usr/local/etc` and `/usr/local/var` paths with private tmpfs mounts so host-local configuration/state is not exposed through the broad `/usr` runtime mount.
+- Mounts selected system/runtime roots read-only; masks existing `/usr/local/etc` and `/usr/local/var` paths with private tmpfs mounts so host-local configuration/state is not exposed through the broad `/usr` runtime mount; fails closed if either mask target is a symlink or a non-directory.
 - Does not mount the host root, home, VST data, Learning Vault, credentials or host temporary directory.
 - Uses private `/tmp` and `/work` tmpfs mounts with explicit size limits (16 MiB and 64 MiB by default; each is capped at 256 MiB).
 - Canonicalizes the executable path and rejects broad/sensitive runtime roots, undeclared executable paths, invalid tmpfs sizes and missing/non-executable Bubblewrap.
