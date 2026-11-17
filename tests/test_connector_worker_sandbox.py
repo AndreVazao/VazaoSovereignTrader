@@ -125,7 +125,7 @@ def test_linux_sandbox_fails_closed_when_bwrap_is_missing(monkeypatch):
         build_linux_bwrap_command(["/usr/bin/python3"])
 
 
-def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_path):
+def test_linux_sandbox_enforces_filesystem_network_environment_and_tmpfs_boundaries(tmp_path):
     if os.environ.get("VST_RUN_BWRAP_INTEGRATION") != "1":
         pytest.skip("Real Bubblewrap execution is reserved for the dedicated Linux CI workflow")
     bwrap = shutil.which("bwrap")
@@ -208,4 +208,4 @@ def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_pa
         f"Bubblewrap enforcement failed with exit {result.returncode}: "
         f"{result.stderr[-2000:]}"
     )
-    assert "filesystem-network-and-tmpfs-boundaries-enforced" in result.stdout
+    assert "filesystem-network-environment-and-tmpfs-boundaries-enforced" in result.stdout
