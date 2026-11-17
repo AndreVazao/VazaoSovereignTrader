@@ -139,14 +139,13 @@ def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_pa
     try:
         argv = build_linux_bwrap_command(
             [
-                sys.executable,
+                "/usr/bin/python3",
                 "-c",
                 script,
                 str(host_marker),
                 str(port),
                 str(work_limit),
             ],
-            runtime_roots=[Path(sys.prefix)],
             bwrap_path=bwrap,
             work_size_bytes=work_limit,
         )
