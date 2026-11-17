@@ -20,7 +20,7 @@ These controls do not isolate filesystem access or restrict network egress. The 
 `PC_ENGINE/core/connector_worker_sandbox.py` builds a Linux Bubblewrap invocation:
 - Uses separate user, PID, IPC, UTS and network namespaces; host network access is denied.
 - Clears the inherited environment and sets only a minimal PATH, HOME and TMPDIR.
-- Mounts selected system/runtime roots read-only.
+- Mounts selected system/runtime roots read-only; masks existing `/usr/local/etc` and `/usr/local/var` paths with private tmpfs mounts so host-local configuration/state is not exposed through the broad `/usr` runtime mount.
 - Does not mount the host root, home, VST data, Learning Vault, credentials or host temporary directory.
 - Uses private `/tmp` and `/work` tmpfs mounts with explicit size limits (16 MiB and 64 MiB by default; each is capped at 256 MiB).
 - Canonicalizes the executable path and rejects broad/sensitive runtime roots, undeclared executable paths, invalid tmpfs sizes and missing/non-executable Bubblewrap.
@@ -53,7 +53,7 @@ The worker may be enabled for an adapter only when every required control is pos
 - Treat redirects, alternate IP literals, IPv4-mapped IPv6, IDNA names, CNAME chains, proxy variables and connection reuse as explicit test cases.
 
 ### Platform enforcement
-- Linux: real Bubblewrap execution is tested in CI for host-file denial, host-loopback denial, inherited-environment removal, normalized HOME/TMPDIR and both bounded tmpfs mounts. Still required: adversarial path/child-process tests, bounded lifecycle cleanup, restricted syscalls/capabilities and a reviewed provider egress policy.
+- Linux: real Bubblewrap execution is tested in CI for host-file denial, host-loopback denial, inherited-environment removal, normalized HOME/TMPDIR and both bounded tmpfs mounts. Still required: adversarial path/child-process tests, bounded lifecycle cleanup, restricted syscalls/capabilities and a reviewed provider egress policy. The broad `/usr` runtime mount is not treated as safe by itself; existing local configuration/state directories below it are now masked.
 - Windows: implement AppContainer/restricted token plus Job Object, explicit capability policy, private scratch ACLs and Windows Firewall/WFP enforcement. Job Objects alone do not provide filesystem or network isolation.
 - Do not claim platform parity until both platforms have independent negative tests proving that denied file and network access actually fails.
 
