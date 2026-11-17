@@ -181,6 +181,14 @@ def build_linux_bwrap_command(
         if path.is_file():
             argv.extend(["--ro-bind", str(path), str(path)])
 
+    # /usr is mounted read-only for the interpreter and standard library.
+    # Mask mutable/local configuration and state below it so those host paths
+    # are not exposed merely because they reside under the system runtime tree.
+    for sensitive_mount in ("/usr/local/etc", "/usr/local/var"):
+        sensitive_path = Path(sensitive_mount)
+        if sensitive_path.is_dir() and not sensitive_path.is_symlink():
+            argv.extend(["--perms", "0700", "--tmpfs", sensitive_mount])
+
     try:
         certs = Path(_SYSTEM_CERT_DIR).resolve(strict=True)
     except (OSError, RuntimeError):
