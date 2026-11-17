@@ -120,6 +120,8 @@ def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_pa
         "    pass\n"
         "else:\n"
         "    raise SystemExit('HOST_FILE_VISIBLE')\n"
+        "if os.path.exists('/etc/passwd'):\n"
+        "    raise SystemExit('HOST_ETC_VISIBLE')\n"
         "client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
         "client.settimeout(1.0)\n"
         "try:\n"
