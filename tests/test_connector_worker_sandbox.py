@@ -53,6 +53,50 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
         assert argv[index - 4 : index + 2] == values
 
 
+
+def test_linux_sandbox_fails_closed_for_symlinked_sensitive_mountpoint(tmp_path, monkeypatch):
+    runtime_link = tmp_path / "runtime"
+    runtime_link.mkdir()
+    sensitive_target = tmp_path / "sensitive-target"
+    sensitive_target.mkdir()
+    sensitive_link = tmp_path / "sensitive-link"
+    sensitive_link.symlink_to(sensitive_target, target_is_directory=True)
+    monkeypatch.setattr(
+        "PC_ENGINE.core.connector_worker_sandbox._MASKED_SYSTEM_PATHS",
+        (str(sensitive_link),),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="sandbox_sensitive_mount_must_be_real_directory",
+    ):
+        build_linux_bwrap_command(
+            ["/usr/bin/python3"],
+            runtime_roots=[str(runtime_link)],
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
+def test_linux_sandbox_fails_closed_for_non_directory_sensitive_mountpoint(tmp_path, monkeypatch):
+    runtime_link = tmp_path / "runtime"
+    runtime_link.mkdir()
+    sensitive_file = tmp_path / "sensitive-file"
+    sensitive_file.write_text("host-state", encoding="utf-8")
+    monkeypatch.setattr(
+        "PC_ENGINE.core.connector_worker_sandbox._MASKED_SYSTEM_PATHS",
+        (str(sensitive_file),),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="sandbox_sensitive_mount_must_be_real_directory",
+    ):
+        build_linux_bwrap_command(
+            ["/usr/bin/python3"],
+            runtime_roots=[str(runtime_link)],
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
 def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
     outside = tmp_path / "outside"
     outside.write_text("not executable", encoding="utf-8")
