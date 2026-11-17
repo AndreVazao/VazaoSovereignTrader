@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import socket
 import subprocess
@@ -35,6 +36,8 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
     assert "--unshare-user" in argv
     assert "--clearenv" in argv
     assert "--bind" not in argv
+    assert "/lib64" in argv
+    assert "/bin" in argv
     assert argv[-2:] == [str(Path("/usr/bin/python3").resolve()), "--version"]
 
     tmpfs_indices = [index for index, item in enumerate(argv) if item == "--tmpfs"]
@@ -97,9 +100,11 @@ def test_linux_sandbox_fails_closed_when_bwrap_is_missing(monkeypatch):
 
 
 def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_path):
+    if os.environ.get("VST_RUN_BWRAP_INTEGRATION") != "1":
+        pytest.skip("Real Bubblewrap execution is reserved for the dedicated Linux CI workflow")
     bwrap = shutil.which("bwrap")
     if not bwrap:
-        pytest.skip("Bubblewrap is installed by the dedicated Linux CI workflow")
+        pytest.fail("Dedicated Linux CI workflow did not install Bubblewrap")
 
     host_marker = tmp_path / "host-only-marker.txt"
     host_marker.write_text("not-mounted-into-sandbox", encoding="utf-8")
