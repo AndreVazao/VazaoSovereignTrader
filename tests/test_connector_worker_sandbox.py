@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,6 +8,11 @@ import pytest
 from PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
     build_linux_bwrap_command,
+)
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="Bubblewrap command construction is Linux-specific",
 )
 
 
@@ -51,6 +56,7 @@ def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
     scratch = _private_dir(tmp_path / "scratch")
     outside = tmp_path / "outside"
     outside.write_text("not executable", encoding="utf-8")
+    outside.chmod(0o700)
     bwrap = tmp_path / "bwrap"
     bwrap.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     bwrap.chmod(0o700)
@@ -71,6 +77,7 @@ def test_linux_sandbox_rejects_world_accessible_scratch(tmp_path):
     scratch.chmod(0o755)
     executable = runtime / "worker"
     executable.write_text("x", encoding="utf-8")
+    executable.chmod(0o700)
     bwrap = tmp_path / "bwrap"
     bwrap.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     bwrap.chmod(0o700)
@@ -89,7 +96,11 @@ def test_linux_sandbox_fails_closed_when_bwrap_is_missing(tmp_path, monkeypatch)
     scratch = _private_dir(tmp_path / "scratch")
     executable = runtime / "worker"
     executable.write_text("x", encoding="utf-8")
-    monkeypatch.setattr("PC_ENGINE.core.connector_worker_sandbox.shutil.which", lambda _: None)
+    executable.chmod(0o700)
+    monkeypatch.setattr(
+        "PC_ENGINE.core.connector_worker_sandbox.shutil.which",
+        lambda _: None,
+    )
 
     with pytest.raises(SandboxUnavailable, match="linux_bwrap_unavailable"):
         build_linux_bwrap_command(
