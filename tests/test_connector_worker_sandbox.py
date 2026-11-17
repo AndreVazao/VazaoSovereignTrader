@@ -19,38 +19,23 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _private_dir(path: Path) -> Path:
-    path.mkdir()
-    path.chmod(0o700)
-    return path
-
-
 def _fake_bwrap(path: Path) -> Path:
     path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     path.chmod(0o700)
     return path
 
 
-def _command(runtime: Path, bwrap: Path) -> list[str]:
-    executable = runtime / "worker"
-    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    executable.chmod(0o700)
-    return build_linux_bwrap_command(
-        [str(executable), "--probe"],
-        runtime_roots=[runtime],
-        bwrap_path=bwrap,
-    )
-
-
 def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path):
-    runtime = _private_dir(tmp_path / "runtime")
-    argv = _command(runtime, _fake_bwrap(tmp_path / "bwrap"))
+    argv = build_linux_bwrap_command(
+        ["/usr/bin/python3", "--version"],
+        bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+    )
 
     assert "--unshare-net" in argv
     assert "--unshare-user" in argv
     assert "--clearenv" in argv
     assert "--bind" not in argv
-    assert argv[-2:] == [str((runtime / "worker").resolve()), "--probe"]
+    assert argv[-2:] == [str(Path("/usr/bin/python3").resolve()), "--version"]
 
     tmpfs_indices = [index for index, item in enumerate(argv) if item == "--tmpfs"]
     assert len(tmpfs_indices) == 2
@@ -63,7 +48,6 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
 
 
 def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
-    runtime = _private_dir(tmp_path / "runtime")
     outside = tmp_path / "outside"
     outside.write_text("not executable", encoding="utf-8")
     outside.chmod(0o700)
@@ -71,7 +55,6 @@ def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
     with pytest.raises(ValueError, match="sandbox_executable_outside_runtime_roots"):
         build_linux_bwrap_command(
             [str(outside)],
-            runtime_roots=[runtime],
             bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
         )
 
@@ -95,35 +78,22 @@ def test_linux_sandbox_rejects_sensitive_or_broad_runtime_roots(tmp_path):
     ],
 )
 def test_linux_sandbox_rejects_invalid_work_tmpfs_size(tmp_path, value, message):
-    runtime = _private_dir(tmp_path / "runtime")
-    executable = runtime / "worker"
-    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    executable.chmod(0o700)
-
     with pytest.raises(ValueError, match=message):
         build_linux_bwrap_command(
-            [str(executable)],
-            runtime_roots=[runtime],
+            ["/usr/bin/python3"],
             work_size_bytes=value,
             bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
         )
 
 
-def test_linux_sandbox_fails_closed_when_bwrap_is_missing(tmp_path, monkeypatch):
-    runtime = _private_dir(tmp_path / "runtime")
-    executable = runtime / "worker"
-    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    executable.chmod(0o700)
+def test_linux_sandbox_fails_closed_when_bwrap_is_missing(monkeypatch):
     monkeypatch.setattr(
         "PC_ENGINE.core.connector_worker_sandbox.shutil.which",
         lambda _: None,
     )
 
     with pytest.raises(SandboxUnavailable, match="linux_bwrap_unavailable"):
-        build_linux_bwrap_command(
-            [str(executable)],
-            runtime_roots=[runtime],
-        )
+        build_linux_bwrap_command(["/usr/bin/python3"])
 
 
 def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_path):
