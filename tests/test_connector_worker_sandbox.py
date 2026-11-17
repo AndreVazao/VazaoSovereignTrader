@@ -71,6 +71,15 @@ def test_linux_sandbox_rejects_sensitive_or_broad_runtime_roots(tmp_path):
         )
 
 
+def test_linux_sandbox_rejects_filesystem_root_runtime_mount(tmp_path):
+    with pytest.raises(ValueError, match="sandbox_runtime_root_overlaps_sensitive_path"):
+        build_linux_bwrap_command(
+            ["/usr/bin/python3"],
+            runtime_roots=[Path("/")],
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
 def test_linux_sandbox_rejects_symlinked_runtime_root_into_sensitive_path(tmp_path):
     runtime_link = tmp_path / "runtime-link"
     runtime_link.symlink_to("/tmp", target_is_directory=True)
