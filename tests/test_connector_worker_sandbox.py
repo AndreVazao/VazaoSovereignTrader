@@ -40,7 +40,11 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
     assert "/bin" in argv
     assert argv[-2:] == [str(Path("/usr/bin/python3").resolve()), "--version"]
 
-    tmpfs_indices = [index for index, item in enumerate(argv) if item == "--tmpfs"]
+    tmpfs_indices = [
+        index
+        for index, item in enumerate(argv)
+        if item == "--tmpfs" and argv[index + 1] in ("/tmp", "/work")
+    ]
     assert len(tmpfs_indices) == 2
     for sensitive_mount in ("/usr/local/etc", "/usr/local/var"):
         if Path(sensitive_mount).is_dir() and not Path(sensitive_mount).is_symlink():
@@ -61,6 +65,10 @@ def test_linux_sandbox_fails_closed_for_symlinked_sensitive_mountpoint(tmp_path,
     sensitive_target.mkdir()
     sensitive_link = tmp_path / "sensitive-link"
     sensitive_link.symlink_to(sensitive_target, target_is_directory=True)
+    monkeypatch.setattr(
+        "PC_ENGINE.core.connector_worker_sandbox._SENSITIVE_ROOTS",
+        (),
+    )
     monkeypatch.setattr(
         "PC_ENGINE.core.connector_worker_sandbox._MASKED_SYSTEM_PATHS",
         (str(sensitive_link),),
