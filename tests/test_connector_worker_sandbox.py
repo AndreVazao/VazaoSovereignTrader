@@ -71,6 +71,32 @@ def test_linux_sandbox_rejects_sensitive_or_broad_runtime_roots(tmp_path):
         )
 
 
+def test_linux_sandbox_rejects_symlinked_runtime_root_into_sensitive_path(tmp_path):
+    runtime_link = tmp_path / "runtime-link"
+    runtime_link.symlink_to("/tmp", target_is_directory=True)
+
+    with pytest.raises(ValueError, match="sandbox_runtime_root_overlaps_sensitive_path"):
+        build_linux_bwrap_command(
+            ["/usr/bin/python3"],
+            runtime_roots=[runtime_link],
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
+def test_linux_sandbox_rejects_symlinked_executable_outside_runtime_roots(tmp_path):
+    outside = tmp_path / "outside-executable"
+    outside.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    outside.chmod(0o700)
+    executable_link = tmp_path / "python"
+    executable_link.symlink_to(outside)
+
+    with pytest.raises(ValueError, match="sandbox_executable_outside_runtime_roots"):
+        build_linux_bwrap_command(
+            [str(executable_link)],
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
 @pytest.mark.parametrize(
     ("value", "message"),
     [
@@ -114,11 +140,16 @@ def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_pa
     listener.bind(("127.0.0.1", 0))
     listener.listen(1)
     port = listener.getsockname()[1]
+    tmp_limit = 16 * 1024 * 1024
     work_limit = 64 * 1024 * 1024
 
     script = (
         "import os, socket, sys\n"
-        "marker, port, work_limit = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])\n"
+        "marker, port, tmp_limit, work_limit = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])\n"
+        "if 'VST_SANDBOX_TEST_INHERITED_MARKER' in os.environ:\n"
+        "    raise SystemExit('HOST_ENVIRONMENT_VISIBLE')\n"
+        "if os.environ.get('HOME') != '/work' or os.environ.get('TMPDIR') != '/tmp':\n"
+        "    raise SystemExit('SANDBOX_ENVIRONMENT_NOT_NORMALIZED')\n"
         "try:\n"
         "    open(marker, 'rb').read()\n"
         "except FileNotFoundError:\n"
@@ -137,11 +168,12 @@ def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_pa
         "    raise SystemExit('HOST_NETWORK_VISIBLE')\n"
         "finally:\n"
         "    client.close()\n"
-        "stat = os.statvfs('/work')\n"
-        "capacity = stat.f_frsize * stat.f_blocks\n"
-        "if capacity > work_limit + 4096:\n"
-        "    raise SystemExit('WORK_TMPFS_LIMIT_NOT_ENFORCED')\n"
-        "print('filesystem-network-and-tmpfs-boundaries-enforced')\n"
+        "for path, limit, label in (('/tmp', tmp_limit, 'TMP'), ('/work', work_limit, 'WORK')):\n"
+        "    stat = os.statvfs(path)\n"
+        "    capacity = stat.f_frsize * stat.f_blocks\n"
+        "    if capacity > limit + 4096:\n"
+        "        raise SystemExit(label + '_TMPFS_LIMIT_NOT_ENFORCED')\n"
+        "print('filesystem-network-environment-and-tmpfs-boundaries-enforced')\n"
     )
     try:
         argv = build_linux_bwrap_command(
@@ -151,9 +183,11 @@ def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_pa
                 script,
                 str(host_marker),
                 str(port),
+                str(tmp_limit),
                 str(work_limit),
             ],
             bwrap_path=bwrap,
+            tmp_size_bytes=tmp_limit,
             work_size_bytes=work_limit,
         )
         result = subprocess.run(
@@ -162,6 +196,10 @@ def test_linux_sandbox_executes_and_denies_host_file_and_loopback_network(tmp_pa
             text=True,
             timeout=20,
             check=False,
+            env={
+                **os.environ,
+                "VST_SANDBOX_TEST_INHERITED_MARKER": "host-only",
+            },
         )
     finally:
         listener.close()

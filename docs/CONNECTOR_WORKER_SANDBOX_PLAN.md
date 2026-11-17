@@ -26,7 +26,7 @@ These controls do not isolate filesystem access or restrict network egress. The 
 - Canonicalizes the executable path and rejects broad/sensitive runtime roots, undeclared executable paths, invalid tmpfs sizes and missing/non-executable Bubblewrap.
 - Fails closed on unsupported platforms or setup errors.
 
-A dedicated Linux GitHub Actions workflow installs Bubblewrap and runs a real sandbox execution test. The test attempts to read a host-only file, connect to a host loopback listener and inspect the writable tmpfs size. The test must execute, not silently skip, in that workflow.
+A dedicated Linux GitHub Actions workflow installs Bubblewrap and runs a real sandbox execution test. The test attempts to read a host-only file, connect to a host loopback listener, verify inherited environment variables are cleared, verify normalized HOME/TMPDIR values, and inspect both private `/tmp` and `/work` tmpfs capacities. The test must execute, not silently skip, in that workflow.
 
 **Important limitations:** this remains a command builder plus an isolated execution test. It is not yet called by `IsolatedConnectorAdapter`, does not provision or clean a production worker lifecycle, and does not provide provider-specific HTTPS egress. Windows filesystem/network sandboxing is not implemented. Do not describe this branch as a complete sandbox.
 
@@ -53,7 +53,7 @@ The worker may be enabled for an adapter only when every required control is pos
 - Treat redirects, alternate IP literals, IPv4-mapped IPv6, IDNA names, CNAME chains, proxy variables and connection reuse as explicit test cases.
 
 ### Platform enforcement
-- Linux: real Bubblewrap execution is tested in CI for host-file denial, host-loopback denial and bounded tmpfs. Still required: adversarial path/child-process tests, bounded lifecycle cleanup, restricted syscalls/capabilities and a reviewed provider egress policy.
+- Linux: real Bubblewrap execution is tested in CI for host-file denial, host-loopback denial, inherited-environment removal, normalized HOME/TMPDIR and both bounded tmpfs mounts. Still required: adversarial path/child-process tests, bounded lifecycle cleanup, restricted syscalls/capabilities and a reviewed provider egress policy.
 - Windows: implement AppContainer/restricted token plus Job Object, explicit capability policy, private scratch ACLs and Windows Firewall/WFP enforcement. Job Objects alone do not provide filesystem or network isolation.
 - Do not claim platform parity until both platforms have independent negative tests proving that denied file and network access actually fails.
 
