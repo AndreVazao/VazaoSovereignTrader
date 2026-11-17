@@ -55,11 +55,11 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
     tmpfs_indices = [index for index, item in enumerate(argv) if item == "--tmpfs"]
     assert len(tmpfs_indices) == 2
     expected = [
-        ("--size", str(16 * 1024 * 1024), "--perms", "0700", "/tmp"),
-        ("--size", str(64 * 1024 * 1024), "--perms", "0700", "/work"),
+        ["--size", str(16 * 1024 * 1024), "--perms", "0700", "--tmpfs", "/tmp"],
+        ["--size", str(64 * 1024 * 1024), "--perms", "0700", "--tmpfs", "/work"],
     ]
     for index, values in zip(tmpfs_indices, expected):
-        assert argv[index - 4 : index + 1] == list(values)
+        assert argv[index - 4 : index + 2] == values
 
 
 def test_linux_sandbox_rejects_executable_outside_declared_roots(tmp_path):
