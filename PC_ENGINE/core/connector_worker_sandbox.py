@@ -11,7 +11,7 @@ class SandboxUnavailable(RuntimeError):
     """Raised when the required Linux sandbox cannot be positively verified."""
 
 
-_SYSTEM_READ_ONLY_DIRS = ("/usr", "/lib", "/lib64")
+_SYSTEM_READ_ONLY_DIRS = ("/usr", "/lib", "/lib64", "/bin", "/sbin")
 _SYSTEM_READ_ONLY_FILES = ("/etc/ld.so.cache",)
 _SYSTEM_CERT_DIR = "/etc/ssl/certs"
 _SENSITIVE_ROOTS = tuple(
@@ -52,19 +52,23 @@ def _is_within(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
 
 
-def _system_runtime_roots() -> list[Path]:
+def _system_runtime_roots() -> tuple[list[tuple[Path, Path]], list[Path]]:
+    mounts: list[tuple[Path, Path]] = []
     roots: list[Path] = []
     for item in _SYSTEM_READ_ONLY_DIRS:
+        source_path = Path(item)
         try:
-            candidate = Path(item).resolve(strict=True)
+            resolved = source_path.resolve(strict=True)
         except (OSError, RuntimeError):
             continue
-        if not candidate.is_dir():
+        if not source_path.is_dir() or not resolved.is_dir():
             continue
-        if any(_is_within(candidate, existing) for existing in roots):
-            continue
-        roots.append(candidate)
-    return roots
+        # Preserve loader/command aliases such as /lib64 and /bin inside the
+        # sandbox even on merged-/usr hosts where their sources resolve under /usr.
+        mounts.append((resolved, source_path))
+        if resolved not in roots:
+            roots.append(resolved)
+    return mounts, roots
 
 
 def _validate_tmpfs_size(value: int, *, label: str) -> int:
@@ -139,7 +143,7 @@ def build_linux_bwrap_command(
     for root in roots:
         _validate_runtime_root(root)
 
-    system_roots = _system_runtime_roots()
+    system_mounts, system_roots = _system_runtime_roots()
     allowed_exec_roots = [*system_roots, *roots]
     executable = Path(command[0])
     if not executable.is_absolute():
@@ -167,8 +171,8 @@ def build_linux_bwrap_command(
         "--unshare-net",
         "--clearenv",
     ]
-    for root in system_roots:
-        argv.extend(["--ro-bind", str(root), str(root)])
+    for source, destination in system_mounts:
+        argv.extend(["--ro-bind", str(source), str(destination)])
     for file_path in _SYSTEM_READ_ONLY_FILES:
         try:
             path = Path(file_path).resolve(strict=True)
