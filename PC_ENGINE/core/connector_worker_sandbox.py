@@ -14,6 +14,25 @@ class SandboxUnavailable(RuntimeError):
 _SYSTEM_READ_ONLY_DIRS = ("/usr", "/lib", "/lib64")
 _SYSTEM_READ_ONLY_FILES = ("/etc/ld.so.cache",)
 _SYSTEM_CERT_DIR = "/etc/ssl/certs"
+_SENSITIVE_ROOTS = tuple(
+    Path(item)
+    for item in (
+        "/home",
+        "/root",
+        "/etc",
+        "/var",
+        "/run",
+        "/proc",
+        "/sys",
+        "/dev",
+        "/tmp",
+        "/mnt",
+        "/media",
+    )
+)
+_DEFAULT_TMP_BYTES = 16 * 1024 * 1024
+_DEFAULT_WORK_BYTES = 64 * 1024 * 1024
+_MAX_TMPFS_BYTES = 256 * 1024 * 1024
 
 
 def _real_directory(value: str | os.PathLike[str], *, label: str) -> Path:
@@ -22,74 +41,121 @@ def _real_directory(value: str | os.PathLike[str], *, label: str) -> Path:
         raise ValueError(f"{label}_must_be_absolute")
     try:
         resolved = path.resolve(strict=True)
-    except OSError:
+    except (OSError, RuntimeError):
         raise ValueError(f"{label}_does_not_exist") from None
     if not resolved.is_dir():
         raise ValueError(f"{label}_must_be_directory")
     return resolved
 
 
+def _is_within(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents
+
+
+def _system_runtime_roots() -> list[Path]:
+    roots: list[Path] = []
+    for item in _SYSTEM_READ_ONLY_DIRS:
+        try:
+            candidate = Path(item).resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if not candidate.is_dir():
+            continue
+        if any(_is_within(candidate, existing) for existing in roots):
+            continue
+        roots.append(candidate)
+    return roots
+
+
+def _validate_tmpfs_size(value: int, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{label}_must_be_integer")
+    if value <= 0 or value > _MAX_TMPFS_BYTES:
+        raise ValueError(f"{label}_out_of_bounds")
+    return value
+
+
 def build_linux_bwrap_command(
     command: Sequence[str],
     *,
-    runtime_roots: Sequence[str | os.PathLike[str]],
-    scratch_dir: str | os.PathLike[str],
-    bwrap_path: str | None = None,
+    runtime_roots: Sequence[str | os.PathLike[str]] = (),
+    tmp_size_bytes: int = _DEFAULT_TMP_BYTES,
+    work_size_bytes: int = _DEFAULT_WORK_BYTES,
+    bwrap_path: str | os.PathLike[str] | None = None,
 ) -> list[str]:
-    """Build a deny-network, minimal-filesystem Bubblewrap invocation.
+    """Build a fail-closed Linux Bubblewrap command with bounded writable tmpfs.
 
     This function only constructs argv; it does not launch or attest a sandbox.
-    Callers must execute argv without a shell, provision a fresh private scratch
-    directory, and pass only reviewed read-only runtime roots. The returned
-    command has no network namespace, host home, VST data, or credential mounts.
+    Callers must execute argv without a shell, keep the runtime roots immutable
+    for the duration of the launch, and treat setup or enforcement failures as
+    a hard denial. The sandbox receives no host home, VST data, Vault, secrets,
+    host temporary directory, or network namespace.
+
+    Writable /tmp and /work are private tmpfs mounts with explicit size caps.
+    Results must leave the sandbox through the bounded worker IPC protocol;
+    no host scratch directory is bind-mounted into an untrusted process.
     """
     if sys.platform != "linux":
         raise SandboxUnavailable("linux_sandbox_platform_required")
-    if not command or any(not isinstance(part, str) or not part for part in command):
+    if isinstance(command, (str, bytes)) or not isinstance(command, Sequence):
+        raise ValueError("sandbox_command_must_be_sequence")
+    if not command or any(
+        not isinstance(part, str) or not part or "\x00" in part
+        for part in command
+    ):
         raise ValueError("sandbox_command_required")
-    executable = Path(command[0])
-    if not executable.is_absolute():
-        raise ValueError("sandbox_executable_must_be_absolute")
+    if isinstance(runtime_roots, (str, bytes, os.PathLike)) or not isinstance(
+        runtime_roots, Sequence
+    ):
+        raise ValueError("sandbox_runtime_roots_must_be_sequence")
+
+    tmp_size = _validate_tmpfs_size(tmp_size_bytes, label="sandbox_tmp_size")
+    work_size = _validate_tmpfs_size(work_size_bytes, label="sandbox_work_size")
 
     binary = bwrap_path or shutil.which("bwrap")
     if not binary:
         raise SandboxUnavailable("linux_bwrap_unavailable")
-    binary_path = Path(binary)
-    if not binary_path.is_absolute() or not os.access(binary_path, os.X_OK):
+    try:
+        binary_path = Path(binary).resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise SandboxUnavailable("linux_bwrap_not_found") from None
+    if not binary_path.is_file() or not os.access(binary_path, os.X_OK):
         raise SandboxUnavailable("linux_bwrap_not_executable")
 
-    scratch_input = Path(scratch_dir)
-    if scratch_input.is_symlink():
-        raise ValueError("sandbox_scratch_must_not_be_symlink")
-    scratch = _real_directory(scratch_input, label="sandbox_scratch")
-    try:
-        mode = scratch.stat().st_mode & 0o777
-    except OSError:
-        raise ValueError("sandbox_scratch_unavailable") from None
-    if mode & 0o077:
-        raise ValueError("sandbox_scratch_permissions_too_open")
-
-    roots = [_real_directory(root, label="sandbox_runtime_root") for root in runtime_roots]
-    if not roots:
-        raise ValueError("sandbox_runtime_roots_required")
+    roots = [
+        _real_directory(root, label="sandbox_runtime_root")
+        for root in runtime_roots
+    ]
     if len(set(roots)) != len(roots):
         raise ValueError("duplicate_sandbox_runtime_root")
-    if Path("/") in roots:
-        raise ValueError("sandbox_root_mount_forbidden")
+    for root in roots:
+        if any(
+            root == sensitive
+            or sensitive in root.parents
+            or root in sensitive.parents
+            for sensitive in _SENSITIVE_ROOTS
+        ):
+            raise ValueError("sandbox_runtime_root_overlaps_sensitive_path")
+        if root == Path("/"):
+            raise ValueError("sandbox_root_mount_forbidden")
 
-    system_roots = [
-        Path(item) for item in _SYSTEM_READ_ONLY_DIRS if Path(item).is_dir()
-    ]
+    system_roots = _system_runtime_roots()
     allowed_exec_roots = [*system_roots, *roots]
-    executable_real = executable.resolve(strict=True)
-    if not executable.is_file() or not os.access(executable_real, os.X_OK):
+    executable = Path(command[0])
+    if not executable.is_absolute():
+        raise ValueError("sandbox_executable_must_be_absolute")
+    try:
+        executable_real = executable.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise ValueError("sandbox_executable_not_found") from None
+    if not executable_real.is_file() or not os.access(executable_real, os.X_OK):
         raise ValueError("sandbox_executable_not_executable")
     if not any(
-        executable_real == root or root in executable_real.parents
-        for root in allowed_exec_roots
+        _is_within(executable_real, root) for root in allowed_exec_roots
     ):
         raise ValueError("sandbox_executable_outside_runtime_roots")
 
+    normalized_command = [str(executable_real), *command[1:]]
     argv = [
         str(binary_path),
         "--die-with-parent",
@@ -104,15 +170,24 @@ def build_linux_bwrap_command(
     for root in system_roots:
         argv.extend(["--ro-bind", str(root), str(root)])
     for file_path in _SYSTEM_READ_ONLY_FILES:
-        path = Path(file_path)
+        try:
+            path = Path(file_path).resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
         if path.is_file():
             argv.extend(["--ro-bind", str(path), str(path)])
-    certs = Path(_SYSTEM_CERT_DIR)
-    if certs.is_dir():
+
+    try:
+        certs = Path(_SYSTEM_CERT_DIR).resolve(strict=True)
+    except (OSError, RuntimeError):
+        certs = None
+    if certs is not None and certs.is_dir() and not any(
+        _is_within(certs, root) for root in system_roots
+    ):
         argv.extend(["--ro-bind", str(certs), str(certs)])
 
     for root in roots:
-        if any(root == system or system in root.parents for system in system_roots):
+        if any(_is_within(root, system) for system in system_roots):
             continue
         argv.extend(["--ro-bind", str(root), str(root)])
 
@@ -120,12 +195,18 @@ def build_linux_bwrap_command(
         [
             "--proc", "/proc",
             "--dev", "/dev",
+            "--size", str(tmp_size),
+            "--perms", "0700",
             "--tmpfs", "/tmp",
-            "--bind", str(scratch), "/work",
+            "--size", str(work_size),
+            "--perms", "0700",
+            "--tmpfs", "/work",
             "--chdir", "/work",
             "--setenv", "PATH", "/usr/local/bin:/usr/bin",
+            "--setenv", "HOME", "/work",
+            "--setenv", "TMPDIR", "/tmp",
             "--",
-            *command,
+            *normalized_command,
         ]
     )
     return argv
