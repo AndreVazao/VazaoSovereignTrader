@@ -42,4 +42,5 @@ jobs:
       - name: Execute Linux sandbox enforcement tests
         env:
           PYTHONPATH: ${{ github.workspace }}
+          VST_RUN_BWRAP_INTEGRATION: "1"
         run: python -m pytest -q tests/test_connector_worker_sandbox.py
