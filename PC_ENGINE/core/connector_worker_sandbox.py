@@ -34,7 +34,7 @@ _SENSITIVE_ROOTS = tuple(
 _DEFAULT_TMP_BYTES = 16 * 1024 * 1024
 _DEFAULT_WORK_BYTES = 64 * 1024 * 1024
 _MAX_TMPFS_BYTES = 256 * 1024 * 1024
-_MASKED_SYSTEM_PATHS = ("/usr/local/etc", "/usr/local/var", "/usr/local/bin")
+_MASKED_SYSTEM_PATHS = ("/usr/local",)
 
 
 def _real_directory(value: str | os.PathLike[str], *, label: str) -> Path:
@@ -184,8 +184,8 @@ def build_linux_bwrap_command(
             argv.extend(["--ro-bind", str(path), str(path)])
 
     # /usr is mounted read-only for the interpreter and standard library.
-    # Mask mutable/local configuration, state, and executable additions below
-    # it so host-local content is not exposed through the broad runtime tree.
+    # Mask the complete host-local subtree, not only selected subdirectories,
+    # so additional /usr/local content cannot be exposed through the broad mount.
     for sensitive_mount in _MASKED_SYSTEM_PATHS:
         sensitive_path = Path(sensitive_mount)
         try:
