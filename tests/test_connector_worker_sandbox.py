@@ -91,6 +91,10 @@ def test_linux_sandbox_fails_closed_for_non_directory_sensitive_mountpoint(tmp_p
     sensitive_file = tmp_path / "sensitive-file"
     sensitive_file.write_text("host-state", encoding="utf-8")
     monkeypatch.setattr(
+        "PC_ENGINE.core.connector_worker_sandbox._SENSITIVE_ROOTS",
+        (),
+    )
+    monkeypatch.setattr(
         "PC_ENGINE.core.connector_worker_sandbox._MASKED_SYSTEM_PATHS",
         (str(sensitive_file),),
     )
