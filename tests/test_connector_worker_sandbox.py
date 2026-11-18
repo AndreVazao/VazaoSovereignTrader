@@ -46,7 +46,7 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
         if item == "--tmpfs" and argv[index + 1] in ("/tmp", "/work")
     ]
     assert len(tmpfs_indices) == 2
-    for sensitive_mount in ("/usr/local/etc", "/usr/local/var"):
+    for sensitive_mount in ("/usr/local/etc", "/usr/local/var", "/usr/local/bin"):
         if Path(sensitive_mount).is_dir() and not Path(sensitive_mount).is_symlink():
             assert sensitive_mount in argv
     expected = [
