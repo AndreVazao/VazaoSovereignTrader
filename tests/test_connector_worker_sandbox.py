@@ -47,7 +47,11 @@ def test_linux_sandbox_command_denies_network_and_bounds_writable_tmpfs(tmp_path
     ]
     assert len(tmpfs_indices) == 2
     if Path("/usr/local").is_dir() and not Path("/usr/local").is_symlink():
-        assert "/usr/local" in argv
+        mask_index = argv.index("/usr/local")
+        assert argv[mask_index - 3 : mask_index + 1] == [
+            "--perms", "0700", "--tmpfs", "/usr/local"
+        ]
+        assert argv.index("--ro-bind") < mask_index
     expected = [
         ["--size", str(16 * 1024 * 1024), "--perms", "0700", "--tmpfs", "/tmp"],
         ["--size", str(64 * 1024 * 1024), "--perms", "0700", "--tmpfs", "/work"],
