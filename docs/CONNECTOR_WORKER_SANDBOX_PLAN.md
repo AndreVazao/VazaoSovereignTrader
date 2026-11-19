@@ -53,7 +53,7 @@ The worker may be enabled for an adapter only when every required control is pos
 - Treat redirects, alternate IP literals, IPv4-mapped IPv6, IDNA names, CNAME chains, proxy variables and connection reuse as explicit test cases.
 
 ### Platform enforcement
-- Linux: real Bubblewrap execution is tested in CI for host-file denial, host-loopback denial, inherited-environment removal, normalized HOME/TMPDIR and both bounded tmpfs mounts. Still required: adversarial path/child-process tests, bounded lifecycle cleanup, restricted syscalls/capabilities and a reviewed provider egress policy. The broad `/usr` runtime mount is not treated as safe by itself; existing local configuration/state directories below it are now masked.
+- Linux: real Bubblewrap execution is tested in CI for host-file denial, host-loopback denial, inherited-environment removal, normalized HOME/TMPDIR and both bounded tmpfs mounts. Still required: adversarial path/child-process tests, bounded lifecycle cleanup, restricted syscalls/capabilities and a reviewed provider egress policy. The broad `/usr` runtime mount is not treated as safe by itself; the complete existing `/usr/local` subtree below it is now masked.
 - Windows: implement AppContainer/restricted token plus Job Object, explicit capability policy, private scratch ACLs and Windows Firewall/WFP enforcement. Job Objects alone do not provide filesystem or network isolation.
 - Do not claim platform parity until both platforms have independent negative tests proving that denied file and network access actually fails.
 
