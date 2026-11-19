@@ -3,7 +3,7 @@
 **Repository:** `AndreVazao/VazaoSovereignTrader` only.  
 **Verified main:** `f4b5811b59f71efcc4d2fcbcf3441efd05cb595e`.  
 **Active development:** [PR #577](https://github.com/AndreVazao/VazaoSovereignTrader/pull/577), branch `feat/connector-worker-filesystem-egress-isolation-2026-11-17`.  
-**Current branch HEAD after this handoff update:** documentation-only follow-up; inspect live PR head and exact-head checks before claiming validation.
+**Current branch HEAD:** includes the Linux sandbox prototype and a browser connector hard block enforcing the PAPER-only policy; exact-head CI must be checked before merge.
 
 ## Verified repository state
 
@@ -73,6 +73,10 @@ The current PR changes only the connector sandbox/documentation area, so Android
 - Never expose or copy secrets. Do not access or modify the user's physical PC without explicit authorization.
 - Work only in this repository. Keep one active development branch and one advancement PR; never edit `main` directly.
 - Merge only after exact-head applicable checks pass, security blockers are resolved, review/mergeability is stable and repository protections permit it. Verify post-merge main SHA and workflows.
+
+## Browser execution safety — 2026-11-19
+
+A source audit found that `BrowserTradingConnector` previously accepted `live_enabled: true` plus a confirmation phrase from local configuration. The class was not integrated into the live `ConnectorRegistry` or the engine's primary REAL route, but the configurable order-submit path contradicted the current PAPER-only product contract. The current branch now hard-denies every browser order request with `live=True`, regardless of local configuration, before opening the page. Regression tests cover both buy and sell methods and verify no action log is written. No live operation or external account interaction was performed.
 
 ## Next engineering sequence
 
