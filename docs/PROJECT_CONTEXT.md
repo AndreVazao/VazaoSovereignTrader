@@ -1,3 +1,91 @@
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-19
+
+**Repository:** `AndreVazao/VazaoSovereignTrader` only.  
+**Verified main:** `f4b5811b59f71efcc4d2fcbcf3441efd05cb595e`.  
+**Active development:** [PR #577](https://github.com/AndreVazao/VazaoSovereignTrader/pull/577), branch `feat/connector-worker-filesystem-egress-isolation-2026-11-17`.  
+**Current branch HEAD after this handoff update:** documentation-only follow-up; inspect live PR head and exact-head checks before claiming validation.
+
+## Verified repository state
+
+- Default branch is `main`; repository is public and the linked GitHub integration currently has push/admin permissions.
+- Exactly one open PR was returned: #577. It remains **DRAFT**, open and unmerged. GitHub reports `mergeable=true`; that is not a security or release approval.
+- The branch inventory returned 33 branches, including `main`; historical branches must be audited before deletion or reuse.
+- No formal GitHub Release was returned. CI artifacts are not formal releases and do not prove installation on the user's PC.
+- The branch-protection endpoint is not independently readable by this integration; do not infer protection from an empty ruleset response.
+
+## Latest fully validated code SHA
+
+`1cbc11396510f990bc5ed80b7f50484df734a83f` passed all four applicable PR workflows on that exact SHA:
+
+- [Python tests #3621](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289788) — success.
+- [PAPER smoke #350](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289899) — success.
+- [Windows EXE/installer #1326](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289935) — both `build-exe` and `build-installer` succeeded. The installer job built a previous-version installer and upgrade installer, then passed install, upgrade, launch, health, uninstall and Learning Vault preservation smoke tests.
+- [Connector sandbox Linux #26](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370290273) — success; real Bubblewrap enforcement test executed.
+
+Windows artifacts from run #44370289935:
+- Portable ZIP [artifact 14459107984](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289935/artifacts/14459107984), 65,942,590 bytes, SHA-256 `ad2c0528e2ccea06ab8655ad2e082e60e20fea0f5b3566fad01ba4529bfb92c8`.
+- Installer [artifact 14459361478](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289935/artifacts/14459361478), 233,826,112 bytes, SHA-256 `7f5fac51acc8345a615fa4a8ea2eccc05150ec5a8472b10188435a3b8b46fc91`.
+
+The current PR branch subsequently received documentation corrections. These earlier results validate the code SHA above, not any later branch HEAD. Recheck every applicable workflow against the live HEAD.
+
+## Connector sandbox — implementation and blockers
+
+The current PR contains a Linux Bubblewrap command builder and a real enforcement test. It:
+- creates user/PID/IPC/UTS/network namespaces and denies host network access;
+- clears inherited environment variables and sets minimal PATH/HOME/TMPDIR;
+- mounts selected system/runtime roots read-only;
+- masks the complete host `/usr/local` subtree with private tmpfs and fails closed if the path is a symlink or non-directory;
+- uses bounded private `/tmp` and `/work` tmpfs;
+- rejects unsupported platforms, invalid sizes, unsafe roots and undeclared executables.
+
+**Do not merge or enable third-party connectors yet.** Remaining blockers:
+- Broad read-only `/usr` still exposes host system binaries/tools. Replace it with a reviewed minimal runtime closure and add executable-discovery/callability negative tests.
+- The sandbox is not integrated into `IsolatedConnectorAdapter`, the supervisor or `ConnectorRegistry`; no production lifecycle is implemented.
+- Provider HTTPS egress allowlisting is not implemented; the current Linux namespace is deny-all.
+- Windows filesystem/network isolation is absent; Job Objects only enforce process/resource boundaries.
+- TOCTOU, hard-link, traversal, symlink/reparse-point, child-process, crash-cleanup and policy-reload adversarial coverage remains incomplete.
+- Keep all third-party connector execution disabled until every required OS boundary is positively enforced.
+
+## Global product readiness
+
+| Area | Verified evidence | Remaining work |
+|---|---|---|
+| Headless backend / Windows | EXE smoke; exact-head installer install/upgrade/launch/health/uninstall and Vault preservation passed | Physical low-memory Windows PC validation; operational recovery |
+| Adaptive resources | Sampling, budgets, cross-process leases and worker OS resource limits have CI coverage | Sustained low-memory and crash/restart validation on target PC |
+| PAPER / risk | PAPER smoke passed on exact SHA; PC/Android interfaces remain PAPER-only | Longer end-to-end PAPER soak and broader risk/fault-injection coverage |
+| Market Data / Radar | Public read-only CCXT connectors and authenticated routes are implemented | More provider coverage; freshness, provenance and outage tests end-to-end |
+| Connector isolation | Linux Bubblewrap prototype tested | Complete Linux runtime closure, Windows boundary, egress policy, lifecycle and registry integration |
+| Research / strategy | Research/evidence and readiness pipeline exist; historical Strategy Advisor branch remains a candidate | Audit and recover only after connector security priority; verify OOS and persistence behavior |
+| Learning Vault | Windows upgrade-preservation SHA-256 smoke passed | Operational backup/restore, migrations, corruption recovery and organization isolation |
+| Linux | Linux sandbox enforcement workflow exists | Linux application packaging/install/start/health/upgrade/uninstall |
+| Android | APK and emulator workflows exist; prior UI smoke evidence recorded | Re-check current path-triggered runs when mobile files change; physical device/rotation/reconnect validation |
+| LAN / Tailscale | Partial architecture and connectivity code | Physical reconnect, offline and long-running remote operation |
+| Virtual office | Authenticated backend snapshot integration exists | Verify backend-confirmed task state and physical PC/phone layout |
+| Release | No formal release | Reproducible signed release lifecycle for declared platforms |
+
+The current PR changes only the connector sandbox/documentation area, so Android and other unrelated path-filtered workflows are not required for this exact change. Inspect their path filters and trigger state when their files change.
+
+## External checks and safety
+
+- Vercel previews are informational and never count as code tests.
+- Snyk is not an acceptance gate while the user's free-tier monthly quota is exhausted; do not treat its status as a vulnerability finding.
+- Keep VST PAPER-only. No exchange/account linking, credentials, LIVE activation, financial operations, transfers or withdrawals.
+- Never expose or copy secrets. Do not access or modify the user's physical PC without explicit authorization.
+- Work only in this repository. Keep one active development branch and one advancement PR; never edit `main` directly.
+- Merge only after exact-head applicable checks pass, security blockers are resolved, review/mergeability is stable and repository protections permit it. Verify post-merge main SHA and workflows.
+
+## Next engineering sequence
+
+1. Narrow the Linux runtime mount from broad `/usr` to a minimal reviewed closure; add host executable discovery/callability and mount-escape tests.
+2. Complete adversarial Linux filesystem/process tests and bounded worker lifecycle cleanup.
+3. Implement and independently test Windows filesystem/network isolation, or keep Windows third-party workers disabled.
+4. Define provider-specific HTTPS egress enforcement with DNS rebinding, redirects, private-address and proxy escape tests.
+5. Integrate the verified boundary into the worker supervisor and registry only after platform gates pass.
+6. Recover strategy/research and SQLite persistence work in a later single-PR increment.
+7. Build Linux application packaging and continue platform/Vault/release validation.
+
+---
+
 # CURRENT AUTHORITATIVE HANDOFF — 2026-11-17
 
 **Repository:** \`AndreVazao/VazaoSovereignTrader\` only.  
