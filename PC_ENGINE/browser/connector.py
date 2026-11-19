@@ -28,7 +28,7 @@ class BrowserTradingConnector:
     """Generic browser execution connector.
 
     Platform-specific selectors remain in local configuration.
-    Live browser orders are disabled unless explicitly enabled.
+    Live browser order submission is permanently disabled by the VST PAPER-only policy.
     """
 
     def __init__(self, platform: str, config: dict[str, Any], manager: BrowserManager):
@@ -36,9 +36,8 @@ class BrowserTradingConnector:
         self.config = config
         self.manager = manager
         self.enabled = bool(config.get("enabled", False))
-        self.live_enabled = bool(config.get("live_enabled", False))
-        self.require_confirmation = bool(config.get("require_confirmation", True))
-        self.confirmation_phrase = str(config.get("confirmation_phrase", "EXECUTE WEB ORDER"))
+        # Compatibility/diagnostic attribute only; local configuration cannot enable LIVE.
+        self.live_enabled = False
         self.actions_path = Path(config.get("actions_log", f"PC_ENGINE/data/browser/{platform}_actions.jsonl"))
         self.actions_path.parent.mkdir(parents=True, exist_ok=True)
         self.human_bridge = HumanInteractionBridge(
@@ -180,12 +179,10 @@ class BrowserTradingConnector:
         return request.__dict__
 
     def _require_live_authorization(self, live: bool, confirmation: str) -> None:
-        if not live:
-            return
-        if not self.enabled or not self.live_enabled:
-            raise PermissionError("live browser trading is disabled")
-        if self.require_confirmation and confirmation != self.confirmation_phrase:
-            raise PermissionError("invalid browser order confirmation")
+        if live:
+            raise PermissionError(
+                "live browser order submission is disabled by the VST PAPER-only policy"
+            )
 
     def _fill_symbol(self, page: Any, selectors: dict[str, Any], symbol: str) -> None:
         selector = selectors.get("symbol_input")
