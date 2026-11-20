@@ -77,6 +77,11 @@ def _validate_file(path: Path, *, label: str, executable: bool = False) -> None:
         raise RuntimeManifestError(f"{label}_not_accessible") from None
     if not stat.S_ISREG(mode):
         raise RuntimeManifestError(f"{label}_must_be_regular_file")
+    metadata = path.lstat()
+    if metadata.st_nlink != 1:
+        raise RuntimeManifestError(f"{label}_must_not_be_hard_linked")
+    if mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise RuntimeManifestError(f"{label}_must_not_be_group_or_world_writable")
     if executable and not os.access(path, os.X_OK):
         raise RuntimeManifestError(f"{label}_not_executable")
 
@@ -88,6 +93,8 @@ def _validate_directory(path: Path, *, label: str) -> None:
         raise RuntimeManifestError(f"{label}_not_accessible") from None
     if not stat.S_ISDIR(mode):
         raise RuntimeManifestError(f"{label}_must_be_real_directory")
+    if mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise RuntimeManifestError(f"{label}_must_not_be_group_or_world_writable")
     if path in _FORBIDDEN_DIRECTORY_MOUNTS:
         raise RuntimeManifestError(f"{label}_is_too_broad")
 
