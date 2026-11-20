@@ -197,6 +197,15 @@ def build_linux_bwrap_command(
         "--clearenv",
     ]
     if validated_manifest is not None:
+        # Establish empty pseudo/scratch filesystems first. Explicit runtime
+        # mounts are applied afterwards, so a declared path beneath the host
+        # temporary parent is not accidentally hidden by the private tmpfs.
+        argv.extend([
+            "--proc", "/proc",
+            "--dev", "/dev",
+            "--size", str(tmp_size), "--perms", "0700", "--tmpfs", "/tmp",
+            "--size", str(work_size), "--perms", "0700", "--tmpfs", "/work",
+        ])
         # Build only empty destination parents, from shallow to deep. No host
         # root, /usr, /lib, /bin, /etc or other implicit runtime tree is mounted.
         destinations = [mount.destination for mount in explicit_mounts]
@@ -255,14 +264,12 @@ def build_linux_bwrap_command(
 
     argv.extend(
         [
-            "--proc", "/proc",
-            "--dev", "/dev",
-            "--size", str(tmp_size),
-            "--perms", "0700",
-            "--tmpfs", "/tmp",
-            "--size", str(work_size),
-            "--perms", "0700",
-            "--tmpfs", "/work",
+            *( [] if validated_manifest is not None else [
+                "--proc", "/proc",
+                "--dev", "/dev",
+                "--size", str(tmp_size), "--perms", "0700", "--tmpfs", "/tmp",
+                "--size", str(work_size), "--perms", "0700", "--tmpfs", "/work",
+            ]),
             "--chdir", "/work",
             "--setenv", "PATH", ("/usr/bin" if validated_manifest is None else "/work/bin"),
             "--setenv", "HOME", "/work",
