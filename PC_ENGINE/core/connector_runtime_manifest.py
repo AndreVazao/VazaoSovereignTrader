@@ -145,7 +145,7 @@ def _is_within(path: Path, directory: Path) -> bool:
 def _validate_destination(value: str | os.PathLike[str]) -> Path:
     """Validate a lexical in-sandbox destination without resolving it on host."""
     raw = os.fspath(value)
-    if not isinstance(raw, str) or not raw.startswith("/") or "\\x00" in raw:
+    if not isinstance(raw, str) or not raw.startswith("/") or "\x00" in raw:
         raise RuntimeManifestError("runtime_mount_destination_must_be_absolute")
     parts = raw.split("/")
     if ".." in parts or "." in parts:
