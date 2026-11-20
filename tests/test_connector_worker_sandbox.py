@@ -317,6 +317,7 @@ def test_manifest_backed_builder_mounts_only_explicit_runtime_entries(tmp_path):
 
     assert "--unshare-net" in argv
     assert "--ro-bind" in argv
+    assert argv.index("--tmpfs") < argv.index("--ro-bind")
     assert str(executable) in argv
     assert str(library) in argv
     assert str(stdlib) in argv
@@ -355,6 +356,24 @@ def test_manifest_backed_builder_rejects_legacy_runtime_roots(tmp_path):
         build_linux_bwrap_command(
             [str(executable)],
             runtime_roots=[tmp_path],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
+def test_manifest_backed_builder_revalidates_sources_before_command_construction(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    library = tmp_path / "libpython.so"
+    library.write_text("library", encoding="utf-8")
+    library.chmod(0o444)
+    manifest = build_runtime_manifest(executable, required_files=[library])
+    library.unlink()
+
+    with pytest.raises(ValueError, match="runtime_file_does_not_exist"):
+        build_linux_bwrap_command(
+            [str(executable)],
             runtime_manifest=manifest,
             bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
         )
