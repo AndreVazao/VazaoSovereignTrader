@@ -311,7 +311,11 @@ def test_runtime_manifest_builder_mounts_alias_at_guest_loader_path(tmp_path):
         bwrap_path=_executable(tmp_path / "bwrap"),
     )
 
-    mount_index = argv.index("--ro-bind")
+    mount_index = next(
+        index
+        for index, item in enumerate(argv)
+        if item == "--ro-bind" and argv[index + 1] == str(loader_source)
+    )
     assert argv[mount_index + 1 : mount_index + 3] == [
         str(loader_source),
         str(loader_destination),
@@ -325,7 +329,7 @@ def test_runtime_manifest_builder_mounts_alias_at_guest_loader_path(tmp_path):
     [
         (Path("relative/loader"), "runtime_mount_destination_must_be_absolute"),
         (Path("/lib/../etc/passwd"), "runtime_mount_destination_not_normalized"),
-        (Path("/lib//loader"), "runtime_mount_destination_not_normalized"),
+        ("/lib//loader", "runtime_mount_destination_not_normalized"),
         (Path("/proc/loader"), "runtime_mount_destination_is_reserved"),
         (Path("/tmp/loader"), "runtime_mount_destination_is_reserved"),
         (Path("/work/loader"), "runtime_mount_destination_is_reserved"),
