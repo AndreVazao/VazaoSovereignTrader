@@ -21,6 +21,7 @@ These controls do not isolate filesystem access or restrict network egress. The 
 - Requires an absolute, existing, non-symlinked executable and explicit regular-file/directory entries.
 - Rejects broad or sensitive directory roots, duplicates, type conflicts, symlinks, missing paths and overlapping mounts.
 - Rejects hard-linked runtime files and group/world-writable runtime files or directories, reducing alias-based mutation and untrusted-owner replacement risks.
+- Recursively rejects symlinks, special files, hard-linked files and group/world-writable nested files/directories inside every exposed runtime directory; TOCTOU protection still requires immutable packaged roots and revalidation immediately before mounting.
 - Rejects files or the executable hidden beneath a separately declared directory mount; the directory mount itself is the sole exposure declaration for its contents.
 - Does not run `ldd`, execute discovery tools, infer dependencies or widen mounts.
 - Produces immutable mount records, but does not yet perform any mounts or integrate with the Bubblewrap builder.
