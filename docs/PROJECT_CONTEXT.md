@@ -1,103 +1,210 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-16
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-19
 
 **Repository:** `AndreVazao/VazaoSovereignTrader` only.  
-**Last verified main:** `d2f0d2f43259b62c96932b8c48dab879dd77cd65` (PR #575 squash merge).  
-**Active development:** one branch and one advancement PR; never write directly to `main`.
+**Verified main:** `f4b5811b59f71efcc4d2fcbcf3441efd05cb595e`.  
+**Active development:** [PR #577](https://github.com/AndreVazao/VazaoSovereignTrader/pull/577), branch `feat/connector-worker-filesystem-egress-isolation-2026-11-17`.  
+**Current branch HEAD:** includes the Linux sandbox prototype and a browser connector hard block enforcing the PAPER-only policy; exact-head CI must be checked before merge.
+
+## Verified repository state
+
+- Default branch is `main`; repository is public and the linked GitHub integration currently has push/admin permissions.
+- Exactly one open PR was returned: #577. It remains **DRAFT**, open and unmerged. GitHub reports `mergeable=true`; that is not a security or release approval.
+- The branch inventory returned 33 branches, including `main`; historical branches must be audited before deletion or reuse.
+- No formal GitHub Release was returned. CI artifacts are not formal releases and do not prove installation on the user's PC.
+- The branch-protection endpoint is not independently readable by this integration; do not infer protection from an empty ruleset response.
+
+## Latest fully validated code SHA
+
+`1cbc11396510f990bc5ed80b7f50484df734a83f` passed all four applicable PR workflows on that exact SHA:
+
+- [Python tests #3621](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289788) — success.
+- [PAPER smoke #350](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289899) — success.
+- [Windows EXE/installer #1326](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289935) — both `build-exe` and `build-installer` succeeded. The installer job built a previous-version installer and upgrade installer, then passed install, upgrade, launch, health, uninstall and Learning Vault preservation smoke tests.
+- [Connector sandbox Linux #26](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370290273) — success; real Bubblewrap enforcement test executed.
+
+Windows artifacts from run #44370289935:
+- Portable ZIP [artifact 14459107984](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289935/artifacts/14459107984), 65,942,590 bytes, SHA-256 `ad2c0528e2ccea06ab8655ad2e082e60e20fea0f5b3566fad01ba4529bfb92c8`.
+- Installer [artifact 14459361478](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/44370289935/artifacts/14459361478), 233,826,112 bytes, SHA-256 `7f5fac51acc8345a615fa4a8ea2eccc05150ec5a8472b10188435a3b8b46fc91`.
+
+The current PR branch subsequently received documentation corrections. These earlier results validate the code SHA above, not any later branch HEAD. Recheck every applicable workflow against the live HEAD.
+
+## Connector sandbox — implementation and blockers
+
+The current PR contains a Linux Bubblewrap command builder and a real enforcement test. It:
+- creates user/PID/IPC/UTS/network namespaces and denies host network access;
+- clears inherited environment variables and sets minimal PATH/HOME/TMPDIR;
+- mounts selected system/runtime roots read-only;
+- masks the complete host `/usr/local` subtree with private tmpfs and fails closed if the path is a symlink or non-directory;
+- uses bounded private `/tmp` and `/work` tmpfs;
+- rejects unsupported platforms, invalid sizes, unsafe roots and undeclared executables.
+
+**Do not merge or enable third-party connectors yet.** Remaining blockers:
+- Broad read-only `/usr` still exposes host system binaries/tools. Replace it with a reviewed minimal runtime closure and add executable-discovery/callability negative tests.
+- The sandbox is not integrated into `IsolatedConnectorAdapter`, the supervisor or `ConnectorRegistry`; no production lifecycle is implemented.
+- Provider HTTPS egress allowlisting is not implemented; the current Linux namespace is deny-all.
+- Windows filesystem/network isolation is absent; Job Objects only enforce process/resource boundaries.
+- TOCTOU, hard-link, traversal, symlink/reparse-point, child-process, crash-cleanup and policy-reload adversarial coverage remains incomplete.
+- Keep all third-party connector execution disabled until every required OS boundary is positively enforced.
+
+## Global product readiness
+
+| Area | Verified evidence | Remaining work |
+|---|---|---|
+| Headless backend / Windows | EXE smoke; exact-head installer install/upgrade/launch/health/uninstall and Vault preservation passed | Physical low-memory Windows PC validation; operational recovery |
+| Adaptive resources | Sampling, budgets, cross-process leases and worker OS resource limits have CI coverage | Sustained low-memory and crash/restart validation on target PC |
+| PAPER / risk | PAPER smoke passed on exact SHA; PC/Android interfaces remain PAPER-only | Longer end-to-end PAPER soak and broader risk/fault-injection coverage |
+| Market Data / Radar | Public read-only CCXT connectors and authenticated routes are implemented | More provider coverage; freshness, provenance and outage tests end-to-end |
+| Connector isolation | Linux Bubblewrap prototype tested | Complete Linux runtime closure, Windows boundary, egress policy, lifecycle and registry integration |
+| Research / strategy | Research/evidence and readiness pipeline exist; historical Strategy Advisor branch remains a candidate | Audit and recover only after connector security priority; verify OOS and persistence behavior |
+| Learning Vault | Windows upgrade-preservation SHA-256 smoke passed | Operational backup/restore, migrations, corruption recovery and organization isolation |
+| Linux | Linux sandbox enforcement workflow exists | Linux application packaging/install/start/health/upgrade/uninstall |
+| Android | APK and emulator workflows exist; prior UI smoke evidence recorded | Re-check current path-triggered runs when mobile files change; physical device/rotation/reconnect validation |
+| LAN / Tailscale | Partial architecture and connectivity code | Physical reconnect, offline and long-running remote operation |
+| Virtual office | Authenticated backend snapshot integration exists | Verify backend-confirmed task state and physical PC/phone layout |
+| Release | No formal release | Reproducible signed release lifecycle for declared platforms |
+
+The current PR changes only the connector sandbox/documentation area, so Android and other unrelated path-filtered workflows are not required for this exact change. Inspect their path filters and trigger state when their files change.
+
+## External checks and safety
+
+- Vercel previews are informational and never count as code tests.
+- Snyk is not an acceptance gate while the user's free-tier monthly quota is exhausted; do not treat its status as a vulnerability finding.
+- Keep VST PAPER-only. No exchange/account linking, credentials, LIVE activation, financial operations, transfers or withdrawals.
+- Never expose or copy secrets. Do not access or modify the user's physical PC without explicit authorization.
+- Work only in this repository. Keep one active development branch and one advancement PR; never edit `main` directly.
+- Merge only after exact-head applicable checks pass, security blockers are resolved, review/mergeability is stable and repository protections permit it. Verify post-merge main SHA and workflows.
+
+## Browser execution safety — 2026-11-19
+
+A source audit found that `BrowserTradingConnector` previously accepted `live_enabled: true` plus a confirmation phrase from local configuration. The class was not integrated into the live `ConnectorRegistry` or the engine's primary REAL route, but the configurable order-submit path contradicted the current PAPER-only product contract. The current branch now hard-denies every browser order request with `live=True`, regardless of local configuration, before opening the page. Regression tests cover both buy and sell methods and verify no action log is written. No live operation or external account interaction was performed.
+
+## Next engineering sequence
+
+1. Narrow the Linux runtime mount from broad `/usr` to a minimal reviewed closure; add host executable discovery/callability and mount-escape tests.
+2. Complete adversarial Linux filesystem/process tests and bounded worker lifecycle cleanup.
+3. Implement and independently test Windows filesystem/network isolation, or keep Windows third-party workers disabled.
+4. Define provider-specific HTTPS egress enforcement with DNS rebinding, redirects, private-address and proxy escape tests.
+5. Integrate the verified boundary into the worker supervisor and registry only after platform gates pass.
+6. Recover strategy/research and SQLite persistence work in a later single-PR increment.
+7. Build Linux application packaging and continue platform/Vault/release validation.
+
+---
+
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-17
+
+**Repository:** \`AndreVazao/VazaoSovereignTrader\` only.  
+**Verified main:** \`f4b5811b59f71efcc4d2fcbcf3441efd05cb595e\` (PR #576 squash merge, 2026-11-17 07:54:43 UTC).  
+**Development policy:** one active advancement branch and one open PR; never write directly to \`main\`.
 
 ## Verified GitHub state
 
 | PR | Scope | Result | Merge commit |
 |---|---|---|---|
-| [#572](https://github.com/AndreVazao/VazaoSovereignTrader/pull/572) | Public CCXT connector registry/API | Merged | `fb59ef5fedbf3df8b9557d2570810c50340fa1a7` |
-| [#573](https://github.com/AndreVazao/VazaoSovereignTrader/pull/573) | One-shot spawned connector worker foundation | Merged | `ed7a4494863fc680f385967a9e99e9df9c17ac67` |
-| [#574](https://github.com/AndreVazao/VazaoSovereignTrader/pull/574) | Remove REAL activation controls from PC/Android interfaces; mobile mode PAPER-only | Merged | `9b3afee4b753eed7518e0cb5811f4cca5101f96d` |
-| [#575](https://github.com/AndreVazao/VazaoSovereignTrader/pull/575) | Cross-process adaptive leases for backtest/simulation/analysis | Merged | `d2f0d2f43259b62c96932b8c48dab879dd77cd65` |
-| [#576](https://github.com/AndreVazao/VazaoSovereignTrader/pull/576) | OS resource limits and process isolation groundwork for connector workers | Open; not merged | Current HEAD below |
+| [#572](https://github.com/AndreVazao/VazaoSovereignTrader/pull/572) | Public CCXT connector registry/API | Merged | \`fb59ef5fedbf3df8b9557d2570810c50340fa1a7\` |
+| [#573](https://github.com/AndreVazao/VazaoSovereignTrader/pull/573) | One-shot spawned connector worker foundation | Merged | \`ed7a4494863fc680f385967a9e99e9df9c17ac67\` |
+| [#574](https://github.com/AndreVazao/VazaoSovereignTrader/pull/574) | Remove REAL activation controls from PC/Android interfaces; mobile mode PAPER-only | Merged | \`9b3afee4b753eed7518e0cb5811f4cca5101f96d\` |
+| [#575](https://github.com/AndreVazao/VazaoSovereignTrader/pull/575) | Cross-process adaptive leases for backtest/simulation/analysis | Merged | \`d2f0d2f43259b62c96932b8c48dab879dd77cd65\` |
+| [#576](https://github.com/AndreVazao/VazaoSovereignTrader/pull/576) | OS resource limits and process-tree cleanup for connector workers | Merged | \`f4b5811b59f71efcc4d2fcbcf3441efd05cb595e\` |
+| [#577](https://github.com/AndreVazao/VazaoSovereignTrader/pull/577) | Linux Bubblewrap connector sandbox prototype | Open, draft; not merge-ready | Pending |
 
-Main has not changed since the PR #575 merge. The open PR inventory contains only #576. The repository has 32 branches; 30 branches other than `main` and the active PR branch have no open PR. Do not delete them until their unique work is classified.
+The open-PR inventory contains only #577. The repository has 33 branches: \`main\`, the active PR branch and 31 other branches without an open PR. Do not delete or merge those other branches until their file-level work is classified.
 
-The rulesets endpoint returned an empty list. The branch-protection endpoint returned HTTP 403 to this integration, so branch-protection configuration cannot be independently confirmed in this run. Do not infer protection status from the rulesets result alone.
+The tag inventory contains \`mobile-v0.4.1\`; the releases endpoint returned no formal GitHub Releases. CI artifacts are not formal releases.
 
-No formal GitHub Release was returned by the releases endpoint. CI artifacts are not formal releases and do not prove installation on the user's PC.
+GitHub currently reports \`main\` as \`protected=false\`. This is a process risk: direct writes are technically possible even though this project requires PR-only changes. The available GitHub integration can inspect protection but cannot change branch-protection settings; an owner must configure a ruleset requiring PRs and blocking force-push/deletion. Do not bypass this requirement.
 
-## Active development — PR #576
+## Active development — PR #577
 
-Branch: `feat/connector-worker-os-resource-boundary-2026-11-15`.  
-Current HEAD: `5f0391ffc9ddbab0a992b903290928ec94897103`.  
-Base/main: `d2f0d2f43259b62c96932b8c48dab879dd77cd65`.  
-PR state: open; GitHub reports `mergeable_state=unstable`. Do not merge while unstable.
+Branch: \`feat/connector-worker-filesystem-egress-isolation-2026-11-17\`.  
+Base: \`main\` at \`f4b5811b59f71efcc4d2fcbcf3441efd05cb595e\`.  
+PR: open and draft. Keep it draft; do not merge until the broader security acceptance gates pass.
 
-### Latest fully validated SHA — `22f7275bfda8e586f37aa5245057498c62826a55`
+Always obtain the current HEAD from GitHub before reading check results. This handoff deliberately does not hardcode the current PR HEAD or run IDs because both change during development. Exact-head Python, PAPER, Linux and Windows results must be read from the PR's current check runs. A successful Vercel preview is informational and never counts as a code test.
 
-Exact-head workflows completed successfully:
-- [Python tests #43750382298](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43750382298): 1,545 passed, 1 skipped, 96 subtests passed.
-- [PAPER smoke #43750382290](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43750382290): 82 passed.
-- [Windows EXE/installer #43750382299](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43750382299): EXE build/startup/health, DPAPI and worker resource-boundary tests passed; previous-version build, silent install, in-place upgrade, launch, health check, silent uninstall and Learning Vault SHA-256 preservation passed.
-- Portable Windows artifact: 65,939,831 bytes; SHA-256 `d2505057e1b417c62f021388e72e2958f8df29b972f3d08490d0fa040055c299`; [artifact](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43750382299/artifacts/14175717825).
-- Installer artifact: 233,892,549 bytes; SHA-256 `e75b1108ee88694868748b94b1720e95fdeb0264dac7f3df40bbff01d2d3083b`; [artifact](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43750382299/artifacts/14176885090).
+### Current sandbox scope
 
-### Exact-head validation — code SHA `281c9419810036c39d0d25d024add6a8ca41f7d3`
+The PR adds \`PC_ENGINE/core/connector_worker_sandbox.py\`, a Linux Bubblewrap command builder, a dedicated \`Connector sandbox Linux\` workflow, focused tests and the implementation plan.
 
-The source and test changes on this exact SHA passed all applicable code workflows:
-- [Python tests #43869288128](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869288128): 1,546 passed, 1 skipped, 96 subtests passed.
-- [PAPER smoke #43869288237](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869288237): 82 passed.
-- [Windows EXE/installer #43869287997](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869287997): EXE build/startup/health passed; DPAPI 11 passed; adaptive resource tests 34 passed; isolated worker tests 9 passed and 1 POSIX-only test skipped on Windows. The installer previous-version build, silent install, in-place upgrade, launch, PAPER health check, silent uninstall and Learning Vault SHA-256 preservation all passed.
-- Portable Windows artifact: [ID 14226886719](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869287997/artifacts/14226886719), 65,940,996 bytes, SHA-256 `7afa6cf6cfcf19bcd1a57beb56f95ed148c3fa3544dacbdef03f5c68d6344549`.
-- Installer artifact: [ID 14227047155](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/43869287997/artifacts/14227047155), 233,819,772 bytes, SHA-256 `f33153e610c05350d3314883b8c4cf9ebc83812a28d79f9d6a2ecf45e74fa751`.
+The prototype currently:
+- Creates user, PID, IPC, UTS and network namespaces; network access is denied entirely.
+- Clears inherited environment variables and sets only a minimal PATH, HOME and TMPDIR.
+- Mounts selected runtime roots read-only and uses private, size-bounded \`/tmp\` and \`/work\` tmpfs mounts.
+- Canonicalizes executable/runtime paths and fails closed for unsupported platforms, missing Bubblewrap, sensitive runtime roots and invalid limits.
+- Has real Linux enforcement tests for host-file denial, loopback-network denial, inherited-environment removal, normalized HOME/TMPDIR, both tmpfs capacities, and symlinked/broad path rejection.
 
-The exact-head POSIX regression test confirms that an inherited soft memory/CPU limit is never raised. Windows Job Object enforcement and descendant termination passed on the Windows runner.
+A test-harness mismatch on an earlier HEAD caused one Linux assertion to fail even though the sandbox returned the expected output; the assertion was corrected and the current HEAD must be rechecked. Do not describe the command builder as a complete sandbox.
 
-This handoff refresh is documentation-only and does not change the source or test files validated on `281c941`. Do not describe any later documentation-only commit as a separately tested code SHA.
+### Security limitations — merge blockers
 
-The external `security/snyk (andrevazao)` status remains `error` due to the reported quota exhaustion; this is not a vulnerability finding or a repository test failure. The current PR remains `mergeable_state=unstable`, so no merge is performed. Vercel is not counted as a code test. The GitHub integration cannot administer the external Snyk installation.
+- The command builder is not integrated with \`IsolatedConnectorAdapter\` or \`ConnectorRegistry\`.
+- Provider-specific HTTPS egress allowlisting is not implemented; the prototype denies all network access.
+- Windows filesystem/network isolation is not implemented. Windows Job Objects provide resource/process-tree controls, not a filesystem/network sandbox.
+- Adversarial traversal, symlink/TOCTOU, hard-link, child-process, crash/cleanup and policy-reload coverage remains incomplete.
+- Keep connector workers disconnected from \`ConnectorRegistry\`; do not load untrusted third-party adapters.
+- The sandbox must remain fail-closed if any platform control cannot be positively verified.
 
-### Connector worker boundary
+Snyk reports free-tier quota exhaustion, not a vulnerability finding. The user's explicit instruction is to ignore Snyk until December 2026; it is not a November code-test acceptance gate. Reassess in December. Real code/test/security failures remain blocking.
 
-- POSIX workers apply `RLIMIT_AS` and `RLIMIT_CPU` before adapter factory execution.
-- Windows workers are assigned to a kill-on-close Job Object with per-process memory and CPU-time limits before adapter execution.
-- The worker removes credential-shaped inherited environment variables before invoking the adapter factory.
-- POSIX workers use a dedicated process group; Windows workers use the Job Object to terminate worker descendants on timeout.
-- If the required resource boundary cannot be established, the worker fails closed.
-- The worker remains disconnected from the live `ConnectorRegistry`.
-- The current POSIX fix preserves inherited soft and hard limits; exact-head CI is still required before calling this latest change validated.
-
-These controls do not isolate filesystem access or restrict network egress, do not prevent access to other files owned by the host user, and do not constitute a complete security sandbox. Do not load untrusted third-party connector code.
-
-## Implemented runtime
+## Implemented runtime on main
 
 ### Trading safety and connectors
 - VST remains PAPER-only. No LIVE activation, order placement, transfers, withdrawals, exchange credentials or financial account linking.
 - PR #574 removed REAL activation controls from PC and Android interfaces; mobile mode selection is restricted to PAPER.
-- PR #572 added authenticated read-only connector routes: `GET /connectors` and `POST /connectors/{provider_id}/read`.
+- PR #572 added authenticated read-only connector routes: \`GET /connectors\` and \`POST /connectors/{provider_id}/read\`.
 - The first adapter uses public CCXT ticker, OHLCV and order-book reads. It reuses existing MarketRadar clients and locks; it does not create duplicate exchange sessions.
-- Connector registration is limited to configured venues. A registered adapter is not proof of remote connectivity.
 - U-Hodler, private account reads, Android UI automation and Android virtualization are not integrated.
 
-### Adaptive resource admission
-- PR #575 adds OS-backed cross-process lock leases for optional backtest, simulation and analysis work.
-- Slot selection is serialized; leases are released by the OS if a process exits unexpectedly; lock-store failure defers work.
-- This controls only VST entrypoints that use the gate. It does not constrain arbitrary processes or impose CPU/RAM quotas on arbitrary code.
-- The shipped adaptive resource setting enables the gate by default. Disabling it bypasses admission control and is not recommended on constrained hardware.
+### Adaptive resources and worker lifecycle
+- PR #575 adds OS-backed cross-process leases for optional backtest, simulation and analysis work.
+- PR #576 adds POSIX \`RLIMIT_AS\`/\`RLIMIT_CPU\` while preserving inherited ceilings, Windows Job Object memory/CPU-time limits, process-tree cleanup and credential-shaped environment filtering.
+- These controls apply only to VST code paths using them. They are not a general-purpose sandbox and do not isolate filesystem or network access.
 
-## Operational gaps and readiness
+### PAPER collector and low-memory PC
+- The mainline collector uses bounded public CCXT request timeouts, cooperative stop checks between venue/symbol requests, bounded shutdown waiting and diagnostics that retain a live worker reference after timeout.
+- Compact resource policy slows optional polling and defers heavier learning work without disabling core public market data or PAPER bookkeeping.
+- [Issue #560](https://github.com/AndreVazao/VazaoSovereignTrader/issues/560) remains open for physical Windows 10 validation at approximately 3 GB RAM. CI tests do not replace that target-PC test.
 
-| Area | Current evidence | Remaining work |
+## Workflows defined on main
+
+- Python tests
+- Trading engine PAPER smoke
+- Windows EXE and installer
+- Android APK
+- Android emulator/Maestro UI smoke
+- Obscura cloud smoke
+- Shared learning service
+- Diorama office prototype
+- Artifact pruning
+
+PR #577 adds a dedicated Linux Bubblewrap enforcement workflow on its branch. There is still no Linux application packaging/install lifecycle workflow. Determine applicability from each workflow's event and path filters; a skipped workflow is not a failure.
+
+## Product readiness matrix
+
+| Area | State | Evidence / remaining work |
 |---|---|---|
-| Headless backend / Windows | EXE smoke and complete installer lifecycle passed in CI on SHA `22f7275` | Re-run on current PR HEAD; physical Windows 10 low-memory PC install/start/health/stop/recovery |
-| Adaptive resources | Sampling, budgets and cross-process admission tested; worker OS limits passed on `22f7275` | Revalidate inherited-limit fix on current SHA; sustained low-memory physical test |
-| PAPER and risk | PAPER smoke passed on `22f7275`; interfaces no longer expose REAL activation | Sustained end-to-end PAPER evidence; preserve all risk gates |
-| Market Data / Radar | Public CCXT read-only connector path | Additional providers and end-to-end freshness/provenance evidence |
-| Third-party connectors | One-shot worker with OS resource limits; disabled from registry | Filesystem isolation, egress policy, supervision, Linux lifecycle and registry integration |
-| Learning Vault | CI upgrade-preservation SHA-256 test passed | Operational backup/restore, migration and organization isolation proof |
-| Linux | No validated package lifecycle | Linux packaging, install, start, health, upgrade and uninstall workflows |
-| Android | APK/emulator evidence from PR #574 | Physical-device and remote reconnect validation |
-| LAN/Tailscale | Architecture and partial code | Physical reconnect and continuous remote-operation validation |
-| Virtual office | Authenticated backend snapshot integration | Physical PC/phone validation; show only backend-confirmed work |
-| Release | No formal release recorded | Reproducible artifacts and release lifecycle for every declared supported platform |
+| Headless backend / Windows | Yellow | EXE and full installer lifecycle have passed CI on earlier exact heads; current PR Windows installer must finish; physical low-memory PC test remains |
+| Adaptive resources | Yellow | Resource sampling, cross-process leases, POSIX limits and Windows Job Objects tested; sustained constrained-hardware validation remains |
+| PAPER and risk | Yellow | PAPER smoke and safety-boundary tests pass; sustained end-to-end PAPER evidence and broader recovery validation remain |
+| Market Data / Radar | Yellow | Public CCXT read-only path exists; more providers and end-to-end freshness/provenance evidence remain |
+| Third-party connectors | Yellow | Worker has resource/process limits; Linux sandbox is a prototype and registry remains disconnected; Windows filesystem/network boundary and provider egress policy absent |
+| Research / Strategy Advisor | Yellow | PAPER study exists; Strategy Advisor/discovery branch has unique work requiring audit and integration |
+| Learning Vault | Yellow | Installer upgrade/uninstall preservation by SHA-256 tested; operational backup/restore, migration and organization-isolation proof remain |
+| Linux application | Red | No application package/install/upgrade/uninstall lifecycle workflow |
+| Android/APK | Yellow | APK and emulator UI workflows passed on PR #574 exact head; physical-device and remote reconnect validation remain |
+| LAN/Tailscale | Yellow | Architecture and partial implementation; physical reconnect and continuous remote-operation validation remain |
+| Virtual office | Yellow | Authenticated backend snapshot integration exists; physical PC/phone validation and backend-confirmed task status remain |
+| Releases | Red | One mobile tag; no formal GitHub Release or reproducible PC/Linux release lifecycle |
 
-## Physical PC blocker — issue #560
+## Branch recovery queue
 
-[Issue #560](https://github.com/AndreVazao/VazaoSovereignTrader/issues/560) remains open. The target is Windows 10 with approximately 3 GB RAM. Historical measurements reported about 446 MB free during an integrated run and an engine working set around 469 MB; these are not current measurements.
+File-level comparison against current \`main\` identified potentially useful unmerged work:
+- \`fix/paper-collector-bounded-shutdown-2026-11-11\`: its timeout/cooperative-stop changes are already present in main; branch is stale and should not be merged wholesale.
+- \`feat/paper-strategy-advisor-2026-11-11\`: contains unique PAPER-only strategy discovery/advisor code and purged chronological OOS logic; audit tests and reapply on current main after PR #577.
+- \`feat/exchange-readonly-mobile-office-foundation-2026-11-11\`: contains credential-vault and mobile/office changes; audit security and overlap before considering any integration. Do not link accounts or load credentials.
+- \`feat/universal-platform-android-virtualization-2026-11-12\`: architecture/roadmap work only; no provider is provisioned.
+- Other branches remain unclassified. Do not delete or merge by commit-count comparison alone.
+
+## Physical validation and safety
 
 Before any physical-PC intervention:
 1. Perform a read-only inventory.
@@ -108,21 +215,21 @@ CI evidence never substitutes for physical validation.
 
 ## Next engineering sequence
 
-1. Obtain Python, PAPER and Windows exact-head CI for current PR #576 HEAD; inspect the POSIX inherited-limit regression test and Windows Job Object behavior.
-2. Keep the worker disabled from the live registry until Windows/Linux enforcement and lifecycle tests pass.
-3. Add provider egress policy and filesystem isolation; fail closed where a platform cannot enforce required controls.
-4. Integrate only approved, read-only providers after the isolation contract is proven.
-5. Route data through Market Data → Radar → Research with freshness, provenance, source health and confidence.
-6. Build and validate Linux packaging.
-7. Prepare Android virtualization architecture for multiple providers; do not provision paid services or link accounts without explicit approval.
-8. Complete physical PC/Android/Tailscale validation only with explicit user authorization.
+1. Finish all applicable exact-HEAD workflows on PR #577; inspect the Linux enforcement log and Windows installer lifecycle.
+2. Keep PR #577 draft and unmerged while filesystem/network/lifecycle and Windows isolation gates remain incomplete.
+3. Add Linux adversarial path/child-process/cleanup coverage and a reviewed provider egress design.
+4. Keep untrusted connector workers disabled on Windows until an OS-enforced filesystem/network boundary exists.
+5. Audit and reapply useful Strategy Advisor work on current main as the next advancement PR.
+6. Continue market-data freshness, collector shutdown and PAPER → Vault end-to-end evidence.
+7. Build Linux application packaging and release lifecycle.
+8. Continue Android virtualization, LAN/Tailscale and virtual-office validation without linking accounts or credentials.
 
 ## Process and safety rules
 
-- Work only in `AndreVazao/VazaoSovereignTrader`; DGM-MAT and Office Kit are separate projects.
-- One active development branch and one advancement PR at a time. Never edit `main` directly.
+- Work only in \`AndreVazao/VazaoSovereignTrader\`; DGM-MAT and Office Kit are separate projects.
+- One active development branch and one advancement PR at a time. Never edit \`main\` directly.
 - Verify exact PR HEAD and all applicable workflows before merge. Use squash merge with an expected HEAD SHA.
-- Snyk and Vercel are external checks; distinguish them from code workflows and report their actual state.
+- Snyk quota exhaustion is excluded from acceptance until December 2026 by the user's instruction; do not confuse it with code/test failures.
 - No physical PC access, private credentials, exchange account linking, LIVE mode or financial operations.
 - Do not claim a feature, platform or physical device is validated without direct evidence.
 

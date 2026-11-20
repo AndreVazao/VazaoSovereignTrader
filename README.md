@@ -282,9 +282,9 @@ O Trader inclui agora uma camada isolada para plataformas que só funcionam por 
 
 - Chromium/Playwright com perfil persistente por plataforma.
 - Login inicial manual e reutilização da sessão local.
-- Dry-run: prepara a ordem sem a submeter.
-- Live browser trading bloqueado por defeito.
-- Confirmação explícita para permitir envio real.
+- Dry-run PAPER: prepara o formulário sem submeter a ordem.
+- O envio de ordens LIVE pelo browser está bloqueado no código e não pode ser ativado por configuração ou frase de confirmação.
+- A integração serve apenas para observação, autenticação manual e preparação PAPER; não autoriza execução financeira.
 - Auditoria JSONL de todas as tentativas.
 - Screenshot de evidência em erros.
 - Configuração específica da plataforma fica fora do código do motor.

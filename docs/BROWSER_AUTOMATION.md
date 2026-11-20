@@ -1,33 +1,31 @@
 # Browser Automation
 
-The Trader now contains an isolated browser execution layer for web-only trading platforms.
+The browser layer is limited to local observation, manual authentication and PAPER dry-run preparation.
 
 ## What it does
 
-- Persistent Chromium profile per platform.
-- Manual login can be completed once; the browser profile keeps the session locally.
-- Dry-run mode prepares the order form without submitting it.
-- Live browser orders require both platform enablement and an explicit confirmation phrase.
-- Every browser order attempt is written to JSONL.
-- Browser errors can capture a screenshot as evidence.
-- Platform selectors stay outside the core strategy/risk code.
+- Maintains a local Chromium/Playwright profile per configured platform.
+- Allows the operator to complete login and security challenges manually.
+- PAPER dry-run can prepare an order form but does not click the submit button.
+- Records browser action attempts in JSONL and can capture diagnostic screenshots on errors.
+- Keeps platform-specific selectors outside the core strategy and risk code.
+
+## LIVE execution is hard-disabled
+
+The VST browser connector rejects every request with `live=True` before opening or interacting with the trading page. This remains true even if local configuration contains `live_enabled: true`, disables confirmation, or supplies the expected confirmation phrase. Configuration cannot override the PAPER-only policy.
+
+No browser order may be submitted by this connector. A future change to this policy requires a separate, explicit product decision and security review; do not re-enable it as part of ordinary development.
+
+## Security model
+
+- Browser automation remains disabled by default.
+- Do not commit browser profiles, cookies, session storage, credentials, 2FA secrets, or screenshots containing private information.
+- Do not automate CAPTCHA or bypass anti-bot/security controls. The operator completes authentication challenges manually.
+- Do not use browser sessions for private account access, order submission, transfers or withdrawals.
+- Keep the browser layer disconnected from the live connector registry.
 
 ## Installation
 
 After installing the PC requirements, install the browser runtime:
 
     python -m playwright install chromium
-
-## Security model
-
-Browser automation is disabled by default.
-
-Do not commit browser profiles, cookies, session storage, credentials, 2FA secrets, or screenshots containing private information.
-
-Do not automate CAPTCHA or bypass anti-bot/security controls. The operator completes authentication challenges manually.
-
-## Next step for each platform
-
-For each web-only platform, create a local platform configuration with its URL and selectors. The generic connector supports symbol_input, quantity_input, buy_button, sell_button and order_confirmation.
-
-The strategy/risk engine remains independent from browser mechanics. This allows the same signal/risk decision to be executed through API or browser without duplicating the trading logic.
