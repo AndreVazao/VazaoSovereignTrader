@@ -88,15 +88,54 @@ def _validate_file(path: Path, *, label: str, executable: bool = False) -> None:
 
 def _validate_directory(path: Path, *, label: str) -> None:
     try:
-        mode = path.lstat().st_mode
+        metadata = path.lstat()
     except OSError:
         raise RuntimeManifestError(f"{label}_not_accessible") from None
+    mode = metadata.st_mode
     if not stat.S_ISDIR(mode):
         raise RuntimeManifestError(f"{label}_must_be_real_directory")
     if path in _FORBIDDEN_DIRECTORY_MOUNTS:
         raise RuntimeManifestError(f"{label}_is_too_broad")
     if mode & (stat.S_IWGRP | stat.S_IWOTH):
         raise RuntimeManifestError(f"{label}_must_not_be_group_or_world_writable")
+
+
+def _validate_directory_tree(path: Path, *, label: str) -> None:
+    """Reject aliases and unsafe entries anywhere below an exposed directory."""
+    _validate_directory(path, label=label)
+    pending = [path]
+    while pending:
+        current = pending.pop()
+        try:
+            entries = tuple(current.iterdir())
+        except OSError:
+            raise RuntimeManifestError(f"{label}_contents_not_accessible") from None
+        for entry in entries:
+            try:
+                metadata = entry.lstat()
+            except OSError:
+                raise RuntimeManifestError(f"{label}_entry_not_accessible") from None
+            mode = metadata.st_mode
+            if stat.S_ISLNK(mode):
+                raise RuntimeManifestError("runtime_directory_contains_symlink")
+            if stat.S_ISDIR(mode):
+                if mode & (stat.S_IWGRP | stat.S_IWOTH):
+                    raise RuntimeManifestError(
+                        "runtime_directory_contains_writable_directory"
+                    )
+                pending.append(entry)
+                continue
+            if stat.S_ISREG(mode):
+                if metadata.st_nlink != 1:
+                    raise RuntimeManifestError(
+                        "runtime_directory_contains_hard_linked_file"
+                    )
+                if mode & (stat.S_IWGRP | stat.S_IWOTH):
+                    raise RuntimeManifestError(
+                        "runtime_directory_contains_writable_file"
+                    )
+                continue
+            raise RuntimeManifestError("runtime_directory_contains_special_file")
 
 
 def _is_within(path: Path, directory: Path) -> bool:
@@ -154,7 +193,7 @@ def build_runtime_manifest(
     for path in file_paths:
         _validate_file(path, label="runtime_file")
     for path in directory_paths:
-        _validate_directory(path, label="runtime_directory")
+        _validate_directory_tree(path, label="runtime_directory")
 
     _validate_mount_boundaries(executable_path, file_paths, directory_paths)
 
