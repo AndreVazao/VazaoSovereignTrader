@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -35,8 +34,8 @@ def test_runtime_manifest_contains_only_explicit_read_only_paths(tmp_path):
     assert manifest.executable == executable
     assert [(item.source, item.destination, item.is_directory) for item in manifest.mounts] == [
         (executable, executable, False),
-        (extension, extension, False),
         (loader, loader, False),
+        (extension, extension, False),
         (stdlib, stdlib, True),
     ]
 
