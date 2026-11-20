@@ -107,3 +107,40 @@ def test_runtime_manifest_rejects_non_executable_interpreter(tmp_path):
     executable.chmod(0o600)
     with pytest.raises(RuntimeManifestError, match="runtime_executable_not_executable"):
         build_runtime_manifest(executable)
+
+
+def test_runtime_manifest_rejects_file_hidden_inside_directory_mount(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    runtime.mkdir()
+    nested = runtime / "extension.so"
+    nested.write_bytes(b"extension")
+
+    with pytest.raises(RuntimeManifestError, match="runtime_file_covered_by_directory_mount"):
+        build_runtime_manifest(
+            executable,
+            required_files=[nested],
+            required_directories=[runtime],
+        )
+
+
+def test_runtime_manifest_rejects_executable_hidden_inside_directory_mount(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    executable = _executable(runtime / "python")
+
+    with pytest.raises(RuntimeManifestError, match="runtime_file_covered_by_directory_mount"):
+        build_runtime_manifest(executable, required_directories=[runtime])
+
+
+def test_runtime_manifest_rejects_nested_directory_mounts(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    nested = runtime / "lib-dynload"
+    nested.mkdir(parents=True)
+
+    with pytest.raises(RuntimeManifestError, match="overlapping_runtime_directories"):
+        build_runtime_manifest(
+            executable,
+            required_directories=[runtime, nested],
+        )
