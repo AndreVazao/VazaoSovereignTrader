@@ -1775,3 +1775,13 @@ Review points before merge:
 - Keep third-party connectors disabled, Linux egress deny-all, and VST PAPER-only. Do not use exchange credentials, private accounts, LIVE trading or financial actions.
 - Next engineering gate: make Bubblewrap consume a validated explicit manifest without broad host mounts; prove the declared interpreter starts and undeclared host tools/files are inaccessible; add adversarial lifecycle/path tests; then integrate the sandbox into worker supervision. Do not merge until security gates and all exact-HEAD CI checks pass.
 - Current physical validation status: no local low-memory Windows PC, Linux installation, Android rotation/reconnect or LAN/Tailscale endurance test has been performed in this checkpoint.
+
+
+## VST checkpoint — manifest-backed builder increment (2026-11-20)
+
+- PR #578 remains the only active VST PR. It is open, Draft and not merged. Main remains `05d4e7c9123e29780d26b12b56fba3f20d5440e7`.
+- The latest branch increment adds an opt-in `runtime_manifest` path to `build_linux_bwrap_command`. It revalidates the explicit manifest immediately before command construction, rejects mixing manifest and legacy roots, requires the command executable to match the manifest, creates only empty destination parents, creates private `/tmp` and `/work` before explicit mounts, and adds only declared read-only mounts. It suppresses legacy system mounts, loader-cache mounts, host certificate mounts and host PATH in this path.
+- A real Bubblewrap integration test now compiles a minimal static probe and checks that `/usr/bin/id`, `/etc/passwd` and an undeclared host marker are inaccessible. The dedicated Linux workflow now installs GCC for this probe.
+- Latest branch HEAD at this documentation update is tracked by PR #578. The last fully validated SHA remains `2a1875cf99798ca147bc3e4218e7b14f24524c63`; newer code has no confirmed exact-HEAD CI result yet.
+- The manifest-backed builder is not integrated into `IsolatedConnectorAdapter`, worker supervision, `ConnectorRegistry` or installer. The legacy builder path still mounts broad host roots. Python runtime closure, TOCTOU-resistant immutable packaging, Windows filesystem/network isolation and provider-specific egress remain unresolved.
+- Do not enable third-party connectors or claim production isolation. Keep Linux network deny-all and VST PAPER-only. No exchange credentials, private accounts, LIVE mode or financial actions.
