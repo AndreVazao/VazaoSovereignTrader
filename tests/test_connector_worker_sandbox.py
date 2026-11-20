@@ -390,14 +390,14 @@ def test_manifest_backed_bwrap_hides_undeclared_host_files_and_tools(tmp_path):
     executable = tmp_path / "manifest-runtime-check"
     host_marker = tmp_path / "host-only-marker"
     host_marker.write_text("must-not-be-visible", encoding="utf-8")
-    marker = str(host_marker).replace("\\\\", "\\\\\\\\").replace('"', '\\\\"')
+    marker = str(host_marker)
     assembly = tmp_path / "runtime-check.s"
     assembly.write_text(
         ".section .rodata\n"
         f'host_tool: .asciz "/usr/bin/id"\n'
         f'host_config: .asciz "/etc/passwd"\n'
         f'host_marker: .asciz "{marker}"\n'
-        'success: .ascii "manifest-runtime-only\n"\n'
+        'success: .ascii "manifest-runtime-only"\n'
         ".text\n"
         ".global _start\n"
         "_start:\n"
