@@ -36,7 +36,7 @@ These controls do not isolate filesystem access or restrict network egress. The 
 - Canonicalizes the executable path and rejects broad/sensitive runtime roots, undeclared executable paths, invalid tmpfs sizes and missing/non-executable Bubblewrap.
 - Fails closed on unsupported platforms or setup errors.
 
-A dedicated Linux GitHub Actions workflow installs Bubblewrap and runs a real sandbox execution test. The test attempts to read a host-only file, connect to a host loopback listener, verify inherited environment variables are cleared, verify normalized HOME/TMPDIR values, and inspect both private `/tmp` and `/work` tmpfs capacities. The test must execute, not silently skip, in that workflow.
+A dedicated Linux GitHub Actions workflow installs Bubblewrap and GCC and runs real sandbox execution tests. The legacy-path test attempts to read a host-only file, connect to a host loopback listener, verify inherited environment variables are cleared, verify normalized HOME/TMPDIR values, and inspect both private `/tmp` and `/work` tmpfs capacities. A manifest-backed static probe checks that `/usr/bin/id`, `/etc/passwd` and an undeclared host marker are inaccessible while the explicitly mounted static executable runs. Both integration tests must execute, not silently skip, in that workflow.
 
 **Additional manifest hardening (2026-11-20):** regular runtime files must have a single hard link and must not be group/world writable; runtime directories must not be group/world writable. Focused tests cover each rejection. This narrows alias and permission risks but does not eliminate privileged-owner replacement or TOCTOU races; the packager must still provide immutable runtime roots and production launch must revalidate immediately before mounting.
 
