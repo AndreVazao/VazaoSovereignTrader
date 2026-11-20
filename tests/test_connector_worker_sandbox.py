@@ -393,44 +393,44 @@ def test_manifest_backed_bwrap_hides_undeclared_host_files_and_tools(tmp_path):
     marker = str(host_marker).replace("\\\\", "\\\\\\\\").replace('"', '\\\\"')
     assembly = tmp_path / "runtime-check.s"
     assembly.write_text(
-        ".section .rodata\\n"
-        f'host_tool: .asciz "/usr/bin/id"\\n'
-        f'host_config: .asciz "/etc/passwd"\\n'
-        f'host_marker: .asciz "{marker}"\\n'
-        'success: .ascii "manifest-runtime-only\\n"\\n'
-        ".text\\n"
-        ".global _start\\n"
-        "_start:\\n"
-        "  mov $21, %rax\\n"
-        "  lea host_tool(%rip), %rdi\\n"
-        "  xor %rsi, %rsi\\n"
-        "  syscall\\n"
-        "  cmp $-2, %rax\\n"
-        "  jne fail\\n"
-        "  mov $21, %rax\\n"
-        "  lea host_config(%rip), %rdi\\n"
-        "  xor %rsi, %rsi\\n"
-        "  syscall\\n"
-        "  cmp $-2, %rax\\n"
-        "  jne fail\\n"
-        "  mov $21, %rax\\n"
-        "  lea host_marker(%rip), %rdi\\n"
-        "  xor %rsi, %rsi\\n"
-        "  syscall\\n"
-        "  cmp $-2, %rax\\n"
-        "  jne fail\\n"
-        "  mov $1, %rax\\n"
-        "  mov $1, %rdi\\n"
-        "  lea success(%rip), %rsi\\n"
-        "  mov $22, %rdx\\n"
-        "  syscall\\n"
-        "  mov $60, %rax\\n"
-        "  xor %rdi, %rdi\\n"
-        "  syscall\\n"
-        "fail:\\n"
-        "  mov $60, %rax\\n"
-        "  mov $42, %rdi\\n"
-        "  syscall\\n",
+        ".section .rodata\n"
+        f'host_tool: .asciz "/usr/bin/id"\n'
+        f'host_config: .asciz "/etc/passwd"\n'
+        f'host_marker: .asciz "{marker}"\n'
+        'success: .ascii "manifest-runtime-only\n"\n'
+        ".text\n"
+        ".global _start\n"
+        "_start:\n"
+        "  mov $21, %rax\n"
+        "  lea host_tool(%rip), %rdi\n"
+        "  xor %rsi, %rsi\n"
+        "  syscall\n"
+        "  cmp $-2, %rax\n"
+        "  jne fail\n"
+        "  mov $21, %rax\n"
+        "  lea host_config(%rip), %rdi\n"
+        "  xor %rsi, %rsi\n"
+        "  syscall\n"
+        "  cmp $-2, %rax\n"
+        "  jne fail\n"
+        "  mov $21, %rax\n"
+        "  lea host_marker(%rip), %rdi\n"
+        "  xor %rsi, %rsi\n"
+        "  syscall\n"
+        "  cmp $-2, %rax\n"
+        "  jne fail\n"
+        "  mov $1, %rax\n"
+        "  mov $1, %rdi\n"
+        "  lea success(%rip), %rsi\n"
+        "  mov $21, %rdx\n"
+        "  syscall\n"
+        "  mov $60, %rax\n"
+        "  xor %rdi, %rdi\n"
+        "  syscall\n"
+        "fail:\n"
+        "  mov $60, %rax\n"
+        "  mov $42, %rdi\n"
+        "  syscall\n",
         encoding="utf-8",
     )
     compiled = subprocess.run(
