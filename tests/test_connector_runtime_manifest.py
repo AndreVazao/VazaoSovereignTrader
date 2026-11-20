@@ -7,7 +7,9 @@ import pytest
 
 from PC_ENGINE.core.connector_runtime_manifest import (
     RuntimeManifestError,
+    RuntimeMount,
     build_runtime_manifest,
+    revalidate_runtime_manifest,
 )
 
 
@@ -261,3 +263,130 @@ def test_runtime_manifest_rejects_special_file_inside_directory_mount(tmp_path):
         match="runtime_directory_contains_special_file",
     ):
         build_runtime_manifest(executable, required_directories=[runtime])
+
+
+
+def test_runtime_manifest_supports_explicit_loader_alias_destination(tmp_path):
+    executable = _executable(tmp_path / "python")
+    loader_source = tmp_path / "lib" / "ld-linux-x86-64.so.2"
+    loader_source.parent.mkdir()
+    loader_source.write_bytes(b"trusted-loader")
+    loader_source.chmod(0o444)
+    loader_destination = Path("/lib64/ld-linux-x86-64.so.2")
+
+    manifest = build_runtime_manifest(
+        executable,
+        required_mounts=[
+            RuntimeMount(loader_source, loader_destination, False),
+        ],
+    )
+
+    assert manifest.mounts[1] == RuntimeMount(
+        loader_source,
+        loader_destination,
+        False,
+    )
+    assert revalidate_runtime_manifest(manifest) == manifest
+
+
+def test_runtime_manifest_builder_mounts_alias_at_guest_loader_path(tmp_path):
+    executable = _executable(tmp_path / "python")
+    loader_source = tmp_path / "lib" / "ld-linux-x86-64.so.2"
+    loader_source.parent.mkdir()
+    loader_source.write_bytes(b"trusted-loader")
+    loader_source.chmod(0o444)
+    loader_destination = Path("/lib64/ld-linux-x86-64.so.2")
+    manifest = build_runtime_manifest(
+        executable,
+        required_mounts=[
+            RuntimeMount(loader_source, loader_destination, False),
+        ],
+    )
+
+    from PC_ENGINE.core.connector_worker_sandbox import build_linux_bwrap_command
+
+    argv = build_linux_bwrap_command(
+        [str(executable), "--version"],
+        runtime_manifest=manifest,
+        bwrap_path=_executable(tmp_path / "bwrap"),
+    )
+
+    mount_index = argv.index("--ro-bind")
+    assert argv[mount_index + 1 : mount_index + 3] == [
+        str(loader_source),
+        str(loader_destination),
+    ]
+    assert argv.index("--dir") < mount_index
+    assert "/lib64" in argv
+
+
+@pytest.mark.parametrize(
+    ("destination", "message"),
+    [
+        (Path("relative/loader"), "runtime_mount_destination_must_be_absolute"),
+        (Path("/lib/../etc/passwd"), "runtime_mount_destination_not_normalized"),
+        (Path("/lib//loader"), "runtime_mount_destination_not_normalized"),
+        (Path("/proc/loader"), "runtime_mount_destination_is_reserved"),
+        (Path("/tmp/loader"), "runtime_mount_destination_is_reserved"),
+        (Path("/work/loader"), "runtime_mount_destination_is_reserved"),
+    ],
+)
+def test_runtime_manifest_rejects_unsafe_alias_destinations(
+    tmp_path,
+    destination,
+    message,
+):
+    executable = _executable(tmp_path / "python")
+    source = tmp_path / "loader"
+    source.write_bytes(b"loader")
+    source.chmod(0o444)
+
+    with pytest.raises(RuntimeManifestError, match=message):
+        build_runtime_manifest(
+            executable,
+            required_mounts=[RuntimeMount(source, destination, False)],
+        )
+
+
+def test_runtime_manifest_rejects_duplicate_alias_destinations(tmp_path):
+    executable = _executable(tmp_path / "python")
+    first = tmp_path / "first-loader"
+    second = tmp_path / "second-loader"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    first.chmod(0o444)
+    second.chmod(0o444)
+    destination = Path("/lib64/ld-linux-x86-64.so.2")
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="duplicate_runtime_mount_destination",
+    ):
+        build_runtime_manifest(
+            executable,
+            required_mounts=[
+                RuntimeMount(first, destination, False),
+                RuntimeMount(second, destination, False),
+            ],
+        )
+
+
+def test_runtime_manifest_rejects_alias_source_covered_by_directory_mount(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    loader = runtime / "loader"
+    loader.write_bytes(b"loader")
+    loader.chmod(0o444)
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_file_covered_by_directory_mount",
+    ):
+        build_runtime_manifest(
+            executable,
+            required_directories=[runtime],
+            required_mounts=[
+                RuntimeMount(loader, Path("/lib64/loader"), False),
+            ],
+        )
