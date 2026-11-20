@@ -92,6 +92,26 @@ def _validate_directory(path: Path, *, label: str) -> None:
         raise RuntimeManifestError(f"{label}_is_too_broad")
 
 
+def _is_within(path: Path, directory: Path) -> bool:
+    return path == directory or directory in path.parents
+
+
+def _validate_mount_boundaries(
+    executable: Path,
+    files: list[Path],
+    directories: list[Path],
+) -> None:
+    """Reject overlapping mounts that silently widen or shadow the closure."""
+    all_files = [executable, *files]
+    for index, directory in enumerate(directories):
+        if any(_is_within(directory, other) for other in directories[:index]):
+            raise RuntimeManifestError("overlapping_runtime_directories")
+        if any(_is_within(other, directory) for other in directories[index + 1 :]):
+            raise RuntimeManifestError("overlapping_runtime_directories")
+        if any(_is_within(path, directory) for path in all_files):
+            raise RuntimeManifestError("runtime_file_covered_by_directory_mount")
+
+
 def build_runtime_manifest(
     executable: str | os.PathLike[str],
     *,
@@ -128,6 +148,8 @@ def build_runtime_manifest(
         _validate_file(path, label="runtime_file")
     for path in directory_paths:
         _validate_directory(path, label="runtime_directory")
+
+    _validate_mount_boundaries(executable_path, file_paths, directory_paths)
 
     mounts = [
         RuntimeMount(executable_path, executable_path, False),
