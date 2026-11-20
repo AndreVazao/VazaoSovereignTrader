@@ -145,3 +145,41 @@ def test_runtime_manifest_rejects_nested_directory_mounts(tmp_path):
             executable,
             required_directories=[runtime, nested],
         )
+
+
+
+def test_runtime_manifest_rejects_hard_linked_runtime_file(tmp_path):
+    executable = _executable(tmp_path / "python")
+    library = tmp_path / "library.so"
+    library.write_bytes(b"library")
+    alias = tmp_path / "library-alias.so"
+    alias.hardlink_to(library)
+
+    with pytest.raises(RuntimeManifestError, match="runtime_file_must_not_be_hard_linked"):
+        build_runtime_manifest(executable, required_files=[library])
+
+
+def test_runtime_manifest_rejects_group_or_world_writable_file(tmp_path):
+    executable = _executable(tmp_path / "python")
+    library = tmp_path / "library.so"
+    library.write_bytes(b"library")
+    library.chmod(0o666)
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_file_must_not_be_group_or_world_writable",
+    ):
+        build_runtime_manifest(executable, required_files=[library])
+
+
+def test_runtime_manifest_rejects_group_or_world_writable_directory(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    runtime.mkdir()
+    runtime.chmod(0o777)
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_must_not_be_group_or_world_writable",
+    ):
+        build_runtime_manifest(executable, required_directories=[runtime])
