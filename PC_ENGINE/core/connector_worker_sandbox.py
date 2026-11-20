@@ -143,6 +143,13 @@ def build_linux_bwrap_command(
     if not binary_path.is_file() or not os.access(binary_path, os.X_OK):
         raise SandboxUnavailable("linux_bwrap_not_executable")
 
+    # Reject mixed policy inputs before resolving legacy roots. Besides
+    # producing the intended deterministic error, this prevents an irrelevant
+    # legacy path (including a sensitive path) from being inspected when the
+    # caller has selected the strict manifest-backed policy.
+    if runtime_manifest is not None and runtime_roots:
+        raise ValueError("sandbox_manifest_and_legacy_roots_are_mutually_exclusive")
+
     roots = [
         _real_directory(root, label="sandbox_runtime_root")
         for root in runtime_roots
@@ -151,9 +158,6 @@ def build_linux_bwrap_command(
         raise ValueError("duplicate_sandbox_runtime_root")
     for root in roots:
         _validate_runtime_root(root)
-
-    if runtime_manifest is not None and roots:
-        raise ValueError("sandbox_manifest_and_legacy_roots_are_mutually_exclusive")
 
     if runtime_manifest is not None:
         try:
