@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from PC_ENGINE.core.connector_runtime_manifest import build_runtime_manifest\nfrom PC_ENGINE.core.connector_worker_sandbox import (
+from PC_ENGINE.core.connector_runtime_manifest import build_runtime_manifest
+from PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
     build_linux_bwrap_command,
 )
