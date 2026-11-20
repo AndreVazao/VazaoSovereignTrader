@@ -27,7 +27,7 @@ def test_runtime_manifest_contains_only_explicit_read_only_paths(tmp_path):
 
     manifest = build_runtime_manifest(
         executable,
-        required_files=[loader, extension],
+        required_files=[loader],
         required_directories=[stdlib],
     )
 
@@ -35,9 +35,10 @@ def test_runtime_manifest_contains_only_explicit_read_only_paths(tmp_path):
     assert [(item.source, item.destination, item.is_directory) for item in manifest.mounts] == [
         (executable, executable, False),
         (loader, loader, False),
-        (extension, extension, False),
         (stdlib, stdlib, True),
     ]
+    # Files inside an explicitly mounted directory are exposed by that
+    # directory mount; they must not also be listed as individual mounts.
 
 
 @pytest.mark.parametrize(
