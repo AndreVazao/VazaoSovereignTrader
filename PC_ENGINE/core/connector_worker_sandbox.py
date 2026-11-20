@@ -214,13 +214,14 @@ def build_linux_bwrap_command(
     else:
         for source, destination in system_mounts:
             argv.extend(["--ro-bind", str(source), str(destination)])
-    for file_path in _SYSTEM_READ_ONLY_FILES:
-        try:
-            path = Path(file_path).resolve(strict=True)
-        except (OSError, RuntimeError):
-            continue
-        if path.is_file():
-            argv.extend(["--ro-bind", str(path), str(path)])
+    if validated_manifest is None:
+        for file_path in _SYSTEM_READ_ONLY_FILES:
+            try:
+                path = Path(file_path).resolve(strict=True)
+            except (OSError, RuntimeError):
+                continue
+            if path.is_file():
+                argv.extend(["--ro-bind", str(path), str(path)])
 
     # The legacy compatibility path masks host-local content after broad mounts.
     # Mask the complete host-local subtree, not only selected subdirectories,
