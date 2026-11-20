@@ -183,3 +183,80 @@ def test_runtime_manifest_rejects_group_or_world_writable_directory(tmp_path):
         match="runtime_directory_must_not_be_group_or_world_writable",
     ):
         build_runtime_manifest(executable, required_directories=[runtime])
+
+
+
+def test_runtime_manifest_rejects_symlink_inside_directory_mount(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    runtime.mkdir()
+    target = tmp_path / "outside-secret"
+    target.write_text("not part of the runtime", encoding="utf-8")
+    (runtime / "escape").symlink_to(target)
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_contains_symlink",
+    ):
+        build_runtime_manifest(executable, required_directories=[runtime])
+
+
+def test_runtime_manifest_rejects_hard_link_inside_directory_mount(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    runtime.mkdir()
+    library = runtime / "library.so"
+    library.write_bytes(b"library")
+    alias = tmp_path / "outside-alias.so"
+    alias.hardlink_to(library)
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_contains_hard_linked_file",
+    ):
+        build_runtime_manifest(executable, required_directories=[runtime])
+
+
+def test_runtime_manifest_rejects_nested_group_or_world_writable_file(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    nested = runtime / "package"
+    nested.mkdir(parents=True)
+    library = nested / "extension.so"
+    library.write_bytes(b"extension")
+    library.chmod(0o666)
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_contains_writable_file",
+    ):
+        build_runtime_manifest(executable, required_directories=[runtime])
+
+
+def test_runtime_manifest_rejects_nested_group_or_world_writable_directory(tmp_path):
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    nested = runtime / "package"
+    nested.mkdir(parents=True)
+    nested.chmod(0o777)
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_contains_writable_directory",
+    ):
+        build_runtime_manifest(executable, required_directories=[runtime])
+
+
+def test_runtime_manifest_rejects_special_file_inside_directory_mount(tmp_path):
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("FIFO creation is unavailable on this platform")
+    executable = _executable(tmp_path / "python")
+    runtime = tmp_path / "stdlib"
+    runtime.mkdir()
+    os.mkfifo(runtime / "unexpected-pipe")
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_contains_special_file",
+    ):
+        build_runtime_manifest(executable, required_directories=[runtime])
