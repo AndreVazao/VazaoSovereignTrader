@@ -34,7 +34,7 @@ jobs:
       - name: Install Bubblewrap
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y bubblewrap
+          sudo apt-get install --no-install-recommends -y bubblewrap gcc
           bwrap --version
 
       - name: Install project test dependencies
