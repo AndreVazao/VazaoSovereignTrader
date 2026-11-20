@@ -377,3 +377,80 @@ def test_manifest_backed_builder_revalidates_sources_before_command_construction
             runtime_manifest=manifest,
             bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
         )
+
+
+def test_manifest_backed_bwrap_hides_undeclared_host_files_and_tools(tmp_path):
+    if os.environ.get("VST_RUN_BWRAP_INTEGRATION") != "1":
+        pytest.skip("Real Bubblewrap execution is reserved for the dedicated Linux CI workflow")
+    bwrap = shutil.which("bwrap")
+    compiler = shutil.which("cc")
+    if not bwrap or not compiler:
+        pytest.fail("Dedicated Linux CI workflow must install Bubblewrap and cc")
+
+    executable = tmp_path / "manifest-runtime-check"
+    host_marker = tmp_path / "host-only-marker"
+    host_marker.write_text("must-not-be-visible", encoding="utf-8")
+    marker = str(host_marker).replace("\\\\", "\\\\\\\\").replace('"', '\\\\"')
+    assembly = tmp_path / "runtime-check.s"
+    assembly.write_text(
+        ".section .rodata\\n"
+        f'host_tool: .asciz "/usr/bin/id"\\n'
+        f'host_config: .asciz "/etc/passwd"\\n'
+        f'host_marker: .asciz "{marker}"\\n'
+        'success: .ascii "manifest-runtime-only\\n"\\n'
+        ".text\\n"
+        ".global _start\\n"
+        "_start:\\n"
+        "  mov $21, %rax\\n"
+        "  lea host_tool(%rip), %rdi\\n"
+        "  xor %rsi, %rsi\\n"
+        "  syscall\\n"
+        "  cmp $-2, %rax\\n"
+        "  jne fail\\n"
+        "  mov $21, %rax\\n"
+        "  lea host_config(%rip), %rdi\\n"
+        "  xor %rsi, %rsi\\n"
+        "  syscall\\n"
+        "  cmp $-2, %rax\\n"
+        "  jne fail\\n"
+        "  mov $21, %rax\\n"
+        "  lea host_marker(%rip), %rdi\\n"
+        "  xor %rsi, %rsi\\n"
+        "  syscall\\n"
+        "  cmp $-2, %rax\\n"
+        "  jne fail\\n"
+        "  mov $1, %rax\\n"
+        "  mov $1, %rdi\\n"
+        "  lea success(%rip), %rsi\\n"
+        "  mov $22, %rdx\\n"
+        "  syscall\\n"
+        "  mov $60, %rax\\n"
+        "  xor %rdi, %rdi\\n"
+        "  syscall\\n"
+        "fail:\\n"
+        "  mov $60, %rax\\n"
+        "  mov $42, %rdi\\n"
+        "  syscall\\n",
+        encoding="utf-8",
+    )
+    compiled = subprocess.run(
+        [compiler, "-nostdlib", "-static", "-no-pie", "-Wl,-e,_start", "-o", str(executable), str(assembly)],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert compiled.returncode == 0, compiled.stderr[-2000:]
+    executable.chmod(0o555)
+    manifest = build_runtime_manifest(executable)
+    argv = build_linux_bwrap_command(
+        [str(executable)],
+        runtime_manifest=manifest,
+        bwrap_path=bwrap,
+    )
+    result = subprocess.run(argv, capture_output=True, text=True, timeout=20, check=False)
+    assert result.returncode == 0, (
+        f"Manifest-backed Bubblewrap failed with exit {result.returncode}: "
+        f"{result.stderr[-2000:]}"
+    )
+    assert "manifest-runtime-only" in result.stdout
