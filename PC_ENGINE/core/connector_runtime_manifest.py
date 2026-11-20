@@ -142,6 +142,33 @@ def _is_within(path: Path, directory: Path) -> bool:
     return path == directory or directory in path.parents
 
 
+def _validate_destination(value: str | os.PathLike[str]) -> Path:
+    """Validate a lexical in-sandbox destination without resolving it on host."""
+    raw = os.fspath(value)
+    if not isinstance(raw, str) or not raw.startswith("/") or "\\x00" in raw:
+        raise RuntimeManifestError("runtime_mount_destination_must_be_absolute")
+    parts = raw.split("/")
+    if ".." in parts or "." in parts:
+        raise RuntimeManifestError("runtime_mount_destination_not_normalized")
+    destination = Path(raw)
+    if destination == Path("/"):
+        raise RuntimeManifestError("runtime_mount_destination_is_root")
+    if destination.parts[1] in {"proc", "dev", "tmp", "work"}:
+        raise RuntimeManifestError("runtime_mount_destination_is_reserved")
+    return destination
+
+
+def _validate_mount_destinations(mounts: list[RuntimeMount]) -> None:
+    destinations = [mount.destination for mount in mounts]
+    if len(set(destinations)) != len(destinations):
+        raise RuntimeManifestError("duplicate_runtime_mount_destination")
+    for index, destination in enumerate(destinations):
+        if any(_is_within(destination, other) for other in destinations[:index]):
+            raise RuntimeManifestError("overlapping_runtime_mount_destinations")
+        if any(_is_within(other, destination) for other in destinations[index + 1 :]):
+            raise RuntimeManifestError("overlapping_runtime_mount_destinations")
+
+
 def _validate_mount_boundaries(
     executable: Path,
     files: list[Path],
@@ -163,6 +190,7 @@ def build_runtime_manifest(
     *,
     required_files: Iterable[str | os.PathLike[str]] = (),
     required_directories: Iterable[str | os.PathLike[str]] = (),
+    required_mounts: Iterable[RuntimeMount] = (),
 ) -> RuntimeManifest:
     """Validate an explicit runtime closure without discovering or executing tools.
 
@@ -180,6 +208,18 @@ def build_runtime_manifest(
         _canonical_path(item, label="runtime_directory")
         for item in required_directories
     ]
+    alias_mounts: list[RuntimeMount] = []
+    for item in required_mounts:
+        if not isinstance(item, RuntimeMount):
+            raise RuntimeManifestError("runtime_mount_invalid")
+        if item.is_directory:
+            raise RuntimeManifestError("runtime_directory_alias_not_supported")
+        source = _canonical_path(item.source, label="runtime_mount_source")
+        destination = _validate_destination(item.destination)
+        if source == destination:
+            raise RuntimeManifestError("runtime_mount_alias_must_change_destination")
+        _validate_file(source, label="runtime_mount_source")
+        alias_mounts.append(RuntimeMount(source, destination, False))
 
     if executable_path in file_paths or executable_path in directory_paths:
         raise RuntimeManifestError("runtime_executable_must_not_be_duplicated")
@@ -189,6 +229,11 @@ def build_runtime_manifest(
         raise RuntimeManifestError("duplicate_runtime_directory")
     if set(file_paths) & set(directory_paths):
         raise RuntimeManifestError("runtime_path_type_conflict")
+    alias_sources = [mount.source for mount in alias_mounts]
+    if len(set(alias_sources)) != len(alias_sources) or set(alias_sources) & (
+        set(file_paths) | set(directory_paths) | {executable_path}
+    ):
+        raise RuntimeManifestError("duplicate_runtime_mount_source")
 
     for path in file_paths:
         _validate_file(path, label="runtime_file")
@@ -200,8 +245,10 @@ def build_runtime_manifest(
     mounts = [
         RuntimeMount(executable_path, executable_path, False),
         *(RuntimeMount(path, path, False) for path in sorted(file_paths)),
+        *sorted(alias_mounts, key=lambda mount: (str(mount.destination), str(mount.source))),
         *(RuntimeMount(path, path, True) for path in sorted(directory_paths)),
     ]
+    _validate_mount_destinations(mounts)
     return RuntimeManifest(executable_path, tuple(mounts))
 
 
@@ -218,22 +265,29 @@ def revalidate_runtime_manifest(manifest: RuntimeManifest) -> RuntimeManifest:
         raise RuntimeManifestError("runtime_manifest_mounts_invalid")
     files: list[Path] = []
     directories: list[Path] = []
+    aliases: list[RuntimeMount] = []
     for mount in manifest.mounts:
         if not isinstance(mount, RuntimeMount):
             raise RuntimeManifestError("runtime_manifest_mount_invalid")
-        if mount.source != mount.destination:
-            raise RuntimeManifestError("runtime_manifest_destination_must_match_source")
         if not isinstance(mount.is_directory, bool):
             raise RuntimeManifestError("runtime_manifest_mount_type_invalid")
         if mount.source == manifest.executable:
-            if mount.is_directory:
+            if mount.is_directory or mount.destination != mount.source:
                 raise RuntimeManifestError("runtime_executable_mount_type_invalid")
             continue
-        (directories if mount.is_directory else files).append(mount.source)
+        if mount.is_directory:
+            if mount.destination != mount.source:
+                raise RuntimeManifestError("runtime_directory_alias_not_supported")
+            directories.append(mount.source)
+        elif mount.source == mount.destination:
+            files.append(mount.source)
+        else:
+            aliases.append(mount)
     rebuilt = build_runtime_manifest(
         manifest.executable,
         required_files=files,
         required_directories=directories,
+        required_mounts=aliases,
     )
     if rebuilt != manifest:
         raise RuntimeManifestError("runtime_manifest_not_canonical")
