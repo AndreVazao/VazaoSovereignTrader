@@ -151,6 +151,8 @@ def _validate_destination(value: str | os.PathLike[str]) -> Path:
     if ".." in parts or "." in parts:
         raise RuntimeManifestError("runtime_mount_destination_not_normalized")
     destination = Path(raw)
+    if str(destination) != raw:
+        raise RuntimeManifestError("runtime_mount_destination_not_normalized")
     if destination == Path("/"):
         raise RuntimeManifestError("runtime_mount_destination_is_root")
     if destination.parts[1] in {"proc", "dev", "tmp", "work"}:
@@ -173,9 +175,10 @@ def _validate_mount_boundaries(
     executable: Path,
     files: list[Path],
     directories: list[Path],
+    alias_files: list[Path] = [],
 ) -> None:
     """Reject overlapping mounts that silently widen or shadow the closure."""
-    all_files = [executable, *files]
+    all_files = [executable, *files, *alias_files]
     for index, directory in enumerate(directories):
         if any(_is_within(directory, other) for other in directories[:index]):
             raise RuntimeManifestError("overlapping_runtime_directories")
@@ -240,7 +243,12 @@ def build_runtime_manifest(
     for path in directory_paths:
         _validate_directory_tree(path, label="runtime_directory")
 
-    _validate_mount_boundaries(executable_path, file_paths, directory_paths)
+    _validate_mount_boundaries(
+        executable_path,
+        file_paths,
+        directory_paths,
+        alias_sources,
+    )
 
     mounts = [
         RuntimeMount(executable_path, executable_path, False),
