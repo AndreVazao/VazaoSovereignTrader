@@ -203,3 +203,38 @@ def build_runtime_manifest(
         *(RuntimeMount(path, path, True) for path in sorted(directory_paths)),
     ]
     return RuntimeManifest(executable_path, tuple(mounts))
+
+
+def revalidate_runtime_manifest(manifest: RuntimeManifest) -> RuntimeManifest:
+    """Reinspect every declared source immediately before sandbox construction.
+
+    The manifest is data, not an authorization token: caller-constructed or
+    stale instances are rebuilt from their explicit entries and must match the
+    canonical validated representation exactly.
+    """
+    if not isinstance(manifest, RuntimeManifest):
+        raise RuntimeManifestError("runtime_manifest_required")
+    if not isinstance(manifest.mounts, tuple) or not manifest.mounts:
+        raise RuntimeManifestError("runtime_manifest_mounts_invalid")
+    files: list[Path] = []
+    directories: list[Path] = []
+    for mount in manifest.mounts:
+        if not isinstance(mount, RuntimeMount):
+            raise RuntimeManifestError("runtime_manifest_mount_invalid")
+        if mount.source != mount.destination:
+            raise RuntimeManifestError("runtime_manifest_destination_must_match_source")
+        if not isinstance(mount.is_directory, bool):
+            raise RuntimeManifestError("runtime_manifest_mount_type_invalid")
+        if mount.source == manifest.executable:
+            if mount.is_directory:
+                raise RuntimeManifestError("runtime_executable_mount_type_invalid")
+            continue
+        (directories if mount.is_directory else files).append(mount.source)
+    rebuilt = build_runtime_manifest(
+        manifest.executable,
+        required_files=files,
+        required_directories=directories,
+    )
+    if rebuilt != manifest:
+        raise RuntimeManifestError("runtime_manifest_not_canonical")
+    return rebuilt
