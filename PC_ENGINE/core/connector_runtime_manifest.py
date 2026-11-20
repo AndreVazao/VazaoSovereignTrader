@@ -20,6 +20,7 @@ _FORBIDDEN_DIRECTORY_MOUNTS = {
     Path("/usr/sbin"),
     Path("/usr/lib"),
     Path("/usr/lib64"),
+    Path("/usr/local"),
     Path("/lib"),
     Path("/lib64"),
     Path("/bin"),
@@ -89,10 +90,6 @@ def _validate_directory(path: Path, *, label: str) -> None:
         raise RuntimeManifestError(f"{label}_must_be_real_directory")
     if path in _FORBIDDEN_DIRECTORY_MOUNTS:
         raise RuntimeManifestError(f"{label}_is_too_broad")
-    # Reject a directory that contains a forbidden root. This catches broad
-    # ancestors such as /usr/local's parent /usr before any mount is assembled.
-    if any(forbidden in path.parents for forbidden in _FORBIDDEN_DIRECTORY_MOUNTS):
-        raise RuntimeManifestError(f"{label}_is_inside_forbidden_root")
 
 
 def build_runtime_manifest(
