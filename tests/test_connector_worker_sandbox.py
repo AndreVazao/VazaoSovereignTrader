@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from PC_ENGINE.core.connector_worker_sandbox import (
+from PC_ENGINE.core.connector_runtime_manifest import build_runtime_manifest\nfrom PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
     build_linux_bwrap_command,
 )
@@ -287,3 +287,73 @@ def test_linux_sandbox_enforces_filesystem_network_environment_and_tmpfs_boundar
         f"{result.stderr[-2000:]}"
     )
     assert "filesystem-network-environment-and-tmpfs-boundaries-enforced" in result.stdout
+
+
+def test_manifest_backed_builder_mounts_only_explicit_runtime_entries(tmp_path):
+    executable = tmp_path / "runtime" / "python"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    library = tmp_path / "runtime" / "libpython.so"
+    library.write_text("library", encoding="utf-8")
+    library.chmod(0o444)
+    stdlib = tmp_path / "runtime" / "stdlib"
+    stdlib.mkdir()
+    (stdlib / "module.py").write_text("value = 1", encoding="utf-8")
+    (stdlib / "module.py").chmod(0o444)
+    stdlib.chmod(0o555)
+    manifest = build_runtime_manifest(
+        executable,
+        required_files=[library],
+        required_directories=[stdlib],
+    )
+
+    argv = build_linux_bwrap_command(
+        [str(executable), "-c", "pass"],
+        runtime_manifest=manifest,
+        bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+    )
+
+    assert "--unshare-net" in argv
+    assert "--ro-bind" in argv
+    assert str(executable) in argv
+    assert str(library) in argv
+    assert str(stdlib) in argv
+    assert "/usr" not in argv
+    assert "/lib" not in argv
+    assert "/bin" not in argv
+    assert "/etc/ld.so.cache" not in argv
+    assert "/usr/bin" not in argv
+    assert argv[argv.index("--setenv") + 2] == "/work/bin"
+
+
+def test_manifest_backed_builder_rejects_command_executable_mismatch(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    other = tmp_path / "other-python"
+    other.write_text("other", encoding="utf-8")
+    other.chmod(0o555)
+    manifest = build_runtime_manifest(executable)
+
+    with pytest.raises(ValueError, match="sandbox_command_must_use_manifest_executable"):
+        build_linux_bwrap_command(
+            [str(other)],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
+def test_manifest_backed_builder_rejects_legacy_runtime_roots(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    manifest = build_runtime_manifest(executable)
+
+    with pytest.raises(ValueError, match="sandbox_manifest_and_legacy_roots_are_mutually_exclusive"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_roots=[tmp_path],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
