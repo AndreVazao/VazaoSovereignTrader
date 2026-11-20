@@ -7,6 +7,12 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from PC_ENGINE.core.connector_runtime_manifest import (
+    RuntimeManifest,
+    RuntimeManifestError,
+    revalidate_runtime_manifest,
+)
+
 
 class SandboxUnavailable(RuntimeError):
     """Raised when the required Linux sandbox cannot be positively verified."""
@@ -96,6 +102,7 @@ def build_linux_bwrap_command(
     tmp_size_bytes: int = _DEFAULT_TMP_BYTES,
     work_size_bytes: int = _DEFAULT_WORK_BYTES,
     bwrap_path: str | os.PathLike[str] | None = None,
+    runtime_manifest: RuntimeManifest | None = None,
 ) -> list[str]:
     """Build a fail-closed Linux Bubblewrap command with bounded writable tmpfs.
 
@@ -145,21 +152,37 @@ def build_linux_bwrap_command(
     for root in roots:
         _validate_runtime_root(root)
 
-    system_mounts, system_roots = _system_runtime_roots()
-    allowed_exec_roots = [*system_roots, *roots]
+    if runtime_manifest is not None and roots:
+        raise ValueError("sandbox_manifest_and_legacy_roots_are_mutually_exclusive")
+
+    if runtime_manifest is not None:
+        try:
+            validated_manifest = revalidate_runtime_manifest(runtime_manifest)
+        except RuntimeManifestError as exc:
+            raise ValueError(str(exc)) from None
+        if Path(command[0]) != validated_manifest.executable:
+            raise ValueError("sandbox_command_must_use_manifest_executable")
+        executable_real = validated_manifest.executable
+        explicit_mounts = validated_manifest.mounts
+        system_mounts: list[tuple[Path, Path]] = []
+        system_roots: list[Path] = []
+        allowed_exec_roots = [executable_real.parent]
+    else:
+        validated_manifest = None
+        system_mounts, system_roots = _system_runtime_roots()
+        allowed_exec_roots = [*system_roots, *roots]
     executable = Path(command[0])
     if not executable.is_absolute():
         raise ValueError("sandbox_executable_must_be_absolute")
-    try:
-        executable_real = executable.resolve(strict=True)
-    except (OSError, RuntimeError):
-        raise ValueError("sandbox_executable_not_found") from None
-    if not executable_real.is_file() or not os.access(executable_real, os.X_OK):
-        raise ValueError("sandbox_executable_not_executable")
-    if not any(
-        _is_within(executable_real, root) for root in allowed_exec_roots
-    ):
-        raise ValueError("sandbox_executable_outside_runtime_roots")
+    if validated_manifest is None:
+        try:
+            executable_real = executable.resolve(strict=True)
+        except (OSError, RuntimeError):
+            raise ValueError("sandbox_executable_not_found") from None
+        if not executable_real.is_file() or not os.access(executable_real, os.X_OK):
+            raise ValueError("sandbox_executable_not_executable")
+        if not any(_is_within(executable_real, root) for root in allowed_exec_roots):
+            raise ValueError("sandbox_executable_outside_runtime_roots")
 
     normalized_command = [str(executable_real), *command[1:]]
     argv = [
@@ -173,8 +196,24 @@ def build_linux_bwrap_command(
         "--unshare-net",
         "--clearenv",
     ]
-    for source, destination in system_mounts:
-        argv.extend(["--ro-bind", str(source), str(destination)])
+    if validated_manifest is not None:
+        # Build only empty destination parents, from shallow to deep. No host
+        # root, /usr, /lib, /bin, /etc or other implicit runtime tree is mounted.
+        destinations = [mount.destination for mount in explicit_mounts]
+        parent_directories: set[Path] = set()
+        reserved = {Path("/"), Path("/proc"), Path("/dev"), Path("/tmp"), Path("/work")}
+        for destination in destinations:
+            for parent in destination.parents:
+                if parent in reserved:
+                    break
+                parent_directories.add(parent)
+        for directory in sorted(parent_directories, key=lambda item: (len(item.parts), str(item))):
+            argv.extend(["--dir", str(directory)])
+        for mount in explicit_mounts:
+            argv.extend(["--ro-bind", str(mount.source), str(mount.destination)])
+    else:
+        for source, destination in system_mounts:
+            argv.extend(["--ro-bind", str(source), str(destination)])
     for file_path in _SYSTEM_READ_ONLY_FILES:
         try:
             path = Path(file_path).resolve(strict=True)
@@ -183,10 +222,10 @@ def build_linux_bwrap_command(
         if path.is_file():
             argv.extend(["--ro-bind", str(path), str(path)])
 
-    # /usr is mounted read-only for the interpreter and standard library.
+    # The legacy compatibility path masks host-local content after broad mounts.
     # Mask the complete host-local subtree, not only selected subdirectories,
     # so additional /usr/local content cannot be exposed through the broad mount.
-    for sensitive_mount in _MASKED_SYSTEM_PATHS:
+    for sensitive_mount in (() if validated_manifest is not None else _MASKED_SYSTEM_PATHS):
         sensitive_path = Path(sensitive_mount)
         try:
             sensitive_mode = sensitive_path.lstat().st_mode
@@ -198,19 +237,20 @@ def build_linux_bwrap_command(
             raise ValueError("sandbox_sensitive_mount_must_be_real_directory")
         argv.extend(["--perms", "0700", "--tmpfs", sensitive_mount])
 
-    try:
-        certs = Path(_SYSTEM_CERT_DIR).resolve(strict=True)
-    except (OSError, RuntimeError):
-        certs = None
-    if certs is not None and certs.is_dir() and not any(
-        _is_within(certs, root) for root in system_roots
-    ):
-        argv.extend(["--ro-bind", str(certs), str(certs)])
+    if validated_manifest is None:
+        try:
+            certs = Path(_SYSTEM_CERT_DIR).resolve(strict=True)
+        except (OSError, RuntimeError):
+            certs = None
+        if certs is not None and certs.is_dir() and not any(
+            _is_within(certs, root) for root in system_roots
+        ):
+            argv.extend(["--ro-bind", str(certs), str(certs)])
 
-    for root in roots:
-        if any(_is_within(root, system) for system in system_roots):
-            continue
-        argv.extend(["--ro-bind", str(root), str(root)])
+        for root in roots:
+            if any(_is_within(root, system) for system in system_roots):
+                continue
+            argv.extend(["--ro-bind", str(root), str(root)])
 
     argv.extend(
         [
@@ -223,7 +263,7 @@ def build_linux_bwrap_command(
             "--perms", "0700",
             "--tmpfs", "/work",
             "--chdir", "/work",
-            "--setenv", "PATH", "/usr/bin",
+            "--setenv", "PATH", ("/usr/bin" if validated_manifest is None else "/work/bin"),
             "--setenv", "HOME", "/work",
             "--setenv", "TMPDIR", "/tmp",
             "--",
