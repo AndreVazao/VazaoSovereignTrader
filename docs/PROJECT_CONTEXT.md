@@ -1762,3 +1762,16 @@ Review points before merge:
 - API maps `source_lineage_not_eligible` to HTTP 409. This is source-level hardening only until tested against disposable Supabase/Postgres with two-session race cases. PostgreSQL client tools are not available in the current working environment; no SQL execution is claimed.
 - Product branch HEAD: `dcb86efd1cedcb15870f6c9b8dcc5d0be47f0125`. Current-head Python, Shared Learning, PAPER and Windows workflows are pending at last poll; Vercel has a build-rate-limit failure and Snyk is pending. Prior HEAD `49b19ce62c56a49b1244223f1cb2ec539f83c0cc` passed Python, Shared Learning, PAPER, Snyk and Vercel; Windows EXE passed while installer smoke was still in progress.
 - PR #504 remains open/unmerged. No production migration, cloud activation, orders, transfers or live trading. Next: inspect current-head CI, run disposable database assertions and concurrency tests, and continue enrollment/key lifecycle and local memory recovery work.
+
+
+## VST global checkpoint — 2026-11-20 (PR #578)
+
+- Main is at merge commit `05d4e7c9123e29780d26b12b56fba3f20d5440e7`; PR #577 is merged. The active development line is PR #578, branch `feat/minimal-python-runtime-closure-2026-11-20`.
+- PR #578 HEAD at this checkpoint: `22379427f8c81a5103d2e3379bd083196a4b9d50`. It remains open and Draft; no merge is authorized by CI status alone.
+- Exact-HEAD GitHub Actions: Python tests, PAPER smoke, Linux Bubblewrap enforcement, Windows EXE and Windows installer all completed successfully. The Windows installer job completed previous-version install, upgrade, launch, health, uninstall and Learning Vault preservation smoke. CI does not replace physical PC validation.
+- PR #578 adds explicit runtime-manifest validation, including recursive rejection of symlinks, special files, hard links and group/world-writable nested entries. The manifest is not yet consumed by the Bubblewrap builder.
+- Critical blocker: the current Linux builder still mounts broad host roots such as `/usr`, `/lib` and `/bin` read-only. Host executables and files may remain visible. The manifest does not yet enforce runtime isolation, and it is not integrated with the worker supervisor, `IsolatedConnectorAdapter`, `ConnectorRegistry` or installer.
+- Further blockers: TOCTOU-safe immutable runtime packaging and launch-time revalidation, negative Bubblewrap tests for undeclared host executables/files, provider-specific HTTPS egress policy, and Windows filesystem/network isolation.
+- Keep third-party connectors disabled, Linux egress deny-all, and VST PAPER-only. Do not use exchange credentials, private accounts, LIVE trading or financial actions.
+- Next engineering gate: make Bubblewrap consume a validated explicit manifest without broad host mounts; prove the declared interpreter starts and undeclared host tools/files are inaccessible; add adversarial lifecycle/path tests; then integrate the sandbox into worker supervision. Do not merge until security gates and all exact-HEAD CI checks pass.
+- Current physical validation status: no local low-memory Windows PC, Linux installation, Android rotation/reconnect or LAN/Tailscale endurance test has been performed in this checkpoint.
