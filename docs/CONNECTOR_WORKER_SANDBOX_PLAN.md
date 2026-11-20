@@ -1,8 +1,8 @@
 # Connector Worker Sandbox — implementation plan
 
-**Status (2026-11-20):** The explicit runtime-manifest validator is implemented and its tests pass. The Linux command builder still uses broad read-only system mounts and does not consume the manifest. Worker lifecycle integration, provider egress policy and Windows filesystem/network isolation remain blocked.
+**Status (2026-11-20):** The explicit runtime-manifest validator is implemented. PR #578 now has an opt-in manifest-backed Bubblewrap command-construction path that revalidates the manifest and emits only explicit read-only mounts; the legacy compatibility path still uses broad host roots. Real Bubblewrap execution of the manifest-backed path, worker lifecycle integration, provider egress policy and Windows filesystem/network isolation remain blocked.
 **Date:** 2026-11-20
-**Base:** `f4b5811b59f71efcc4d2fcbcf3441efd05cb595e` (PR #576 squash merge)
+**Base:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7` (PR #577 merge commit; includes PR #576)
 
 ## Current enforced worker controls on main
 
@@ -24,12 +24,13 @@ These controls do not isolate filesystem access or restrict network egress. The 
 - Recursively rejects symlinks, special files, hard-linked files and group/world-writable nested files/directories inside every exposed runtime directory; TOCTOU protection still requires immutable packaged roots and revalidation immediately before mounting.
 - Rejects files or the executable hidden beneath a separately declared directory mount; the directory mount itself is the sole exposure declaration for its contents.
 - Does not run `ldd`, execute discovery tools, infer dependencies or widen mounts.
-- Produces immutable mount records, but does not yet perform any mounts or integrate with the Bubblewrap builder.
+- Produces immutable mount records and exposes `revalidate_runtime_manifest()` to reconstruct and re-inspect every declared source immediately before command construction.
 
-`PC_ENGINE/core/connector_worker_sandbox.py` still builds a Linux Bubblewrap invocation:
+`PC_ENGINE/core/connector_worker_sandbox.py` now supports two deliberately separate paths:
 - Uses separate user, PID, IPC, UTS and network namespaces; host network access is denied.
 - Clears the inherited environment and sets only a minimal PATH, HOME and TMPDIR.
-- Mounts selected system/runtime roots read-only; masks the complete existing `/usr/local` subtree with a private tmpfs mount; fails closed if `/usr/local` is a symlink or non-directory. The sandbox PATH is limited to `/usr/bin`.
+- Legacy compatibility path: mounts selected broad system/runtime roots read-only, masks `/usr/local`, and sets PATH to `/usr/bin`. This path is not a minimal runtime and remains unsuitable for untrusted third-party connectors.
+- Manifest-backed path: rejects simultaneous legacy `runtime_roots`, revalidates the manifest, requires `command[0]` to match the declared executable, creates only empty destination parents, mounts only explicit manifest entries read-only, sets PATH to `/work/bin`, and does not mount `/usr`, `/lib`, `/bin`, `/etc/ld.so.cache` or the host certificate tree. Private `/tmp` and `/work` tmpfs mounts are created before explicit mounts so declared destinations beneath those parents are not shadowed.
 - Does not mount the host root, home, VST data, Learning Vault, credentials or host temporary directory.
 - Uses private `/tmp` and `/work` tmpfs mounts with explicit size limits (16 MiB and 64 MiB by default; each is capped at 256 MiB).
 - Canonicalizes the executable path and rejects broad/sensitive runtime roots, undeclared executable paths, invalid tmpfs sizes and missing/non-executable Bubblewrap.
