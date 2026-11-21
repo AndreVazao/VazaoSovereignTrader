@@ -178,7 +178,7 @@ def build_linux_bwrap_command(
         if python_home_path in {Path("/"), Path("/tmp"), Path("/work"), Path("/proc"), Path("/dev")}:
             raise ValueError("sandbox_manifest_python_home_is_reserved")
         if not any(
-            mount.is_directory and _is_within(mount.destination, python_home_path)
+            mount.is_directory and _is_within(python_home_path, mount.destination)
             for mount in validated_manifest.mounts
         ):
             raise ValueError("sandbox_manifest_python_home_not_mounted")
