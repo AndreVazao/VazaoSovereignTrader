@@ -1,8 +1,8 @@
 # Connector Worker Sandbox — implementation plan
 
-**Status:** Linux Bubblewrap command builder now creates bounded private tmpfs mounts and has a real enforcement test; worker integration and cross-platform sandboxing are still incomplete.
-**Date:** 2026-11-17
-**Base:** `f4b5811b59f71efcc4d2fcbcf3441efd05cb595e` (PR #576 squash merge)
+**Status (2026-11-20):** The explicit runtime-manifest validator and opt-in manifest-backed Bubblewrap command-construction path are implemented. The manifest-backed path has passed real Bubblewrap execution in CI on PR #578 HEAD `27051f98bc0a1992300db6f1cb8b1e2dc730d02e`; Python, PAPER and Windows EXE/installer workflows also passed on that exact SHA. The static probe proves selected host paths are absent, but it is not a packaged Python runtime closure. Worker lifecycle integration, immutable runtime packaging/TOCTOU mitigation, provider egress policy and Windows filesystem/network isolation remain blocked.
+**Date:** 2026-11-21
+**Base:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7` (PR #577 merge commit; includes PR #576)
 
 ## Current enforced worker controls on main
 
@@ -17,18 +17,35 @@ These controls do not isolate filesystem access or restrict network egress. The 
 
 ## Work in the current PR
 
-`PC_ENGINE/core/connector_worker_sandbox.py` builds a Linux Bubblewrap invocation:
+`PC_ENGINE/core/connector_runtime_manifest.py` now validates an explicit runtime closure:
+- Requires an absolute, existing, non-symlinked executable and explicit regular-file/directory entries.
+- Rejects executable, file, alias-source and directory paths that overlap host-owned sensitive/system roots, including nested descendants and ancestor mounts; package runtime sources must not come from user, VST state, host configuration, scratch or broad system trees.
+- Rejects broad or sensitive directory roots, duplicates, type conflicts, symlinks, missing paths and overlapping mounts.
+- Rejects hard-linked runtime files and group/world-writable runtime files or directories, reducing alias-based mutation and untrusted-owner replacement risks.
+- Recursively rejects symlinks, special files, hard-linked files and group/world-writable nested files/directories inside every exposed runtime directory; TOCTOU protection still requires immutable packaged roots and revalidation immediately before mounting.
+- Rejects files or the executable hidden beneath a separately declared directory mount; the directory mount itself is the sole exposure declaration for its contents.
+- Does not run `ldd`, execute discovery tools, infer dependencies or widen mounts.
+- Produces immutable mount records and exposes `revalidate_runtime_manifest()` to reconstruct and re-inspect every declared source immediately before command construction.
+
+`PC_ENGINE/core/connector_worker_sandbox.py` now supports two deliberately separate paths:
 - Uses separate user, PID, IPC, UTS and network namespaces; host network access is denied.
 - Clears the inherited environment and sets only a minimal PATH, HOME and TMPDIR.
-- Mounts selected system/runtime roots read-only; masks the complete existing `/usr/local` subtree with a private tmpfs mount; fails closed if `/usr/local` is a symlink or non-directory. The sandbox PATH is limited to `/usr/bin`.
+- Legacy compatibility path: mounts selected broad system/runtime roots read-only, masks `/usr/local`, and sets PATH to `/usr/bin`. This path is not a minimal runtime and remains unsuitable for untrusted third-party connectors.
+- Manifest-backed path: rejects simultaneous legacy `runtime_roots`, revalidates the manifest, requires `command[0]` to match the declared executable, creates only empty destination parents, mounts only explicit manifest entries read-only, sets PATH to `/work/bin`, and does not mount `/usr`, `/lib`, `/bin`, `/etc/ld.so.cache` or the host certificate tree. Private `/tmp` and `/work` tmpfs mounts are created before explicit mounts so declared destinations beneath those parents are not shadowed.
 - Does not mount the host root, home, VST data, Learning Vault, credentials or host temporary directory.
 - Uses private `/tmp` and `/work` tmpfs mounts with explicit size limits (16 MiB and 64 MiB by default; each is capped at 256 MiB).
 - Canonicalizes the executable path and rejects broad/sensitive runtime roots, undeclared executable paths, invalid tmpfs sizes and missing/non-executable Bubblewrap.
 - Fails closed on unsupported platforms or setup errors.
 
-A dedicated Linux GitHub Actions workflow installs Bubblewrap and runs a real sandbox execution test. The test attempts to read a host-only file, connect to a host loopback listener, verify inherited environment variables are cleared, verify normalized HOME/TMPDIR values, and inspect both private `/tmp` and `/work` tmpfs capacities. The test must execute, not silently skip, in that workflow.
+A dedicated Linux GitHub Actions workflow installs Bubblewrap and GCC and runs real sandbox execution tests. The legacy-path test attempts to read a host-only file, connect to a host loopback listener, verify inherited environment variables are cleared, verify normalized HOME/TMPDIR values, and inspect both private `/tmp` and `/work` tmpfs capacities. A manifest-backed static probe checks that `/usr/bin/id`, `/etc/passwd` and an undeclared host marker are inaccessible while the explicitly mounted static executable runs. Both integration tests must execute, not silently skip, in that workflow.
 
-**Additional mount audit (2026-11-18):** masking the complete `/usr/local` subtree and keeping PATH limited to `/usr/bin` reduces local configuration/state/executable exposure. However, the broad read-only `/usr` mount still exposes other host-provided executables/tools, which may be callable. Read-only access is still host content exposure, not a complete isolation boundary. Before production, replace the broad runtime mount with an explicit minimal runtime closure (interpreter, required shared libraries, CA roots, and narrowly approved support files), omit host `/usr/local` entirely unless a reviewed dependency requires it, and use a minimal PATH. Add negative tests for host executable discovery/callability and mount/symlink escape cases. This is a security blocker, not an accepted residual risk.\n\n**Important limitations:** this remains a command builder plus an isolated execution test. It is not yet called by `IsolatedConnectorAdapter`, does not provision or clean a production worker lifecycle, and does not provide provider-specific HTTPS egress. Windows filesystem/network sandboxing is not implemented. Do not describe this branch as a complete sandbox.
+**Source-path confinement (2026-11-21):** the manifest validator now rejects any source path that is inside, or is an ancestor of, a host-owned sensitive/system root. This applies to the interpreter, ordinary files, alias sources and directory mounts; it closes the gap where a nested path such as a user-home subdirectory or host configuration subtree could otherwise pass the exact-root checks. Tests cover nested file/directory/executable/alias sources and a parent directory that would contain the sensitive root. The test suite substitutes a synthetic sensitive root so it remains portable across CI runners.
+
+**Additional manifest hardening (2026-11-20):** regular runtime files must have a single hard link and must not be group/world writable; runtime directories must not be group/world writable. Focused tests cover each rejection. This narrows alias and permission risks but does not eliminate privileged-owner replacement or TOCTOU races; the packager must still provide immutable runtime roots and production launch must revalidate immediately before mounting.
+
+**Security blocker — broad runtime exposure (2026-11-20):** the builder still mounts broad read-only `/usr`, `/lib`, `/bin` and related roots, so host tools and binaries can remain visible/callable. Masking `/usr/local` does not make this a minimal runtime. The manifest validator is groundwork only: until `build_linux_bwrap_command` consumes a validated manifest and mounts only its explicit entries, this blocker remains open. The next implementation step is to make manifest-backed mounting the only accepted execution path, create only the required empty destination parents, reject any undeclared executable or dependency, and add real Bubblewrap tests proving host executables and unrelated host files are absent. Do not enable connector execution in the meantime.
+
+**Important limitations:** this remains a command builder plus an isolated execution test. It is not yet called by `IsolatedConnectorAdapter`, does not provision or clean a production worker lifecycle, and does not provide provider-specific HTTPS egress. Windows filesystem/network sandboxing is not implemented. Do not describe this branch as a complete sandbox.
 
 ## Required security contract
 
@@ -53,7 +70,7 @@ The worker may be enabled for an adapter only when every required control is pos
 - Treat redirects, alternate IP literals, IPv4-mapped IPv6, IDNA names, CNAME chains, proxy variables and connection reuse as explicit test cases.
 
 ### Platform enforcement
-- Linux: real Bubblewrap execution is tested in CI for host-file denial, host-loopback denial, inherited-environment removal, normalized HOME/TMPDIR and both bounded tmpfs mounts. Still required: adversarial path/child-process tests, bounded lifecycle cleanup, restricted syscalls/capabilities and a reviewed provider egress policy. The broad `/usr` runtime mount is not treated as safe by itself; the complete existing `/usr/local` subtree below it is now masked.
+- Linux: the legacy Bubblewrap path has real CI coverage for host-file denial, host-loopback denial, inherited-environment removal, normalized HOME/TMPDIR and bounded tmpfs. The opt-in manifest-backed builder has command-construction and source-revalidation tests plus a real static executable probe; CI passed on PR #578 HEAD `27051f98bc0a1992300db6f1cb8b1e2dc730d02e`, confirming undeclared `/usr/bin/id`, `/etc/passwd` and a host marker are inaccessible. This is not yet a packaged Python runtime closure. Still required: packaged Python closure execution, worker lifecycle integration, adversarial path/child-process tests, bounded cleanup, restricted syscalls/capabilities and reviewed provider egress policy. The broad `/usr` mount remains a blocker in the legacy path; the manifest-backed path must be the only path permitted for untrusted workers.
 - Windows: implement AppContainer/restricted token plus Job Object, explicit capability policy, private scratch ACLs and Windows Firewall/WFP enforcement. Job Objects alone do not provide filesystem or network isolation.
 - Do not claim platform parity until both platforms have independent negative tests proving that denied file and network access actually fails.
 

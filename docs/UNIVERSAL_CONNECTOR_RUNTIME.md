@@ -1,75 +1,68 @@
 # Universal Connector Runtime — VST
 
-**Status date:** 2026-11-17  
-**Scope:** first-party public market-data adapters only. This document describes implemented behavior, not a promise that every platform connector is already available.
+**Status date:** 2026-11-21  
+**Scope:** first-party public market-data adapters and the security boundaries required before any third-party connector execution. This document describes verified implementation, not planned capability.
 
 ## Implemented on main
 
 - A typed provider manifest and capability contract lives in `PC_ENGINE/core/platform_connectors.py`.
 - `ConnectorRegistry` enforces explicit owner grants and provider verification, read-only capability allowlists, per-provider rolling request limits, JSON request/response size limits, detached request data and sanitized adapter errors.
-- The first built-in adapter is `CcxtPublicMarketDataAdapter`. It supports bounded public `ticker`, `ohlcv` and `order_book` reads without API keys or private/account methods.
-- The engine registers only venues explicitly present in `radar.polling_exchanges`, while the engine is in PAPER mode and the Radar is observational-only.
-- Registered adapters reuse the existing unauthenticated `MarketRadar` CCXT clients and their per-client locks. The registry therefore does not create a second set of exchange sessions on a constrained PC.
-- On-demand public connector reads are capped at 12 requests/minute per provider, in addition to CCXT's own rate limiter.
-- The connector API is owner-authenticated with `read_private_state`:
-  - `GET /connectors` returns safe connector metadata and local registration diagnostics.
-  - `POST /connectors/{provider_id}/read` accepts only a read capability and a JSON request. It is a read operation despite using POST for a bounded request body.
-- Connector reads are refused while the engine is not RUNNING or collector shutdown has begun. Responses are `no-store`.
-- Credential-shaped fields are rejected before the request reaches an adapter. No credentials are loaded, copied, logged or persisted by this connector runtime.
+- The built-in `CcxtPublicMarketDataAdapter` supports bounded public `ticker`, `ohlcv` and `order_book` reads without API keys or private/account methods.
+- The engine registers only venues explicitly present in `radar.polling_exchanges`, while the engine is in PAPER mode and Radar is observational-only.
+- Registered adapters reuse existing unauthenticated `MarketRadar` CCXT clients and per-client locks.
+- On-demand public connector reads are capped at 12 requests/minute per provider, in addition to CCXT rate limiting.
+- The connector API is owner-authenticated with `read_private_state`; responses are `no-store`, and credential-shaped request fields are rejected before adapter execution.
 
 ## Worker resource boundary on main
 
-PR #576 is merged in main at `f4b5811b59f71efcc4d2fcbcf3441efd05cb595e`:
-- POSIX workers apply `RLIMIT_AS` and `RLIMIT_CPU`, preserving inherited soft and hard ceilings.
-- Windows workers use a kill-on-close Job Object with per-process memory and CPU-time limits.
+PR #576 is included in main through PR #577 merge commit `05d4e7c9123e29780d26b12b56fba3f20d5440e7`:
+- POSIX workers apply `RLIMIT_AS` and `RLIMIT_CPU`, preserving stricter inherited limits.
+- Windows workers use a kill-on-close Job Object with process/memory/CPU controls.
 - POSIX process groups and Windows Job Objects terminate worker descendants on timeout.
 - Credential-shaped inherited environment variables are removed before adapter factory execution.
 - JSON IPC is bounded and worker errors are sanitized.
-- If the required resource boundary cannot be established, the worker fails closed.
 
-These controls bound resource consumption and process lifetime; they do not isolate filesystem access or restrict network egress. They do not prevent code from reading other files owned by the same host user.
+These controls bound resource use and process lifetime; they do not isolate filesystem access or restrict network egress.
 
-## Linux sandbox prototype in PR #577
+## Linux Bubblewrap prototype and active PR #578
 
-The current draft PR adds a Bubblewrap command builder with:
-- Separate user, PID, IPC, UTS and network namespaces; network is denied entirely.
-- A cleared environment and selected read-only runtime roots.
-- Private, size-bounded `/tmp` and `/work` tmpfs mounts.
-- Validation of executable paths, runtime roots, tmpfs sizes and Bubblewrap availability.
-- A dedicated Linux CI workflow intended to execute negative tests for host-file access, loopback network access and tmpfs size.
+PR #577 is merged. The active security groundwork is PR #578, branch `feat/minimal-python-runtime-closure-2026-11-20`, currently Draft and not merged.
 
-This is not yet a production sandbox:
-- The command builder is not integrated with `IsolatedConnectorAdapter` or `ConnectorRegistry`.
-- Real Bubblewrap CI must pass on the exact current PR HEAD.
-- Filesystem adversarial tests, cleanup/supervision and provider-specific HTTPS egress policy remain incomplete.
-- Windows filesystem/network isolation is not implemented.
-- The worker remains disconnected from the live connector registry. Do not load untrusted third-party adapters.
+The merged Bubblewrap prototype provides:
+- user, PID, IPC, UTS and network namespaces; network is denied;
+- a cleared environment and bounded private `/tmp` and `/work` tmpfs mounts;
+- a real Linux CI enforcement test for host-file denial, loopback denial, inherited-environment removal and tmpfs limits.
+
+PR #578 adds `PC_ENGINE/core/connector_runtime_manifest.py`, which validates explicit executable/file/directory entries and rejects source paths overlapping host-owned sensitive/system roots (including nested descendants and ancestor mounts), symlinks, special files, hard links, group/world-writable entries, duplicate/type-conflicting paths and overlapping mounts. Directory trees are inspected recursively. `revalidate_runtime_manifest()` reconstructs and rechecks the exact manifest immediately before command construction. It does not discover dependencies or execute `ldd`.
+
+**Current builder split:** `build_linux_bwrap_command(..., runtime_manifest=...)` now has a separate opt-in manifest-backed path. It rejects simultaneous legacy `runtime_roots`, revalidates the manifest, requires the command executable to match the manifest, creates only empty destination parents, sets a non-host PATH, creates private `/tmp` and `/work` first, and mounts only explicit entries read-only. It does not add `/usr`, `/lib`, `/bin`, `/etc/ld.so.cache` or the host CA tree. The legacy compatibility path still uses broad read-only host roots and remains unsuitable for untrusted connectors. A real Bubblewrap static-probe test is now included to check denial of `/usr/bin/id`, `/etc/passwd` and an undeclared host marker.
+
+**Critical integration blocker:** the manifest-backed builder path is not called by `IsolatedConnectorAdapter`, the worker supervisor, `ConnectorRegistry` or installer. The real static probe is not yet validated by a new CI run on the latest HEAD, and the packaged Python interpreter/shared-library closure has not been tested. Do not load untrusted third-party adapters.
+
+## Required Linux acceptance gates
+
+1. Keep production worker launch fail-closed until the supervisor calls the manifest-backed builder; then ensure the manifest-backed path mounts only declared runtime files/directories and never falls back to broad host roots.
+2. Create only empty destination parent directories needed for explicit mounts; reject overlapping, symlinked, mutable or changed paths. Packaged runtime roots must be immutable and protected against TOCTOU replacement between validation and launch.
+3. Real Bubblewrap tests must prove the declared interpreter starts/imports while undeclared host executables, tools, unrelated files, host home, VST data, Learning Vault and credentials remain inaccessible.
+4. Add adversarial path/traversal, symlink/hard-link, replacement race, child-process, crash and bounded cleanup tests.
+5. Keep network deny-all until a separately reviewed provider-specific egress policy exists. Do not infer HTTPS access from a network namespace alone.
+
+## Windows and lifecycle gates
+
+Windows Job Objects provide process/resource control only. Filesystem and network isolation are not implemented. Before enabling third-party connectors, add a restricted-token/AppContainer or equivalent filesystem boundary, explicit network policy, private scratch ACLs and independent negative tests. Do not claim Linux/Windows sandbox parity until both platforms prove denied file and network access.
 
 ## Safety boundary
 
-The current registry can execute only capabilities in `READ_ONLY_CAPABILITIES`. It rejects order creation/cancellation, transfers, withdrawals, profile mutation and interactive device control. The public CCXT adapter exposes only:
-- `public_market_data.read` with `operation=ticker`
-- `public_market_data.read` with `operation=ohlcv`
-- `public_market_data.read` with `operation=order_book`
+The current registry permits only `READ_ONLY_CAPABILITIES`. It rejects order creation/cancellation, transfers, withdrawals, profile mutation and interactive device control. Public CCXT reads do not use private exchange accounts. VST remains PAPER-only. No credentials, private accounts, LIVE trading or financial actions are authorized by this connector runtime.
 
-The connector runtime does not connect private exchange accounts and does not grant trading authority. VST remains PAPER-only. A configured venue is an owner-selected public-data source, not proof that its remote API is reachable. The manifest health value means the local adapter is loaded; remote connectivity must be read from Radar/market-data health telemetry.
+## Other limits
 
-## Other limits and next phases
+- The registry currently executes adapters in-process; the resource-limited worker is not integrated into the registry execution path.
+- Python cannot forcibly interrupt arbitrary synchronous third-party code running in-process.
+- OAuth, private account reads, balances, statements, Android UI automation, browser automation and desktop automation are not live integrations in this increment.
+- U-Hodler is not connected; no Android virtualization provider is provisioned.
+- Human handoff remains mandatory for MFA, OTP, CAPTCHA, biometrics, consent and financial/security prompts.
 
-- The registry is in-process. The manifest timeout is passed to the adapter and CCXT's request timeout is set, but Python cannot forcibly interrupt arbitrary synchronous third-party code. Do not load untrusted adapters into this process.
-- The current wrapper starts a fresh process per read; it is a safety prototype, not yet an optimized persistent worker pool.
-- OAuth, private account reads, balances, statements, Android UI automation, browser automation and desktop automation are contract categories only; they are not live integrations in this increment.
-- U-Hodler is not connected. No Android virtualization provider is provisioned locally or in cloud.
-- Provider-specific terms, permissions and authentication flows must be reviewed before adding any non-public capability. Human handoff remains mandatory for MFA, OTP, CAPTCHA, biometrics, consent and financial/security prompts.
+## Exact-HEAD verification checkpoint — 2026-11-21
 
-## Verification
-
-The implementation is covered by unit tests for:
-- configured-venue allowlisting and fail-closed registration;
-- reuse of the existing MarketRadar client and lock;
-- read-only capability enforcement;
-- authentication, request bounds, credential-field rejection and no-store responses;
-- rate limiting and rejection of reads during collector shutdown;
-- isolated-worker JSON IPC, timeout termination of the worker and its child processes, request/response bounds, credential-shaped environment cleanup and OS-enforced worker resource limits.
-
-For PR #577, the dedicated Linux Bubblewrap workflow is an additional acceptance gate. CI results must be checked against the exact PR HEAD. CI does not replace physical Windows, Linux or Android validation.
+At PR #578 HEAD `c96cb668ef320bf8b2e042fbafa8273770b92f7c`, the four applicable GitHub Actions workflows passed on the exact same SHA: Python tests, PAPER lifecycle/safety smoke, Connector sandbox Linux Bubblewrap enforcement, and Windows EXE/installer. The Windows workflow completed EXE smoke plus previous-version install, upgrade, launch, health, uninstall and Learning Vault preservation. The Snyk status check also reported success on this SHA. Vercel is a deployment preview only and is not code-test evidence. The earlier Linux/Python failures on SHA `8b874509a2173518d993eab60acd285d4de1c9b6` were superseded by later exact-head runs; their results are not transferred to `c96cb66`. Android workflows were not triggered by this PR's path filters. This is CI evidence only; physical PC validation remains pending. Any later commit requires its own exact-HEAD verification.

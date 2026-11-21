@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from PC_ENGINE.core import connector_runtime_manifest as runtime_manifest
+from PC_ENGINE.core.connector_runtime_manifest import build_runtime_manifest
 from PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
     build_linux_bwrap_command,
@@ -18,6 +20,15 @@ pytestmark = pytest.mark.skipif(
     sys.platform != "linux",
     reason="Bubblewrap command construction is Linux-specific",
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sensitive_source_roots_for_test_runtime(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        runtime_manifest,
+        "_SENSITIVE_SOURCE_ROOTS",
+        (tmp_path / "__sensitive_source_root__",),
+    )
 
 
 def _fake_bwrap(path: Path) -> Path:
@@ -287,3 +298,263 @@ def test_linux_sandbox_enforces_filesystem_network_environment_and_tmpfs_boundar
         f"{result.stderr[-2000:]}"
     )
     assert "filesystem-network-environment-and-tmpfs-boundaries-enforced" in result.stdout
+
+
+def test_manifest_backed_builder_mounts_only_explicit_runtime_entries(tmp_path):
+    executable = tmp_path / "runtime" / "python"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    library = tmp_path / "runtime" / "libpython.so"
+    library.write_text("library", encoding="utf-8")
+    library.chmod(0o444)
+    stdlib = tmp_path / "runtime" / "stdlib"
+    stdlib.mkdir()
+    (stdlib / "module.py").write_text("value = 1", encoding="utf-8")
+    (stdlib / "module.py").chmod(0o444)
+    stdlib.chmod(0o555)
+    manifest = build_runtime_manifest(
+        executable,
+        required_files=[library],
+        required_directories=[stdlib],
+    )
+
+    argv = build_linux_bwrap_command(
+        [str(executable), "-c", "pass"],
+        runtime_manifest=manifest,
+        python_home=str(stdlib),
+        bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+    )
+
+    assert "--unshare-net" in argv
+    assert "--ro-bind" in argv
+    assert argv.index("--tmpfs") < argv.index("--ro-bind")
+    assert str(executable) in argv
+    assert str(library) in argv
+    assert str(stdlib) in argv
+    assert "/usr" not in argv
+    assert "/lib" not in argv
+    assert "/bin" not in argv
+    assert "/etc/ld.so.cache" not in argv
+    assert "/usr/bin" not in argv
+    assert argv[argv.index("--setenv") + 2] == "/work/bin"
+    setenv = [
+        argv[index:index + 3]
+        for index, value in enumerate(argv)
+        if value == "--setenv"
+    ]
+    assert ["--setenv", "PYTHONHOME", str(stdlib)] in setenv
+    assert ["--setenv", "PYTHONNOUSERSITE", "1"] in setenv
+    assert ["--setenv", "PYTHONDONTWRITEBYTECODE", "1"] in setenv
+    assert ["--setenv", "PYTHONSAFEPATH", "1"] in setenv
+
+
+
+def test_manifest_backed_builder_requires_mounted_python_home(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    manifest = build_runtime_manifest(executable)
+
+    with pytest.raises(ValueError, match="sandbox_manifest_python_home_required"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+    with pytest.raises(ValueError, match="sandbox_manifest_python_home_not_mounted"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_manifest=manifest,
+            python_home=str(tmp_path / "missing-home"),
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+def test_manifest_backed_builder_accepts_python_home_nested_in_declared_runtime_mount(tmp_path):
+    executable = tmp_path / "interpreter" / "python"
+    executable.parent.mkdir()
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    python_runtime = tmp_path / "runtime"
+    python_home = python_runtime / "lib" / "python3.11"
+    python_home.mkdir(parents=True)
+    (python_home / "encodings.py").write_text("value = 1", encoding="utf-8")
+    (python_home / "encodings.py").chmod(0o444)
+    python_home.chmod(0o555)
+    (python_home.parent).chmod(0o555)
+    python_runtime.chmod(0o555)
+    manifest = build_runtime_manifest(
+        executable,
+        required_directories=[python_runtime],
+    )
+
+    argv = build_linux_bwrap_command(
+        [str(executable), "-c", "pass"],
+        runtime_manifest=manifest,
+        python_home=str(python_home),
+        bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+    )
+
+    assert ["--setenv", "PYTHONHOME", str(python_home)] in [
+        argv[index:index + 3]
+        for index, value in enumerate(argv)
+        if value == "--setenv"
+    ]
+
+
+def test_manifest_backed_builder_rejects_python_home_outside_runtime_mount(tmp_path):
+    executable = tmp_path / "runtime" / "python"
+    executable.parent.mkdir()
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    runtime = tmp_path / "runtime" / "stdlib"
+    runtime.mkdir()
+    (runtime / "module.py").write_text("value = 1", encoding="utf-8")
+    (runtime / "module.py").chmod(0o444)
+    runtime.chmod(0o555)
+    manifest = build_runtime_manifest(
+        executable,
+        required_directories=[runtime],
+    )
+
+    with pytest.raises(ValueError, match="sandbox_manifest_python_home_not_mounted"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_manifest=manifest,
+            python_home=str(tmp_path / "unmounted"),
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+def test_manifest_backed_builder_rejects_command_executable_mismatch(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    other = tmp_path / "other-python"
+    other.write_text("other", encoding="utf-8")
+    other.chmod(0o555)
+    manifest = build_runtime_manifest(executable)
+
+    with pytest.raises(ValueError, match="sandbox_command_must_use_manifest_executable"):
+        build_linux_bwrap_command(
+            [str(other)],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
+def test_manifest_backed_builder_rejects_legacy_runtime_roots(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    manifest = build_runtime_manifest(executable)
+
+    with pytest.raises(ValueError, match="sandbox_manifest_and_legacy_roots_are_mutually_exclusive"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_roots=[tmp_path],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
+def test_manifest_backed_builder_revalidates_sources_before_command_construction(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    library = tmp_path / "libpython.so"
+    library.write_text("library", encoding="utf-8")
+    library.chmod(0o444)
+    manifest = build_runtime_manifest(executable, required_files=[library])
+    library.unlink()
+
+    with pytest.raises(ValueError, match="runtime_file_does_not_exist"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+
+def test_manifest_backed_bwrap_hides_undeclared_host_files_and_tools(tmp_path):
+    if os.environ.get("VST_RUN_BWRAP_INTEGRATION") != "1":
+        pytest.skip("Real Bubblewrap execution is reserved for the dedicated Linux CI workflow")
+    bwrap = shutil.which("bwrap")
+    compiler = shutil.which("cc")
+    if not bwrap or not compiler:
+        pytest.fail("Dedicated Linux CI workflow must install Bubblewrap and cc")
+
+    executable = tmp_path / "manifest-runtime-check"
+    python_home = tmp_path / "python-home"
+    python_home.mkdir()
+    python_home.chmod(0o555)
+    host_marker = tmp_path / "host-only-marker"
+    host_marker.write_text("must-not-be-visible", encoding="utf-8")
+    marker = str(host_marker)
+    assembly = tmp_path / "runtime-check.s"
+    assembly.write_text(
+        ".section .rodata\n"
+        f'host_tool: .asciz "/usr/bin/id"\n'
+        f'host_config: .asciz "/etc/passwd"\n'
+        f'host_marker: .asciz "{marker}"\n'
+        'success: .ascii "manifest-runtime-only"\n'
+        ".text\n"
+        ".global _start\n"
+        "_start:\n"
+        "  mov $21, %rax\n"
+        "  lea host_tool(%rip), %rdi\n"
+        "  xor %rsi, %rsi\n"
+        "  syscall\n"
+        "  cmp $-2, %rax\n"
+        "  jne fail\n"
+        "  mov $21, %rax\n"
+        "  lea host_config(%rip), %rdi\n"
+        "  xor %rsi, %rsi\n"
+        "  syscall\n"
+        "  cmp $-2, %rax\n"
+        "  jne fail\n"
+        "  mov $21, %rax\n"
+        "  lea host_marker(%rip), %rdi\n"
+        "  xor %rsi, %rsi\n"
+        "  syscall\n"
+        "  cmp $-2, %rax\n"
+        "  jne fail\n"
+        "  mov $1, %rax\n"
+        "  mov $1, %rdi\n"
+        "  lea success(%rip), %rsi\n"
+        "  mov $21, %rdx\n"
+        "  syscall\n"
+        "  mov $60, %rax\n"
+        "  xor %rdi, %rdi\n"
+        "  syscall\n"
+        "fail:\n"
+        "  mov $60, %rax\n"
+        "  mov $42, %rdi\n"
+        "  syscall\n",
+        encoding="utf-8",
+    )
+    compiled = subprocess.run(
+        [compiler, "-nostdlib", "-static", "-no-pie", "-Wl,-e,_start", "-o", str(executable), str(assembly)],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert compiled.returncode == 0, compiled.stderr[-2000:]
+    executable.chmod(0o555)
+    manifest = build_runtime_manifest(
+        executable,
+        required_directories=[python_home],
+    )
+    argv = build_linux_bwrap_command(
+        [str(executable)],
+        runtime_manifest=manifest,
+        python_home=str(python_home),
+        bwrap_path=bwrap,
+    )
+    result = subprocess.run(argv, capture_output=True, text=True, timeout=20, check=False)
+    assert result.returncode == 0, (
+        f"Manifest-backed Bubblewrap failed with exit {result.returncode}: "
+        f"{result.stderr[-2000:]}"
+    )
+    assert "manifest-runtime-only" in result.stdout
