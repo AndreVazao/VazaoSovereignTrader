@@ -312,6 +312,7 @@ def test_manifest_backed_builder_mounts_only_explicit_runtime_entries(tmp_path):
     argv = build_linux_bwrap_command(
         [str(executable), "-c", "pass"],
         runtime_manifest=manifest,
+        python_home=str(tmp_path / "runtime"),
         bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
     )
 
@@ -327,6 +328,15 @@ def test_manifest_backed_builder_mounts_only_explicit_runtime_entries(tmp_path):
     assert "/etc/ld.so.cache" not in argv
     assert "/usr/bin" not in argv
     assert argv[argv.index("--setenv") + 2] == "/work/bin"
+    setenv = [
+        argv[index:index + 3]
+        for index, value in enumerate(argv)
+        if value == "--setenv"
+    ]
+    assert ["--setenv", "PYTHONHOME", str(tmp_path / "runtime")] in setenv
+    assert ["--setenv", "PYTHONNOUSERSITE", "1"] in setenv
+    assert ["--setenv", "PYTHONDONTWRITEBYTECODE", "1"] in setenv
+    assert ["--setenv", "PYTHONSAFEPATH", "1"] in setenv
 
 
 def test_manifest_backed_builder_rejects_command_executable_mismatch(tmp_path):
