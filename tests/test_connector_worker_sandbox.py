@@ -339,6 +339,28 @@ def test_manifest_backed_builder_mounts_only_explicit_runtime_entries(tmp_path):
     assert ["--setenv", "PYTHONSAFEPATH", "1"] in setenv
 
 
+
+def test_manifest_backed_builder_requires_mounted_python_home(tmp_path):
+    executable = tmp_path / "python"
+    executable.write_text("runtime", encoding="utf-8")
+    executable.chmod(0o555)
+    manifest = build_runtime_manifest(executable)
+
+    with pytest.raises(ValueError, match="sandbox_manifest_python_home_required"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_manifest=manifest,
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
+    with pytest.raises(ValueError, match="sandbox_manifest_python_home_not_mounted"):
+        build_linux_bwrap_command(
+            [str(executable)],
+            runtime_manifest=manifest,
+            python_home=str(tmp_path / "missing-home"),
+            bwrap_path=_fake_bwrap(tmp_path / "bwrap"),
+        )
+
 def test_manifest_backed_builder_rejects_command_executable_mismatch(tmp_path):
     executable = tmp_path / "python"
     executable.write_text("runtime", encoding="utf-8")
@@ -398,6 +420,9 @@ def test_manifest_backed_bwrap_hides_undeclared_host_files_and_tools(tmp_path):
         pytest.fail("Dedicated Linux CI workflow must install Bubblewrap and cc")
 
     executable = tmp_path / "manifest-runtime-check"
+    python_home = tmp_path / "python-home"
+    python_home.mkdir()
+    python_home.chmod(0o555)
     host_marker = tmp_path / "host-only-marker"
     host_marker.write_text("must-not-be-visible", encoding="utf-8")
     marker = str(host_marker)
@@ -452,10 +477,14 @@ def test_manifest_backed_bwrap_hides_undeclared_host_files_and_tools(tmp_path):
     )
     assert compiled.returncode == 0, compiled.stderr[-2000:]
     executable.chmod(0o555)
-    manifest = build_runtime_manifest(executable)
+    manifest = build_runtime_manifest(
+        executable,
+        required_directories=[python_home],
+    )
     argv = build_linux_bwrap_command(
         [str(executable)],
         runtime_manifest=manifest,
+        python_home=str(python_home),
         bwrap_path=bwrap,
     )
     result = subprocess.run(argv, capture_output=True, text=True, timeout=20, check=False)
