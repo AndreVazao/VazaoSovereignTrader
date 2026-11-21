@@ -291,6 +291,9 @@ def test_runtime_manifest_supports_explicit_loader_alias_destination(tmp_path):
 
 def test_runtime_manifest_builder_mounts_alias_at_guest_loader_path(tmp_path):
     executable = _executable(tmp_path / "python")
+    python_home = tmp_path / "python-home"
+    python_home.mkdir()
+    python_home.chmod(0o555)
     loader_source = tmp_path / "lib" / "ld-linux-x86-64.so.2"
     loader_source.parent.mkdir()
     loader_source.write_bytes(b"trusted-loader")
@@ -298,6 +301,7 @@ def test_runtime_manifest_builder_mounts_alias_at_guest_loader_path(tmp_path):
     loader_destination = Path("/lib64/ld-linux-x86-64.so.2")
     manifest = build_runtime_manifest(
         executable,
+        required_directories=[python_home],
         required_mounts=[
             RuntimeMount(loader_source, loader_destination, False),
         ],
@@ -308,6 +312,7 @@ def test_runtime_manifest_builder_mounts_alias_at_guest_loader_path(tmp_path):
     argv = build_linux_bwrap_command(
         [str(executable), "--version"],
         runtime_manifest=manifest,
+        python_home=str(python_home),
         bwrap_path=_executable(tmp_path / "bwrap"),
     )
 
