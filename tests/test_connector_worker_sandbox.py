@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from PC_ENGINE.core import connector_runtime_manifest as runtime_manifest
 from PC_ENGINE.core.connector_runtime_manifest import build_runtime_manifest
 from PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
@@ -19,6 +20,15 @@ pytestmark = pytest.mark.skipif(
     sys.platform != "linux",
     reason="Bubblewrap command construction is Linux-specific",
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sensitive_source_roots_for_test_runtime(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        runtime_manifest,
+        "_SENSITIVE_SOURCE_ROOTS",
+        (tmp_path / "__sensitive_source_root__",),
+    )
 
 
 def _fake_bwrap(path: Path) -> Path:
