@@ -170,7 +170,7 @@ def build_linux_bwrap_command(
         if python_home is None:
             raise ValueError("sandbox_manifest_python_home_required")
         raw_python_home = os.fspath(python_home)
-        if not isinstance(raw_python_home, str) or not raw_python_home.startswith("/") or "\\x00" in raw_python_home:
+        if not isinstance(raw_python_home, str) or not raw_python_home.startswith("/") or "\x00" in raw_python_home:
             raise ValueError("sandbox_manifest_python_home_must_be_absolute")
         python_home_path = Path(raw_python_home)
         if str(python_home_path) != raw_python_home or any(part in {".", ".."} for part in raw_python_home.split("/")):
