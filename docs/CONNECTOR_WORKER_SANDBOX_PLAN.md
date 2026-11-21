@@ -1,7 +1,7 @@
 # Connector Worker Sandbox — implementation plan
 
 **Status (2026-11-20):** The explicit runtime-manifest validator and opt-in manifest-backed Bubblewrap command-construction path are implemented. The manifest-backed path has passed real Bubblewrap execution in CI on PR #578 HEAD `27051f98bc0a1992300db6f1cb8b1e2dc730d02e`; Python, PAPER and Windows EXE/installer workflows also passed on that exact SHA. The static probe proves selected host paths are absent, but it is not a packaged Python runtime closure. Worker lifecycle integration, immutable runtime packaging/TOCTOU mitigation, provider egress policy and Windows filesystem/network isolation remain blocked.
-**Date:** 2026-11-20
+**Date:** 2026-11-21
 **Base:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7` (PR #577 merge commit; includes PR #576)
 
 ## Current enforced worker controls on main
@@ -19,6 +19,7 @@ These controls do not isolate filesystem access or restrict network egress. The 
 
 `PC_ENGINE/core/connector_runtime_manifest.py` now validates an explicit runtime closure:
 - Requires an absolute, existing, non-symlinked executable and explicit regular-file/directory entries.
+- Rejects executable, file, alias-source and directory paths that overlap host-owned sensitive/system roots, including nested descendants and ancestor mounts; package runtime sources must not come from user, VST state, host configuration, scratch or broad system trees.
 - Rejects broad or sensitive directory roots, duplicates, type conflicts, symlinks, missing paths and overlapping mounts.
 - Rejects hard-linked runtime files and group/world-writable runtime files or directories, reducing alias-based mutation and untrusted-owner replacement risks.
 - Recursively rejects symlinks, special files, hard-linked files and group/world-writable nested files/directories inside every exposed runtime directory; TOCTOU protection still requires immutable packaged roots and revalidation immediately before mounting.
@@ -38,9 +39,13 @@ These controls do not isolate filesystem access or restrict network egress. The 
 
 A dedicated Linux GitHub Actions workflow installs Bubblewrap and GCC and runs real sandbox execution tests. The legacy-path test attempts to read a host-only file, connect to a host loopback listener, verify inherited environment variables are cleared, verify normalized HOME/TMPDIR values, and inspect both private `/tmp` and `/work` tmpfs capacities. A manifest-backed static probe checks that `/usr/bin/id`, `/etc/passwd` and an undeclared host marker are inaccessible while the explicitly mounted static executable runs. Both integration tests must execute, not silently skip, in that workflow.
 
+**Source-path confinement (2026-11-21):** the manifest validator now rejects any source path that is inside, or is an ancestor of, a host-owned sensitive/system root. This applies to the interpreter, ordinary files, alias sources and directory mounts; it closes the gap where a nested path such as a user-home subdirectory or host configuration subtree could otherwise pass the exact-root checks. Tests cover nested file/directory/executable/alias sources and a parent directory that would contain the sensitive root. The test suite substitutes a synthetic sensitive root so it remains portable across CI runners.
+
 **Additional manifest hardening (2026-11-20):** regular runtime files must have a single hard link and must not be group/world writable; runtime directories must not be group/world writable. Focused tests cover each rejection. This narrows alias and permission risks but does not eliminate privileged-owner replacement or TOCTOU races; the packager must still provide immutable runtime roots and production launch must revalidate immediately before mounting.
 
-**Security blocker — broad runtime exposure (2026-11-20):** the builder still mounts broad read-only `/usr`, `/lib`, `/bin` and related roots, so host tools and binaries can remain visible/callable. Masking `/usr/local` does not make this a minimal runtime. The manifest validator is groundwork only: until `build_linux_bwrap_command` consumes a validated manifest and mounts only its explicit entries, this blocker remains open. The next implementation step is to make manifest-backed mounting the only accepted execution path, create only the required empty destination parents, reject any undeclared executable or dependency, and add real Bubblewrap tests proving host executables and unrelated host files are absent. Do not enable connector execution in the meantime.\n\n**Important limitations:** this remains a command builder plus an isolated execution test. It is not yet called by `IsolatedConnectorAdapter`, does not provision or clean a production worker lifecycle, and does not provide provider-specific HTTPS egress. Windows filesystem/network sandboxing is not implemented. Do not describe this branch as a complete sandbox.
+**Security blocker — broad runtime exposure (2026-11-20):** the builder still mounts broad read-only `/usr`, `/lib`, `/bin` and related roots, so host tools and binaries can remain visible/callable. Masking `/usr/local` does not make this a minimal runtime. The manifest validator is groundwork only: until `build_linux_bwrap_command` consumes a validated manifest and mounts only its explicit entries, this blocker remains open. The next implementation step is to make manifest-backed mounting the only accepted execution path, create only the required empty destination parents, reject any undeclared executable or dependency, and add real Bubblewrap tests proving host executables and unrelated host files are absent. Do not enable connector execution in the meantime.
+
+**Important limitations:** this remains a command builder plus an isolated execution test. It is not yet called by `IsolatedConnectorAdapter`, does not provision or clean a production worker lifecycle, and does not provide provider-specific HTTPS egress. Windows filesystem/network sandboxing is not implemented. Do not describe this branch as a complete sandbox.
 
 ## Required security contract
 

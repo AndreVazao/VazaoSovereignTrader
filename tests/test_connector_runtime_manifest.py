@@ -5,6 +5,17 @@ from pathlib import Path
 
 import pytest
 
+from PC_ENGINE.core import connector_runtime_manifest as runtime_manifest
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sensitive_source_roots_for_test_runtime(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        runtime_manifest,
+        "_SENSITIVE_SOURCE_ROOTS",
+        (tmp_path / "__sensitive_source_root__",),
+    )
+
 from PC_ENGINE.core.connector_runtime_manifest import (
     RuntimeManifestError,
     RuntimeMount,
@@ -17,6 +28,78 @@ def _executable(path: Path) -> Path:
     path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     path.chmod(0o700)
     return path
+
+
+def test_runtime_manifest_rejects_executable_inside_sensitive_source_root(tmp_path):
+    sensitive_root = tmp_path / "__sensitive_source_root__"
+    sensitive_root.mkdir()
+    executable = _executable(sensitive_root / "python")
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_executable_overlaps_sensitive_path",
+    ):
+        build_runtime_manifest(executable)
+
+
+def test_runtime_manifest_rejects_nested_sensitive_runtime_file(tmp_path):
+    sensitive_root = tmp_path / "__sensitive_source_root__"
+    sensitive_root.mkdir()
+    private_file = sensitive_root / "private-state.bin"
+    private_file.write_bytes(b"private")
+    private_file.chmod(0o600)
+    executable = _executable(tmp_path / "python")
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_file_overlaps_sensitive_path",
+    ):
+        build_runtime_manifest(executable, required_files=[private_file])
+
+
+def test_runtime_manifest_rejects_nested_sensitive_directory(tmp_path):
+    sensitive_root = tmp_path / "__sensitive_source_root__"
+    runtime = sensitive_root / "nested-runtime"
+    runtime.mkdir(parents=True)
+    executable = _executable(tmp_path / "python")
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_overlaps_sensitive_path",
+    ):
+        build_runtime_manifest(executable, required_directories=[runtime])
+
+
+def test_runtime_manifest_rejects_directory_that_contains_sensitive_root(tmp_path):
+    sensitive_root = tmp_path / "__sensitive_source_root__"
+    sensitive_root.mkdir()
+    executable = _executable(tmp_path / "python")
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_directory_overlaps_sensitive_path",
+    ):
+        build_runtime_manifest(executable, required_directories=[tmp_path])
+
+
+def test_runtime_manifest_rejects_sensitive_alias_source(tmp_path):
+    sensitive_root = tmp_path / "__sensitive_source_root__"
+    sensitive_root.mkdir()
+    private_file = sensitive_root / "private-loader"
+    private_file.write_bytes(b"private")
+    private_file.chmod(0o444)
+    executable = _executable(tmp_path / "python")
+
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_mount_source_overlaps_sensitive_path",
+    ):
+        build_runtime_manifest(
+            executable,
+            required_mounts=[
+                RuntimeMount(private_file, Path("/lib64/loader"), False),
+            ],
+        )
 
 
 def test_runtime_manifest_contains_only_explicit_read_only_paths(tmp_path):

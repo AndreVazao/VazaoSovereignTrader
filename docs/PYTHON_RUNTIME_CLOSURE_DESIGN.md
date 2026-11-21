@@ -23,6 +23,7 @@ The package must not contain pip, compilers, shells, package managers, debuggers
 - Generate the manifest at trusted packaging time from the package staging directory and a reviewed dependency inventory.
 - Record package format version, Python ABI/version, architecture, source paths, in-sandbox destinations, file type, size and SHA-256 for every regular file.
 - Reject symlinks, hard links, special files, duplicate destinations, path traversal, writable-by-group/world entries and unreviewed executable files.
+- Reject every source path that overlaps host-owned sensitive/system roots, including nested descendants and ancestor mounts; package sources must come from a protected, package-owned runtime location rather than user home, VST state, host configuration, temporary or broad system trees.
 - Sign or otherwise authenticate the manifest as part of the installer/package trust chain. Hashes alone do not establish authenticity if an attacker can replace both package and manifest.
 - Install under a protected, versioned directory that the runtime user cannot modify. Do not update files in place while workers may be starting.
 - Revalidate the package identity and file metadata immediately before launch. Prefer opening sources by file descriptor and using fd-based bind mounts where supported; if the implementation cannot close the validation-to-mount race, deny launch rather than claiming TOCTOU protection.

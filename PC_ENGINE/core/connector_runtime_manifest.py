@@ -38,6 +38,16 @@ _FORBIDDEN_DIRECTORY_MOUNTS = {
     Path("/media"),
 }
 
+# Runtime sources must come from a protected package-owned location. Never
+# expose host user/configuration/state/system trees, even through a nested path.
+_SENSITIVE_SOURCE_ROOTS = tuple(
+    Path(item)
+    for item in (
+        "/home", "/root", "/etc", "/var", "/run", "/proc", "/sys", "/dev",
+        "/tmp", "/mnt", "/media", "/usr", "/lib", "/lib64", "/bin", "/sbin",
+    )
+)
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeMount:
@@ -70,7 +80,17 @@ def _canonical_path(value: str | os.PathLike[str], *, label: str) -> Path:
     return resolved
 
 
+def _path_overlaps(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents or path in root.parents
+
+
+def _validate_source_path(path: Path, *, label: str) -> None:
+    if any(_path_overlaps(path, root) for root in _SENSITIVE_SOURCE_ROOTS):
+        raise RuntimeManifestError(f"{label}_overlaps_sensitive_path")
+
+
 def _validate_file(path: Path, *, label: str, executable: bool = False) -> None:
+    _validate_source_path(path, label=label)
     try:
         mode = path.lstat().st_mode
     except OSError:
@@ -96,6 +116,7 @@ def _validate_directory(path: Path, *, label: str) -> None:
         raise RuntimeManifestError(f"{label}_must_be_real_directory")
     if path in _FORBIDDEN_DIRECTORY_MOUNTS:
         raise RuntimeManifestError(f"{label}_is_too_broad")
+    _validate_source_path(path, label=label)
     if mode & (stat.S_IWGRP | stat.S_IWOTH):
         raise RuntimeManifestError(f"{label}_must_not_be_group_or_world_writable")
 

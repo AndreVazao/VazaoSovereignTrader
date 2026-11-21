@@ -1,6 +1,6 @@
 # Universal Connector Runtime — VST
 
-**Status date:** 2026-11-20  
+**Status date:** 2026-11-21  
 **Scope:** first-party public market-data adapters and the security boundaries required before any third-party connector execution. This document describes verified implementation, not planned capability.
 
 ## Implemented on main
@@ -33,7 +33,7 @@ The merged Bubblewrap prototype provides:
 - a cleared environment and bounded private `/tmp` and `/work` tmpfs mounts;
 - a real Linux CI enforcement test for host-file denial, loopback denial, inherited-environment removal and tmpfs limits.
 
-PR #578 adds `PC_ENGINE/core/connector_runtime_manifest.py`, which validates explicit executable/file/directory entries and rejects broad/sensitive directory roots, symlinks, special files, hard links, group/world-writable entries, duplicate/type-conflicting paths and overlapping mounts. Directory trees are inspected recursively. `revalidate_runtime_manifest()` reconstructs and rechecks the exact manifest immediately before command construction. It does not discover dependencies or execute `ldd`.
+PR #578 adds `PC_ENGINE/core/connector_runtime_manifest.py`, which validates explicit executable/file/directory entries and rejects source paths overlapping host-owned sensitive/system roots (including nested descendants and ancestor mounts), symlinks, special files, hard links, group/world-writable entries, duplicate/type-conflicting paths and overlapping mounts. Directory trees are inspected recursively. `revalidate_runtime_manifest()` reconstructs and rechecks the exact manifest immediately before command construction. It does not discover dependencies or execute `ldd`.
 
 **Current builder split:** `build_linux_bwrap_command(..., runtime_manifest=...)` now has a separate opt-in manifest-backed path. It rejects simultaneous legacy `runtime_roots`, revalidates the manifest, requires the command executable to match the manifest, creates only empty destination parents, sets a non-host PATH, creates private `/tmp` and `/work` first, and mounts only explicit entries read-only. It does not add `/usr`, `/lib`, `/bin`, `/etc/ld.so.cache` or the host CA tree. The legacy compatibility path still uses broad read-only host roots and remains unsuitable for untrusted connectors. A real Bubblewrap static-probe test is now included to check denial of `/usr/bin/id`, `/etc/passwd` and an undeclared host marker.
 
@@ -63,6 +63,6 @@ The current registry permits only `READ_ONLY_CAPABILITIES`. It rejects order cre
 - U-Hodler is not connected; no Android virtualization provider is provisioned.
 - Human handoff remains mandatory for MFA, OTP, CAPTCHA, biometrics, consent and financial/security prompts.
 
-## Exact-HEAD verification checkpoint — 2026-11-20
+## Exact-HEAD verification checkpoint — 2026-11-21
 
-For PR #578 HEAD `2a1875cf99798ca147bc3e4218e7b14f24524c63`, GitHub Actions reported success for Python tests, PAPER smoke, Connector sandbox Linux, Windows EXE and Windows installer. The installer job completed previous-version install, upgrade, launch, health, uninstall and Learning Vault preservation smoke. Subsequent manifest-backed builder/test changes are newer than that validated SHA and require a fresh exact-HEAD CI run. This is CI evidence only; physical PC validation remains pending. Vercel previews are informational, not code tests. Android and unrelated workflows were not triggered by this PR's path filters.
+At PR #578 HEAD `c96cb668ef320bf8b2e042fbafa8273770b92f7c`, the four applicable GitHub Actions workflows passed on the exact same SHA: Python tests, PAPER lifecycle/safety smoke, Connector sandbox Linux Bubblewrap enforcement, and Windows EXE/installer. The Windows workflow completed EXE smoke plus previous-version install, upgrade, launch, health, uninstall and Learning Vault preservation. The Snyk status check also reported success on this SHA. Vercel is a deployment preview only and is not code-test evidence. The earlier Linux/Python failures on SHA `8b874509a2173518d993eab60acd285d4de1c9b6` were superseded by later exact-head runs; their results are not transferred to `c96cb66`. Android workflows were not triggered by this PR's path filters. This is CI evidence only; physical PC validation remains pending. Any later commit requires its own exact-HEAD verification.
