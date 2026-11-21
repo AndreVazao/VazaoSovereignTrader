@@ -103,6 +103,7 @@ def build_linux_bwrap_command(
     work_size_bytes: int = _DEFAULT_WORK_BYTES,
     bwrap_path: str | os.PathLike[str] | None = None,
     runtime_manifest: RuntimeManifest | None = None,
+    python_home: str | os.PathLike[str] | None = None,
 ) -> list[str]:
     """Build a fail-closed Linux Bubblewrap command with bounded writable tmpfs.
 
@@ -166,6 +167,21 @@ def build_linux_bwrap_command(
             raise ValueError(str(exc)) from None
         if Path(command[0]) != validated_manifest.executable:
             raise ValueError("sandbox_command_must_use_manifest_executable")
+        if python_home is None:
+            raise ValueError("sandbox_manifest_python_home_required")
+        raw_python_home = os.fspath(python_home)
+        if not isinstance(raw_python_home, str) or not raw_python_home.startswith("/") or "\\x00" in raw_python_home:
+            raise ValueError("sandbox_manifest_python_home_must_be_absolute")
+        python_home_path = Path(raw_python_home)
+        if str(python_home_path) != raw_python_home or any(part in {".", ".."} for part in raw_python_home.split("/")):
+            raise ValueError("sandbox_manifest_python_home_not_normalized")
+        if python_home_path in {Path("/"), Path("/tmp"), Path("/work"), Path("/proc"), Path("/dev")}:
+            raise ValueError("sandbox_manifest_python_home_is_reserved")
+        if not any(
+            mount.is_directory and _is_within(mount.destination, python_home_path)
+            for mount in validated_manifest.mounts
+        ):
+            raise ValueError("sandbox_manifest_python_home_not_mounted")
         executable_real = validated_manifest.executable
         explicit_mounts = validated_manifest.mounts
         system_mounts: list[tuple[Path, Path]] = []
@@ -278,6 +294,16 @@ def build_linux_bwrap_command(
             "--setenv", "PATH", ("/usr/bin" if validated_manifest is None else "/work/bin"),
             "--setenv", "HOME", "/work",
             "--setenv", "TMPDIR", "/tmp",
+            *(
+                [
+                    "--setenv", "PYTHONHOME", str(python_home_path),
+                    "--setenv", "PYTHONNOUSERSITE", "1",
+                    "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
+                    "--setenv", "PYTHONSAFEPATH", "1",
+                ]
+                if validated_manifest is not None
+                else []
+            ),
             "--",
             *normalized_command,
         ]
