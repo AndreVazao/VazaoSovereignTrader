@@ -362,21 +362,21 @@ def test_manifest_backed_builder_requires_mounted_python_home(tmp_path):
         )
 
 def test_manifest_backed_builder_accepts_python_home_nested_in_declared_runtime_mount(tmp_path):
-    executable = tmp_path / "runtime" / "bin" / "python"
-    executable.parent.mkdir(parents=True)
+    executable = tmp_path / "interpreter" / "python"
+    executable.parent.mkdir()
     executable.write_text("runtime", encoding="utf-8")
     executable.chmod(0o555)
-    python_home = tmp_path / "runtime" / "lib" / "python3.11"
+    python_runtime = tmp_path / "runtime"
+    python_home = python_runtime / "lib" / "python3.11"
     python_home.mkdir(parents=True)
     (python_home / "encodings.py").write_text("value = 1", encoding="utf-8")
     (python_home / "encodings.py").chmod(0o444)
     python_home.chmod(0o555)
     (python_home.parent).chmod(0o555)
-    (python_home.parent.parent).chmod(0o555)
-    (executable.parent).chmod(0o555)
+    python_runtime.chmod(0o555)
     manifest = build_runtime_manifest(
         executable,
-        required_directories=[tmp_path / "runtime"],
+        required_directories=[python_runtime],
     )
 
     argv = build_linux_bwrap_command(
