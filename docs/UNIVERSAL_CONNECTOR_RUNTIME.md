@@ -63,15 +63,39 @@ The current registry permits only `READ_ONLY_CAPABILITIES`. It rejects order cre
 - U-Hodler is not connected; no Android virtualization provider is provisioned.
 - Human handoff remains mandatory for MFA, OTP, CAPTCHA, biometrics, consent and financial/security prompts.
 
-## Exact-HEAD verification checkpoint — 2026-11-22
+## Exact-HEAD verification checkpoint — 2026-11-22 12:52 UTC
 
-At PR #578 HEAD `e5c0e9fefbc6a69b3c91a9fce0e519aefd31fdc0`, all four applicable GitHub Actions workflows completed successfully on the exact same SHA:
+**Repository:** `AndreVazao/VazaoSovereignTrader`  
+**Main SHA:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`  
+**Active PR:** [#578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578), Draft, open, base `main`, mergeable/clean, not merged.  
+**PR HEAD:** `121b10d187b80f42625cf23ac78881fb209a2d09`.
 
-- Python tests: run `44904591206`, job `test`.
-- PAPER lifecycle/safety: run `44904591234`, job `PAPER lifecycle and safety boundaries`.
-- Connector sandbox Linux: run `44904591241`, job `linux-bubblewrap-enforcement`.
-- Windows EXE/installer: run `44904591213`; both `build-exe` and `build-installer` succeeded. The installer job ran previous-version install, upgrade, launch, health check, uninstall and Learning Vault preservation, then uploaded the artifact.
+All four applicable code workflows completed successfully on that exact HEAD:
 
-The installer lifecycle is no longer pending for this SHA. CI does not replace physical validation on the target PC. Vercel previews are not code-test evidence.
+- [Python tests #45007660609](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660609) — **PASS**, 1,613 passed, 4 skipped, 96 subtests passed.
+- [PAPER lifecycle/safety #45007660634](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660634) — **PASS**, 82 passed.
+- [Connector sandbox Linux #45007660575](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660575) — **PASS**, 69 passed; builds the packaged CPython runtime and runs the real runtime/worker probes inside Bubblewrap.
+- [Windows EXE/installer #45007660587](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660587) — **PASS**, both `build-exe` and `build-installer`. The installer job completed previous-version silent install, in-place upgrade, launch, PAPER health check, silent uninstall, process/task cleanup and Learning Vault SHA-256 preservation.
 
-The Linux workflow still validates the manifest-backed static executable probe, not a packaged CPython runtime. The manifest-backed launcher is not integrated into `IsolatedConnectorAdapter` or a parent supervisor. Runtime authenticity/immutability, TOCTOU mitigation, bounded IPC under Bubblewrap, provider-specific egress and Windows filesystem/network isolation remain open. PR #578 remains Draft and must not be merged based only on green CI. Do not enable third-party connectors.
+Windows artifacts from run #45007660587 (both unexpired when checked):
+- [Portable Windows ZIP, artifact 14748651526](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660587/artifacts/14748651526), 65,932,024 bytes; upload-artifact archive SHA-256 `24c6cf95c5378290b24c6c4d00850b3ff4f2750b1ebbe56d04e16fec0e7023de`.
+- [Windows installer ZIP, artifact 14748438404](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660587/artifacts/14748438404), 233,807,991 bytes; upload-artifact archive SHA-256 `731309b9a0efad900473c9c415ef8126e549b7cbea13135e9bbc413c2f4e891f`.
+
+The successful Vercel preview comment is informational only and is not code-test evidence. No Android workflow was triggered by this PR's changed paths. No Snyk result was present in the exact-HEAD checks.
+
+**What the Linux CI now proves:** the packaged CPython runtime is built from the selected trusted interpreter, imported and exercised inside Bubblewrap; the existing `IsolatedConnectorAdapter` multiprocessing spawn path, bounded IPC, timeout and process-group cleanup are exercised from inside that namespace. This is materially beyond the earlier static-probe-only stage.
+
+**What it does not prove:** production launch is still not integrated. The trusted production parent/supervisor does not yet construct the strict manifest-backed Bubblewrap command and launch the worker through it before adapter code executes. The CI probe enters Bubblewrap first, then starts the adapter inside it. This is not yet the production lifecycle.
+
+**Do not merge or enable third-party connectors yet.** Remaining security gates:
+1. Authenticate/sign the runtime inventory and bind it to the installer/package trust chain; hashes alone do not establish authenticity.
+2. Establish and verify root-owned, immutable package paths in the actual installer/runtime, including replacement/TOCTOU protection between validation and mount.
+3. Implement the trusted parent/supervisor launch path using only the manifest-backed builder; no fallback to broad host mounts or unsandboxed multiprocessing when strict mode is required.
+4. Integrate only after the launcher/lifecycle tests pass; keep `ConnectorRegistry` disconnected from untrusted connector execution meanwhile.
+5. Keep Linux egress deny-all until a separately reviewed provider-specific HTTPS policy and DNS/redirect/private-address/proxy escape tests exist.
+6. Implement independent Windows filesystem and network isolation; Job Objects remain process/resource controls only.
+7. Perform physical target-PC validation; CI is not evidence of the user's PC.
+
+The repository inventory at this checkpoint returned 33 branches including `main`, exactly one open PR (#578), and no formal GitHub Releases. Branch listing reported `protected=false` for `main`; the rulesets endpoint returned an empty list, while the branch-protection endpoint returned 403 to this integration. Therefore required branch protection cannot be confirmed and should be checked in repository settings by an authorized maintainer.
+
+VST remains PAPER-only. No credentials, exchange accounts, LIVE permissions, orders, transfers or financial operations are used or authorized.
