@@ -10,6 +10,7 @@ executable path.
 from __future__ import annotations
 
 import argparse
+import ctypes.util
 import hashlib
 import json
 import os
@@ -188,6 +189,21 @@ def main() -> None:
         ldd_env = {**os.environ, "LD_LIBRARY_PATH": str(libdir)}
         dependencies.update(ldd_dependencies(python, ldd_env))
         dependencies.update(ldd_dependencies(libpython_source, ldd_env))
+        # CPython's _ctypes loads libffi dynamically, so it is not guaranteed
+        # to appear in ldd's DT_NEEDED closure. Resolve this trusted runtime
+        # dependency explicitly from the host linker cache and copy it in.
+        ffi_soname = ctypes.util.find_library("ffi")
+        if not ffi_soname:
+            fail("python_libffi_dependency_missing")
+        linker_cache = run(["ldconfig", "-p"])
+        ffi_paths = re.findall(
+            rf"^\\s*{re.escape(ffi_soname)}(?:\\s|$).*=>\\s*(/[^\\s]+)",
+            linker_cache,
+            flags=re.MULTILINE,
+        )
+        if not ffi_paths:
+            fail("python_libffi_dependency_unresolved")
+        dependencies.add(Path(ffi_paths[0]).resolve(strict=True))
         extension_root = stdlib_target / "lib-dynload"
         if not extension_root.is_dir():
             fail("python_extension_directory_missing")
