@@ -6,6 +6,8 @@ on:
     paths:
       - "PC_ENGINE/core/connector_worker_sandbox.py"
       - "PC_ENGINE/core/connector_runtime_manifest.py"
+      - "scripts/build_connector_python_runtime.py"
+      - "tests/test_connector_python_runtime.py"
       - "tests/test_connector_worker_sandbox.py"
       - "tests/test_connector_runtime_manifest.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
@@ -34,15 +36,28 @@ jobs:
       - name: Install Bubblewrap
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y bubblewrap gcc
+          sudo apt-get install --no-install-recommends -y bubblewrap gcc patchelf binutils
           bwrap --version
 
       - name: Install project test dependencies
         run: |
           python -m pip install --disable-pip-version-check -r requirements-pc.txt pytest
 
-      - name: Execute Linux sandbox enforcement tests
+      - name: Build protected packaged CPython runtime
+        run: |
+          sudo "$(command -v python)" scripts/build_connector_python_runtime.py
+          sudo test -x /opt/vst-connector-python/python
+          sudo test -d /opt/vst-connector-runtime/lib/python3.11
+
+      - name: Execute Linux sandbox and packaged-runtime enforcement tests
         env:
           PYTHONPATH: ${{ github.workspace }}
           VST_RUN_BWRAP_INTEGRATION: "1"
-        run: python -m pytest -q tests/test_connector_worker_sandbox.py tests/test_connector_runtime_manifest.py
+          VST_CONNECTOR_RUNTIME_INTEGRATION: "1"
+          VST_CONNECTOR_RUNTIME_ROOT: /opt/vst-connector-runtime
+          VST_CONNECTOR_RUNTIME_EXECUTABLE: /opt/vst-connector-python/python
+        run: |
+          python -m pytest -q \
+            tests/test_connector_worker_sandbox.py \
+            tests/test_connector_runtime_manifest.py \
+            tests/test_connector_python_runtime.py
