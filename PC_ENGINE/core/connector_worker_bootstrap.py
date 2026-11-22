@@ -2,8 +2,9 @@ from __future__ import annotations
 
 """Minimal one-shot entry point for a worker already launched by a trusted sandbox parent.
 
-This module deliberately has no process-launching or credential-loading authority.
-The parent must establish the OS sandbox before invoking this module.
+The factory reference is supplied as a process argument by the trusted parent,
+never by the worker's untrusted JSON request. This module does not create a
+sandbox, launch processes, or load credentials.
 """
 
 import contextlib
@@ -25,7 +26,10 @@ _SECRET_ENV_MARKERS = (
     "ACCESS_KEY", "PRIVATE", "SIGNING_KEY", "BEARER", "CLIENT_SECRET",
     "AUTHORIZATION", "COOKIE",
 )
-_FACTORY_PATH = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*:[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
+_FACTORY_PATH = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*:"
+    r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"
+)
 
 
 def _sanitize_environment() -> None:
@@ -51,10 +55,11 @@ def _resolve_factory(path: str) -> Any:
 def execute_request(
     payload: Mapping[str, Any],
     *,
+    factory_reference: str,
     factory_resolver: Any = _resolve_factory,
 ) -> dict[str, Any]:
     if not isinstance(payload, Mapping) or set(payload) != {
-        "factory", "capability", "request", "timeout_seconds",
+        "capability", "request", "timeout_seconds",
         "memory_limit_mb", "cpu_time_limit_seconds",
     }:
         raise ValueError("invalid_worker_request")
@@ -76,10 +81,10 @@ def execute_request(
     if isinstance(cpu_limit, bool) or not isinstance(cpu_limit, int):
         raise ValueError("invalid_cpu_limit")
 
+    # Resource boundaries are established before importing adapter modules.
     apply_child_resource_limits(memory_limit, cpu_limit)
-    factory = factory_resolver(payload["factory"])
+    factory = factory_resolver(factory_reference)
     adapter = factory()
-    # Adapter diagnostics must never corrupt the single JSON response channel.
     with contextlib.redirect_stdout(sys.stderr):
         result = adapter.read(
             capability,
@@ -99,12 +104,17 @@ def execute_request(
 def main() -> int:
     _sanitize_environment()
     try:
+        if len(sys.argv) != 2:
+            raise ValueError("trusted_factory_argument_required")
         raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
         if len(raw) > MAX_REQUEST_BYTES:
             envelope = {"ok": False, "error": "request_too_large"}
         else:
             payload = json.loads(raw.decode("utf-8"))
-            envelope = execute_request(payload)
+            envelope = execute_request(
+                payload,
+                factory_reference=sys.argv[1],
+            )
     except BaseException:
         # Do not expose exception messages, tracebacks, provider URLs or secrets.
         envelope = {"ok": False, "error": "connector_execution_failed"}
