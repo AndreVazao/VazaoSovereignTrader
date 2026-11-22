@@ -68,7 +68,7 @@ The current registry permits only `READ_ONLY_CAPABILITIES`. It rejects order cre
 **Repository:** `AndreVazao/VazaoSovereignTrader`  
 **Main SHA:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`  
 **Active PR:** [#578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578), Draft, open, base `main`, mergeable/clean, not merged.  
-**PR HEAD:** `121b10d187b80f42625cf23ac78881fb209a2d09`.
+**Current branch HEAD:** `d2e5391d59af3ff823726978bacdfad86ba2fd94` (documentation-only follow-up commits). **Last code-bearing SHA with all four applicable workflows green:** `121b10d187b80f42625cf23ac78881fb209a2d09`.
 
 All four applicable code workflows completed successfully on that exact HEAD:
 
@@ -82,6 +82,8 @@ Windows artifacts from run #45007660587 (both unexpired when checked):
 - [Windows installer ZIP, artifact 14748438404](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660587/artifacts/14748438404), 233,807,991 bytes; upload-artifact archive SHA-256 `731309b9a0efad900473c9c415ef8126e549b7cbea13135e9bbc413c2f4e891f`.
 
 The successful Vercel preview comment is informational only and is not code-test evidence. No Android workflow was triggered by this PR's changed paths. No Snyk result was present in the exact-HEAD checks.
+
+After those workflow runs, two documentation-only commits were added: [d9fe13d](https://github.com/AndreVazao/VazaoSovereignTrader/commit/d9fe13d8a20e2024dc2180c08e47f995ca3082bb) and [d2e5391](https://github.com/AndreVazao/VazaoSovereignTrader/commit/d2e5391d59af3ff823726978bacdfad86ba2fd94). They update only `docs/UNIVERSAL_CONNECTOR_RUNTIME.md` and `docs/PROJECT_CONTEXT.md`. The current branch HEAD is therefore `d2e5391d59af3ff823726978bacdfad86ba2fd94`; the green code-workflow evidence remains attached to code-bearing SHA `121b10d187b80f42625cf23ac78881fb209a2d09`. These documentation paths are outside the Python/PAPER/Windows/Linux code-workflow path filters, so those workflows were not re-triggered on the documentation-only HEAD. Do not describe `d2e5391d59af3ff823726978bacdfad86ba2fd94` as having a fresh code test run.
 
 **What the Linux CI now proves:** the packaged CPython runtime is built from the selected trusted interpreter, imported and exercised inside Bubblewrap; the existing `IsolatedConnectorAdapter` multiprocessing spawn path, bounded IPC, timeout and process-group cleanup are exercised from inside that namespace. This is materially beyond the earlier static-probe-only stage.
 
