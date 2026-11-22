@@ -5,8 +5,14 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "PC_ENGINE/core/connector_worker_sandbox.py"
+      - "PC_ENGINE/core/connector_runtime_manifest.py"
+      - "scripts/build_connector_python_runtime.py"
+      - "tests/test_connector_python_runtime.py"
+      - "tests/fixtures/connector_runtime_probe.py"
       - "tests/test_connector_worker_sandbox.py"
+      - "tests/test_connector_runtime_manifest.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
+      - "docs/PYTHON_RUNTIME_CLOSURE_DESIGN.md"
       - ".github/workflows/connector-sandbox-linux.yml"
 
 permissions:
@@ -32,15 +38,33 @@ jobs:
       - name: Install Bubblewrap
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y bubblewrap
+          sudo apt-get install --no-install-recommends -y bubblewrap gcc patchelf binutils
           bwrap --version
 
       - name: Install project test dependencies
         run: |
           python -m pip install --disable-pip-version-check -r requirements-pc.txt pytest
 
-      - name: Execute Linux sandbox enforcement tests
+      - name: Build protected packaged CPython runtime
+        run: |
+          stat -c "%n uid=%u mode=%a" / /srv
+          sudo install -d -o root -g root -m 0755 /srv/vst-connector
+          stat -c "%n uid=%u mode=%a" /srv/vst-connector
+          sudo "$(command -v python)" scripts/build_connector_python_runtime.py \
+            --destination /srv/vst-connector/runtime \
+            --executable /srv/vst-connector/bin/python
+          sudo test -x /srv/vst-connector/bin/python
+          sudo test -d /srv/vst-connector/runtime/lib/python3.11
+
+      - name: Execute Linux sandbox and packaged-runtime enforcement tests
         env:
           PYTHONPATH: ${{ github.workspace }}
           VST_RUN_BWRAP_INTEGRATION: "1"
-        run: python -m pytest -q tests/test_connector_worker_sandbox.py
+          VST_CONNECTOR_RUNTIME_INTEGRATION: "1"
+          VST_CONNECTOR_RUNTIME_ROOT: /srv/vst-connector/runtime
+          VST_CONNECTOR_RUNTIME_EXECUTABLE: /srv/vst-connector/bin/python
+        run: |
+          python -m pytest -q \
+            tests/test_connector_worker_sandbox.py \
+            tests/test_connector_runtime_manifest.py \
+            tests/test_connector_python_runtime.py

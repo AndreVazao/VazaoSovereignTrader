@@ -1,4 +1,82 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-19
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-22 12:52 UTC
+
+**Repository:** `AndreVazao/VazaoSovereignTrader` only.  
+**Verified main:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`.  
+**Active development:** [PR #578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578), branch `feat/minimal-python-runtime-closure-2026-11-20`.  
+**Current PR head:** read live metadata from [PR #578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578) before acting. **Last code-bearing SHA with all four applicable workflows green:** `121b10d187b80f42625cf23ac78881fb209a2d09`. Subsequent commits in this PR changed only `docs/UNIVERSAL_CONNECTOR_RUNTIME.md` and `docs/PROJECT_CONTEXT.md`; the code workflows were not re-triggered because these paths do not match their filters. This checkpoint supersedes the historical 2026-11-19 handoff below.
+
+## Live repository inventory
+
+- Default branch: `main`, exact SHA above.
+- Branch inventory: 33 branches including `main`.
+- Open PR inventory: exactly one, #578. PRs #536 and #541 are historical only.
+- Formal GitHub Releases: none returned.
+- Branch listing reports `protected=false` for `main`; rulesets query returned an empty list. The branch-protection endpoint returned 403 to this integration, so the required status-check/review rules could not be independently inspected. Treat branch protection as **unconfirmed** and verify in GitHub repository settings.
+
+## Exact-HEAD CI — PR #578 HEAD
+
+All four applicable workflows below completed successfully on `121b10d187b80f42625cf23ac78881fb209a2d09`:
+
+- [Python tests](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660609) — 1,613 passed, 4 skipped, 96 subtests passed.
+- [PAPER lifecycle and safety](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660634) — 82 passed.
+- [Linux Bubblewrap + packaged CPython](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660575) — 69 passed. The workflow builds the protected runtime package and exercises the packaged interpreter and multiprocessing adapter probe inside Bubblewrap.
+- [Windows EXE and installer](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660587) — both jobs passed. The installer job completed silent v1 install, in-place v2 upgrade, launch, PAPER health check, silent uninstall, process/task cleanup and Learning Vault SHA-256 preservation.
+
+Unexpired Windows artifacts:
+- [Portable ZIP](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660587/artifacts/14748651526), 65,932,024 bytes; upload archive SHA-256 `24c6cf95c5378290b24c6c4d00850b3ff4f2750b1ebbe56d04e16fec0e7023de`.
+- [Installer ZIP](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45007660587/artifacts/14748438404), 233,807,991 bytes; upload archive SHA-256 `731309b9a0efad900473c9c415ef8126e549b7cbea13135e9bbc413c2f4e891f`.
+
+The Vercel preview is not a code test. Android was not triggered by the PR's changed paths. No Snyk result was present in the exact-HEAD check set.
+
+## Connector runtime — implemented vs production-ready
+
+Implemented and CI-tested:
+- Explicit Linux runtime manifest with canonical path, overlap, symlink, hard-link, special-file, permission and mount-boundary validation.
+- Revalidation immediately before sandbox command construction.
+- Packaged CPython 3.11 runtime and explicit ELF dependency closure.
+- Real Bubblewrap execution with host-file/tool/network denial.
+- Existing multiprocessing `IsolatedConnectorAdapter` exercised from inside Bubblewrap, including bounded IPC, timeout and process-group cleanup.
+
+Still blocked from production:
+- The test enters Bubblewrap first and then starts the adapter. The trusted production parent/supervisor still does not construct the strict manifest-backed command and launch the worker through it.
+- Runtime inventory is unsigned; hashes alone do not establish authenticity.
+- The installer/runtime trust boundary and race-resistant package immutability still need implementation and adversarial verification.
+- Linux network remains deny-all; provider-specific HTTPS egress is not implemented.
+- Windows Job Objects limit process/resource use but do not provide filesystem/network isolation.
+- Do not connect untrusted third-party adapters to `ConnectorRegistry` or enable third-party execution.
+
+## Global readiness — current assessment
+
+| Workstream | State | Verified evidence / next gate |
+|---|---|---|
+| Headless backend / Windows | Yellow | EXE smoke and installer lifecycle pass in CI; physical low-memory PC validation and operational recovery remain. |
+| Adaptive runtime | Yellow | Windows resource sampling, constrained PAPER policy, worker limits and cross-process leases have CI coverage; sustained low-memory/restart validation on target PC remains. |
+| PAPER / financial risk | Green in CI | 82 PAPER lifecycle/safety tests on exact PR HEAD; longer endurance and fault-injection coverage remain. Keep PAPER-only. |
+| Market data / Radar | Yellow | Public read-only connectors and data-quality validation exist; end-to-end freshness/provenance/outage validation remains. |
+| Connector isolation | Yellow / production blocked | Packaged CPython and Bubblewrap probes pass; production supervisor integration, authenticated package, TOCTOU, egress and Windows boundary remain. |
+| Research / learning | Yellow | Research/evidence pipeline exists; verify durable persistence, OOS validity and cross-department adoption. |
+| Learning Vault | Yellow | Installer upgrade/uninstall preservation passes; operational backup/restore, migrations, corruption recovery and organization isolation remain. |
+| Linux application | Yellow | Linux sandbox/runtime CI passes; full backend package install/start/health/upgrade/uninstall remains. |
+| Android / remote | Yellow | Android workflows exist but are not triggered by this PR; latest APK and physical device/rotation/reconnect evidence must be rechecked when mobile paths change. |
+| LAN / Tailscale / discovery | Yellow | Partial architecture exists; physical reconnect, offline operation and long-running remote validation remain. |
+| Virtual office | Yellow | Authenticated backend snapshot foundation exists; verify real task-state integration and device layouts. |
+| Release / documentation | Yellow | No formal release; signed/reproducible platform release process remains. |
+
+## Next engineering sequence
+
+1. Design the trusted production supervisor/launcher contract and integrate the strict manifest-backed Bubblewrap invocation without an unsandboxed fallback.
+2. Add adversarial tests for manifest tampering, package replacement/TOCTOU, process descendants, crash, cancellation and cleanup.
+3. Bind runtime package authenticity and immutable installation to the actual installer lifecycle.
+4. Keep Linux egress deny-all until provider-specific network policy is independently reviewed and tested.
+5. Keep third-party connector execution disabled on Windows until filesystem and network isolation are implemented and tested.
+6. Continue Linux application packaging, Vault backup/restore/isolation, and platform readiness after the connector security boundary.
+7. Validate the first install on the user's physical PC only after CI and release artifacts are stable; identify any remaining physical-only checks explicitly.
+
+VST remains PAPER-only. Do not access or expose credentials, connect private exchange accounts, enable LIVE, or execute financial operations. Work only in this repository; never modify `main` directly.
+
+---
+
+# HISTORICAL HANDOFF — 2026-11-19 (superseded by the 2026-11-22 checkpoint above)
 
 **Repository:** `AndreVazao/VazaoSovereignTrader` only.  
 **Verified main:** `f4b5811b59f71efcc4d2fcbcf3441efd05cb595e`.  
@@ -1762,3 +1840,26 @@ Review points before merge:
 - API maps `source_lineage_not_eligible` to HTTP 409. This is source-level hardening only until tested against disposable Supabase/Postgres with two-session race cases. PostgreSQL client tools are not available in the current working environment; no SQL execution is claimed.
 - Product branch HEAD: `dcb86efd1cedcb15870f6c9b8dcc5d0be47f0125`. Current-head Python, Shared Learning, PAPER and Windows workflows are pending at last poll; Vercel has a build-rate-limit failure and Snyk is pending. Prior HEAD `49b19ce62c56a49b1244223f1cb2ec539f83c0cc` passed Python, Shared Learning, PAPER, Snyk and Vercel; Windows EXE passed while installer smoke was still in progress.
 - PR #504 remains open/unmerged. No production migration, cloud activation, orders, transfers or live trading. Next: inspect current-head CI, run disposable database assertions and concurrency tests, and continue enrollment/key lifecycle and local memory recovery work.
+
+
+## VST global checkpoint — 2026-11-20 (PR #578)
+
+- Main is at merge commit `05d4e7c9123e29780d26b12b56fba3f20d5440e7`; PR #577 is merged. The active development line is PR #578, branch `feat/minimal-python-runtime-closure-2026-11-20`.
+- PR #578 HEAD at this checkpoint: `22379427f8c81a5103d2e3379bd083196a4b9d50`. It remains open and Draft; no merge is authorized by CI status alone.
+- Exact-HEAD GitHub Actions: Python tests, PAPER smoke, Linux Bubblewrap enforcement, Windows EXE and Windows installer all completed successfully. The Windows installer job completed previous-version install, upgrade, launch, health, uninstall and Learning Vault preservation smoke. CI does not replace physical PC validation.
+- PR #578 adds explicit runtime-manifest validation, including recursive rejection of symlinks, special files, hard links and group/world-writable nested entries. The manifest is not yet consumed by the Bubblewrap builder.
+- Critical blocker: the current Linux builder still mounts broad host roots such as `/usr`, `/lib` and `/bin` read-only. Host executables and files may remain visible. The manifest does not yet enforce runtime isolation, and it is not integrated with the worker supervisor, `IsolatedConnectorAdapter`, `ConnectorRegistry` or installer.
+- Further blockers: TOCTOU-safe immutable runtime packaging and launch-time revalidation, negative Bubblewrap tests for undeclared host executables/files, provider-specific HTTPS egress policy, and Windows filesystem/network isolation.
+- Keep third-party connectors disabled, Linux egress deny-all, and VST PAPER-only. Do not use exchange credentials, private accounts, LIVE trading or financial actions.
+- Next engineering gate: make Bubblewrap consume a validated explicit manifest without broad host mounts; prove the declared interpreter starts and undeclared host tools/files are inaccessible; add adversarial lifecycle/path tests; then integrate the sandbox into worker supervision. Do not merge until security gates and all exact-HEAD CI checks pass.
+- Current physical validation status: no local low-memory Windows PC, Linux installation, Android rotation/reconnect or LAN/Tailscale endurance test has been performed in this checkpoint.
+
+
+## VST checkpoint — manifest-backed builder increment (2026-11-20)
+
+- PR #578 remains the only active VST PR. It is open, Draft and not merged. Main remains `05d4e7c9123e29780d26b12b56fba3f20d5440e7`.
+- The latest branch increment adds an opt-in `runtime_manifest` path to `build_linux_bwrap_command`. It revalidates the explicit manifest immediately before command construction, rejects mixing manifest and legacy roots, requires the command executable to match the manifest, creates only empty destination parents, creates private `/tmp` and `/work` before explicit mounts, and adds only declared read-only mounts. It suppresses legacy system mounts, loader-cache mounts, host certificate mounts and host PATH in this path.
+- A real Bubblewrap integration test now compiles a minimal static probe and checks that `/usr/bin/id`, `/etc/passwd` and an undeclared host marker are inaccessible. The dedicated Linux workflow now installs GCC for this probe.
+- Latest branch HEAD at this documentation update is tracked by PR #578. The last fully validated SHA remains `2a1875cf99798ca147bc3e4218e7b14f24524c63`; newer code has no confirmed exact-HEAD CI result yet.
+- The manifest-backed builder is not integrated into `IsolatedConnectorAdapter`, worker supervision, `ConnectorRegistry` or installer. The legacy builder path still mounts broad host roots. Python runtime closure, TOCTOU-resistant immutable packaging, Windows filesystem/network isolation and provider-specific egress remain unresolved.
+- Do not enable third-party connectors or claim production isolation. Keep Linux network deny-all and VST PAPER-only. No exchange credentials, private accounts, LIVE mode or financial actions.
