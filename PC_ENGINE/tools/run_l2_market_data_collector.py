@@ -119,6 +119,8 @@ def main() -> None:
         selected_venues = reviewed_stream_venues(registry, available, args.venues)
     except ValueError as exc:
         parser.error(str(exc))
+    if not selected_venues:
+        parser.error("No reviewed native public L2 venues are available.")
     configs = []
     requested_venues = set(selected_venues)
     for symbol in args.symbols:
