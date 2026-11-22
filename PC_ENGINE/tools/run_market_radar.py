@@ -42,6 +42,8 @@ def main() -> None:
     else:
         exchanges = [reviewed[name].ccxt_id for name in sorted(reviewed)]
 
+    if not exchanges:
+        parser.error("No reviewed public REST venues are configured.")
     symbols = [x.strip() for x in args.symbols.split(",") if x.strip()]
     if not symbols:
         parser.error("At least one symbol is required.")
