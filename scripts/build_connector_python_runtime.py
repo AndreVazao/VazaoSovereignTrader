@@ -191,6 +191,7 @@ def main() -> None:
             "PC_ENGINE/__init__.py",
             "PC_ENGINE/core/__init__.py",
             "PC_ENGINE/core/isolated_connector_worker.py",
+            "PC_ENGINE/core/connector_worker_bootstrap.py",
             "PC_ENGINE/core/connector_worker_limits.py",
             "tests/fixtures/connector_runtime_probe.py",
         ):
