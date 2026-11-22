@@ -61,8 +61,8 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
           VST_RUN_BWRAP_INTEGRATION: "1"
           VST_CONNECTOR_RUNTIME_INTEGRATION: "1"
-          VST_CONNECTOR_RUNTIME_ROOT: /opt/vst-connector/runtime
-          VST_CONNECTOR_RUNTIME_EXECUTABLE: /opt/vst-connector/bin/python
+          VST_CONNECTOR_RUNTIME_ROOT: /srv/vst-connector/runtime
+          VST_CONNECTOR_RUNTIME_EXECUTABLE: /srv/vst-connector/bin/python
         run: |
           python -m pytest -q \
             tests/test_connector_worker_sandbox.py \
