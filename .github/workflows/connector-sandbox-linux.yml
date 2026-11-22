@@ -12,6 +12,7 @@ on:
       - "tests/test_connector_worker_sandbox.py"
       - "tests/test_connector_runtime_manifest.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
+      - "docs/PYTHON_RUNTIME_CLOSURE_DESIGN.md"
       - ".github/workflows/connector-sandbox-linux.yml"
 
 permissions:
