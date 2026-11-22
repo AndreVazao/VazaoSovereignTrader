@@ -48,6 +48,22 @@ def run(argv: list[str], *, env: dict[str, str] | None = None) -> str:
     return result.stdout
 
 
+def require_protected_ancestors(path: Path, *, label: str) -> None:
+    current = path
+    while True:
+        try:
+            metadata = current.lstat()
+        except OSError:
+            fail(f"{label}_ancestor_missing")
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            fail(f"{label}_ancestor_not_real_directory")
+        if metadata.st_uid != 0 or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            fail(f"{label}_ancestor_not_protected")
+        if current == current.parent:
+            break
+        current = current.parent
+
+
 def safe_destination(path: Path) -> Path:
     if (
         not path.is_absolute()
@@ -60,13 +76,11 @@ def safe_destination(path: Path) -> Path:
     parent = path.parent
     try:
         resolved_parent = parent.resolve(strict=True)
-        metadata = parent.stat()
     except OSError:
         fail("runtime_destination_parent_missing")
     if resolved_parent != parent:
         fail("runtime_destination_parent_must_not_use_symlinks")
-    if metadata.st_uid != 0 or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-        fail("runtime_destination_parent_not_protected")
+    require_protected_ancestors(parent, label="runtime_destination")
     return path
 
 
@@ -133,10 +147,10 @@ def main() -> None:
     executable_target = args.executable or (destination.parent / "bin" / "python")
     if executable_target.parent != destination.parent / "bin":
         fail("runtime_executable_destination_invalid")
+    if executable_target.parent.is_symlink():
+        fail("runtime_executable_parent_must_not_be_symlink")
     executable_target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-    executable_parent = executable_target.parent.stat()
-    if executable_parent.st_uid != 0 or executable_parent.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-        fail("runtime_executable_parent_not_protected")
+    require_protected_ancestors(executable_target.parent, label="runtime_executable")
     if executable_target.exists() or executable_target.is_symlink():
         fail("runtime_executable_destination_already_exists")
 
@@ -157,6 +171,11 @@ def main() -> None:
     if not patchelf:
         fail("patchelf_required")
 
+    require_protected_ancestors(Path("/opt"), label="runtime_staging")
+    metadata_path = destination.parent / "runtime-manifest.json"
+    if metadata_path.exists() or metadata_path.is_symlink():
+        fail("runtime_metadata_destination_already_exists")
+    metadata_written = False
     stage = Path(tempfile.mkdtemp(prefix=".vst-runtime-stage-", dir="/opt"))
     try:
         runtime_lib = stage / "lib"
@@ -272,11 +291,9 @@ def main() -> None:
         # Metadata is generated outside the immutable runtime root. Its digest
         # is evidence for CI only; production authentication/signing is a
         # separate gate and must not be inferred from this unsigned document.
-        metadata_path = destination.parent / "runtime-manifest.json"
-        if metadata_path.exists() or metadata_path.is_symlink():
-            fail("runtime_metadata_destination_already_exists")
         metadata_path.write_text(json.dumps(metadata, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         metadata_path.chmod(0o444)
+        metadata_written = True
         os.rename(stage, destination)
         print(json.dumps({
             "runtime_root": str(destination),
@@ -290,6 +307,8 @@ def main() -> None:
         shutil.rmtree(stage, ignore_errors=True)
         if executable_target.exists():
             executable_target.unlink()
+        if metadata_written and metadata_path.exists():
+            metadata_path.unlink()
         raise
 
 
