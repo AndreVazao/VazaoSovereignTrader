@@ -112,7 +112,7 @@ def ldd_dependencies(binary: Path, env: dict[str, str]) -> set[Path]:
         if "statically linked" in output:
             return set()
         fail(f"runtime_dependency_unresolved:{binary.name}")
-    found = {Path(match).resolve(strict=True) for match in DEPENDENCY.findall(output)}
+    found = {Path(match) for match in DEPENDENCY.findall(output)}
     if not found:
         fail(f"runtime_dependency_inventory_empty:{binary.name}")
     return found
@@ -203,7 +203,8 @@ def main() -> None:
         )
         if not ffi_paths:
             fail("python_libffi_dependency_unresolved")
-        dependencies.add(Path(ffi_paths[0]).resolve(strict=True))
+        dependencies.add(Path(ffi_paths[0]))
+        dependencies.update(ldd_dependencies(Path(ffi_paths[0]), ldd_env))
         extension_root = stdlib_target / "lib-dynload"
         if not extension_root.is_dir():
             fail("python_extension_directory_missing")
@@ -225,7 +226,7 @@ def main() -> None:
             match = INTERPRETER.search(headers)
             if not match:
                 fail("python_elf_loader_missing")
-            loader = Path(match.group(1)).resolve(strict=True)
+            loader = Path(match.group(1))
             copy_regular(loader, runtime_lib / loader.name)
 
         executable_target.parent.chmod(0o755)
