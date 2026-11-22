@@ -197,7 +197,7 @@ def main() -> None:
             fail("python_libffi_dependency_missing")
         linker_cache = run(["ldconfig", "-p"])
         ffi_paths = re.findall(
-            rf"^\\s*{re.escape(ffi_soname)}(?:\\s|$).*=>\\s*(/[^\\s]+)",
+            rf"^\s*{re.escape(ffi_soname)}(?:\s|$).*=>\s*(/[^\s]+)",
             linker_cache,
             flags=re.MULTILINE,
         )
