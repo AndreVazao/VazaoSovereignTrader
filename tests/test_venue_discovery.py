@@ -16,7 +16,10 @@ class VenueDiscoveryRegistryTests(unittest.TestCase):
         for venue in registry.list_venues():
             self.assertEqual(venue.private_account_access, "not_configured")
             self.assertEqual(venue.jurisdiction_status, "unknown")
-            self.assertEqual(venue.lifecycle, "public_research_only")
+        bitget = registry.get("bitget")
+        self.assertFalse(bitget.public_rest)
+        self.assertEqual(bitget.lifecycle, "discovered_unverified")
+        self.assertTrue(registry.get("binance").public_rest)
 
     def test_local_candidate_is_added_as_unverified_and_cannot_be_private(self) -> None:
         candidate = [{
@@ -40,7 +43,7 @@ class VenueDiscoveryRegistryTests(unittest.TestCase):
 
     def test_installed_ccxt_venues_are_leads_not_trusted_adapters(self) -> None:
         registry = VenueDiscoveryRegistry()
-        leads = registry.ccxt_candidates(["binance", "newvenue", "bad/id", "newvenue"])
+        leads = registry.ccxt_candidates(["binance", "newvenue", "bad/id", "newvenue", None, 7])
         self.assertEqual(len(leads), 1)
         self.assertEqual(leads[0]["ccxt_id"], "newvenue")
         self.assertEqual(leads[0]["lifecycle"], "discovered_unverified")
