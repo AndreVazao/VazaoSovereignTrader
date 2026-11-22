@@ -35,6 +35,7 @@ import importlib
 import json
 import os
 import socket
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.environ["PYTHONHOME"], "app"))
@@ -66,6 +67,21 @@ finally:
     client.close()
     server.close()
 
+probe = subprocess.run(
+    [sys.executable, os.path.join(os.environ["PYTHONHOME"], "app", "tests", "fixtures", "connector_runtime_probe.py")],
+    capture_output=True,
+    text=True,
+    timeout=20,
+    check=False,
+)
+assert probe.returncode == 0, f"multiprocessing probe failed: {probe.stderr[-2000:]}"
+multiprocessing_evidence = json.loads(probe.stdout.strip().splitlines()[-1])
+assert multiprocessing_evidence["multiprocessing_spawn"] == "ok"
+assert multiprocessing_evidence["startup_handshake"] == "ok"
+assert multiprocessing_evidence["bounded_request_response"] == "ok"
+assert multiprocessing_evidence["timeout"] == "ok"
+assert multiprocessing_evidence["process_cleanup"] == "ok"
+
 network = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 network.settimeout(0.5)
 try:
@@ -84,6 +100,8 @@ print(json.dumps({
     "worker_import": "ok",
     "stdlib_imports": "ok",
     "bounded_ipc": "ok",
+    "multiprocessing_spawn": "ok",
+    "worker_timeout_cleanup": "ok",
     "host_files_hidden": True,
     "network_denied": True,
 }))
@@ -117,6 +135,8 @@ print(json.dumps({
     assert evidence["worker_import"] == "ok"
     assert evidence["stdlib_imports"] == "ok"
     assert evidence["bounded_ipc"] == "ok"
+    assert evidence["multiprocessing_spawn"] == "ok"
+    assert evidence["worker_timeout_cleanup"] == "ok"
     assert evidence["host_files_hidden"] is True
     assert evidence["network_denied"] is True
 
