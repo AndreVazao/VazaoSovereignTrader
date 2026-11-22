@@ -178,6 +178,8 @@ def main() -> None:
         selected_venues = reviewed_stream_venues(registry, available, args.venues)
     except ValueError as exc:
         parser.error(str(exc))
+    if not selected_venues:
+        parser.error("No reviewed native public WebSocket venues are available.")
     allowed = set(selected_venues)
     configs = [
         cfg
@@ -262,7 +264,7 @@ def main() -> None:
             collectors=collectors,
             counters=counters,
             symbols=args.symbols,
-            venues=args.venues,
+            venues=selected_venues,
             output=output,
             backup=backup,
             max_bytes=max_bytes,
