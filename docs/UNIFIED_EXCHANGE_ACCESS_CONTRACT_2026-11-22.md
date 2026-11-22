@@ -151,3 +151,68 @@ Headless browser is default; no permanent visible windows. Reuse bounded persist
 - Headless mode is the default when technically supported; explicit manual handoff remains available.
 - Financial mutations remain unavailable in the current PAPER release.
 - A successful CI run is not represented as proof of physical-PC, phone, emulator, exchange login or account correctness.
+
+
+## Continuous venue discovery and adaptive owner profile
+
+The exchange catalogue is an extensible discovery index, not a fixed allowlist of four providers. Binance, Coinbase, OKX and BingX are initial entries only. VST must be able to discover additional venues and market providers through documented public sources, exchange metadata, supported market-data registries and owner-approved research. Discovery does not imply trust, account creation, eligibility, connection or authorization.
+
+For every discovered venue, maintain a versioned evidence record:
+- legal/provider identity, official domains and official documentation references;
+- supported jurisdictions and product availability, with verification timestamp and source;
+- spot/derivatives/other product coverage, instruments and symbol mappings;
+- public/private API capabilities, browser/app surfaces and documented restrictions;
+- fees, liquidity, depth, spread, data quality, latency, uptime and rate limits where measurable;
+- custody, counterparty, settlement, operational, security and regulatory risk indicators;
+- adapter maturity, test coverage, known limitations and last successful validation.
+
+Unknown or unverified fields must remain explicitly unknown. Never infer legitimacy from search ranking, social promotion, token listings or an attractive quoted price. New venues enter **discovered / public-research-only** and are subject to source validation, jurisdiction review, security review and adapter tests before any private connection is offered. The owner must explicitly choose whether to investigate, ignore, watch or connect a venue.
+
+### Dynamic venue evaluation
+
+VST must continuously re-evaluate venues and instruments against current evidence rather than preserve a permanent ranking. A venue's relevance score should be explainable and multi-dimensional, including:
+- net opportunity after fees, spread, slippage, funding/borrow and settlement costs;
+- executable liquidity at the owner's configured research size;
+- feed freshness, timestamp quality, latency distribution and uptime;
+- supported instruments and access to relevant markets;
+- jurisdictional eligibility and provider restrictions;
+- counterparty, custody, security and operational risk;
+- reliability of the adapter and confidence in the underlying evidence.
+
+The system must expose component scores, source timestamps, confidence and reasons for changes. It must not collapse hard safety/eligibility failures into a high aggregate score. A venue that becomes unreliable, unavailable, ineligible or uneconomic is downgraded, paused or removed from active routing while its public history remains available for comparison. A previously ignored venue can be reconsidered when new evidence appears. Avoid hard-coded assumptions that today's best venue remains best tomorrow.
+
+Re-evaluation must account for regime changes and avoid overreacting to isolated observations. Use configurable observation windows, minimum sample sizes, confidence intervals and out-of-sample validation. Preserve historical rankings and decision reasons so the owner can audit why the system changed its recommendation.
+
+### Owner-adaptive operating profile
+
+VST should adapt to the owner's explicitly configured usage profile without silently expanding permissions. The profile may learn from approved preferences and observed choices, such as:
+- preferred assets, markets, instruments and research horizons;
+- preferred exchanges and access surfaces, including venues the owner has declined;
+- risk tolerance, research sizing assumptions, excluded products and maximum observation frequency;
+- notification urgency, reporting detail, quiet periods and preferred control client;
+- operational constraints such as low-resource local hardware and whether remote paired devices are available.
+
+Distinguish **explicit owner settings**, **inferred preferences** and **temporary context**. Inferred preferences must be labelled, explainable, correctable and never treated as authorization. Do not infer permission to trade, transfer, deposit, withdraw, use leverage, open accounts, accept terms or share private data from past behavior or a recommendation. Ask for owner confirmation when a preference materially changes risk, data access, account scope or resource use.
+
+The owner can inspect, correct, export and reset the adaptive profile. Keep private account data isolated per owner and venue; shared learning may use only privacy-reviewed, non-identifying aggregates with explicit opt-in. Do not use another owner's credentials, account history or private financial data to personalize this owner's decisions.
+
+### Discovery and onboarding loop
+
+1. Discover a candidate from a traceable source and validate its official identity and documentation.
+2. Start public-only collection where permitted, with strict rate limits and source attribution.
+3. Compare its measured contribution against the owner's current venue set and research profile.
+4. Recommend deeper investigation only when evidence is sufficiently strong and material; show uncertainty, risks, jurisdiction status and what remains unknown.
+5. Offer the official registration route only after eligibility and official destination checks. The owner may create an account, connect an existing one, continue public-only or decline.
+6. If the owner chooses onboarding, guide the owner through the provider-controlled process and prepare the local Vault record without capturing provider passwords, 2FA, KYC documents or payment data.
+7. Establish a separately authorized read-only connection and perform a real permission probe before marking the account connected.
+8. Monitor ongoing value and risk. Reassess, pause or recommend disconnecting when conditions deteriorate; never delete the owner's history or silently revoke a provider account.
+
+### Acceptance criteria for adaptability
+
+- The catalogue accepts new venue definitions without code changes to the core research engine.
+- A discovered venue is public-only by default and cannot access private owner data.
+- Every recommendation includes evidence, timestamp, uncertainty, risk and an explanation of relevance to the owner's configured profile.
+- Venue rankings can change as conditions change; previous decisions remain auditable.
+- Explicit preferences, inferred preferences and permissions are stored and displayed separately.
+- Learning from owner behavior never grants new capabilities or financial authorization.
+- The owner can decline a venue without losing public research coverage or being repeatedly prompted.
