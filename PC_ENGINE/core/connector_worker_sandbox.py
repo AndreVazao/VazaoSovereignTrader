@@ -189,7 +189,7 @@ def build_linux_bwrap_command(
             if (
                 not isinstance(raw_library_path, str)
                 or not raw_library_path.startswith("/")
-                or "\\x00" in raw_library_path
+                or "\x00" in raw_library_path
             ):
                 raise ValueError("sandbox_manifest_library_path_must_be_absolute")
             library_path_value = Path(raw_library_path)
