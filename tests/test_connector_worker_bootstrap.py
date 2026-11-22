@@ -15,7 +15,6 @@ class _Adapter:
 
 def _payload():
     return {
-        "factory": "tests.fake:Factory",
         "capability": "public_market_data.read",
         "request": {"symbol": "BTC/USDT"},
         "timeout_seconds": 2.0,
@@ -36,7 +35,7 @@ def test_bootstrap_executes_factory_only_after_resource_limits(monkeypatch):
         events.append(("factory", reference))
         return _Adapter
 
-    result = bootstrap.execute_request(_payload(), factory_resolver=resolve)
+    result = bootstrap.execute_request(_payload(), factory_reference="tests.fake:Factory", factory_resolver=resolve)
 
     assert result == {"ok": True, "data": {"echo": "BTC/USDT"}}
     assert events == [
@@ -61,16 +60,16 @@ def test_bootstrap_rejects_invalid_worker_request(field, value, error, monkeypat
     payload = _payload()
     payload[field] = value
     with pytest.raises(ValueError, match=error):
-        bootstrap.execute_request(payload, factory_resolver=lambda _: _Adapter)
+        bootstrap.execute_request(payload, factory_reference="tests.fake:Factory", factory_resolver=lambda _: _Adapter)
 
 
-def test_bootstrap_rejects_extra_payload_fields_before_factory(monkeypatch):
+def test_bootstrap_rejects_factory_in_untrusted_payload_before_factory(monkeypatch):
     monkeypatch.setattr(bootstrap, "apply_child_resource_limits", lambda *_: None)
     payload = _payload()
-    payload["api_key"] = "must-never-be-accepted"
+    payload["factory"] = "attacker.module:Factory"
     called = []
     with pytest.raises(ValueError, match="invalid_worker_request"):
-        bootstrap.execute_request(payload, factory_resolver=lambda _: called.append(True))
+        bootstrap.execute_request(payload, factory_reference="tests.fake:Factory", factory_resolver=lambda _: called.append(True))
     assert called == []
 
 
@@ -82,7 +81,7 @@ def test_bootstrap_bounds_serialized_response(monkeypatch):
             return {"value": "x" * bootstrap.MAX_RESPONSE_BYTES}
 
     with pytest.raises(ValueError, match="response_too_large"):
-        bootstrap.execute_request(_payload(), factory_resolver=lambda _: LargeAdapter)
+        bootstrap.execute_request(_payload(), factory_reference="tests.fake:Factory", factory_resolver=lambda _: LargeAdapter)
 
 
 def test_factory_reference_is_restricted_to_importable_names():
