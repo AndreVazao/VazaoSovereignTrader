@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import json
 import time
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(os.environ["PYTHONHOME"]) / "app"))
 from collections.abc import Mapping
 from typing import Any
 
