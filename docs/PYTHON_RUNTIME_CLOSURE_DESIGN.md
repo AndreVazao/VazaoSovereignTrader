@@ -86,3 +86,16 @@ This is an implementation/test increment, not yet a production runtime release:
 - The current IPC probe uses a bounded local socket pair; it does not yet prove that the existing multiprocessing worker lifecycle is supervised inside Bubblewrap.
 - The real runtime test must pass on the exact current PR HEAD before this increment is considered validated.
 - No connector adapter is launched through this runtime yet. The registry remains disconnected from untrusted connector execution.
+
+## Supervised multiprocessing probe — 2026-11-22
+
+The packaged-runtime integration now includes a second-stage probe launched by the packaged interpreter itself. It invokes the existing `IsolatedConnectorAdapter` inside Bubblewrap, so the existing `multiprocessing.get_context("spawn")` path is exercised rather than only simulating a socket exchange.
+
+The probe verifies:
+- worker process starts from the packaged CPython executable;
+- bootstrap handshake and resource-limit acknowledgement complete;
+- bounded request/response crosses the existing multiprocessing pipes;
+- a deliberately slow adapter hits the parent-side timeout;
+- the parent's process-group cleanup reaps the worker and leaves no active child.
+
+This is stronger CI evidence for the existing worker lifecycle, but it does not mean the supervisor launches that worker under Bubblewrap in production. The test explicitly enters Bubblewrap first and then starts the worker from inside that namespace. The missing production integration remains: the trusted parent must construct the strict manifest-backed Bubblewrap argv and launch the worker executable through it before any adapter code can run. No fallback to the legacy unsandboxed multiprocessing path is allowed when strict mode is required.
