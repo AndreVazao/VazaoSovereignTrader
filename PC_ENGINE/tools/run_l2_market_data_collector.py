@@ -126,7 +126,7 @@ def main() -> None:
     configured_pairs = {(config.symbol, config.venue) for config in configs}
     unconfigured_pairs = [
         {"symbol": symbol, "venue": venue, "reason": "no_safe_default_mapping"}
-        for symbol in args.symbols for venue in args.venues
+        for symbol in args.symbols for venue in selected_venues
         if (symbol, venue) not in configured_pairs
     ]
 
@@ -139,7 +139,7 @@ def main() -> None:
                 "orders_submitted": False,
                 "unconfigured_pairs": unconfigured_pairs,
                 "max_file_bytes": max_bytes,
-                "backups": {venue: str(backups[path]) for venue, path in synchronized_outputs.items()},
+                "backups": {"raw": str(backups[output]), **{venue: str(backups[path]) for venue, path in synchronized_outputs.items()}},
                 "counters": dict(counters),
                 "collectors": [collector.health_snapshot() for collector in collectors],
             }
