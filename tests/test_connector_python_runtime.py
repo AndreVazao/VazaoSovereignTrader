@@ -89,7 +89,7 @@ print(json.dumps({
 }))
 '''
     argv = build_linux_bwrap_command(
-        [str(executable), "-c", script],
+        [str(executable), "-S", "-c", script],
         runtime_manifest=manifest,
         python_home=str(runtime_root),
         runtime_library_path=str(runtime_root / "lib"),
