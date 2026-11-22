@@ -63,6 +63,15 @@ The current registry permits only `READ_ONLY_CAPABILITIES`. It rejects order cre
 - U-Hodler is not connected; no Android virtualization provider is provisioned.
 - Human handoff remains mandatory for MFA, OTP, CAPTCHA, biometrics, consent and financial/security prompts.
 
-## Exact-HEAD verification checkpoint — 2026-11-21
+## Exact-HEAD verification checkpoint — 2026-11-22
 
-At PR #578 HEAD `c96cb668ef320bf8b2e042fbafa8273770b92f7c`, the four applicable GitHub Actions workflows passed on the exact same SHA: Python tests, PAPER lifecycle/safety smoke, Connector sandbox Linux Bubblewrap enforcement, and Windows EXE/installer. The Windows workflow completed EXE smoke plus previous-version install, upgrade, launch, health, uninstall and Learning Vault preservation. The Snyk status check also reported success on this SHA. Vercel is a deployment preview only and is not code-test evidence. The earlier Linux/Python failures on SHA `8b874509a2173518d993eab60acd285d4de1c9b6` were superseded by later exact-head runs; their results are not transferred to `c96cb66`. Android workflows were not triggered by this PR's path filters. This is CI evidence only; physical PC validation remains pending. Any later commit requires its own exact-HEAD verification.
+At PR #578 HEAD `e5c0e9fefbc6a69b3c91a9fce0e519aefd31fdc0`, all four applicable GitHub Actions workflows completed successfully on the exact same SHA:
+
+- Python tests: run `44904591206`, job `test`.
+- PAPER lifecycle/safety: run `44904591234`, job `PAPER lifecycle and safety boundaries`.
+- Connector sandbox Linux: run `44904591241`, job `linux-bubblewrap-enforcement`.
+- Windows EXE/installer: run `44904591213`; both `build-exe` and `build-installer` succeeded. The installer job ran previous-version install, upgrade, launch, health check, uninstall and Learning Vault preservation, then uploaded the artifact.
+
+The installer lifecycle is no longer pending for this SHA. CI does not replace physical validation on the target PC. Vercel previews are not code-test evidence.
+
+The Linux workflow still validates the manifest-backed static executable probe, not a packaged CPython runtime. The manifest-backed launcher is not integrated into `IsolatedConnectorAdapter` or a parent supervisor. Runtime authenticity/immutability, TOCTOU mitigation, bounded IPC under Bubblewrap, provider-specific egress and Windows filesystem/network isolation remain open. PR #578 remains Draft and must not be merged based only on green CI. Do not enable third-party connectors.
