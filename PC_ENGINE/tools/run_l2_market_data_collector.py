@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from PC_ENGINE.market_events.binance_book_state import BookSnapshot
+from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
 from PC_ENGINE.market_events.l2_collectors import L2WebSocketConfig, PublicL2WebSocketCollector, default_l2_configs
 
 
@@ -52,6 +53,7 @@ def main() -> None:
     parser.add_argument("--symbols", nargs="+", default=["BTC/USDT", "ETH/USDT"])
     parser.add_argument("--venues", nargs="+", default=["binance", "okx", "coinbase"])
     parser.add_argument("--data-dir", default="PC_ENGINE/data/radar")
+    parser.add_argument("--max-file-mb", type=float, default=64.0)
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
@@ -59,6 +61,10 @@ def main() -> None:
     output = data_dir / "websocket_orderbook_events.jsonl"
     synchronized_outputs = {venue: synchronized_book_path(data_dir, venue) for venue in SYNCHRONIZED_BOOK_FILENAMES}
     health_output = data_dir / "l2_collector_health.json"
+    max_bytes = max(1, int(args.max_file_mb * 1024 * 1024))
+    backups = {path: path.with_suffix(path.suffix + ".1") for path in [output, *synchronized_outputs.values()]}
+    counters = {"events_written": 0, "books_written": 0, "oversized_records_ignored": 0, "write_errors": 0}
+    counters_lock = threading.Lock()
     stop = threading.Event()
     write_lock = threading.Lock()
     collectors: list[PublicL2WebSocketCollector] = []
@@ -73,21 +79,29 @@ def main() -> None:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, shutdown)
 
-    def append_jsonl(path: Path, payload: dict) -> None:
-        line = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+    def append_jsonl(path: Path, payload: dict, counter: str) -> None:
+        line = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")) + "\n"
         with write_lock:
-            with path.open("a", encoding="utf-8") as handle:
-                handle.write(line + "\n")
+            try:
+                if not append_bounded_jsonl(path, backups[path], line, max_bytes):
+                    with counters_lock:
+                        counters["oversized_records_ignored"] += 1
+                    return
+                with counters_lock:
+                    counters[counter] += 1
+            except OSError:
+                with counters_lock:
+                    counters["write_errors"] += 1
 
     def persist(event) -> None:
-        append_jsonl(output, asdict(event))
+        append_jsonl(output, asdict(event), "events_written")
 
     def persist_book(venue: str, symbol: str, view) -> None:
         payload = synchronized_book_payload(venue, symbol, view)
         target = synchronized_outputs.get(venue)
         if target is None:
             raise ValueError("unsupported_synchronized_book_venue")
-        append_jsonl(target, payload)
+        append_jsonl(target, payload, "books_written")
 
     configs = []
     requested_venues = set(args.venues)
@@ -108,6 +122,9 @@ def main() -> None:
                 "paper_only": True,
                 "orders_submitted": False,
                 "unconfigured_pairs": unconfigured_pairs,
+                "max_file_bytes": max_bytes,
+                "backups": {venue: str(backups[path]) for venue, path in synchronized_outputs.items()},
+                "counters": dict(counters),
                 "collectors": [collector.health_snapshot() for collector in collectors],
             }
             try:
@@ -144,6 +161,8 @@ def main() -> None:
         "raw_output": str(output),
         "synchronized_book_outputs": {venue: str(path) for venue, path in synchronized_outputs.items()},
         "health_output": str(health_output),
+        "max_file_bytes": max_bytes,
+        "counters": dict(counters),
         "paper_only": True,
         "orders_submitted": False,
     }, ensure_ascii=False))
