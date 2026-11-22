@@ -23,6 +23,31 @@ For browser login, prefer a local owner-controlled handoff to the official venue
 
 The backend must not assume that a user typing in the conversation is an authenticated local owner. Bind requests to a paired owner identity/device and require fresh confirmation for sensitive session establishment. A phone can request or approve a task, but it cannot directly receive existing vault secrets.
 
+## Exchange catalogue and account lifecycle
+
+The VST exchange catalogue must include both exchanges the owner already uses and exchanges that are only candidates. Initial requested catalogue: Binance, Coinbase, OKX and BingX, plus additional venues added through the same adapter contract. Catalogue membership does not imply that the owner has an account, that the venue is available in the owner's jurisdiction, or that the VST is authorized to access it.
+
+Each owner/venue pair has an explicit lifecycle state:
+- **Not configured:** venue is known, but no account connection or collection is configured.
+- **Candidate / research-only:** public market data and venue metadata may be collected without an account.
+- **Account creation offered:** VST presents the official registration destination and a guided checklist; the owner creates the account directly with the provider.
+- **Account created / not connected:** owner confirms account creation, but no credentials or session have been supplied.
+- **Connection pending:** owner is completing secure API-key or browser/app session handoff.
+- **Connected read-only:** private observation has passed a real permission probe; no financial mutation capability is granted.
+- **Restricted / attention required:** verification, regional eligibility, KYC, 2FA, provider review or other owner action is pending.
+- **Paused / revoked / disconnected:** collection is stopped or authorization has been withdrawn.
+
+For an exchange where the owner has no account (for example, OKX), VST must still be able to:
+1. collect permitted public market data and compare that venue with connected venues;
+2. show why the venue may be useful, including liquidity, instruments, fees, latency/data quality, jurisdictional availability and operational constraints;
+3. offer a clearly labelled **Create account** action that opens the provider's official registration page, never a third-party imitation or affiliate page unless explicitly disclosed and chosen by the owner;
+4. guide the owner through registration and any provider-required identity/security steps, while the owner remains in control of the provider website/app;
+5. let the owner mark registration complete and then choose API read-only connection, browser session handoff, Android app connection, or leave the venue in public-research-only mode.
+
+VST must not create accounts, accept provider terms, complete KYC, submit identity documents, or claim an account exists on the owner's behalf. It must not store the exchange's normal account password. The owner performs registration directly with the exchange. The catalogue must record jurisdiction/eligibility as unknown until verified from current official provider information and owner confirmation; do not recommend account creation where availability or eligibility is not established.
+
+A newly created account begins with the least-privilege read-only state. Any future enablement of trading or other financial actions is a separate, later authorization and risk-policy process; account creation or credential entry never grants it automatically. The owner can connect an existing account, create a new one, use a venue only for public market data, or decline it entirely. Venue selection must be based on measured net opportunity and operational risk, not on a presumption that more exchanges are always better.
+
 ## Three access channels
 
 ### 1. Native API
