@@ -95,6 +95,19 @@ Os eventos de lead/lag da Fase 1 são apenas candidatos de investigação porque
 
 Arquitetura detalhada: `docs/SOVEREIGN_MARKET_RADAR.md`.
 
+## Exchange Discovery and Public Data
+
+The venue catalogue is extensible and separates discovered candidates from reviewed public-data venues and private account connections. Initial entries include Binance, Coinbase, OKX, BingX, Bybit and Bitget; additional CCXT exchange IDs can be surfaced as unverified research leads.
+
+```powershell
+python PC_ENGINE/tools/run_exchange_discovery.py --include-ccxt-leads
+python PC_ENGINE/tools/run_market_radar.py --cycles 20
+```
+
+New candidate metadata is loaded from `PC_ENGINE/config/exchange_candidates.json` and remains unverified/public-disabled until reviewed. Discovery never grants private account access or financial permissions. Public collection needs no exchange API keys.
+
+Details: `docs/EXCHANGE_DISCOVERY_AND_PUBLIC_DATA.md`.
+
 ## Capital Opportunity Engine
 
 O Trader agora possui uma camada separada para transformar evidência histórica do Radar em candidatos de oportunidade com foco em eficiência de capital.
