@@ -218,7 +218,7 @@ def main() -> None:
                     collectors=collectors,
                     counters=counters,
                     symbols=args.symbols,
-                    venues=args.venues,
+                    venues=selected_venues,
                     output=output,
                     backup=backup,
                     max_bytes=max_bytes,
