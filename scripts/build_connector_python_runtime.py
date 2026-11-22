@@ -173,6 +173,7 @@ def main() -> None:
             "PC_ENGINE/core/__init__.py",
             "PC_ENGINE/core/isolated_connector_worker.py",
             "PC_ENGINE/core/connector_worker_limits.py",
+            "tests/fixtures/connector_runtime_probe.py",
         ):
             source = repository / relative
             target = stage / "app" / relative
