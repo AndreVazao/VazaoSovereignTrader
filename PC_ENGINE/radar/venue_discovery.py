@@ -40,15 +40,19 @@ _BUILTIN: tuple[VenueProfile, ...] = (
     VenueProfile("okx", "OKX", "https://www.okx.com", "https://www.okx.com/docs-v5/en/", "okx", public_websocket="native_trades_and_l2"),
     VenueProfile("bingx", "BingX", "https://bingx.com", "https://bingx-api.github.io/docs/", "bingx"),
     VenueProfile("bybit", "Bybit", "https://www.bybit.com", "https://bybit-exchange.github.io/docs/v5/intro", "bybit"),
-    VenueProfile("bitget", "Bitget", "https://www.bitget.com", "https://www.bitget.com/api-doc/common/intro", "bitget"),
+    VenueProfile("bitget", "Bitget", "https://www.bitget.com", "https://www.bitget.com/api-doc/common/intro", "bitget", lifecycle="discovered_unverified", public_rest=False, source="built_in_candidate"),
 )
 
 
 def _https_url(value: Any, field: str) -> str:
     if not isinstance(value, str) or len(value) > 2048:
         raise ValueError(f"{field}_invalid")
-    parsed = urlparse(value)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+    try:
+        parsed = urlparse(value)
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise ValueError(f"{field}_invalid") from exc
+    if parsed.scheme != "https" or not hostname or parsed.username or parsed.password:
         raise ValueError(f"{field}_must_be_https")
     if parsed.fragment:
         raise ValueError(f"{field}_fragment_not_allowed")
@@ -129,9 +133,11 @@ class VenueDiscoveryRegistry:
         """List installed CCXT venues not in the curated catalogue as unverified leads."""
         known = {v.ccxt_id for v in self._venues.values() if v.ccxt_id}
         result = []
-        for raw_id in sorted(set(installed_exchange_ids)):
-            if not isinstance(raw_id, str) or not _ID_RE.fullmatch(raw_id):
-                continue
+        valid_ids = {
+            raw_id for raw_id in installed_exchange_ids
+            if isinstance(raw_id, str) and _ID_RE.fullmatch(raw_id)
+        }
+        for raw_id in sorted(valid_ids):
             if raw_id not in known:
                 result.append({
                     "ccxt_id": raw_id,
