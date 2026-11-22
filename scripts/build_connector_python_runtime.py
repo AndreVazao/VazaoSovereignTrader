@@ -29,6 +29,8 @@ EXCLUDED_DIRS = {
 }
 EXCLUDED_FILES = {
     "sitecustomize.py", "usercustomize.py", "EXTERNALLY-MANAGED",
+    "_tkinter*", "_curses*", "readline*", "_dbm*", "_gdbm*",
+    "_test*", "xxlimited*",
 }
 DEPENDENCY = re.compile(r"(?:=>\s+)?(/[^\s]+)\s+\(0x[0-9a-fA-F]+\)")
 INTERPRETER = re.compile(r"Requesting program interpreter:\s*(/[^\]]+)")
@@ -73,6 +75,10 @@ def copy_regular(source: Path, target: Path, mode: int = 0o444) -> None:
 def copy_tree(source: Path, target: Path) -> None:
     if not source.is_dir():
         fail("python_stdlib_directory_missing")
+    for current, dirs, files in os.walk(source, followlinks=False):
+        for name in [*dirs, *files]:
+            if (Path(current) / name).is_symlink():
+                fail("python_stdlib_source_contains_symlink")
     shutil.copytree(
         source,
         target,
@@ -117,6 +123,9 @@ def main() -> None:
     if executable_target.parent != Path("/opt/vst-connector-python"):
         fail("runtime_executable_destination_invalid")
     executable_target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    executable_parent = executable_target.parent.stat()
+    if executable_parent.st_uid != 0 or executable_parent.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        fail("runtime_executable_parent_not_protected")
     if executable_target.exists() or executable_target.is_symlink():
         fail("runtime_executable_destination_already_exists")
 
@@ -194,6 +203,7 @@ def main() -> None:
         loader_target = runtime_lib / loader.name
         if not loader_target.exists():
             copy_regular(loader, loader_target)
+        loader_target.chmod(0o555)
         run([patchelf, "--set-interpreter", str(destination / "lib" / loader.name), "--set-rpath", str(destination / "lib"), str(executable_target)])
 
         for current, dirs, files in os.walk(stage):
