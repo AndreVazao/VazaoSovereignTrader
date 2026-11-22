@@ -120,7 +120,7 @@ def ldd_dependencies(binary: Path, env: dict[str, str]) -> set[Path]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--destination", type=Path, default=Path("/opt/vst-connector-runtime"))
-    parser.add_argument("--executable", type=Path, default=Path("/opt/vst-connector-python/python"))
+    parser.add_argument("--executable", type=Path)
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
     args = parser.parse_args()
 
@@ -129,7 +129,7 @@ def main() -> None:
     if os.geteuid() != 0:
         fail("runtime_packager_requires_root")
     destination = safe_destination(args.destination)
-    executable_target = args.executable
+    executable_target = args.executable or (destination.parent / "bin" / "python")
     if executable_target.parent != destination.parent / "bin":
         fail("runtime_executable_destination_invalid")
     executable_target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
@@ -174,10 +174,15 @@ def main() -> None:
             "PC_ENGINE/core/connector_worker_limits.py",
         ):
             source = repository / relative
-            if not source.is_file():
-                fail(f"worker_bootstrap_source_missing:{relative}")
             target = stage / "app" / relative
-            copy_regular(source, target)
+            if source.is_file():
+                copy_regular(source, target)
+            elif relative.endswith("__init__.py"):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("", encoding="utf-8")
+                target.chmod(0o444)
+            else:
+                fail(f"worker_bootstrap_source_missing:{relative}")
 
         dependencies: set[Path] = set()
         ldd_env = {**os.environ, "LD_LIBRARY_PATH": str(libdir)}
