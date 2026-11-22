@@ -40,7 +40,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.environ["PYTHONHOME"], "app"))
 worker = importlib.import_module("PC_ENGINE.core.isolated_connector_worker")
+bootstrap = importlib.import_module("PC_ENGINE.core.connector_worker_bootstrap")
 assert hasattr(worker, "IsolatedConnectorAdapter")
+assert hasattr(bootstrap, "execute_request")
 
 for name in (
     "json", "ssl", "sqlite3", "ctypes", "multiprocessing",
