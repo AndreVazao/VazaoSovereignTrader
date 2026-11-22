@@ -72,3 +72,17 @@ The Linux enforcement workflow must build the runtime package from pinned inputs
 - No assumption that Linux CI proves the user's physical Windows PC.
 - No claim that a static assembly probe is equivalent to a packaged Python runtime.
 - No merge while any required exact-HEAD workflow or security gate is incomplete.
+
+## Packaged-runtime implementation increment — 2026-11-22
+
+A first reproducible Linux packaging path now exists in `scripts/build_connector_python_runtime.py`. It requires root and a protected `/opt` parent, copies the selected trusted CPython interpreter's standard library and selected worker bootstrap modules into a versioned-layout staging tree, inventories ELF dependencies of the interpreter, libpython and extension modules, copies the loader/shared libraries into the package, and patches the copied interpreter to use the package-local loader and library path. The executable is deliberately stored outside the mounted runtime directory so the manifest does not hide it behind a directory mount.
+
+The dedicated Linux workflow now installs Bubblewrap, patchelf and binutils, builds this package, and runs `tests/test_connector_python_runtime.py` inside the real sandbox. The test imports the actual `IsolatedConnectorAdapter` module plus selected standard-library and extension modules, exercises a size-bounded local IPC exchange, checks the runtime prefix and sanitized environment, and verifies host files and loopback networking are unavailable.
+
+This is an implementation/test increment, not yet a production runtime release:
+- The generated JSON inventory is unsigned. It is CI evidence, not an authenticity mechanism.
+- Package immutability currently relies on root ownership and read-only modes; a production installer must establish and verify this trust boundary.
+- The packager's ELF dependency discovery uses `ldd` only on the trusted CI-selected CPython interpreter and its bundled extension modules. It must never be reused on arbitrary connector binaries.
+- The current IPC probe uses a bounded local socket pair; it does not yet prove that the existing multiprocessing worker lifecycle is supervised inside Bubblewrap.
+- The real runtime test must pass on the exact current PR HEAD before this increment is considered validated.
+- No connector adapter is launched through this runtime yet. The registry remains disconnected from untrusted connector execution.
