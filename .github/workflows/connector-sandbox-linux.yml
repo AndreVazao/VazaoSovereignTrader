@@ -4,11 +4,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
+      - "PC_ENGINE/core/connector_worker_bootstrap.py"
       - "PC_ENGINE/core/connector_worker_sandbox.py"
       - "PC_ENGINE/core/connector_runtime_manifest.py"
       - "scripts/build_connector_python_runtime.py"
       - "tests/test_connector_python_runtime.py"
       - "tests/fixtures/connector_runtime_probe.py"
+      - "tests/test_connector_worker_bootstrap.py"
       - "tests/test_connector_worker_sandbox.py"
       - "tests/test_connector_runtime_manifest.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
@@ -65,6 +67,7 @@ jobs:
           VST_CONNECTOR_RUNTIME_EXECUTABLE: /srv/vst-connector/bin/python
         run: |
           python -m pytest -q \
+            tests/test_connector_worker_bootstrap.py \
             tests/test_connector_worker_sandbox.py \
             tests/test_connector_runtime_manifest.py \
             tests/test_connector_python_runtime.py
