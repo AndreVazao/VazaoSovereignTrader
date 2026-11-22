@@ -67,10 +67,10 @@ def require_protected_ancestors(path: Path, *, label: str) -> None:
 def safe_destination(path: Path) -> Path:
     if (
         not path.is_absolute()
-        or Path("/opt") not in path.parents
-        or path.parent == Path("/opt")
+        or Path("/srv") not in path.parents
+        or path.parent == Path("/srv")
     ):
-        fail("runtime_destination_must_be_under_protected_opt_subdirectory")
+        fail("runtime_destination_must_be_under_protected_srv_subdirectory")
     if path.exists() or path.is_symlink():
         fail("runtime_destination_already_exists")
     parent = path.parent
@@ -176,7 +176,7 @@ def main() -> None:
     if metadata_path.exists() or metadata_path.is_symlink():
         fail("runtime_metadata_destination_already_exists")
     metadata_written = False
-    stage = Path(tempfile.mkdtemp(prefix=".vst-runtime-stage-", dir="/opt"))
+    stage = Path(tempfile.mkdtemp(prefix=".vst-runtime-stage-", dir="/srv"))
     try:
         runtime_lib = stage / "lib"
         stdlib_target = runtime_lib / f"python{version}"
