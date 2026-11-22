@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import signal
 import threading
 import time
@@ -10,6 +11,8 @@ from pathlib import Path
 
 from PC_ENGINE.market_events.binance_book_state import BookSnapshot
 from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
+from PC_ENGINE.radar.collection_routing import reviewed_stream_venues
+from PC_ENGINE.radar.venue_discovery import VenueDiscoveryRegistry
 from PC_ENGINE.market_events.l2_collectors import L2WebSocketConfig, PublicL2WebSocketCollector, default_l2_configs
 
 
@@ -51,7 +54,8 @@ def synchronized_book_payload(venue: str, symbol: str, view) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run public L2 order-book collection.")
     parser.add_argument("--symbols", nargs="+", default=["BTC/USDT", "ETH/USDT"])
-    parser.add_argument("--venues", nargs="+", default=["binance", "okx", "coinbase"])
+    parser.add_argument("--venues", nargs="+", default=None)
+    parser.add_argument("--candidates", default="PC_ENGINE/config/exchange_candidates.json")
     parser.add_argument("--data-dir", default="PC_ENGINE/data/radar")
     parser.add_argument("--max-file-mb", type=float, default=64.0)
     args = parser.parse_args()
@@ -61,7 +65,9 @@ def main() -> None:
     output = data_dir / "websocket_orderbook_events.jsonl"
     synchronized_outputs = {venue: synchronized_book_path(data_dir, venue) for venue in SYNCHRONIZED_BOOK_FILENAMES}
     health_output = data_dir / "l2_collector_health.json"
-    max_bytes = max(1, int(args.max_file_mb * 1024 * 1024))
+    if not math.isfinite(args.max_file_mb) or args.max_file_mb <= 0:
+        parser.error("--max-file-mb must be a finite positive number.")
+    max_bytes = min(512 * 1024 * 1024, max(1024, int(args.max_file_mb * 1024 * 1024)))
     backups = {path: path.with_suffix(path.suffix + ".1") for path in [output, *synchronized_outputs.values()]}
     counters = {"events_written": 0, "books_written": 0, "oversized_records_ignored": 0, "write_errors": 0}
     counters_lock = threading.Lock()
@@ -103,8 +109,18 @@ def main() -> None:
             raise ValueError("unsupported_synchronized_book_venue")
         append_jsonl(target, payload, "books_written")
 
+    registry = VenueDiscoveryRegistry(args.candidates)
+    available = {
+        config.venue
+        for symbol in args.symbols
+        for config in default_l2_configs(symbol)
+    }
+    try:
+        selected_venues = reviewed_stream_venues(registry, available, args.venues)
+    except ValueError as exc:
+        parser.error(str(exc))
     configs = []
-    requested_venues = set(args.venues)
+    requested_venues = set(selected_venues)
     for symbol in args.symbols:
         configs.extend(config for config in default_l2_configs(symbol) if config.venue in requested_venues)
     configured_pairs = {(config.symbol, config.venue) for config in configs}
@@ -155,7 +171,7 @@ def main() -> None:
         "service": "l2_market_data_collector",
         "status": "RUNNING",
         "symbols": args.symbols,
-        "venues": args.venues,
+        "venues": selected_venues,
         "configured_pairs": [{"symbol": symbol, "venue": venue} for symbol, venue in sorted(configured_pairs)],
         "unconfigured_pairs": unconfigured_pairs,
         "raw_output": str(output),
