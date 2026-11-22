@@ -8,6 +8,7 @@ import threading
 import time
 from pathlib import Path
 
+from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
 from PC_ENGINE.market_events.websocket_collectors import (
     PublicWebSocketCollector,
     default_public_configs,
@@ -66,21 +67,8 @@ def _is_valid_top_of_book(event) -> bool:
 
 
 def _append_bounded_line(output: Path, backup: Path, encoded: str, max_bytes: int) -> bool:
-    """Append one complete JSONL record without exceeding the configured file cap.
-
-    Returns False when a single record is larger than the cap. In that case the
-    current file is left untouched and the caller can count/drop the record.
-    """
-    encoded_size = len(encoded.encode("utf-8"))
-    if encoded_size > max_bytes:
-        return False
-    if output.exists() and output.stat().st_size + encoded_size > max_bytes:
-        if backup.exists():
-            backup.unlink()
-        output.replace(backup)
-    with output.open("a", encoding="utf-8") as handle:
-        handle.write(encoded)
-    return True
+    """Compatibility wrapper around the shared bounded JSONL writer."""
+    return append_bounded_jsonl(output, backup, encoded, max_bytes)
 
 
 def main() -> None:
