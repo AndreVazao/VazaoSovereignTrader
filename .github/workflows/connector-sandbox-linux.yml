@@ -8,6 +8,7 @@ on:
       - "PC_ENGINE/core/connector_runtime_manifest.py"
       - "scripts/build_connector_python_runtime.py"
       - "tests/test_connector_python_runtime.py"
+      - "tests/fixtures/connector_runtime_probe.py"
       - "tests/test_connector_worker_sandbox.py"
       - "tests/test_connector_runtime_manifest.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
