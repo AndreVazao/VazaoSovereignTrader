@@ -103,3 +103,18 @@ The eventual integration PR must include:
 - Documentation distinguishing implemented controls from deferred controls.
 
 Until all gates pass, the worker is resource-limited and the Linux sandbox command builder is a prototype; neither is a complete production security sandbox.
+
+## Exact-HEAD verification checkpoint — 2026-11-22
+
+Verified against PR #578 HEAD `e5c0e9fefbc6a69b3c91a9fce0e519aefd31fdc0` (branch `feat/minimal-python-runtime-closure-2026-11-20`). All four applicable workflows completed successfully on this exact SHA:
+
+- Python tests: run `44904591206`, job `test` — success.
+- PAPER lifecycle and safety: run `44904591234`, job `PAPER lifecycle and safety boundaries` — success.
+- Connector sandbox Linux: run `44904591241`, job `linux-bubblewrap-enforcement` — success.
+- Windows EXE/installer: run `44904591213`; both `build-exe` and `build-installer` — success. The installer job completed previous-version installer build, upgrade installer build, install/upgrade/launch/health/uninstall and Learning Vault preservation smoke test, and artifact upload.
+
+The Windows lifecycle is therefore no longer pending on this SHA. This is CI evidence, not physical PC validation.
+
+The Linux job still proves the manifest-backed static executable probe and sandbox boundaries; it does **not** prove a packaged CPython runtime. The runtime package, real interpreter imports, bounded worker IPC, parent-side sandbox launcher/supervision, authenticated immutable manifest, TOCTOU closure, provider egress and Windows filesystem/network sandbox remain unimplemented gates. The existing `IsolatedConnectorAdapter` still starts a multiprocessing worker directly; do not route untrusted adapters through it or enable third-party connectors.
+
+PR #578 remains Draft. Do not merge on green CI alone. The next implementation increment must be a reproducible, pinned Linux CPython runtime package with a complete explicit dependency closure and a real Bubblewrap test that starts that interpreter, imports the worker bootstrap and declared extensions, handles one bounded IPC request, and verifies host files/network remain inaccessible. If the runtime cannot be packaged without broad host mounts or unauthenticated mutable paths, fail the build rather than weakening the manifest policy.
