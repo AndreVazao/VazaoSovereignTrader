@@ -47,7 +47,9 @@ jobs:
 
       - name: Build protected packaged CPython runtime
         run: |
+          stat -c "%n uid=%u mode=%a" / /opt
           sudo install -d -o root -g root -m 0755 /opt/vst-connector
+          stat -c "%n uid=%u mode=%a" /opt/vst-connector
           sudo "$(command -v python)" scripts/build_connector_python_runtime.py \
             --destination /opt/vst-connector/runtime \
             --executable /opt/vst-connector/bin/python
