@@ -45,17 +45,20 @@ jobs:
 
       - name: Build protected packaged CPython runtime
         run: |
-          sudo "$(command -v python)" scripts/build_connector_python_runtime.py
-          sudo test -x /opt/vst-connector-python/python
-          sudo test -d /opt/vst-connector-runtime/lib/python3.11
+          sudo install -d -o root -g root -m 0755 /opt/vst-connector
+          sudo "$(command -v python)" scripts/build_connector_python_runtime.py \
+            --destination /opt/vst-connector/runtime \
+            --executable /opt/vst-connector/bin/python
+          sudo test -x /opt/vst-connector/bin/python
+          sudo test -d /opt/vst-connector/runtime/lib/python3.11
 
       - name: Execute Linux sandbox and packaged-runtime enforcement tests
         env:
           PYTHONPATH: ${{ github.workspace }}
           VST_RUN_BWRAP_INTEGRATION: "1"
           VST_CONNECTOR_RUNTIME_INTEGRATION: "1"
-          VST_CONNECTOR_RUNTIME_ROOT: /opt/vst-connector-runtime
-          VST_CONNECTOR_RUNTIME_EXECUTABLE: /opt/vst-connector-python/python
+          VST_CONNECTOR_RUNTIME_ROOT: /opt/vst-connector/runtime
+          VST_CONNECTOR_RUNTIME_EXECUTABLE: /opt/vst-connector/bin/python
         run: |
           python -m pytest -q \
             tests/test_connector_worker_sandbox.py \
