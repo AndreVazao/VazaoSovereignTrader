@@ -68,7 +68,7 @@ The current registry permits only `READ_ONLY_CAPABILITIES`. It rejects order cre
 **Repository:** `AndreVazao/VazaoSovereignTrader`  
 **Main SHA:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`  
 **Active PR:** [#578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578), Draft, open, base `main`, mergeable/clean, not merged.  
-**Current branch HEAD:** `d2e5391d59af3ff823726978bacdfad86ba2fd94` (documentation-only follow-up commits). **Last code-bearing SHA with all four applicable workflows green:** `121b10d187b80f42625cf23ac78881fb209a2d09`.
+**Current PR head:** read live metadata from [PR #578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578) before acting. **Last code-bearing SHA with all four applicable workflows green:** `121b10d187b80f42625cf23ac78881fb209a2d09`.
 
 All four applicable code workflows completed successfully on that exact HEAD:
 

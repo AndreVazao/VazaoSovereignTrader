@@ -3,7 +3,7 @@
 **Repository:** `AndreVazao/VazaoSovereignTrader` only.  
 **Verified main:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`.  
 **Active development:** [PR #578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578), branch `feat/minimal-python-runtime-closure-2026-11-20`.  
-**Current branch HEAD:** `d2e5391d59af3ff823726978bacdfad86ba2fd94` (documentation-only follow-up). **Last code-bearing SHA with all four applicable workflows green:** `121b10d187b80f42625cf23ac78881fb209a2d09`. PR is open, Draft, mergeable/clean, and not merged. The documentation-only commits are [d9fe13d](https://github.com/AndreVazao/VazaoSovereignTrader/commit/d9fe13d8a20e2024dc2180c08e47f995ca3082bb) and [d2e5391](https://github.com/AndreVazao/VazaoSovereignTrader/commit/d2e5391d59af3ff823726978bacdfad86ba2fd94). They update only this handoff and the connector runtime status document; code workflows were not re-triggered because the changed paths do not match their filters. This checkpoint supersedes the historical 2026-11-19 handoff below.
+**Current PR head:** read live metadata from [PR #578](https://github.com/AndreVazao/VazaoSovereignTrader/pull/578) before acting. **Last code-bearing SHA with all four applicable workflows green:** `121b10d187b80f42625cf23ac78881fb209a2d09`. Subsequent commits in this PR changed only `docs/UNIVERSAL_CONNECTOR_RUNTIME.md` and `docs/PROJECT_CONTEXT.md`; the code workflows were not re-triggered because these paths do not match their filters. This checkpoint supersedes the historical 2026-11-19 handoff below.
 
 ## Live repository inventory
 
