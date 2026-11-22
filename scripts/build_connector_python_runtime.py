@@ -171,7 +171,7 @@ def main() -> None:
     if not patchelf:
         fail("patchelf_required")
 
-    require_protected_ancestors(Path("/opt"), label="runtime_staging")
+    require_protected_ancestors(Path("/srv"), label="runtime_staging")
     metadata_path = destination.parent / "runtime-manifest.json"
     if metadata_path.exists() or metadata_path.is_symlink():
         fail("runtime_metadata_destination_already_exists")
