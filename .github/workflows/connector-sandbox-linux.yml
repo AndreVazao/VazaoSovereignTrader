@@ -53,8 +53,8 @@ jobs:
           sudo "$(command -v python)" scripts/build_connector_python_runtime.py \
             --destination /srv/vst-connector/runtime \
             --executable /srv/vst-connector/bin/python
-          sudo test -x /opt/vst-connector/bin/python
-          sudo test -d /opt/vst-connector/runtime/lib/python3.11
+          sudo test -x /srv/vst-connector/bin/python
+          sudo test -d /srv/vst-connector/runtime/lib/python3.11
 
       - name: Execute Linux sandbox and packaged-runtime enforcement tests
         env:
