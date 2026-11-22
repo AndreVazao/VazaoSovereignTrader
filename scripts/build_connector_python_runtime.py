@@ -48,12 +48,22 @@ def run(argv: list[str], *, env: dict[str, str] | None = None) -> str:
 
 
 def safe_destination(path: Path) -> Path:
-    if not path.is_absolute() or path.parent != Path("/opt"):
-        fail("runtime_destination_must_be_direct_child_of_opt")
+    if (
+        not path.is_absolute()
+        or Path("/opt") not in path.parents
+        or path.parent == Path("/opt")
+    ):
+        fail("runtime_destination_must_be_under_protected_opt_subdirectory")
     if path.exists() or path.is_symlink():
         fail("runtime_destination_already_exists")
-    parent = Path("/opt")
-    metadata = parent.stat()
+    parent = path.parent
+    try:
+        resolved_parent = parent.resolve(strict=True)
+        metadata = parent.stat()
+    except OSError:
+        fail("runtime_destination_parent_missing")
+    if resolved_parent != parent:
+        fail("runtime_destination_parent_must_not_use_symlinks")
     if metadata.st_uid != 0 or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
         fail("runtime_destination_parent_not_protected")
     return path
@@ -120,7 +130,7 @@ def main() -> None:
         fail("runtime_packager_requires_root")
     destination = safe_destination(args.destination)
     executable_target = args.executable
-    if executable_target.parent != Path("/opt/vst-connector-python"):
+    if executable_target.parent != destination.parent / "bin":
         fail("runtime_executable_destination_invalid")
     executable_target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     executable_parent = executable_target.parent.stat()
@@ -239,7 +249,9 @@ def main() -> None:
         # Metadata is generated outside the immutable runtime root. Its digest
         # is evidence for CI only; production authentication/signing is a
         # separate gate and must not be inferred from this unsigned document.
-        metadata_path = Path("/opt/vst-connector-runtime-manifest.json")
+        metadata_path = destination.parent / "runtime-manifest.json"
+        if metadata_path.exists() or metadata_path.is_symlink():
+            fail("runtime_metadata_destination_already_exists")
         metadata_path.write_text(json.dumps(metadata, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         metadata_path.chmod(0o444)
         os.rename(stage, destination)
