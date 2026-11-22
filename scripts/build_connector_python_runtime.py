@@ -194,7 +194,7 @@ def main() -> None:
         loader_target = runtime_lib / loader.name
         if not loader_target.exists():
             copy_regular(loader, loader_target)
-        run([patchelf, "--set-interpreter", str(loader_target), "--set-rpath", str(runtime_lib), str(executable_target)])
+        run([patchelf, "--set-interpreter", str(destination / "lib" / loader.name), "--set-rpath", str(destination / "lib"), str(executable_target)])
 
         for current, dirs, files in os.walk(stage):
             for name in dirs:
