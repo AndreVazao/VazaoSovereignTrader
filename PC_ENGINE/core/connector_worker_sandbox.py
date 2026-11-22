@@ -104,6 +104,7 @@ def build_linux_bwrap_command(
     bwrap_path: str | os.PathLike[str] | None = None,
     runtime_manifest: RuntimeManifest | None = None,
     python_home: str | os.PathLike[str] | None = None,
+    runtime_library_path: str | os.PathLike[str] | None = None,
 ) -> list[str]:
     """Build a fail-closed Linux Bubblewrap command with bounded writable tmpfs.
 
@@ -182,6 +183,26 @@ def build_linux_bwrap_command(
             for mount in validated_manifest.mounts
         ):
             raise ValueError("sandbox_manifest_python_home_not_mounted")
+        library_path_value = None
+        if runtime_library_path is not None:
+            raw_library_path = os.fspath(runtime_library_path)
+            if (
+                not isinstance(raw_library_path, str)
+                or not raw_library_path.startswith("/")
+                or "\\x00" in raw_library_path
+            ):
+                raise ValueError("sandbox_manifest_library_path_must_be_absolute")
+            library_path_value = Path(raw_library_path)
+            if (
+                str(library_path_value) != raw_library_path
+                or any(part in {".", ".."} for part in raw_library_path.split("/"))
+            ):
+                raise ValueError("sandbox_manifest_library_path_not_normalized")
+            if not any(
+                mount.is_directory and _is_within(library_path_value, mount.destination)
+                for mount in validated_manifest.mounts
+            ):
+                raise ValueError("sandbox_manifest_library_path_not_mounted")
         executable_real = validated_manifest.executable
         explicit_mounts = validated_manifest.mounts
         system_mounts: list[tuple[Path, Path]] = []
@@ -300,6 +321,11 @@ def build_linux_bwrap_command(
                     "--setenv", "PYTHONNOUSERSITE", "1",
                     "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
                     "--setenv", "PYTHONSAFEPATH", "1",
+                    *(
+                        ["--setenv", "LD_LIBRARY_PATH", str(library_path_value)]
+                        if library_path_value is not None
+                        else []
+                    ),
                 ]
                 if validated_manifest is not None
                 else []
