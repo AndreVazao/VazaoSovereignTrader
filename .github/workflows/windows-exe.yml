@@ -11,6 +11,14 @@ on:
       - "requirements-pc.txt"
       - ".github/workflows/windows-exe.yml"
   push:
+    branches: [main]
+    paths:
+      - "PC_ENGINE/**"
+      - "scripts/**"
+      - "installer/**"
+      - "tests/**"
+      - "requirements-pc.txt"
+      - ".github/workflows/windows-exe.yml"
     tags:
       - "pc-v*"
 concurrency:
