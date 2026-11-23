@@ -252,7 +252,7 @@ class PublicMarketDataService:
 
     def _write_health(self, status: str) -> None:
         payload = self.snapshot()
-        payload["status"] = status
+        payload["status"] = ("STOPPED" if status == "STOPPED" else ("RUNNING" if payload["all_workers_running"] and payload["all_data_fresh"] else "DEGRADED"))
         target = self.data_dir / "market_data_service_health.json"
         temporary = target.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
