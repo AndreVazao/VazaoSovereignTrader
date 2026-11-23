@@ -20,6 +20,7 @@ class WorkerSpec:
     name: str
     command: tuple[str, ...]
     health_file: Path
+    stop_file: Path
     stale_after_seconds: float = 45.0
     process: subprocess.Popen | None = None
     last_start_ms: int = 0
@@ -96,6 +97,8 @@ class PublicMarketDataService:
                 name=name,
                 command=(str(executable), *commands[name], "--stop-file", str(self.data_dir / f"stop_{name}.request")),
                 health_file=self.data_dir / "radar" / health_names[name],
+                stop_file=self.data_dir / f"stop_{name}.request",
+                stale_after_seconds=180.0 if name == "radar_rest" else 45.0,
             ))
         return result
 
