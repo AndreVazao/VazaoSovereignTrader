@@ -236,7 +236,7 @@ class PublicMarketDataService:
         return {
             "schema_version": 1,
             "service": "vst_public_market_data",
-            "status": "RUNNING" if all_running else "DEGRADED",
+            "status": "RUNNING" if all_running and all_fresh else "DEGRADED",
             "timestamp_ms": time.time_ns() // 1_000_000,
             "workers": workers,
             "all_workers_running": all_running,
@@ -291,7 +291,7 @@ class PublicMarketDataService:
                         self._start_worker(worker)
                         changed = True
                 try:
-                    self._write_health("RUNNING" if all(w.process and w.process.poll() is None for w in self.workers) else "DEGRADED")
+                    self._write_health("RUNNING" if self.snapshot()["all_workers_running"] and self.snapshot()["all_data_fresh"] else "DEGRADED")
                 except OSError:
                     self._logger.exception("health write failed")
             return 0
