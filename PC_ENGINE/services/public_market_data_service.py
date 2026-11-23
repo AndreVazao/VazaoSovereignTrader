@@ -41,6 +41,7 @@ class PublicMarketDataService:
         restart_limit: int = 8,
         restart_window_seconds: int = 900,
         health_interval_seconds: float = 5.0,
+        max_data_dir_bytes: int = 1024 * 1024 * 1024,
         popen=subprocess.Popen,
         clock=time.monotonic,
         sleep=time.sleep,
@@ -51,6 +52,8 @@ class PublicMarketDataService:
         self.restart_limit = max(1, int(restart_limit))
         self.restart_window_seconds = max(60, int(restart_window_seconds))
         self.health_interval_seconds = max(1.0, float(health_interval_seconds))
+        self.max_data_dir_bytes = max(1024 * 1024, min(8 * 1024 * 1024 * 1024, int(max_data_dir_bytes)))
+        self.shutdown_reason: str | None = None
         self._popen = popen
         self._clock = clock
         self._sleep = sleep
@@ -147,6 +150,12 @@ class PublicMarketDataService:
         except FileNotFoundError:
             pass
         (self.data_dir / "radar").mkdir(parents=True, exist_ok=True)
+        if self._storage_usage_bytes() >= self.max_data_dir_bytes:
+            self.shutdown_reason = "storage_limit_reached_before_start"
+            self._logger.error("storage budget already exhausted; refusing to start collectors")
+            self._stop.set()
+            self._write_health("DEGRADED")
+            return
         self._logger.info("service starting; workers=%s", [w.name for w in self.workers])
         for worker in self.workers:
             self._start_worker(worker)
@@ -188,6 +197,31 @@ class PublicMarketDataService:
             worker.last_error = type(exc).__name__
             self._logger.exception("worker start failed: %s", worker.name)
             return False
+
+    def _storage_usage_bytes(self) -> int:
+        total = 0
+        if not self.data_dir.exists():
+            return 0
+        for root, dirs, files in os.walk(self.data_dir, followlinks=False):
+            dirs[:] = [name for name in dirs if not (Path(root) / name).is_symlink()]
+            for name in files:
+                candidate = Path(root) / name
+                try:
+                    if candidate.is_symlink() or not candidate.is_file():
+                        continue
+                    total += candidate.stat().st_size
+                except OSError:
+                    continue
+        return total
+
+    def _storage_snapshot(self) -> dict:
+        used = self._storage_usage_bytes()
+        return {
+            "used_bytes": used,
+            "budget_bytes": self.max_data_dir_bytes,
+            "remaining_bytes": max(0, self.max_data_dir_bytes - used),
+            "budget_exhausted": used >= self.max_data_dir_bytes,
+        }
 
     def _health_age(self, worker: WorkerSpec) -> float | None:
         try:
@@ -259,6 +293,8 @@ class PublicMarketDataService:
             "symbols": self.symbols,
             "data_dir": str(self.data_dir),
             "log_file": str(self.log_path),
+            "storage": self._storage_snapshot(),
+            "shutdown_reason": self.shutdown_reason,
             "paper_only": True,
             "private_account_access": False,
             "orders_submitted": False,
@@ -286,7 +322,14 @@ class PublicMarketDataService:
                         self._logger.exception("could not remove stop request")
                     self._stop.set()
                     break
-                changed = False
+                storage = self._storage_snapshot()
+                if storage["budget_exhausted"]:
+                    self.shutdown_reason = "storage_budget_exhausted"
+                    self._logger.error("storage budget exhausted; stopping all public-data workers")
+                    for worker in reversed(self.workers):
+                        self._stop_worker(worker)
+                    self._stop.set()
+                    break
                 for worker in self.workers:
                     process = worker.process
                     exited = process is not None and process.poll() is not None
@@ -344,14 +387,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--restart-limit", type=int, default=8)
     parser.add_argument("--restart-window-seconds", type=int, default=900)
     parser.add_argument("--health-interval-seconds", type=float, default=5.0)
+    parser.add_argument("--max-data-dir-mb", type=float, default=1024.0)
     args = parser.parse_args(argv)
-    if args.restart_limit < 1 or args.restart_window_seconds < 60 or not math_is_positive(args.health_interval_seconds):
-        parser.error("restart limits and health interval must be positive and bounded")
+    if (args.restart_limit < 1 or args.restart_window_seconds < 60 or not math_is_positive(args.health_interval_seconds) or not math_is_positive(args.max_data_dir_mb) or args.max_data_dir_mb < 1 or args.max_data_dir_mb > 8192):
+        parser.error("restart limits, health interval and storage budget must be positive and bounded")
     service = PublicMarketDataService(
         Path(args.app_dir), Path(args.data_dir), symbols=args.symbols,
         restart_limit=args.restart_limit,
         restart_window_seconds=args.restart_window_seconds,
         health_interval_seconds=args.health_interval_seconds,
+        max_data_dir_bytes=int(args.max_data_dir_mb * 1024 * 1024),
     )
     def stop(_signum, _frame):
         service.request_stop()
