@@ -9,6 +9,7 @@ import threading
 import time
 from pathlib import Path
 
+from PC_ENGINE.services.stop_file import watch_stop_file
 from PC_ENGINE.radar.hot_path import HotPathLeadLagEngine, HotPathOpportunity
 from PC_ENGINE.radar.hot_path_outcomes import HotPathOutcomeTracker
 from PC_ENGINE.radar.hot_path_calibration import write_hot_path_calibration
@@ -78,6 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=str(REPO_ROOT / "PC_ENGINE" / "config" / "config.local.json"),
     )
     parser.add_argument("--data-dir", default=None)
+    parser.add_argument("--stop-file", default=None)
     parser.add_argument("--learn-minutes", type=float, default=5.0)
     parser.add_argument("--study-minutes", type=float, default=None)
     parser.add_argument(
@@ -119,6 +121,8 @@ def main(argv: list[str] | None = None) -> None:
         tmp.replace(health_path)
 
     stop = threading.Event()
+    if args.stop_file:
+        watch_stop_file(stop, args.stop_file)
 
     def shutdown(_signum, _frame) -> None:
         stop.set()
