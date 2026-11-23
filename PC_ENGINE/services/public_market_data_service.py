@@ -56,7 +56,7 @@ class PublicMarketDataService:
         self._sleep = sleep
         self._stop = threading.Event()
         self._lock = threading.RLock()
-        self._logger = logging.getLogger("vst.market_data_service")
+        self._logger = logging.getLogger(f"vst.market_data_service.{id(self)}")
         self._logger.setLevel(logging.INFO)
         self._logger.propagate = False
         self.log_path = self.data_dir / "logs" / "market_data_service.log"
@@ -187,7 +187,7 @@ class PublicMarketDataService:
         try:
             payload = json.loads(worker.health_file.read_text(encoding="utf-8"))
             stamp = int(payload.get("timestamp_ms") or payload.get("updated_at_ms") or 0)
-            if not stamp:
+            if not stamp or (worker.last_start_ms and stamp < worker.last_start_ms):
                 return None
             return max(0.0, (time.time_ns() // 1_000_000 - stamp) / 1000.0)
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
