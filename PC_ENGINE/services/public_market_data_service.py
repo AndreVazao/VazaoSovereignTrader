@@ -94,7 +94,7 @@ class PublicMarketDataService:
                 raise FileNotFoundError(f"required_worker_missing:{binary}")
             result.append(WorkerSpec(
                 name=name,
-                command=(str(executable), *commands[name]),
+                command=(str(executable), *commands[name], "--stop-file", str(self.data_dir / f"stop_{name}.request")),
                 health_file=self.data_dir / "radar" / health_names[name],
             ))
         return result
