@@ -28,6 +28,7 @@ class FakeProcess:
         self.returncode = 0
 
     def wait(self, timeout=None):
+        self.returncode = 0
         return self.returncode
 
     def kill(self):
@@ -85,7 +86,8 @@ def test_start_and_stop_own_exact_child_processes(tmp_path):
     assert service.snapshot()["all_workers_running"] is True
 
     service.stop()
-    assert all(process.terminated for process in processes)
+    assert all(process.returncode == 0 for process in processes)
+    assert all(process.terminated is False for process in processes)
     assert all(worker.process is None for worker in service.workers)
 
 
