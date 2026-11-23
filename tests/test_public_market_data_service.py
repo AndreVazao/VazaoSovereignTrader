@@ -120,3 +120,15 @@ def test_health_report_is_atomic_and_marks_paper_only(tmp_path):
     assert report["orders_submitted"] is False
     assert report["execution_authorized"] is False
     service.stop()
+
+
+def test_singleton_lock_prevents_duplicate_supervisor_instances(tmp_path):
+    app = create_app(tmp_path)
+    first = PublicMarketDataService(app, tmp_path / "data", popen=FakeProcess)
+    second = PublicMarketDataService(app, tmp_path / "data", popen=FakeProcess)
+    first.start()
+    try:
+        with pytest.raises(RuntimeError, match="already_running"):
+            second.start()
+    finally:
+        first.stop()
