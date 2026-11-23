@@ -229,7 +229,7 @@ def test_default_storage_budget_is_five_gib(tmp_path):
     assert service.max_data_dir_bytes == 5 * 1024 * 1024 * 1024
 
 
-def test_retention_deletes_only_expired_jsonl_and_preserves_reports(tmp_path):
+def test_retention_prunes_only_expired_raw_streams_and_preserves_paper_evidence(tmp_path):
     import os
     import time
 
@@ -237,18 +237,54 @@ def test_retention_deletes_only_expired_jsonl_and_preserves_reports(tmp_path):
     data = tmp_path / "data"
     radar = data / "radar"
     radar.mkdir(parents=True)
-    expired = radar / "old_events.jsonl"
-    recent = radar / "recent_events.jsonl"
+
+    expired_raw = radar / "websocket_ticker_events.jsonl"
+    expired_rotated_raw = radar / "websocket_orderbook_events.jsonl.1"
+    recent_raw = radar / "observations.jsonl"
+    evidence = radar / "evidence_ledger.jsonl"
+    outcomes = radar / "hot_path_outcomes.jsonl"
+    market_states = radar / "market_states.jsonl"
+    state_outcomes = radar / "state_outcomes.jsonl"
+    unknown_jsonl = radar / "old_events.jsonl"
     report = radar / "venue_economic_evidence.json"
-    expired.write_text('{"old":true}\\n', encoding="utf-8")
-    recent.write_text('{"new":true}\\n', encoding="utf-8")
+
+    for path in (
+        expired_raw,
+        expired_rotated_raw,
+        recent_raw,
+        evidence,
+        outcomes,
+        market_states,
+        state_outcomes,
+        unknown_jsonl,
+    ):
+        path.write_text('{"record":true}\\n', encoding="utf-8")
     report.write_text('{"generated_at_ms":1}\\n', encoding="utf-8")
+
     old = time.time() - (31 * 24 * 60 * 60)
-    os.utime(expired, (old, old))
-    os.utime(report, (old, old))
+    for path in (
+        expired_raw,
+        expired_rotated_raw,
+        evidence,
+        outcomes,
+        market_states,
+        state_outcomes,
+        unknown_jsonl,
+        report,
+    ):
+        os.utime(path, (old, old))
+
     service = PublicMarketDataService(app, data)
     service._prune_expired_market_data()
-    assert not expired.exists()
-    assert recent.exists()
+
+    assert not expired_raw.exists()
+    assert not expired_rotated_raw.exists()
+    assert recent_raw.exists()
+    assert evidence.exists()
+    assert outcomes.exists()
+    assert market_states.exists()
+    assert state_outcomes.exists()
+    assert unknown_jsonl.exists()
     assert report.exists()
-    assert service.retention_snapshot["expired_files_deleted"] == 1
+    assert service.retention_snapshot["expired_files_deleted"] == 2
+    assert service.retention_snapshot["preserved_non_raw_jsonl"] >= 5

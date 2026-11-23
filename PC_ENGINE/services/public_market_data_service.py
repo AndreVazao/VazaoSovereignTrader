@@ -15,6 +15,27 @@ from logging.handlers import RotatingFileHandler
 import logging
 
 
+_RAW_MARKET_DATA_JSONL_FILES = frozenset({
+    "observations.jsonl",
+    "websocket_orderbook_events.jsonl",
+    "websocket_ticker_events.jsonl",
+    "binance_synchronized_orderbook_views.jsonl",
+    "coinbase_synchronized_orderbook_views.jsonl",
+    "okx_synchronized_orderbook_views.jsonl",
+})
+
+
+def _is_raw_market_data_jsonl(name: str) -> bool:
+    """Match only reviewed raw streams and their numbered rotation backups."""
+    for filename in _RAW_MARKET_DATA_JSONL_FILES:
+        if name == filename:
+            return True
+        prefix = f"{filename}."
+        if name.startswith(prefix) and name[len(prefix):].isdigit():
+            return True
+    return False
+
+
 @dataclass
 class WorkerSpec:
     name: str
@@ -54,7 +75,13 @@ class PublicMarketDataService:
         self.health_interval_seconds = max(1.0, float(health_interval_seconds))
         self.max_data_dir_bytes = max(1024 * 1024, min(5 * 1024 * 1024 * 1024, int(max_data_dir_bytes)))
         self.market_data_retention_days = 30
-        self.retention_snapshot = {"scanned_files": 0, "expired_files_deleted": 0, "expired_bytes_deleted": 0, "errors": 0}
+        self.retention_snapshot = {
+            "scanned_files": 0,
+            "expired_files_deleted": 0,
+            "expired_bytes_deleted": 0,
+            "preserved_non_raw_jsonl": 0,
+            "errors": 0,
+        }
         self.shutdown_reason: str | None = None
         self._popen = popen
         self._clock = clock
@@ -202,7 +229,7 @@ class PublicMarketDataService:
             return False
 
     def _prune_expired_market_data(self) -> None:
-        """Delete only expired JSONL market-data files before workers start; preserve reports/config."""
+        """Prune only reviewed raw market-data streams; preserve derived PAPER evidence."""
         radar_dir = self.data_dir / "radar"
         cutoff = time.time() - (self.market_data_retention_days * 24 * 60 * 60)
         if not radar_dir.exists():
@@ -213,7 +240,11 @@ class PublicMarketDataService:
                 candidate = Path(root) / name
                 self.retention_snapshot["scanned_files"] += 1
                 try:
-                    if candidate.is_symlink() or not candidate.is_file() or candidate.suffix.lower() != ".jsonl":
+                    if candidate.is_symlink() or not candidate.is_file():
+                        continue
+                    if not _is_raw_market_data_jsonl(candidate.name):
+                        if candidate.name.endswith(".jsonl") or ".jsonl." in candidate.name:
+                            self.retention_snapshot["preserved_non_raw_jsonl"] += 1
                         continue
                     stat = candidate.stat()
                     if stat.st_mtime >= cutoff:
