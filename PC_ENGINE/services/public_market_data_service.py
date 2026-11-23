@@ -59,6 +59,8 @@ class PublicMarketDataService:
         self._logger.setLevel(logging.INFO)
         self._logger.propagate = False
         self.log_path = self.data_dir / "logs" / "market_data_service.log"
+        self.control_file = self.data_dir / "stop.request"
+        self._instance_lock_handle = None
         self._logger.handlers.clear()
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         handler = RotatingFileHandler(self.log_path, maxBytes=2 * 1024 * 1024, backupCount=2, encoding="utf-8")
@@ -97,7 +99,43 @@ class PublicMarketDataService:
             ))
         return result
 
+    def _acquire_instance_lock(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        handle = (self.data_dir / "service.lock").open("a+b")
+        if handle.seek(0, os.SEEK_END) == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            handle.close()
+            raise RuntimeError("market_data_service_already_running") from exc
+        self._instance_lock_handle = handle
+
+    def _release_instance_lock(self) -> None:
+        handle = self._instance_lock_handle
+        self._instance_lock_handle = None
+        if handle is None:
+            return
+        try:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+
     def start(self) -> None:
+        self._acquire_instance_lock()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         (self.data_dir / "radar").mkdir(parents=True, exist_ok=True)
         self._logger.info("service starting; workers=%s", [w.name for w in self.workers])
@@ -215,6 +253,13 @@ class PublicMarketDataService:
         self.start()
         try:
             while not self._stop.wait(self.health_interval_seconds):
+                if self.control_file.exists():
+                    try:
+                        self.control_file.unlink()
+                    except OSError:
+                        self._logger.exception("could not remove stop request")
+                    self._stop.set()
+                    break
                 changed = False
                 for worker in self.workers:
                     process = worker.process
@@ -259,6 +304,7 @@ class PublicMarketDataService:
         except OSError:
             self._logger.exception("final health write failed")
         self._logger.info("service stopped")
+        self._release_instance_lock()
 
 
 def main(argv: list[str] | None = None) -> int:
