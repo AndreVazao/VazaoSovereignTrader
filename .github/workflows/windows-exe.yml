@@ -218,6 +218,19 @@ jobs:
           if (-not (Test-Path $engine)) { throw "Upgraded engine EXE missing." }
           if (-not (Test-Path $configPath)) { throw "Upgraded local config missing." }
           if (-not (Test-Path $uninstaller)) { throw "Upgraded uninstaller missing." }
+          $requiredWorkers = @(
+            "VazaoSovereignTrader-MarketData.exe",
+            "VazaoSovereignTrader-Radar.exe",
+            "VazaoSovereignTrader-TopOfBook.exe",
+            "VazaoSovereignTrader-L2.exe",
+            "VazaoSovereignTrader-MarketDataService.exe"
+          )
+          foreach ($worker in $requiredWorkers) {
+            if (-not (Test-Path (Join-Path $testDir $worker))) { throw "Installed market-data worker missing: $worker" }
+          }
+          if (-not (Test-Path (Join-Path $testDir "scripts\stop_market_data_service.ps1"))) {
+            throw "Graceful market-data stop helper missing."
+          }
           $tokenHelper = Join-Path $testDir "scripts\ensure_windows_token.ps1"
           if (-not (Test-Path $tokenHelper)) { throw "Packaged Windows PowerShell token helper missing." }
           $windowsPowerShell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
