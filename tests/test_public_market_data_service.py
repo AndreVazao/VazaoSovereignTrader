@@ -183,3 +183,72 @@ def test_new_supervisor_start_clears_stale_stop_request(tmp_path):
         assert service.control_file.exists() is False
     finally:
         service.stop()
+
+
+def test_storage_budget_counts_persistent_files_without_following_symlinks(tmp_path):
+    app = create_app(tmp_path)
+    data = tmp_path / "data"
+    service = PublicMarketDataService(app, data, max_data_dir_bytes=1024 * 1024)
+    (data / "radar").mkdir(parents=True)
+    (data / "radar" / "events.jsonl").write_bytes(b"x" * 4096)
+    assert service._storage_usage_bytes() >= 4096
+    outside = tmp_path / "outside.bin"
+    outside.write_bytes(b"y" * 8192)
+    link = data / "radar" / "external.bin"
+    try:
+        link.symlink_to(outside)
+    except (OSError, NotImplementedError):
+        return
+    assert service._storage_usage_bytes() == 4096
+
+
+def test_supervisor_refuses_to_start_when_storage_budget_is_exhausted(tmp_path):
+    app = create_app(tmp_path)
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "existing.jsonl").write_bytes(b"x" * (1024 * 1024))
+    started = []
+    service = PublicMarketDataService(
+        app, data, max_data_dir_bytes=1024 * 1024,
+        popen=lambda *args, **kwargs: started.append(args),
+    )
+    service.start()
+    try:
+        assert started == []
+        assert service.shutdown_reason == "storage_limit_reached_before_start"
+        report = json.loads((data / "market_data_service_health.json").read_text())
+        assert report["storage"]["budget_exhausted"] is True
+        assert report["shutdown_reason"] == "storage_limit_reached_before_start"
+    finally:
+        service.stop()
+
+
+def test_default_storage_budget_is_five_gib(tmp_path):
+    app = create_app(tmp_path)
+    service = PublicMarketDataService(app, tmp_path / "data")
+    assert service.max_data_dir_bytes == 5 * 1024 * 1024 * 1024
+
+
+def test_retention_deletes_only_expired_jsonl_and_preserves_reports(tmp_path):
+    import os
+    import time
+
+    app = create_app(tmp_path)
+    data = tmp_path / "data"
+    radar = data / "radar"
+    radar.mkdir(parents=True)
+    expired = radar / "old_events.jsonl"
+    recent = radar / "recent_events.jsonl"
+    report = radar / "venue_economic_evidence.json"
+    expired.write_text('{"old":true}\\n', encoding="utf-8")
+    recent.write_text('{"new":true}\\n', encoding="utf-8")
+    report.write_text('{"generated_at_ms":1}\\n', encoding="utf-8")
+    old = time.time() - (31 * 24 * 60 * 60)
+    os.utime(expired, (old, old))
+    os.utime(report, (old, old))
+    service = PublicMarketDataService(app, data)
+    service._prune_expired_market_data()
+    assert not expired.exists()
+    assert recent.exists()
+    assert report.exists()
+    assert service.retention_snapshot["expired_files_deleted"] == 1

@@ -27,9 +27,9 @@ Supervisor health:
 Supervisor log:
 `%LOCALAPPDATA%\VazaoSovereignTraderData\market-data\logs\market_data_service.log`
 
-The supervisor writes atomic health snapshots, checks each worker heartbeat, restarts exited/stale workers with exponential backoff, and limits each worker to eight starts in a 15-minute window. The service log rotates at 2 MiB with two backups. A singleton file lock prevents a second supervisor instance from launching duplicate collectors.
+The supervisor writes atomic health snapshots, checks each worker heartbeat, restarts exited/stale workers with exponential backoff, limits each worker to eight starts in a 15-minute window, and reports persistent storage usage against the aggregate budget. The service log rotates at 2 MiB with two backups. A singleton file lock prevents a second supervisor instance from launching duplicate collectors.
 
-The collector JSONL files retain their individual bounded rotation policies. The supervisor does not delete market history on stop or application upgrade.
+The collector JSONL files retain their individual bounded rotation policies. In addition, the supervisor enforces a 1 GiB aggregate budget across the persistent market-data directory by default (configurable from 1 MiB to 8 GiB when launching the service directly). It checks the budget before starting and during operation; if exhausted, it refuses startup or cooperatively stops all workers and records `storage_budget_exhausted` in health. It does not delete market history automatically. The usage scan does not follow symlinks.
 
 ## Resource and safety boundaries
 - Default symbols: BTC/USDT and ETH/USDT.
