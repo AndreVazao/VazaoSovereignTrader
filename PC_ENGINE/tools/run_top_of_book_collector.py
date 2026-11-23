@@ -111,6 +111,8 @@ def main() -> None:
     }
     counters_lock = threading.Lock()
     quality_gate = TopOfBookQualityGate()
+    for quality_name, quality_value in quality_gate.snapshot().items():
+        counters[f"quality_{quality_name}"] = quality_value
 
     def shutdown(_signum, _frame) -> None:
         stop.set()
