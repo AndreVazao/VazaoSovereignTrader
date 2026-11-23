@@ -200,6 +200,8 @@ class PublicMarketDataService:
         try:
             if process.poll() is None:
                 worker.stop_file.parent.mkdir(parents=True, exist_ok=True)
+                if worker.stop_file.is_symlink():
+                    raise OSError("worker_stop_file_symlink_rejected")
                 worker.stop_file.write_text("stop", encoding="ascii")
                 try:
                     process.wait(timeout=5.0)
