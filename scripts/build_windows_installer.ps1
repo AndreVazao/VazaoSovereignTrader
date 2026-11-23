@@ -54,6 +54,7 @@ Copy-Item "PC_ENGINE\config\config.example.json" (Join-Path $build "config\confi
 Copy-Item "README.md" (Join-Path $build "README.md")
 Copy-Item "docs\WINDOWS_ONE_CLICK_INSTALL.md" (Join-Path $build "docs\WINDOWS_ONE_CLICK_INSTALL.md")
 Copy-Item "scripts\ensure_windows_token.ps1" (Join-Path $build "scripts\ensure_windows_token.ps1")
+Copy-Item "scripts\stop_market_data_service.ps1" (Join-Path $build "scripts\stop_market_data_service.ps1")
 
 $iss = Join-Path $repo "installer\VazaoSovereignTrader.iss"
 $iscc = $null
