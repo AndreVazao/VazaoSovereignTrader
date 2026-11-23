@@ -61,6 +61,8 @@ Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange
 ; The supervised collector is launched manually after installation and local validation.
 
 [UninstallRun]
+; Request a cooperative shutdown before removing worker executables.
+Filename: "{sys}\\WindowsPowerShell\\v1.0\\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\\scripts\\stop_market_data_service.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "StopVstPublicMarketDataService"
 ; Remove only the legacy VST tasks created by older installer versions.
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstEngineTask"
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader-MarketData"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstMarketDataTask"
