@@ -121,6 +121,7 @@ def test_health_report_is_atomic_and_marks_paper_only(tmp_path):
     assert report["paper_only"] is True
     assert report["private_account_access"] is False
     assert report["orders_submitted"] is False
+    assert "all_worker_heartbeats_fresh" in report
     assert report["execution_authorized"] is False
     service.stop()
 
