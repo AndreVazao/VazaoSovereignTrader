@@ -10,6 +10,7 @@ from pathlib import Path
 
 from PC_ENGINE.services.stop_file import watch_stop_file
 from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
+from PC_ENGINE.market_events.top_of_book_quality import TopOfBookQualityGate
 from PC_ENGINE.radar.collection_routing import reviewed_stream_venues
 from PC_ENGINE.radar.venue_discovery import VenueDiscoveryRegistry
 from PC_ENGINE.market_events.websocket_collectors import (
@@ -109,6 +110,9 @@ def main() -> None:
         "reconnects": 0,
     }
     counters_lock = threading.Lock()
+    quality_gate = TopOfBookQualityGate()
+    for quality_name, quality_value in quality_gate.snapshot().items():
+        counters[f"quality_{quality_name}"] = quality_value
 
     def shutdown(_signum, _frame) -> None:
         stop.set()
@@ -122,9 +126,14 @@ def main() -> None:
     def persist(event) -> None:
         if event.event_type != "ticker":
             return
-        if not _is_valid_top_of_book(event):
-            with counters_lock:
+        accepted, timestamp_quality = quality_gate.evaluate(event)
+        quality_snapshot = quality_gate.snapshot()
+        with counters_lock:
+            for quality_name, quality_value in quality_snapshot.items():
+                counters[f"quality_{quality_name}"] = quality_value
+            if not accepted:
                 counters["invalid_tickers_ignored"] += 1
+        if not accepted:
             return
         row = event.as_dict()
         row.update({
@@ -132,6 +141,7 @@ def main() -> None:
             "orders_submitted": False,
             "execution_authorized": False,
             "observation_type": "PUBLIC_TOP_OF_BOOK",
+            "timestamp_quality": timestamp_quality,
         })
         encoded = json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
         with write_lock:
