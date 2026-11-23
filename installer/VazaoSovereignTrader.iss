@@ -36,6 +36,7 @@ Source: "build\config\config.example.json"; DestDir: "{app}\config"; Flags: igno
 Source: "build\config\config.example.json"; DestDir: "{app}\config"; DestName: "config.local.json"; Flags: ignoreversion onlyifdoesntexist
 Source: "build\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\docs\WINDOWS_ONE_CLICK_INSTALL.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "build\docs\PUBLIC_MARKET_DATA_SERVICE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "build\scripts\ensure_windows_token.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "build\scripts\stop_market_data_service.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 
