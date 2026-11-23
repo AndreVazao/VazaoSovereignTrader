@@ -294,6 +294,8 @@ class PublicMarketDataService:
 
     def stop(self) -> None:
         self._stop.set()
+        if self._instance_lock_handle is None:
+            return
         for worker in reversed(self.workers):
             process = worker.process
             if process is None or process.poll() is not None:
