@@ -1,21 +1,25 @@
 $ErrorActionPreference = "Stop"
 $dataRoot = Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData\market-data"
 $healthPath = Join-Path $dataRoot "market_data_service_health.json"
+$lockPath = Join-Path $dataRoot "service.lock"
 $stopRequest = Join-Path $dataRoot "stop.request"
-New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+if (-not (Test-Path -LiteralPath $healthPath) -and -not (Test-Path -LiteralPath $lockPath)) { exit 0 }
 if (Test-Path -LiteralPath $stopRequest) {
     $existing = Get-Item -LiteralPath $stopRequest -Force
     if (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Stop request path cannot be a reparse point." }
 }
 Set-Content -LiteralPath $stopRequest -Value "stop" -NoNewline -Encoding ascii
-if (Test-Path -LiteralPath $healthPath) {
-    $deadline = (Get-Date).AddSeconds(30)
-    while ((Get-Date) -lt $deadline) {
-        try {
+$deadline = (Get-Date).AddSeconds(30)
+while ((Get-Date) -lt $deadline) {
+    try {
+        if (Test-Path -LiteralPath $healthPath) {
             $health = Get-Content -LiteralPath $healthPath -Raw | ConvertFrom-Json
-            if ($health.status -eq "STOPPED") { break }
-        } catch { }
-        Start-Sleep -Seconds 1
-    }
+            if ($health.status -eq "STOPPED") {
+                Remove-Item -LiteralPath $stopRequest -Force -ErrorAction SilentlyContinue
+                break
+            }
+        }
+    } catch { }
+    Start-Sleep -Seconds 1
 }
-Write-Host "Pedido de paragem enviado; o serviço foi aguardado até 30 segundos."
+Write-Host "Pedido de paragem enviado; aguardado até 30 segundos."
