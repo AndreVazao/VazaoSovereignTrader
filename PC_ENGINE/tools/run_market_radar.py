@@ -23,6 +23,7 @@ def main() -> None:
     parser.add_argument("--cycles", type=int, default=0, help="0 means run continuously")
     parser.add_argument("--data-dir", default="PC_ENGINE/data/radar")
     parser.add_argument("--max-file-mb", type=float, default=64.0)
+    parser.add_argument("--stop-file", default=None)
     args = parser.parse_args()
 
     registry = VenueDiscoveryRegistry(args.candidates)
@@ -57,8 +58,23 @@ def main() -> None:
         exchanges, symbols, Path(args.data_dir), max_persist_bytes=max_persist_bytes
     )
     cycles = 0
+    health_path = Path(args.data_dir) / "market_radar_health.json"
+
+    def write_health(status: str, summary: dict | None = None) -> None:
+        payload = {
+            "schema_version": 1, "service": "market_radar_rest", "status": status,
+            "timestamp_ms": time.time_ns() // 1_000_000,
+            "configured_venues": exchanges, "symbols": symbols,
+            "collection_metrics": radar.collection_metrics(), "summary": summary or {},
+            "public_data_only": True, "private_account_access": False, "order_authority": False,
+        }
+        health_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = health_path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+        temporary.replace(health_path)
+
     try:
-        while args.cycles == 0 or cycles < args.cycles:
+        while (args.cycles == 0 or cycles < args.cycles) and not (args.stop_file and Path(args.stop_file).is_file()):
             snapshots, leads = radar.snapshot()
             summary = {
                 "snapshots": len(snapshots),
@@ -70,14 +86,20 @@ def main() -> None:
                 "max_persist_bytes": max_persist_bytes,
                 "collection_metrics": radar.collection_metrics(),
             }
-            print(json.dumps(summary, ensure_ascii=False))
+            write_health("RUNNING", summary)
+            print(json.dumps(summary, ensure_ascii=False), flush=True)
             cycles += 1
             if args.cycles == 0 or cycles < args.cycles:
-                time.sleep(max(0.25, min(300.0, args.interval)))
+                wait_until = time.monotonic() + max(0.25, min(300.0, args.interval))
+                while time.monotonic() < wait_until and not (args.stop_file and Path(args.stop_file).is_file()):
+                    time.sleep(min(0.5, max(0.0, wait_until - time.monotonic())))
     except KeyboardInterrupt:
         print("Radar stopped by user.")
     finally:
-        radar.close()
+        try:
+            write_health("STOPPED")
+        finally:
+            radar.close()
 
 
 if __name__ == "__main__":
