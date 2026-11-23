@@ -49,9 +49,7 @@ Name: "{group}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDi
 Name: "{group}\Pasta de troca - INBOX"; Filename: "{app}\data\operator_exchange\INBOX"
 Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange\OUTBOX"
 
-; Installation never starts the engine, launches the collector, or creates
-; unattended scheduled tasks.
-; Operators may start the backend manually after local validation.
+; The supervised collector is launched manually after installation and local validation.
 
 [UninstallRun]
 ; Remove only the legacy VST tasks created by older installer versions.
