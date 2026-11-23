@@ -186,11 +186,13 @@ class PublicMarketDataService:
     def _health_age(self, worker: WorkerSpec) -> float | None:
         try:
             payload = json.loads(worker.health_file.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return None
             stamp = int(payload.get("timestamp_ms") or payload.get("updated_at_ms") or 0)
             if not stamp or (worker.last_start_ms and stamp < worker.last_start_ms):
                 return None
             return max(0.0, (time.time_ns() // 1_000_000 - stamp) / 1000.0)
-        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        except (OSError, ValueError, TypeError, OverflowError, AttributeError, json.JSONDecodeError):
             return None
 
     def _stop_worker(self, worker: WorkerSpec) -> None:
@@ -260,6 +262,8 @@ class PublicMarketDataService:
         payload["status"] = ("STOPPED" if status == "STOPPED" else ("RUNNING" if payload["all_workers_running"] and payload["all_worker_heartbeats_fresh"] else "DEGRADED"))
         target = self.data_dir / "market_data_service_health.json"
         temporary = target.with_suffix(".json.tmp")
+        if temporary.is_symlink():
+            raise OSError("service_health_temp_symlink_rejected")
         temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
         temporary.replace(target)
 
