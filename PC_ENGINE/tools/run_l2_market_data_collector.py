@@ -10,6 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from PC_ENGINE.market_events.binance_book_state import BookSnapshot
+from PC_ENGINE.services.stop_file import watch_stop_file
 from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
 from PC_ENGINE.radar.collection_routing import reviewed_stream_venues
 from PC_ENGINE.radar.venue_discovery import VenueDiscoveryRegistry
@@ -57,6 +58,7 @@ def main() -> None:
     parser.add_argument("--venues", nargs="+", default=None)
     parser.add_argument("--candidates", default="PC_ENGINE/config/exchange_candidates.json")
     parser.add_argument("--data-dir", default="PC_ENGINE/data/radar")
+    parser.add_argument("--stop-file", default=None)
     parser.add_argument("--max-file-mb", type=float, default=64.0)
     args = parser.parse_args()
 
@@ -165,6 +167,9 @@ def main() -> None:
         )
         threads.append(thread)
         thread.start()
+
+    if args.stop_file:
+        watch_stop_file(stop, args.stop_file, on_stop=lambda: shutdown(None, None))
 
     health_thread = threading.Thread(target=write_health, name="l2-health-writer", daemon=True)
     health_thread.start()
