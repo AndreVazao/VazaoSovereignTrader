@@ -63,6 +63,7 @@ def test_builds_only_fixed_public_data_worker_commands(tmp_path):
     ]
     assert all(worker.command[0].startswith(str(app)) for worker in service.workers)
     assert all("--data-dir" in worker.command for worker in service.workers)
+    assert all("--stop-file" in worker.command for worker in service.workers)
     assert service.symbols == ["BTC/USDT", "ETH/USDT"]
     assert all("private" not in " ".join(worker.command).lower() for worker in service.workers)
 
@@ -132,3 +133,19 @@ def test_singleton_lock_prevents_duplicate_supervisor_instances(tmp_path):
             second.start()
     finally:
         first.stop()
+
+
+def test_cooperative_stop_file_sets_event_and_runs_callback(tmp_path):
+    import threading
+    import time
+    from PC_ENGINE.services.stop_file import watch_stop_file
+
+    event = threading.Event()
+    called = []
+    request = tmp_path / "stop.request"
+    watcher = watch_stop_file(event, request, on_stop=lambda: called.append(True), poll_seconds=0.05)
+    request.write_text("stop", encoding="ascii")
+    assert event.wait(1.0)
+    watcher.join(timeout=1.0)
+    assert called == [True]
+    assert request.exists() is False
