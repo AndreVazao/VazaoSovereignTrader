@@ -240,7 +240,10 @@ def test_retention_prunes_only_expired_raw_streams_and_preserves_paper_evidence(
 
     expired_raw = radar / "websocket_ticker_events.jsonl"
     expired_rotated_raw = radar / "websocket_orderbook_events.jsonl.1"
-    recent_raw = radar / "observations.jsonl"
+    expired_observations = radar / "observations.jsonl"
+    nested_dir = radar / "archive"
+    nested_dir.mkdir()
+    nested_raw = nested_dir / "websocket_ticker_events.jsonl"
     evidence = radar / "evidence_ledger.jsonl"
     outcomes = radar / "hot_path_outcomes.jsonl"
     market_states = radar / "market_states.jsonl"
@@ -251,7 +254,8 @@ def test_retention_prunes_only_expired_raw_streams_and_preserves_paper_evidence(
     for path in (
         expired_raw,
         expired_rotated_raw,
-        recent_raw,
+        expired_observations,
+        nested_raw,
         evidence,
         outcomes,
         market_states,
@@ -265,6 +269,8 @@ def test_retention_prunes_only_expired_raw_streams_and_preserves_paper_evidence(
     for path in (
         expired_raw,
         expired_rotated_raw,
+        expired_observations,
+        nested_raw,
         evidence,
         outcomes,
         market_states,
@@ -279,7 +285,8 @@ def test_retention_prunes_only_expired_raw_streams_and_preserves_paper_evidence(
 
     assert not expired_raw.exists()
     assert not expired_rotated_raw.exists()
-    assert recent_raw.exists()
+    assert not expired_observations.exists()
+    assert nested_raw.exists()
     assert evidence.exists()
     assert outcomes.exists()
     assert market_states.exists()

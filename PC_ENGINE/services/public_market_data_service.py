@@ -242,7 +242,7 @@ class PublicMarketDataService:
                 try:
                     if candidate.is_symlink() or not candidate.is_file():
                         continue
-                    if not _is_raw_market_data_jsonl(candidate.name):
+                    if candidate.parent != radar_dir or not _is_raw_market_data_jsonl(candidate.name):
                         if candidate.name.endswith(".jsonl") or ".jsonl." in candidate.name:
                             self.retention_snapshot["preserved_non_raw_jsonl"] += 1
                         continue
