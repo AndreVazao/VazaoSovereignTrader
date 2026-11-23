@@ -171,3 +171,15 @@ def test_failed_worker_launch_consumes_restart_budget_and_can_retry(tmp_path):
     assert worker.last_start_ms > 0
     assert service._start_worker(worker) is True
     assert len(worker.restarts) == 2
+
+
+def test_new_supervisor_start_clears_stale_stop_request(tmp_path):
+    app = create_app(tmp_path)
+    service = PublicMarketDataService(app, tmp_path / "data", popen=FakeProcess)
+    service.data_dir.mkdir(parents=True, exist_ok=True)
+    service.control_file.write_text("stop", encoding="ascii")
+    service.start()
+    try:
+        assert service.control_file.exists() is False
+    finally:
+        service.stop()
