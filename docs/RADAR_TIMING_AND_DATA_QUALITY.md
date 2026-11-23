@@ -35,3 +35,15 @@ The existing `latency_ms` snapshot field remains present but is now `null` to av
 ## WebSocket source timestamp policy
 
 The native Binance, Coinbase, and OKX public-trade parsers reject an event when its venue-provided trade timestamp is missing, malformed, or non-positive. They do not replace it with the collector's receive time. Collector receive time remains a separate field. This preserves the distinction between venue event-time evidence and local arrival-time evidence; a rejected event is preferable to a fabricated cross-venue lag.
+
+## Public top-of-book ingestion gate
+
+The WebSocket top-of-book collector applies a separate quality gate before writing ticker rows:
+
+- Rejects non-finite/non-positive quotes, crossed or locked quotes, invalid local receive clocks, and observations whose monotonic receive age exceeds 30 seconds.
+- Orders provider timestamps only within the same venue and normalized symbol. Older timestamps are rejected; an identical timestamp and identical quote is counted as a duplicate.
+- Equal provider timestamps with different quotes are retained but explicitly marked `SAME_TIMESTAMP_DIFFERENT_QUOTE`; they are not treated as a reliable event-time ordering.
+- When a venue message has no provider timestamp (currently possible on the Coinbase ticker parser), the observation may be retained with `timestamp_quality="LOCAL_RECEIVE_ONLY"`. The collector never fabricates a provider timestamp from local time.
+- The health snapshot exposes accepted, missing-timestamp, duplicate, out-of-order, and invalid-observation counters. These counters describe data quality, not venue clock accuracy.
+
+Provider timestamps are deliberately not compared with local wall-clock time: without measured clock offset and uncertainty, that comparison could falsely reject valid events or label stale events as fresh. Cross-venue lead/lag remains unconfirmed.
