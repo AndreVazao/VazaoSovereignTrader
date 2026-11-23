@@ -79,7 +79,7 @@ class PublicMarketDataService:
             "radar_rest": ("--symbols", ",".join(self.symbols), "--data-dir", str(self.data_dir / "radar")),
             "top_of_book": ("--symbols", *self.symbols, "--data-dir", str(self.data_dir / "radar")),
             "order_book_l2": ("--symbols", *self.symbols, "--data-dir", str(self.data_dir / "radar")),
-            "market_data_learning": ("--data-dir", str(self.data_dir / "radar")),
+            "market_data_learning": ("--config", str(self.app_dir / "config" / "config.local.json"), "--data-dir", str(self.data_dir / "radar")),
         }
         health_names = {
             "radar_rest": "market_radar_health.json",
