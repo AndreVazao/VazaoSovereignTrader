@@ -28,3 +28,5 @@ def test_windows_installer_exposes_graceful_start_and_stop():
     assert "stop_market_data_service.ps1" in build
     assert "PUBLIC_MARKET_DATA_SERVICE.md" in build
     assert "PUBLIC_MARKET_DATA_SERVICE.md" in installer
+    assert "StopVstPublicMarketDataService" in installer
+    assert "waituntilterminated" in installer
