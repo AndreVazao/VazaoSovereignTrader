@@ -250,8 +250,8 @@ class PublicMarketDataService:
         temporary.replace(target)
 
     def run(self) -> int:
-        self.start()
         try:
+            self.start()
             while not self._stop.wait(self.health_interval_seconds):
                 if self.control_file.exists():
                     try:
