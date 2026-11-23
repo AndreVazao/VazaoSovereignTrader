@@ -36,3 +36,29 @@ def test_frozen_collector_resolves_relative_paths_from_executable_directory(monk
 
     assert collector._resolve_path("config/config.local.json") == tmp_path / "config" / "config.local.json"
     assert collector._resolve_path("data/radar") == tmp_path / "data" / "radar"
+
+
+def test_evidence_refresh_schedule_defaults_to_one_hour_then_six_hours() -> None:
+    from PC_ENGINE.tools.run_market_data_collector import _evidence_refresh_timing
+
+    initial_delay, interval = _evidence_refresh_timing({})
+    assert initial_delay == 3600.0
+    assert interval == 6 * 3600.0
+
+
+def test_evidence_refresh_schedule_is_bounded_and_rejects_non_finite_values() -> None:
+    from PC_ENGINE.tools.run_market_data_collector import _evidence_refresh_timing
+
+    initial_delay, interval = _evidence_refresh_timing({
+        "evidence_refresh_initial_delay_minutes": 99999,
+        "evidence_refresh_interval_hours": float("inf"),
+    })
+    assert initial_delay == 24 * 3600.0
+    assert interval == 6 * 3600.0
+
+    initial_delay, interval = _evidence_refresh_timing({
+        "evidence_refresh_initial_delay_minutes": 0,
+        "evidence_refresh_interval_hours": 0,
+    })
+    assert initial_delay == 5 * 60.0
+    assert interval == 3600.0

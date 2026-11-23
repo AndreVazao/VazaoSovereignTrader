@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from PC_ENGINE.services.stop_file import watch_stop_file
+from PC_ENGINE.diagnostics.evidence_scorecard import refresh_runtime_evidence_reports
 from PC_ENGINE.radar.hot_path import HotPathLeadLagEngine, HotPathOpportunity
 from PC_ENGINE.radar.hot_path_outcomes import HotPathOutcomeTracker
 from PC_ENGINE.radar.hot_path_calibration import write_hot_path_calibration
@@ -48,6 +49,22 @@ def _health_heartbeat_interval_seconds(radar_cfg: dict) -> float:
     # sensible bounds to avoid either rapid disk churn or a very slow heartbeat.
     upper_bound = min(20.0, max(1.0, stale_after / 3.0))
     return min(upper_bound, max(1.0, configured))
+
+
+def _evidence_refresh_timing(radar_cfg: dict) -> tuple[float, float]:
+    """Return (initial delay, refresh interval) with conservative bounded defaults."""
+    try:
+        interval_hours = float(radar_cfg.get("evidence_refresh_interval_hours", 6.0))
+        initial_minutes = float(radar_cfg.get("evidence_refresh_initial_delay_minutes", 60.0))
+    except (TypeError, ValueError, OverflowError):
+        interval_hours, initial_minutes = 6.0, 60.0
+    if not math.isfinite(interval_hours):
+        interval_hours = 6.0
+    if not math.isfinite(initial_minutes):
+        initial_minutes = 60.0
+    interval_seconds = min(168.0, max(1.0, interval_hours)) * 3600.0
+    initial_delay_seconds = min(1440.0, max(5.0, initial_minutes)) * 60.0
+    return initial_delay_seconds, interval_seconds
 
 
 def _outcomes_path(radar_cfg: dict, data_dir: Path) -> Path:
@@ -208,6 +225,17 @@ def main(argv: list[str] | None = None) -> None:
     study_minutes = float(args.study_minutes if args.study_minutes is not None else study_cfg.get("interval_minutes", 15))
     next_learning = 0.0
     next_study = 0.0
+    evidence_initial_delay, evidence_interval = _evidence_refresh_timing(radar_cfg)
+    next_evidence_refresh = time.monotonic() + evidence_initial_delay
+    evidence_refresh_health = {
+        "enabled": True,
+        "status": "SCHEDULED",
+        "initial_delay_seconds": evidence_initial_delay,
+        "interval_seconds": evidence_interval,
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+    }
     next_health_heartbeat = time.monotonic() + _health_heartbeat_interval_seconds(radar_cfg)
     run_deadline = time.monotonic() + args.run_seconds if args.run_seconds > 0 else None
     try:
@@ -224,6 +252,7 @@ def main(argv: list[str] | None = None) -> None:
                         radar=radar.snapshot(),
                         hot_path=hot_path.snapshot(),
                         hot_path_outcomes=outcome_tracker.snapshot(),
+                        evidence_refresh=evidence_refresh_health,
                     )
                 except OSError as exc:
                     # A health-file write failure must not stop public data collection.
@@ -232,6 +261,72 @@ def main(argv: list[str] | None = None) -> None:
                         "health_heartbeat_error": type(exc).__name__,
                     }), flush=True)
                 next_health_heartbeat = now + _health_heartbeat_interval_seconds(radar_cfg)
+            if now >= next_evidence_refresh:
+                def execute_evidence_refresh():
+                    # Refresh latest-only reports from completed PAPER outcomes.
+                    return refresh_runtime_evidence_reports(config)
+
+                try:
+                    refresh_result = _run_study_with_resource_budget(execute_evidence_refresh)
+                    if refresh_result.get("deferred"):
+                        evidence_refresh_health = {
+                            "enabled": True,
+                            "status": "DEFERRED_RESOURCE_BUDGET",
+                            "reason": str(refresh_result.get("reason", "adaptive budget unavailable"))[:240],
+                            "paper_only": True,
+                            "orders_submitted": False,
+                            "execution_authorized": False,
+                        }
+                        next_evidence_refresh = now + 900.0
+                    else:
+                        reports = refresh_result.get("reports", {})
+                        evidence_refresh_health = {
+                            "enabled": True,
+                            "status": "COMPLETED",
+                            "generated_at_ms": time.time_ns() // 1_000_000,
+                            "report_names": sorted(reports.keys()) if isinstance(reports, dict) else [],
+                            "outcomes_file_exists": bool(refresh_result.get("outcomes_file_exists")),
+                            "paper_only": True,
+                            "orders_submitted": False,
+                            "execution_authorized": False,
+                        }
+                        next_evidence_refresh = now + evidence_interval
+                    write_health(
+                        "RUNNING",
+                        radar=radar.snapshot(),
+                        hot_path=hot_path.snapshot(),
+                        hot_path_outcomes=outcome_tracker.snapshot(),
+                        evidence_refresh=evidence_refresh_health,
+                    )
+                    print(json.dumps({
+                        "service": "market_data_collector",
+                        "evidence_refresh": evidence_refresh_health,
+                    }, ensure_ascii=False), flush=True)
+                except Exception as exc:
+                    evidence_refresh_health = {
+                        "enabled": True,
+                        "status": "FAILED",
+                        "error": type(exc).__name__,
+                        "retry_in_seconds": 900,
+                        "paper_only": True,
+                        "orders_submitted": False,
+                        "execution_authorized": False,
+                    }
+                    next_evidence_refresh = now + 900.0
+                    try:
+                        write_health(
+                            "RUNNING",
+                            radar=radar.snapshot(),
+                            hot_path=hot_path.snapshot(),
+                            hot_path_outcomes=outcome_tracker.snapshot(),
+                            evidence_refresh=evidence_refresh_health,
+                        )
+                    except OSError:
+                        pass
+                    print(json.dumps({
+                        "service": "market_data_collector",
+                        "evidence_refresh": evidence_refresh_health,
+                    }, ensure_ascii=False), flush=True)
             if now >= next_learning:
                 stats = learner.learn()
                 calibration = write_hot_path_calibration(
