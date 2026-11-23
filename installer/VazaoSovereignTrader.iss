@@ -37,6 +37,7 @@ Source: "build\config\config.example.json"; DestDir: "{app}\config"; DestName: "
 Source: "build\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\docs\WINDOWS_ONE_CLICK_INSTALL.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "build\scripts\ensure_windows_token.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "build\scripts\stop_market_data_service.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\config"
@@ -52,6 +53,7 @@ Name: "{app}\scripts"
 Name: "{autodesktop}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{group}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{group}\Iniciar recolha contínua"; Filename: "{app}\VazaoSovereignTrader-MarketDataService.exe"; WorkingDir: "{app}"
+Name: "{group}\Parar recolha contínua"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\stop_market_data_service.ps1"""
 Name: "{group}\Pasta de troca - INBOX"; Filename: "{app}\data\operator_exchange\INBOX"
 Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange\OUTBOX"
 
