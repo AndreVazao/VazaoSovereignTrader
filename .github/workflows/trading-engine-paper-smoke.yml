@@ -1,6 +1,38 @@
 name: Trading engine PAPER smoke
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "PC_ENGINE/core/**"
+      - "PC_ENGINE/exchanges/**"
+      - "PC_ENGINE/storage/**"
+      - "PC_ENGINE/services/paper_market_collector.py"
+      - "tests/test_engine_paper_e2e.py"
+      - "scripts/benchmark_paper_engine_observer_load.py"
+      - "tests/test_paper_engine_observer_load_benchmark.py"
+      - "scripts/benchmark_paper_runtime_endurance.py"
+      - "tests/test_paper_runtime_endurance.py"
+      - "tests/test_engine_restart_recovery.py"
+      - "tests/test_engine_unknown_outcome.py"
+      - "tests/test_recovery_integrity.py"
+      - "tests/test_recovery_atomicity.py"
+      - "tests/test_recovery_durability.py"
+      - "tests/test_recovery_pending_orders.py"
+      - "tests/test_recovery_concurrency.py"
+      - "tests/test_browser_pending_recovery.py"
+      - "tests/test_closed_order_recovery.py"
+      - "tests/test_lost_position_recovery.py"
+      - "tests/test_pending_order_partial_reconciliation.py"
+      - "tests/test_pending_order_financial_recovery.py"
+      - "tests/test_execution_intent_recovery.py"
+      - "tests/test_controlled_restart_recovery_e2e.py"
+      - "tests/test_order_manager.py"
+      - "tests/test_risk_final_authorization.py"
+      - "tests/test_external_side_effect_adapter_contract.py"
+      - "tests/test_financial_order_invariants.py"
+      - "requirements-pc.txt"
+      - ".github/workflows/trading-engine-paper-smoke.yml"
   workflow_dispatch:
   pull_request:
     paths:

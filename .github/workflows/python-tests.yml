@@ -1,6 +1,13 @@
 name: Python tests
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "PC_ENGINE/**"
+      - "tests/**"
+      - "requirements-pc.txt"
+      - ".github/workflows/python-tests.yml"
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
