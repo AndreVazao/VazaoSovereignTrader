@@ -221,7 +221,7 @@ class PublicMarketDataService:
             "pid": getattr(process, "pid", None) if running else None,
             "health_file": str(worker.health_file),
             "health_age_seconds": age,
-            "data_fresh": age is not None and age <= worker.stale_after_seconds,
+            "heartbeat_fresh": age is not None and age <= worker.stale_after_seconds,
             "restart_count_window": len(worker.restarts),
             "last_exit_code": worker.last_exit_code,
             "last_error": worker.last_error,
@@ -232,7 +232,7 @@ class PublicMarketDataService:
     def snapshot(self) -> dict:
         workers = {w.name: self._worker_snapshot(w) for w in self.workers}
         all_running = all(item["running"] for item in workers.values())
-        all_fresh = all(item["data_fresh"] for item in workers.values())
+        all_fresh = all(item["heartbeat_fresh"] for item in workers.values())
         return {
             "schema_version": 1,
             "service": "vst_public_market_data",
@@ -240,7 +240,7 @@ class PublicMarketDataService:
             "timestamp_ms": time.time_ns() // 1_000_000,
             "workers": workers,
             "all_workers_running": all_running,
-            "all_data_fresh": all_fresh,
+            "all_worker_heartbeats_fresh": all_fresh,
             "symbols": self.symbols,
             "data_dir": str(self.data_dir),
             "log_file": str(self.log_path),
@@ -252,7 +252,7 @@ class PublicMarketDataService:
 
     def _write_health(self, status: str) -> None:
         payload = self.snapshot()
-        payload["status"] = ("STOPPED" if status == "STOPPED" else ("RUNNING" if payload["all_workers_running"] and payload["all_data_fresh"] else "DEGRADED"))
+        payload["status"] = ("STOPPED" if status == "STOPPED" else ("RUNNING" if payload["all_workers_running"] and payload["all_worker_heartbeats_fresh"] else "DEGRADED"))
         target = self.data_dir / "market_data_service_health.json"
         temporary = target.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
@@ -291,7 +291,7 @@ class PublicMarketDataService:
                         self._start_worker(worker)
                         changed = True
                 try:
-                    self._write_health("RUNNING" if self.snapshot()["all_workers_running"] and self.snapshot()["all_data_fresh"] else "DEGRADED")
+                    self._write_health("RUNNING" if self.snapshot()["all_workers_running"] and self.snapshot()["all_worker_heartbeats_fresh"] else "DEGRADED")
                 except OSError:
                     self._logger.exception("health write failed")
             return 0
