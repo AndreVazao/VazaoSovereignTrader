@@ -277,6 +277,26 @@ class MarketRadarTests(unittest.TestCase):
         self.assertEqual(radar.collection_metrics()["persistence_errors"], 1)
 
 
+    def test_observation_persistence_rotates_within_configured_disk_cap(self):
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            radar = MarketRadar.__new__(MarketRadar)
+            radar.data_dir = Path(tmp)
+            radar.last_pressure = {}
+            radar.quality_rejections = 0
+            radar.max_persist_bytes = 512
+            for _ in range(20):
+                radar._persist([], [])
+            output = Path(tmp) / "observations.jsonl"
+            backup = Path(tmp) / "observations.jsonl.1"
+            self.assertLessEqual(output.stat().st_size, 512)
+            self.assertLessEqual(backup.stat().st_size, 512)
+            self.assertGreater(output.stat().st_size, 0)
+            self.assertGreater(backup.stat().st_size, 0)
+
+
+
 if __name__ == "__main__":
     unittest.main()
 

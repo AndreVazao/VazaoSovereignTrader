@@ -10,6 +10,8 @@ from typing import Any
 
 import ccxt
 
+from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
+
 
 @dataclass(frozen=True)
 class VenueSnapshot:
@@ -60,6 +62,7 @@ class MarketRadar:
         data_dir: str | Path = "PC_ENGINE/data/radar",
         *,
         request_timeout_ms: int = 8000,
+        max_persist_bytes: int = 64 * 1024 * 1024,
         stop_event=None,
     ):
         self.exchanges = list(dict.fromkeys(exchanges))
@@ -82,6 +85,7 @@ class MarketRadar:
             for name in self.exchanges
         }
         self.request_timeout_ms = max(1000, min(60000, int(request_timeout_ms)))
+        self.max_persist_bytes = max(1024, min(512 * 1024 * 1024, int(max_persist_bytes)))
         self.stop_event = stop_event
         self._build_clients()
 
@@ -321,6 +325,7 @@ class MarketRadar:
 
     def _persist(self, snapshots: list[VenueSnapshot], leads: list[LeadLagObservation]) -> None:
         path = self.data_dir / "observations.jsonl"
+        backup = path.with_suffix(path.suffix + ".1")
         row = {
             "local_ts_ms": time.time_ns() // 1_000_000,
             "snapshots": [asdict(x) for x in snapshots],
@@ -329,8 +334,10 @@ class MarketRadar:
             "quality_rejections_total": self.quality_rejections,
             "lead_lag_semantics": "candidate_only_polling_receive_order_unconfirmed",
         }
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+        encoded = json.dumps(row, ensure_ascii=False, allow_nan=False, separators=(",", ":")) + "\n"
+        max_bytes = getattr(self, "max_persist_bytes", 64 * 1024 * 1024)
+        if not append_bounded_jsonl(path, backup, encoded, max_bytes):
+            raise OSError("radar_observation_record_exceeds_storage_limit")
 
     def collection_metrics(self) -> dict[str, Any]:
         """Operational public-data counters; excludes private account data."""

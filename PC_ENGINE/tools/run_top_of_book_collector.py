@@ -8,6 +8,9 @@ import threading
 import time
 from pathlib import Path
 
+from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
+from PC_ENGINE.radar.collection_routing import reviewed_stream_venues
+from PC_ENGINE.radar.venue_discovery import VenueDiscoveryRegistry
 from PC_ENGINE.market_events.websocket_collectors import (
     PublicWebSocketCollector,
     default_public_configs,
@@ -66,21 +69,8 @@ def _is_valid_top_of_book(event) -> bool:
 
 
 def _append_bounded_line(output: Path, backup: Path, encoded: str, max_bytes: int) -> bool:
-    """Append one complete JSONL record without exceeding the configured file cap.
-
-    Returns False when a single record is larger than the cap. In that case the
-    current file is left untouched and the caller can count/drop the record.
-    """
-    encoded_size = len(encoded.encode("utf-8"))
-    if encoded_size > max_bytes:
-        return False
-    if output.exists() and output.stat().st_size + encoded_size > max_bytes:
-        if backup.exists():
-            backup.unlink()
-        output.replace(backup)
-    with output.open("a", encoding="utf-8") as handle:
-        handle.write(encoded)
-    return True
+    """Compatibility wrapper around the shared bounded JSONL writer."""
+    return append_bounded_jsonl(output, backup, encoded, max_bytes)
 
 
 def main() -> None:
@@ -88,7 +78,8 @@ def main() -> None:
         description="Collect public top-of-book ticker observations for PAPER research only."
     )
     parser.add_argument("--symbols", nargs="+", default=["BTC/USDT", "ETH/USDT"])
-    parser.add_argument("--venues", nargs="+", default=["binance", "okx", "coinbase"])
+    parser.add_argument("--venues", nargs="+", default=None)
+    parser.add_argument("--candidates", default="PC_ENGINE/config/exchange_candidates.json")
     parser.add_argument("--data-dir", default="PC_ENGINE/data/radar")
     parser.add_argument("--max-file-mb", type=float, default=64.0)
     parser.add_argument("--health-interval-seconds", type=float, default=5.0)
@@ -99,7 +90,9 @@ def main() -> None:
     output = data_dir / "websocket_ticker_events.jsonl"
     backup = output.with_suffix(output.suffix + ".1")
     health_path = data_dir / "top_of_book_health.json"
-    max_bytes = max(1, int(args.max_file_mb * 1024 * 1024))
+    if not math.isfinite(args.max_file_mb) or args.max_file_mb <= 0:
+        parser.error("--max-file-mb must be a finite positive number.")
+    max_bytes = min(512 * 1024 * 1024, max(1024, int(args.max_file_mb * 1024 * 1024)))
     health_interval = max(1.0, float(args.health_interval_seconds))
     stop = threading.Event()
     write_lock = threading.Lock()
@@ -175,7 +168,19 @@ def main() -> None:
             with counters_lock:
                 counters["reconnects"] += 1
 
-    allowed = set(args.venues)
+    registry = VenueDiscoveryRegistry(args.candidates)
+    available = {
+        cfg.venue
+        for symbol in args.symbols
+        for cfg in default_public_configs(symbol)
+    }
+    try:
+        selected_venues = reviewed_stream_venues(registry, available, args.venues)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not selected_venues:
+        parser.error("No reviewed native public WebSocket venues are available.")
+    allowed = set(selected_venues)
     configs = [
         cfg
         for symbol in args.symbols
@@ -200,7 +205,7 @@ def main() -> None:
         collectors=collectors,
         counters=counters,
         symbols=args.symbols,
-        venues=args.venues,
+        venues=selected_venues,
         output=output,
         backup=backup,
         max_bytes=max_bytes,
@@ -215,7 +220,7 @@ def main() -> None:
                     collectors=collectors,
                     counters=counters,
                     symbols=args.symbols,
-                    venues=args.venues,
+                    venues=selected_venues,
                     output=output,
                     backup=backup,
                     max_bytes=max_bytes,
@@ -234,7 +239,7 @@ def main() -> None:
         "service": "top_of_book_collector",
         "status": "RUNNING",
         "symbols": args.symbols,
-        "venues": args.venues,
+        "venues": selected_venues,
         "output": str(output),
         "backup": str(backup),
         "health": str(health_path),
@@ -259,7 +264,7 @@ def main() -> None:
             collectors=collectors,
             counters=counters,
             symbols=args.symbols,
-            venues=args.venues,
+            venues=selected_venues,
             output=output,
             backup=backup,
             max_bytes=max_bytes,
