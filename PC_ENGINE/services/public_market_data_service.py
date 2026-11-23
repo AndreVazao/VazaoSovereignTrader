@@ -148,6 +148,23 @@ class PublicMarketDataService:
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return None
 
+    def _stop_worker(self, worker: WorkerSpec) -> None:
+        process = worker.process
+        if process is None:
+            return
+        try:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2.0)
+        except Exception:
+            self._logger.exception("worker restart cleanup failed: %s", worker.name)
+        finally:
+            worker.process = None
+
     def _worker_snapshot(self, worker: WorkerSpec) -> dict:
         process = worker.process
         running = process is not None and process.poll() is None
@@ -201,11 +218,19 @@ class PublicMarketDataService:
                 changed = False
                 for worker in self.workers:
                     process = worker.process
-                    if process is not None and process.poll() is not None:
-                        worker.last_exit_code = process.returncode
-                        worker.process = None
-                        worker.last_error = "worker_exited"
-                        self._logger.warning("worker exited: %s code=%s", worker.name, worker.last_exit_code)
+                    exited = process is not None and process.poll() is not None
+                    age_since_start = time.time_ns() // 1_000_000 - worker.last_start_ms
+                    health_age = self._health_age(worker)
+                    stale = (
+                        process is not None and process.poll() is None
+                        and age_since_start > 60000
+                        and (health_age is None or health_age > worker.stale_after_seconds)
+                    )
+                    if exited or stale:
+                        worker.last_exit_code = process.returncode if exited else None
+                        worker.last_error = "worker_exited" if exited else "worker_health_stale"
+                        self._logger.warning("worker recovery: %s reason=%s", worker.name, worker.last_error)
+                        self._stop_worker(worker)
                         delay = min(60.0, 2.0 ** min(len(worker.restarts), 6))
                         if self._stop.wait(delay):
                             break
@@ -228,16 +253,7 @@ class PublicMarketDataService:
             process = worker.process
             if process is None or process.poll() is not None:
                 continue
-            try:
-                process.terminate()
-                try:
-                    process.wait(timeout=5.0)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=2.0)
-            except Exception:
-                self._logger.exception("worker shutdown failed: %s", worker.name)
-            worker.process = None
+            self._stop_worker(worker)
         try:
             self._write_health("STOPPED")
         except OSError:
