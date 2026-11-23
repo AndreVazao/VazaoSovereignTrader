@@ -140,6 +140,12 @@ class PublicMarketDataService:
     def start(self) -> None:
         self._acquire_instance_lock()
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        if self.control_file.is_symlink():
+            raise RuntimeError("market_data_service_stop_control_symlink_rejected")
+        try:
+            self.control_file.unlink()
+        except FileNotFoundError:
+            pass
         (self.data_dir / "radar").mkdir(parents=True, exist_ok=True)
         self._logger.info("service starting; workers=%s", [w.name for w in self.workers])
         for worker in self.workers:
