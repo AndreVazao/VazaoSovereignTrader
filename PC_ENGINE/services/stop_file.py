@@ -18,7 +18,7 @@ def watch_stop_file(
 
     def watch() -> None:
         while not stop_event.wait(max(0.1, min(5.0, float(poll_seconds)))):
-            if not target.is_file():
+            if target.is_symlink() or not target.is_file():
                 continue
             try:
                 target.unlink()
