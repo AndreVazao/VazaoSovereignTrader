@@ -27,6 +27,10 @@ RestartApplications=no
 [Files]
 Source: "build\VazaoSovereignTrader.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\VazaoSovereignTrader-MarketData.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\VazaoSovereignTrader-Radar.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\VazaoSovereignTrader-TopOfBook.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\VazaoSovereignTrader-L2.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\VazaoSovereignTrader-MarketDataService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\ms-playwright\*"; DestDir: "{app}\ms-playwright"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "build\config\config.example.json"; DestDir: "{app}\config"; Flags: ignoreversion onlyifdoesntexist
 Source: "build\config\config.example.json"; DestDir: "{app}\config"; DestName: "config.local.json"; Flags: ignoreversion onlyifdoesntexist
@@ -37,6 +41,7 @@ Source: "build\scripts\ensure_windows_token.ps1"; DestDir: "{app}\scripts"; Flag
 [Dirs]
 Name: "{app}\config"
 Name: "{app}\data\radar"
+Name: "{localappdata}\VazaoSovereignTraderData\market-data"
 Name: "{app}\data\logs"
 Name: "{app}\data\browser\profiles"
 Name: "{app}\data\operator_exchange\INBOX"
@@ -46,6 +51,7 @@ Name: "{app}\scripts"
 [Icons]
 Name: "{autodesktop}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{group}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+Name: "{group}\Iniciar recolha contínua"; Filename: "{app}\VazaoSovereignTrader-MarketDataService.exe"; WorkingDir: "{app}"
 Name: "{group}\Pasta de troca - INBOX"; Filename: "{app}\data\operator_exchange\INBOX"
 Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange\OUTBOX"
 
