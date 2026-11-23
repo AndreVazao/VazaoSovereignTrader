@@ -191,6 +191,8 @@ class PublicMarketDataService:
 
     def _health_age(self, worker: WorkerSpec) -> float | None:
         try:
+            if worker.health_file.is_symlink():
+                return None
             payload = json.loads(worker.health_file.read_text(encoding="utf-8"))
             if not isinstance(payload, dict):
                 return None
