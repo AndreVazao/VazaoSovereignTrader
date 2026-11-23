@@ -154,6 +154,8 @@ class PublicMarketDataService:
             worker.last_error = "restart_rate_limit_exceeded"
             self._logger.error("%s restart rate limit exceeded", worker.name)
             return False
+        worker.restarts.append(now)
+        worker.last_start_ms = time.time_ns() // 1_000_000
         try:
             try:
                 worker.stop_file.unlink()
@@ -172,8 +174,6 @@ class PublicMarketDataService:
             else:
                 kwargs["start_new_session"] = True
             worker.process = self._popen(list(worker.command), **kwargs)
-            worker.last_start_ms = time.time_ns() // 1_000_000
-            worker.restarts.append(now)
             worker.last_error = None
             self._logger.info("worker started: %s pid=%s", worker.name, worker.process.pid)
             return True
@@ -277,15 +277,16 @@ class PublicMarketDataService:
                     process = worker.process
                     exited = process is not None and process.poll() is not None
                     age_since_start = time.time_ns() // 1_000_000 - worker.last_start_ms
+                    missing = process is None and worker.last_start_ms > 0 and age_since_start > 5000
                     health_age = self._health_age(worker)
                     stale = (
                         process is not None and process.poll() is None
                         and age_since_start > 60000
                         and (health_age is None or health_age > worker.stale_after_seconds)
                     )
-                    if exited or stale:
+                    if (exited or stale or missing) and worker.last_error != "restart_rate_limit_exceeded":
                         worker.last_exit_code = process.returncode if exited else None
-                        worker.last_error = "worker_exited" if exited else "worker_health_stale"
+                        worker.last_error = ("worker_exited" if exited else ("worker_health_stale" if stale else "worker_start_failed"))
                         self._logger.warning("worker recovery: %s reason=%s", worker.name, worker.last_error)
                         self._stop_worker(worker)
                         delay = min(60.0, 2.0 ** min(len(worker.restarts), 6))
