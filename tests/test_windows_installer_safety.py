@@ -15,5 +15,6 @@ def test_windows_uninstall_does_not_delete_browser_profiles_or_user_vault():
     installer = Path("installer/VazaoSovereignTrader.iss").read_text(encoding="utf-8")
 
     assert "[UninstallDelete]" not in installer
-    assert "VazaoSovereignTraderData" not in installer
+    assert 'Name: "{localappdata}\\VazaoSovereignTraderData\\market-data"' in installer
+    assert "VazaoSovereignTraderData" not in installer.split("[UninstallRun]", 1)[-1]
     assert 'Type: filesandordirs; Name: "{app}\\data\\browser\\profiles"' not in installer
