@@ -152,6 +152,10 @@ class PublicMarketDataService:
             self._logger.error("%s restart rate limit exceeded", worker.name)
             return False
         try:
+            try:
+                worker.stop_file.unlink()
+            except FileNotFoundError:
+                pass
             kwargs = {
                 "cwd": str(self.app_dir),
                 "stdin": subprocess.DEVNULL,
@@ -192,12 +196,17 @@ class PublicMarketDataService:
             return
         try:
             if process.poll() is None:
-                process.terminate()
+                worker.stop_file.parent.mkdir(parents=True, exist_ok=True)
+                worker.stop_file.write_text("stop", encoding="ascii")
                 try:
                     process.wait(timeout=5.0)
                 except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=2.0)
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2.0)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=2.0)
         except Exception:
             self._logger.exception("worker restart cleanup failed: %s", worker.name)
         finally:
