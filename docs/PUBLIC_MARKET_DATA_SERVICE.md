@@ -29,7 +29,18 @@ Supervisor log:
 
 The supervisor writes atomic health snapshots, checks each worker heartbeat, restarts exited/stale workers with exponential backoff, limits each worker to eight starts in a 15-minute window, and reports persistent storage usage against the aggregate budget. The service log rotates at 2 MiB with two backups. A singleton file lock prevents a second supervisor instance from launching duplicate collectors.
 
-The collector JSONL files retain their individual bounded rotation policies. In addition, the supervisor enforces a 1 GiB aggregate budget across the persistent market-data directory by default (configurable from 1 MiB to 8 GiB when launching the service directly). It checks the budget before starting and during operation; if exhausted, it refuses startup or cooperatively stops all workers and records `storage_budget_exhausted` in health. It does not delete market history automatically. The usage scan does not follow symlinks.
+The collector JSONL files retain their individual bounded rotation policies. The supervisor enforces a **5 GiB (5,120 MiB) aggregate budget** across the persistent market-data directory by default (CLI range 1 MiB–5,120 MiB). It checks the budget before starting and during operation; if exhausted, it refuses startup or cooperatively stops all workers and records `storage_budget_exhausted` in health. At service startup it deletes only raw `.jsonl` files older than 30 days under the `radar` data directory; it does not delete JSON reports, configuration, logs or health records. Symlinks are excluded.
+
+## Automatic evidence reports
+The continuous Market Data worker refreshes the existing PAPER evidence pipeline automatically:
+- First refresh: **60 minutes** after collector startup, allowing data to accumulate.
+- Subsequent refreshes: every **6 hours** by default.
+- Configurable via `radar.evidence_refresh_initial_delay_minutes` (5 minutes–24 hours) and `radar.evidence_refresh_interval_hours` (1–168 hours).
+- Refresh work passes through the adaptive resource budget. If deferred or failed, it retries after 15 minutes and reports the state in `market_data_health.json`.
+- Reports are written to their existing configured paths using atomic replacement. The latest report is retained; no unbounded archive is created. Each report carries its own generation timestamp where supported.
+- The pipeline uses completed PAPER outcomes and fresh public top-of-book observations. Insufficient data remains explicitly insufficient; a positive PAPER result is not proof of profitability and does not authorize trading.
+
+The scheduled refresh is part of the existing Market Data executable, so it does not introduce another continuously running process.
 
 ## Resource and safety boundaries
 - Default symbols: BTC/USDT and ETH/USDT.
