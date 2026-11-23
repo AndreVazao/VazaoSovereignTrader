@@ -152,3 +152,22 @@ def test_cooperative_stop_file_sets_event_and_runs_callback(tmp_path):
     watcher.join(timeout=1.0)
     assert called == [True]
     assert request.exists() is False
+
+
+def test_failed_worker_launch_consumes_restart_budget_and_can_retry(tmp_path):
+    app = create_app(tmp_path)
+    attempts = []
+
+    def popen(command, **kwargs):
+        attempts.append(command)
+        if len(attempts) == 1:
+            raise OSError("temporary launch failure")
+        return FakeProcess(command, **kwargs)
+
+    service = PublicMarketDataService(app, tmp_path / "data", restart_limit=2, popen=popen)
+    worker = service.workers[0]
+    assert service._start_worker(worker) is False
+    assert len(worker.restarts) == 1
+    assert worker.last_start_ms > 0
+    assert service._start_worker(worker) is True
+    assert len(worker.restarts) == 2
