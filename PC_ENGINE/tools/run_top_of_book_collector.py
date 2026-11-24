@@ -70,6 +70,27 @@ def _is_valid_top_of_book(event) -> bool:
     )
 
 
+
+def _quality_observation_row(event, *, analysis_eligible: bool, quality_reason: str | None) -> dict:
+    """Serialize raw observations while keeping quality flags separate from retention."""
+    row = event.as_dict()
+    for field in ("price", "bid", "ask", "volume"):
+        value = row.get(field)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if not math.isfinite(float(value)):
+                row[field] = None
+    row.update({
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+        "observation_type": "PUBLIC_TOP_OF_BOOK",
+        "analysis_eligible": analysis_eligible,
+        "quality_status": "VALID" if analysis_eligible else "FLAGGED",
+        "quality_reason": quality_reason,
+        "timestamp_quality": quality_reason if analysis_eligible else "FLAGGED_" + str(quality_reason),
+    })
+    return row
+
 def _append_bounded_line(output: Path, backup: Path, encoded: str, max_bytes: int) -> bool:
     """Compatibility wrapper around the shared bounded JSONL writer."""
     return append_bounded_jsonl(output, backup, encoded, max_bytes)
@@ -103,7 +124,7 @@ def main() -> None:
     threads: list[threading.Thread] = []
     counters = {
         "events_written": 0,
-        "invalid_tickers_ignored": 0,
+        "quality_observations_not_analysis_eligible": 0,
         "oversized_tickers_ignored": 0,
         "write_errors": 0,
         "collector_errors": 0,
@@ -132,18 +153,15 @@ def main() -> None:
             for quality_name, quality_value in quality_snapshot.items():
                 counters[f"quality_{quality_name}"] = quality_value
             if not accepted:
-                counters["invalid_tickers_ignored"] += 1
-        if not accepted:
-            return
-        row = event.as_dict()
-        row.update({
-            "paper_only": True,
-            "orders_submitted": False,
-            "execution_authorized": False,
-            "observation_type": "PUBLIC_TOP_OF_BOOK",
-            "timestamp_quality": timestamp_quality,
-        })
-        encoded = json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+                counters["quality_observations_not_analysis_eligible"] += 1
+        row = _quality_observation_row(
+            event,
+            analysis_eligible=accepted,
+            quality_reason=timestamp_quality,
+        )
+        encoded = json.dumps(
+            row, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        ) + "\n"
         with write_lock:
             try:
                 if not _append_bounded_line(output, backup, encoded, max_bytes):
