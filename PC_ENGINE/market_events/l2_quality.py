@@ -44,7 +44,11 @@ def assess_l2_book_view(
         reason = getattr(view, "reason", None)
         return reject(reason if isinstance(reason, str) and reason else "book_not_eligible")
 
+    # Binance's production BookSnapshot exposes the same sequence contract
+    # as update_id; Coinbase and OKX expose it as sequence.
     sequence = getattr(view, "sequence", None)
+    if sequence is None:
+        sequence = getattr(view, "update_id", None)
     if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
         return reject("missing_or_invalid_sequence")
 
