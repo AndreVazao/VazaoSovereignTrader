@@ -206,6 +206,9 @@ def build_report(
         "market_groups_limit_ignored": 0,
         "valid_books_analyzed": 0,
         "records_omitted_by_limit": 0,
+        "files_read": 0,
+        "backup_files_read": 0,
+        "symlink_files_ignored": 0,
         "files_missing": 0,
     }
     groups: dict[str, dict[str, Any]] = defaultdict(lambda: {
@@ -223,92 +226,107 @@ def build_report(
 
     for venue in venues:
         path = root / BOOK_FILES[venue]
-        if not path.is_file():
+        backup_path = path.with_suffix(path.suffix + ".1")
+        segments = (backup_path, path)
+        available_segments = []
+        for segment in segments:
+            if segment.is_symlink():
+                counters["symlink_files_ignored"] += 1
+                continue
+            if segment.is_file():
+                available_segments.append(segment)
+        if not available_segments:
             counters["files_missing"] += 1
             continue
-        with path.open("rb") as handle:
-            while True:
-                line = handle.readline(MAX_JSONL_LINE_BYTES + 1)
-                if not line:
-                    break
-                if len(line) > MAX_JSONL_LINE_BYTES:
-                    if not line.endswith(b"\n"):
-                        while True:
-                            remainder = handle.readline(MAX_JSONL_LINE_BYTES + 1)
-                            if not remainder or remainder.endswith(b"\n"):
-                                break
-                    counters["oversized_lines_ignored"] += 1
-                    continue
-                if not line.strip():
-                    continue
-                counters["raw_lines_seen"] += 1
-                try:
-                    row = json.loads(line.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    counters["malformed_json_ignored"] += 1
-                    continue
-                if not isinstance(row, dict):
-                    counters["non_object_rows_ignored"] += 1
-                    continue
-                if row.get("status") != "SYNCED":
-                    raw_venue, raw_symbol = row.get("venue"), row.get("symbol")
-                    if isinstance(raw_venue, str) and isinstance(raw_symbol, str):
-                        last_sequences.pop((raw_venue.strip().lower(), raw_symbol.strip().upper()), None)
-                if row.get("analysis_eligible") is not True or row.get("quality_status") != "VALID":
-                    counters["quality_flagged_ignored"] += 1
-                    continue
-                if (
-                    row.get("paper_only") is not True
-                    or row.get("orders_submitted") is not False
-                    or row.get("execution_authorized") is not False
-                ):
-                    counters["non_paper_rows_ignored"] += 1
-                    continue
-                sample = analyze_book(
-                    row, quote_notional=quote_notional, fee_bps=fee_bps,
-                    max_age_ms=max_age_ms, max_levels_per_side=max_levels_per_side,
-                )
-                if sample is None:
-                    counters["invalid_or_stale_books_ignored"] += 1
-                    continue
-                if sample["venue"] != venue:
-                    counters["invalid_or_stale_books_ignored"] += 1
-                    continue
-                key = f'{sample["venue"]}:{sample["symbol"]}'
-                if key not in groups and len(groups) >= MAX_MARKET_GROUPS:
-                    counters["market_groups_limit_ignored"] += 1
-                    continue
-                sequence_key = (sample["venue"], sample["symbol"])
-                previous_sequence = last_sequences.get(sequence_key)
-                if previous_sequence is not None and sample["sequence"] <= previous_sequence:
-                    counters["duplicate_or_out_of_order_sequences_ignored"] += 1
-                    continue
-                last_sequences[sequence_key] = sample["sequence"]
-                counters["valid_books_analyzed"] += 1
-                if len(samples) == max_records:
-                    counters["records_omitted_by_limit"] += 1
-                samples.append(sample)
-                group = groups[key]
-                group["samples"] += 1
-                group["full_buy_fills"] += int(sample["buy"]["full_fill"])
-                group["partial_buy_fills"] += int(0 < sample["buy"]["filled_quantity"] < sample["buy"]["requested_quantity"])
-                group["full_sell_fills"] += int(sample["sell"]["full_fill"])
-                group["partial_sell_fills"] += int(0 < sample["sell"]["filled_quantity"] < sample["sell"]["requested_quantity"])
-                group["spread_sum"] += sample["spread_bps"]
-                group["spread_count"] += 1
-                if sample["buy_impact_bps"] is not None:
-                    group["buy_impact_sum"] += sample["buy_impact_bps"]
-                    group["buy_impact_count"] += 1
-                    group["buy_cost_sum"] += sample["buy_cost_including_fee_bps"]
-                    group["buy_cost_count"] += 1
-                if sample["sell_impact_bps"] is not None:
-                    group["sell_impact_sum"] += sample["sell_impact_bps"]
-                    group["sell_impact_count"] += 1
-                    group["sell_cost_sum"] += sample["sell_cost_including_fee_bps"]
-                    group["sell_cost_count"] += 1
-                if sample["depth_imbalance"] is not None:
-                    group["imbalance_sum"] += sample["depth_imbalance"]
-                    group["imbalance_count"] += 1
+        # Rotation renames the former active file to .jsonl.1. Read it first
+        # so sequence validation follows the original capture order.
+        for segment in available_segments:
+            counters["files_read"] += 1
+            if segment == backup_path:
+                counters["backup_files_read"] += 1
+            with segment.open("rb") as handle:
+                while True:
+                    line = handle.readline(MAX_JSONL_LINE_BYTES + 1)
+                    if not line:
+                        break
+                    if len(line) > MAX_JSONL_LINE_BYTES:
+                        if not line.endswith(b"\n"):
+                            while True:
+                                remainder = handle.readline(MAX_JSONL_LINE_BYTES + 1)
+                                if not remainder or remainder.endswith(b"\n"):
+                                    break
+                        counters["oversized_lines_ignored"] += 1
+                        continue
+                    if not line.strip():
+                        continue
+                    counters["raw_lines_seen"] += 1
+                    try:
+                        row = json.loads(line.decode("utf-8"))
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        counters["malformed_json_ignored"] += 1
+                        continue
+                    if not isinstance(row, dict):
+                        counters["non_object_rows_ignored"] += 1
+                        continue
+                    if row.get("status") != "SYNCED":
+                        raw_venue, raw_symbol = row.get("venue"), row.get("symbol")
+                        if isinstance(raw_venue, str) and isinstance(raw_symbol, str):
+                            last_sequences.pop((raw_venue.strip().lower(), raw_symbol.strip().upper()), None)
+                    if row.get("analysis_eligible") is not True or row.get("quality_status") != "VALID":
+                        counters["quality_flagged_ignored"] += 1
+                        continue
+                    if (
+                        row.get("paper_only") is not True
+                        or row.get("orders_submitted") is not False
+                        or row.get("execution_authorized") is not False
+                    ):
+                        counters["non_paper_rows_ignored"] += 1
+                        continue
+                    sample = analyze_book(
+                        row, quote_notional=quote_notional, fee_bps=fee_bps,
+                        max_age_ms=max_age_ms, max_levels_per_side=max_levels_per_side,
+                    )
+                    if sample is None:
+                        counters["invalid_or_stale_books_ignored"] += 1
+                        continue
+                    if sample["venue"] != venue:
+                        counters["invalid_or_stale_books_ignored"] += 1
+                        continue
+                    key = f'{sample["venue"]}:{sample["symbol"]}'
+                    if key not in groups and len(groups) >= MAX_MARKET_GROUPS:
+                        counters["market_groups_limit_ignored"] += 1
+                        continue
+                    sequence_key = (sample["venue"], sample["symbol"])
+                    previous_sequence = last_sequences.get(sequence_key)
+                    if previous_sequence is not None and sample["sequence"] <= previous_sequence:
+                        counters["duplicate_or_out_of_order_sequences_ignored"] += 1
+                        continue
+                    last_sequences[sequence_key] = sample["sequence"]
+                    counters["valid_books_analyzed"] += 1
+                    if len(samples) == max_records:
+                        counters["records_omitted_by_limit"] += 1
+                    samples.append(sample)
+                    group = groups[key]
+                    group["samples"] += 1
+                    group["full_buy_fills"] += int(sample["buy"]["full_fill"])
+                    group["partial_buy_fills"] += int(0 < sample["buy"]["filled_quantity"] < sample["buy"]["requested_quantity"])
+                    group["full_sell_fills"] += int(sample["sell"]["full_fill"])
+                    group["partial_sell_fills"] += int(0 < sample["sell"]["filled_quantity"] < sample["sell"]["requested_quantity"])
+                    group["spread_sum"] += sample["spread_bps"]
+                    group["spread_count"] += 1
+                    if sample["buy_impact_bps"] is not None:
+                        group["buy_impact_sum"] += sample["buy_impact_bps"]
+                        group["buy_impact_count"] += 1
+                        group["buy_cost_sum"] += sample["buy_cost_including_fee_bps"]
+                        group["buy_cost_count"] += 1
+                    if sample["sell_impact_bps"] is not None:
+                        group["sell_impact_sum"] += sample["sell_impact_bps"]
+                        group["sell_impact_count"] += 1
+                        group["sell_cost_sum"] += sample["sell_cost_including_fee_bps"]
+                        group["sell_cost_count"] += 1
+                    if sample["depth_imbalance"] is not None:
+                        group["imbalance_sum"] += sample["depth_imbalance"]
+                        group["imbalance_count"] += 1
 
     summaries = {}
     for key, group in sorted(groups.items()):
