@@ -72,11 +72,10 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
             root = Path(temp)
             path = root / "binance_synchronized_orderbook_views.jsonl"
             rows = [_row(sequence=index + 1) for index in range(4)]
-            rows.insert(1, {"not": "an object"})
-            rows.insert(2, {"broken": True, "analysis_eligible": False, "quality_status": "FLAGGED"})
-            path.write_bytes(
-                ("\n".join(json.dumps(row) for row in rows) + "\n{broken\n").encode("utf-8") + b"\xff\n"
-            )
+            lines = [json.dumps(rows[0]), json.dumps("not an object"), json.dumps(rows[1]),
+                     json.dumps({"broken": True, "analysis_eligible": False, "quality_status": "FLAGGED"}),
+                     json.dumps(rows[2]), json.dumps(rows[3]), "{broken"]
+            path.write_bytes(("\n".join(lines) + "\n").encode("utf-8") + b"\xff\n")
             report = build_report(root, venues=("binance",), max_records=2)
         self.assertEqual(report["counters"]["valid_books_analyzed"], 4)
         self.assertEqual(report["counters"]["records_omitted_by_limit"], 2)
