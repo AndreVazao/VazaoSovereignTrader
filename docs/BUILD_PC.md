@@ -50,4 +50,5 @@ dist\VazaoSovereignTrader.exe
 - Nunca coloques `config.local.json` no GitHub.
 - Nunca coloques chaves reais no código.
 - Começa sempre em PAPER.
-- Recolha pública inicial: não configurar chaves nem ligar contas de exchange. Os endpoints públicos de market data não precisam de credenciais.\n- Se uma fase futura exigir acesso privado, começar apenas com permissões estritamente read-only e sem Spot Trade, Withdraw, transferências ou execução. Nunca guardar chaves no ficheiro de configuração nem no GitHub. O VST permanece PAPER-only.
+- Recolha pública inicial: não configurar chaves nem ligar contas de exchange. Os endpoints públicos de market data não precisam de credenciais.
+- Se uma fase futura exigir acesso privado, começar apenas com permissões estritamente read-only e sem Spot Trade, Withdraw, transferências ou execução. Nunca guardar chaves no ficheiro de configuração nem no GitHub. O VST permanece PAPER-only.
