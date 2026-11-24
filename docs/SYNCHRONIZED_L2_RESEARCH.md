@@ -6,7 +6,9 @@ The public L2 collector persists synchronized, quality-labelled views to:
 - `PC_ENGINE/data/radar/coinbase_synchronized_orderbook_views.jsonl`
 - `PC_ENGINE/data/radar/okx_synchronized_orderbook_views.jsonl`
 
-Run the bounded PAPER research consumer after collection has produced data:
+After installing VST and collecting public market data, launch **Analisar profundidade L2 (PAPER)** from the Start menu. The shortcut reads the installed user's persistent market-data folder and writes its report to the persistent replay folder.
+
+For source checkouts, run the bounded PAPER research consumer after collection has produced data:
 
 ```powershell
 python PC_ENGINE/replay/synchronized_l2_research.py --data-dir PC_ENGINE/data/radar --quote-notional 100 --fee-bps 10
