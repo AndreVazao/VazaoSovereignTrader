@@ -213,8 +213,12 @@ def build_report(
     groups: dict[str, dict[str, Any]] = defaultdict(lambda: {
         "samples": 0, "full_buy_fills": 0, "partial_buy_fills": 0,
         "full_sell_fills": 0, "partial_sell_fills": 0,
-        "spreads": [], "buy_impacts": [], "sell_impacts": [],
-        "buy_costs": [], "sell_costs": [], "imbalances": [],
+        "spread_sum": 0.0, "spread_count": 0,
+        "buy_impact_sum": 0.0, "buy_impact_count": 0,
+        "sell_impact_sum": 0.0, "sell_impact_count": 0,
+        "buy_cost_sum": 0.0, "buy_cost_count": 0,
+        "sell_cost_sum": 0.0, "sell_cost_count": 0,
+        "imbalance_sum": 0.0, "imbalance_count": 0,
     })
     root = Path(data_dir)
     last_sequences: dict[tuple[str, str], int] = {}
@@ -286,15 +290,21 @@ def build_report(
                 group["partial_buy_fills"] += int(0 < sample["buy"]["filled_quantity"] < sample["buy"]["requested_quantity"])
                 group["full_sell_fills"] += int(sample["sell"]["full_fill"])
                 group["partial_sell_fills"] += int(0 < sample["sell"]["filled_quantity"] < sample["sell"]["requested_quantity"])
-                group["spreads"].append(sample["spread_bps"])
+                group["spread_sum"] += sample["spread_bps"]
+                group["spread_count"] += 1
                 if sample["buy_impact_bps"] is not None:
-                    group["buy_impacts"].append(sample["buy_impact_bps"])
-                    group["buy_costs"].append(sample["buy_cost_including_fee_bps"])
+                    group["buy_impact_sum"] += sample["buy_impact_bps"]
+                    group["buy_impact_count"] += 1
+                    group["buy_cost_sum"] += sample["buy_cost_including_fee_bps"]
+                    group["buy_cost_count"] += 1
                 if sample["sell_impact_bps"] is not None:
-                    group["sell_impacts"].append(sample["sell_impact_bps"])
-                    group["sell_costs"].append(sample["sell_cost_including_fee_bps"])
+                    group["sell_impact_sum"] += sample["sell_impact_bps"]
+                    group["sell_impact_count"] += 1
+                    group["sell_cost_sum"] += sample["sell_cost_including_fee_bps"]
+                    group["sell_cost_count"] += 1
                 if sample["depth_imbalance"] is not None:
-                    group["imbalances"].append(sample["depth_imbalance"])
+                    group["imbalance_sum"] += sample["depth_imbalance"]
+                    group["imbalance_count"] += 1
 
     summaries = {}
     for key, group in sorted(groups.items()):
@@ -304,12 +314,12 @@ def build_report(
             "partial_buy_fills": group["partial_buy_fills"],
             "full_sell_fills": group["full_sell_fills"],
             "partial_sell_fills": group["partial_sell_fills"],
-            "average_spread_bps": _average(group["spreads"]),
-            "average_buy_impact_bps": _average(group["buy_impacts"]),
-            "average_sell_impact_bps": _average(group["sell_impacts"]),
-            "average_buy_cost_including_fee_bps": _average(group["buy_costs"]),
-            "average_sell_cost_including_fee_bps": _average(group["sell_costs"]),
-            "average_depth_imbalance": _average(group["imbalances"]),
+            "average_spread_bps": group["spread_sum"] / group["spread_count"] if group["spread_count"] else None,
+            "average_buy_impact_bps": group["buy_impact_sum"] / group["buy_impact_count"] if group["buy_impact_count"] else None,
+            "average_sell_impact_bps": group["sell_impact_sum"] / group["sell_impact_count"] if group["sell_impact_count"] else None,
+            "average_buy_cost_including_fee_bps": group["buy_cost_sum"] / group["buy_cost_count"] if group["buy_cost_count"] else None,
+            "average_sell_cost_including_fee_bps": group["sell_cost_sum"] / group["sell_cost_count"] if group["sell_cost_count"] else None,
+            "average_depth_imbalance": group["imbalance_sum"] / group["imbalance_count"] if group["imbalance_count"] else None,
         }
 
     return {
