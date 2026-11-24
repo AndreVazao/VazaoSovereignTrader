@@ -40,6 +40,7 @@ $workerBuilds = @(
     @{ Name = "VazaoSovereignTrader-Radar"; Entry = "PC_ENGINE/tools/run_market_radar.py"; Console = $false },
     @{ Name = "VazaoSovereignTrader-TopOfBook"; Entry = "PC_ENGINE/tools/run_top_of_book_collector.py"; Console = $false },
     @{ Name = "VazaoSovereignTrader-L2"; Entry = "PC_ENGINE/tools/run_l2_market_data_collector.py"; Console = $false },
+    @{ Name = "VazaoSovereignTrader-L2Research"; Entry = "PC_ENGINE/replay/synchronized_l2_research.py"; Console = $true },
     @{ Name = "VazaoSovereignTrader-MarketDataService"; Entry = "PC_ENGINE/services/public_market_data_service.py"; Console = $false }
 )
 foreach ($worker in $workerBuilds) {
