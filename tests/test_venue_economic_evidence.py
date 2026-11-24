@@ -136,6 +136,7 @@ def test_spread_uses_only_fresh_valid_public_top_of_book_observations(tmp_path):
     rows = [
         {**base, "event_id": "t1", "bid": 100.0, "ask": 100.2},
         {**base, "event_id": "t2", "bid": 100.1, "ask": 100.3},
+        {**base, "event_id": "flagged", "bid": 100.0, "ask": 100.1, "analysis_eligible": False, "quality_status": "FLAGGED"},
         {**base, "event_id": "crossed", "bid": 101.0, "ask": 100.0},
         {**base, "event_id": "nonpaper", "bid": 100.0, "ask": 100.1, "orders_submitted": True},
     ]
@@ -159,6 +160,7 @@ def test_spread_uses_only_fresh_valid_public_top_of_book_observations(tmp_path):
     assert venue["spread_samples"] == 2
     assert 19.0 < venue["spread_bps"] < 21.0
     assert report["integrity"]["ticker_invalid_ignored"] == 1
+    assert report["integrity"]["ticker_quality_flagged_ignored"] == 1
     assert report["integrity"]["ticker_non_paper_ignored"] == 1
     assert report["integrity"]["ticker_malformed_ignored"] == 1
     assert report["execution_authorized"] is False

@@ -41,9 +41,10 @@ The native Binance, Coinbase, and OKX public-trade parsers reject an event when 
 The WebSocket top-of-book collector applies a separate quality gate before writing ticker rows:
 
 - Rejects non-finite/non-positive quotes, crossed or locked quotes, invalid local receive clocks, and observations whose monotonic receive age exceeds 30 seconds.
-- Orders provider timestamps only within the same venue and normalized symbol. Older timestamps are rejected; an identical timestamp and identical quote is counted as a duplicate.
+- Orders provider timestamps only within the same venue and normalized symbol. Older timestamps and exact duplicate observations are flagged as ineligible for analysis, but remain in the bounded raw JSONL evidence store.
 - Equal provider timestamps with different quotes are retained but explicitly marked `SAME_TIMESTAMP_DIFFERENT_QUOTE`; they are not treated as a reliable event-time ordering.
 - When a venue message has no provider timestamp (currently possible on the Coinbase ticker parser), the observation may be retained with `timestamp_quality="LOCAL_RECEIVE_ONLY"`. The collector never fabricates a provider timestamp from local time.
-- The health snapshot exposes accepted, missing-timestamp, duplicate, out-of-order, and invalid-observation counters. These counters describe data quality, not venue clock accuracy.
+- The health snapshot exposes accepted, missing-timestamp, duplicate, out-of-order, invalid-observation, and bounded-tracker eviction counters. These counters describe data quality, not venue clock accuracy.
+- Every parsed ticker observation is retained in the bounded raw evidence store, including flagged anomalies. Each row carries `analysis_eligible`, `quality_status`, and `quality_reason`; downstream research must exclude rows where `analysis_eligible` is false. Non-finite numeric fields are serialized as `null` rather than invalid JSON. Provider timestamp tracking is bounded to 4,096 venue/instrument keys.
 
 Provider timestamps are deliberately not compared with local wall-clock time: without measured clock offset and uncertainty, that comparison could falsely reject valid events or label stale events as fresh. Cross-venue lead/lag remains unconfirmed.

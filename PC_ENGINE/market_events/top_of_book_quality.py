@@ -4,6 +4,7 @@ import math
 import threading
 import time
 from typing import Any
+from collections import OrderedDict
 
 
 class TopOfBookQualityGate:
@@ -12,18 +13,21 @@ class TopOfBookQualityGate:
     MAX_LOCAL_RECEIVE_AGE_NS = 30_000_000_000
     FUTURE_MONOTONIC_TOLERANCE_NS = 100_000_000
 
+    MAX_TRACKED_INSTRUMENTS = 4096
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._last_provider: dict[tuple[str, str], tuple[int, float, float]] = {}
+        self._last_provider: OrderedDict[tuple[str, str], tuple[int, float, float]] = OrderedDict()
         self._counters: dict[str, int] = {
             "accepted": 0,
             "provider_timestamp_missing": 0,
             "same_timestamp_different_quote": 0,
-            "rejected_invalid_quote": 0,
-            "rejected_invalid_receive_clock": 0,
-            "rejected_invalid_provider_timestamp": 0,
-            "rejected_out_of_order_provider_timestamp": 0,
-            "rejected_duplicate_provider_observation": 0,
+            "flagged_invalid_quote": 0,
+            "flagged_invalid_receive_clock": 0,
+            "flagged_invalid_provider_timestamp": 0,
+            "flagged_out_of_order_provider_timestamp": 0,
+            "flagged_duplicate_provider_observation": 0,
+            "provider_tracking_evictions": 0,
         }
 
     @staticmethod
@@ -42,23 +46,24 @@ class TopOfBookQualityGate:
         *,
         now_monotonic_ns: int | None = None,
     ) -> tuple[bool, str | None]:
-        """Return (accepted, timestamp_quality/rejection_reason).
+        """Return (analysis_eligible, quality_reason).
 
-        Provider timestamps are ordered only within the same venue/instrument.
-        They are never compared with the local wall clock because clock offset
-        and timestamp semantics are not calibrated across venues.
+        Every observation remains eligible for raw persistence by the caller.
+        This flag only controls whether it may enter downstream analysis.
+        Provider timestamps are ordered only within one venue/instrument and
+        are never compared directly with the local wall clock.
         """
         bid = self._finite_positive(getattr(event, "bid", None))
         ask = self._finite_positive(getattr(event, "ask", None))
         if bid is None or ask is None or ask <= bid:
-            return self._reject("rejected_invalid_quote")
+            return self._reject("flagged_invalid_quote")
 
         try:
             receive_ns = int(event.local_receive_ns)
             receive_wall_ns = int(event.local_receive_wall_ns)
             now_ns = int(now_monotonic_ns if now_monotonic_ns is not None else time.monotonic_ns())
         except (AttributeError, TypeError, ValueError, OverflowError):
-            return self._reject("rejected_invalid_receive_clock")
+            return self._reject("flagged_invalid_receive_clock")
 
         age_ns = now_ns - receive_ns
         if (
@@ -67,7 +72,7 @@ class TopOfBookQualityGate:
             or age_ns < -self.FUTURE_MONOTONIC_TOLERANCE_NS
             or age_ns > self.MAX_LOCAL_RECEIVE_AGE_NS
         ):
-            return self._reject("rejected_invalid_receive_clock")
+            return self._reject("flagged_invalid_receive_clock")
 
         raw_provider_ts = getattr(event, "provider_ts_ms", None)
         if raw_provider_ts is None:
@@ -76,37 +81,39 @@ class TopOfBookQualityGate:
                 self._counters["provider_timestamp_missing"] += 1
             return True, "LOCAL_RECEIVE_ONLY"
 
-        if isinstance(raw_provider_ts, bool):
-            return self._reject("rejected_invalid_provider_timestamp")
-        try:
-            provider_ts = int(raw_provider_ts)
-        except (TypeError, ValueError, OverflowError):
-            return self._reject("rejected_invalid_provider_timestamp")
+        if not isinstance(raw_provider_ts, int) or isinstance(raw_provider_ts, bool):
+            return self._reject("flagged_invalid_provider_timestamp")
+        provider_ts = raw_provider_ts
         if provider_ts <= 0:
-            return self._reject("rejected_invalid_provider_timestamp")
+            return self._reject("flagged_invalid_provider_timestamp")
 
         venue = str(getattr(event, "venue", "")).strip().lower()
         symbol = str(getattr(event, "symbol", "")).strip().upper()
         if not venue or not symbol:
-            return self._reject("rejected_invalid_provider_timestamp")
+            return self._reject("flagged_invalid_provider_timestamp")
 
         key = (venue, symbol)
         with self._lock:
             previous = self._last_provider.get(key)
             if previous is not None:
+                self._last_provider.move_to_end(key)
                 previous_ts, previous_bid, previous_ask = previous
                 if provider_ts < previous_ts:
-                    self._counters["rejected_out_of_order_provider_timestamp"] += 1
-                    return False, "OUT_OF_ORDER_PROVIDER_TIMESTAMP"
+                    self._counters["flagged_out_of_order_provider_timestamp"] += 1
+                    return False, "FLAGGED_OUT_OF_ORDER_PROVIDER_TIMESTAMP"
                 if provider_ts == previous_ts:
                     if bid == previous_bid and ask == previous_ask:
-                        self._counters["rejected_duplicate_provider_observation"] += 1
-                        return False, "DUPLICATE_PROVIDER_OBSERVATION"
+                        self._counters["flagged_duplicate_provider_observation"] += 1
+                        return False, "FLAGGED_DUPLICATE_PROVIDER_OBSERVATION"
                     self._counters["same_timestamp_different_quote"] += 1
                     self._last_provider[key] = (provider_ts, bid, ask)
                     self._counters["accepted"] += 1
                     return True, "SAME_TIMESTAMP_DIFFERENT_QUOTE"
             self._last_provider[key] = (provider_ts, bid, ask)
+            self._last_provider.move_to_end(key)
+            if len(self._last_provider) > self.MAX_TRACKED_INSTRUMENTS:
+                self._last_provider.popitem(last=False)
+                self._counters["provider_tracking_evictions"] += 1
             self._counters["accepted"] += 1
         return True, "PROVIDER_TIMESTAMP_ORDERED"
 

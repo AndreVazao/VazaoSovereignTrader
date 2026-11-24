@@ -10,6 +10,7 @@ from PC_ENGINE.tools.run_top_of_book_collector import (
     _append_bounded_line,
     _is_valid_top_of_book,
     _write_health,
+    _quality_observation_row,
 )
 
 
@@ -35,6 +36,28 @@ class TopOfBookTickerValidationTests(unittest.TestCase):
     def test_accepts_valid_top_of_book(self) -> None:
         event = SimpleNamespace(bid="100.5", ask="101", local_receive_wall_ns="123")
         self.assertTrue(_is_valid_top_of_book(event))
+
+    def test_flagged_duplicate_is_retained_but_marked_ineligible(self) -> None:
+        class Event:
+            def as_dict(self):
+                return {
+                    "venue": "binance", "symbol": "BTC/USDT", "event_type": "ticker",
+                    "provider_ts_ms": 1000, "price": float("nan"), "bid": 100.0,
+                    "ask": 101.0, "volume": 1.0, "raw_source": "websocket",
+                }
+
+        row = _quality_observation_row(
+            Event(), analysis_eligible=False,
+            quality_reason="FLAGGED_DUPLICATE_PROVIDER_OBSERVATION",
+        )
+        self.assertFalse(row["analysis_eligible"])
+        self.assertEqual(row["quality_status"], "FLAGGED")
+        self.assertEqual(row["quality_reason"], "FLAGGED_DUPLICATE_PROVIDER_OBSERVATION")
+        self.assertIsNone(row["price"])
+        self.assertTrue(row["paper_only"])
+        self.assertFalse(row["orders_submitted"])
+        self.assertFalse(row["execution_authorized"])
+        json.dumps(row, allow_nan=False)
 
 
 class TopOfBookCollectorHealthTests(unittest.TestCase):
