@@ -48,3 +48,17 @@ The WebSocket top-of-book collector applies a separate quality gate before writi
 - Every parsed ticker observation is retained in the bounded raw evidence store, including flagged anomalies. Each row carries `analysis_eligible`, `quality_status`, and `quality_reason`; downstream research must exclude rows where `analysis_eligible` is false. Non-finite numeric fields are serialized as `null` rather than invalid JSON. Provider timestamp tracking is bounded to 4,096 venue/instrument keys.
 
 Provider timestamps are deliberately not compared with local wall-clock time: without measured clock offset and uncertainty, that comparison could falsely reject valid events or label stale events as fresh. Cross-venue lead/lag remains unconfirmed.
+
+
+## Synchronized L2 book quality contract
+
+The L2 collector persists every synchronized-book callback to its bounded per-venue JSONL file, including views that are not eligible for analysis. Each row carries a separate quality decision:
+
+- `analysis_eligible` is true only when the synchronizer reports `SYNCED` and eligible, the sequence and monotonic observation timestamp are valid, the measured age is finite and within 1,000 ms, both sides contain levels, and the levels are finite, positive, unique and correctly sorted.
+- Bid and ask sides are checked independently (bids descending, asks ascending). A locked or crossed best bid/ask is flagged.
+- A side exceeding 5,000 levels is flagged, not silently truncated. The original synchronized view remains in the raw record for audit.
+- `quality_status` is `VALID` or `FLAGGED`; `quality_reason` identifies the first failed gate. Health counters distinguish eligible and flagged book observations.
+- These flags do not repair sequence gaps or reconstruct missing updates. A sequence error still requires the venue-specific synchronizer to re-bootstrap or receive a new snapshot.
+- Raw L2 event records remain separate from synchronized-book views. Neither stream grants private account access or order authority; rows explicitly remain PAPER-only with execution disabled.
+
+Consumers of synchronized L2 files must filter `analysis_eligible=true` and independently enforce freshness at the time of analysis. A previously valid stored book is not necessarily fresh later.
