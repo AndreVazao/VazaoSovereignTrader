@@ -43,9 +43,20 @@ def build_collector(config: L2WebSocketConfig, on_event, on_book) -> PublicL2Web
     return PublicL2WebSocketCollector(config, on_event, on_book=callback)
 
 
+def _json_safe(value):
+    """Convert non-finite floats to null so flagged evidence remains strict JSON."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def synchronized_book_payload(venue: str, symbol: str, view) -> dict:
     """Serialize a synchronized view with explicit venue/instrument identity."""
-    payload = asdict(view)
+    payload = _json_safe(asdict(view))
     if hasattr(view.status, "value"):
         payload["status"] = view.status.value
     payload["venue"] = venue
@@ -86,8 +97,8 @@ def main() -> None:
     counters = {
         "events_written": 0,
         "books_written": 0,
-        "books_analysis_eligible": 0,
-        "books_quality_flagged": 0,
+        "books_analysis_eligible_seen": 0,
+        "books_quality_flagged_seen": 0,
         "oversized_records_ignored": 0,
         "write_errors": 0,
     }
@@ -129,7 +140,7 @@ def main() -> None:
         if target is None:
             raise ValueError("unsupported_synchronized_book_venue")
         append_jsonl(target, payload, "books_written")
-        quality_counter = "books_analysis_eligible" if payload["analysis_eligible"] else "books_quality_flagged"
+        quality_counter = "books_analysis_eligible_seen" if payload["analysis_eligible"] else "books_quality_flagged_seen"
         with counters_lock:
             counters[quality_counter] += 1
 
