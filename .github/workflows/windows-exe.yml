@@ -232,6 +232,7 @@ jobs:
             "VazaoSovereignTrader-Radar.exe",
             "VazaoSovereignTrader-TopOfBook.exe",
             "VazaoSovereignTrader-L2.exe",
+            "VazaoSovereignTrader-L2Research.exe",
             "VazaoSovereignTrader-MarketDataService.exe"
           )
           foreach ($worker in $requiredWorkers) {
