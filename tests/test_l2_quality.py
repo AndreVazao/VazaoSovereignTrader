@@ -98,3 +98,13 @@ def test_quality_configuration_must_be_valid():
         assess_l2_book_view(valid_view(), max_age_ms=float("inf"))
     with pytest.raises(ValueError, match="invalid_max_levels_per_side"):
         assess_l2_book_view(valid_view(), max_levels_per_side=True)
+
+
+def test_flagged_non_finite_values_remain_serializable_for_audit():
+    import json
+    view = valid_view(age_ms=float("nan"))
+    payload = synchronized_book_payload("binance", "BTC/USDT", view)
+    assert payload["analysis_eligible"] is False
+    assert payload["quality_reason"] == "invalid_book_age"
+    assert payload["age_ms"] is None
+    json.dumps(payload, allow_nan=False)
