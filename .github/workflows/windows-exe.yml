@@ -238,6 +238,9 @@ jobs:
           foreach ($worker in $requiredWorkers) {
             if (-not (Test-Path (Join-Path $testDir $worker))) { throw "Installed market-data worker missing: $worker" }
           }
+          if (-not (Test-Path (Join-Path $testDir "docs\SYNCHRONIZED_L2_RESEARCH.md"))) {
+            throw "Installed synchronized L2 research guide missing."
+          }
           if (-not (Test-Path (Join-Path $testDir "scripts\stop_market_data_service.ps1"))) {
             throw "Graceful market-data stop helper missing."
           }
