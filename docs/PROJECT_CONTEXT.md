@@ -1,4 +1,67 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-22 12:52 UTC
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-24 14:50 UTC
+
+**Repository:** `AndreVazao/VazaoSovereignTrader` only.  
+**Verified main:** `8c36fb7c4316e63293e44de36df1bc383eaadc69`.  
+**Latest integration:** PR [#588](https://github.com/AndreVazao/VazaoSovereignTrader/pull/588), merged at 2026-11-24 14:48 UTC.  
+**Active implementation PRs:** none at this checkpoint. A documentation reconciliation branch is being prepared; read live GitHub state before acting.  
+**Release state:** no formal GitHub Release verified. CI artifacts are not physical-PC validation or a formal release.
+
+## Exact merge and validation evidence
+
+PR #588 added a fail-closed quality gate for synchronized public L2 books, preserved flagged observations for audit, and fixed the Binance `BookSnapshot.update_id` sequence contract.
+
+The exact PR HEAD `9518e63fdfc848fa844510239d01815fc1880ea5` passed:
+- Python tests — run `45391387938`.
+- Windows EXE and installer — run `45391386836`; both jobs passed, including previous-version install, upgrade, launch, health check, uninstall and Learning Vault preservation.
+- Snyk — success.
+- Vercel preview — success; not a code test.
+
+PR #588 was squash-merged as `8c36fb7c4316e63293e44de36df1bc383eaadc69`. The `main` branch ref was independently read back and matched this SHA.
+
+## Post-merge main validation — still pending at checkpoint
+
+On exact main SHA `8c36fb7c4316e63293e44de36df1bc383eaadc69`:
+- Python tests run `45418214434` — passed.
+- Windows EXE/installer run `45418215197` — still running; EXE smoke and installer build/lifecycle must finish before declaring main post-merge validation complete.
+- Vercel — success.
+- PAPER and Linux sandbox workflows were not triggered by the changed-path filters. Do not describe them as passing on this SHA.
+
+Recheck these runs before the next merge or release decision.
+
+## Branch protection
+
+The GitHub branch endpoint currently reports `main.protected=false` and `protection.enabled=false`. This is stronger evidence than the earlier inconclusive 403 report: branch protection is not enabled according to the endpoint response at this checkpoint. Rulesets should also be rechecked. Do not claim that required status checks or review protections are enforcing merges. Repository settings need owner review; no settings were changed here.
+
+## L2 quality gate — implemented, consumer integration pending
+
+The collector now persists synchronized views for Binance, Coinbase and OKX with `analysis_eligible`, `quality_status`, `quality_reason`, depth counts and PAPER-only safety metadata. Binance sequence validation accepts `update_id` when the typed `BookSnapshot` does not expose `sequence`.
+
+The quality gate does not repair sequence gaps or recover a snapshot itself. Binance synchronizer currently invalidates the book and schedules a new REST snapshot after a gap/disconnect/overflow, with bounded exponential retry. Coinbase and OKX synchronizers invalidate their local view on sequence errors and connection loss; reconnect/rebootstrap must be validated end-to-end.
+
+A repository code search at this checkpoint found no downstream research consumer reading the persisted `*_synchronized_orderbook_views.jsonl` files. The top-of-book evidence loader is a separate input path. Do not claim L2 depth evidence is already feeding strategy/research. Any future consumer must filter `analysis_eligible=true` and independently recheck freshness at read time.
+
+## Open operational blocker — issue #560
+
+[Issue #560](https://github.com/AndreVazao/VazaoSovereignTrader/issues/560) remains open. It requires bounded CCXT public-request timeouts, cooperative stop checks between venue/symbol requests, adaptive polling/concurrency on constrained hosts, authenticated resource/shutdown diagnostics, and regression tests for slow calls and bounded stop. Acceptance includes a constrained Windows host around 3 GB RAM. CI evidence is not a substitute for the user's physical PC test.
+
+## Documentation corrections in progress
+
+- `docs/BUILD_PC.md` must remain PAPER-only and must not instruct users to grant Spot Trade permissions. Initial public market-data collection requires no exchange credentials or private scopes.
+- This file's older handoff below is historical and must not be treated as current state.
+- `docs/CONNECTOR_WORKER_SANDBOX_PLAN.md` must distinguish the current main implementation from the older PR #578 checkpoint.
+
+## Global safety and validation policy
+
+- Public market data first; no exchange credentials are needed for initial collection.
+- PAPER-only: `allow_real=false`, `auto_promote_real=false`; no live orders, transfers, withdrawals or execution authorization.
+- Keep third-party connector execution disabled until production OS isolation is integrated and independently tested on each platform.
+- Never claim physical Windows/Linux/Android validation from GitHub Actions.
+- Keep one active implementation PR at a time, branch from verified latest `main`, never edit `main` directly, and merge only after applicable checks pass on the exact HEAD.
+- Preserve the 5 GiB aggregate market-data cap and 30-day raw JSONL retention unless a reviewed change explicitly supersedes them.
+
+---
+
+# HISTORICAL HANDOFF — 2026-11-22 12:52 UTC (superseded by the 2026-11-24 checkpoint above)
 
 **Repository:** `AndreVazao/VazaoSovereignTrader` only.  
 **Verified main:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`.  
