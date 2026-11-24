@@ -128,6 +128,7 @@ def _load_top_of_book(
         "ticker_malformed_ignored": 0,
         "ticker_invalid_ignored": 0,
         "ticker_non_paper_ignored": 0,
+        "ticker_quality_flagged_ignored": 0,
         "ticker_duplicate_ignored": 0,
         "ticker_stale_ignored": 0,
         "ticker_records_omitted_by_limit": 0,
@@ -161,6 +162,11 @@ def _load_top_of_book(
                 or row.get("execution_authorized") is not False
             ):
                 counters["ticker_non_paper_ignored"] += 1
+                continue
+            # Legacy rows without this field remain readable. New collector
+            # rows explicitly opt out of research when the quality gate flags them.
+            if row.get("analysis_eligible", True) is not True:
+                counters["ticker_quality_flagged_ignored"] += 1
                 continue
             try:
                 venue = str(row["venue"]).strip().lower()
