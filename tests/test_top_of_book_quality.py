@@ -29,15 +29,15 @@ class TopOfBookQualityGateTests(unittest.TestCase):
         gate.evaluate(self.event(), now_monotonic_ns=1_100_000_000)
         accepted, reason = gate.evaluate(self.event(), now_monotonic_ns=1_200_000_000)
         self.assertFalse(accepted)
-        self.assertEqual(reason, "DUPLICATE_PROVIDER_OBSERVATION")
-        self.assertEqual(gate.snapshot()["rejected_duplicate_provider_observation"], 1)
+        self.assertEqual(reason, "FLAGGED_DUPLICATE_PROVIDER_OBSERVATION")
+        self.assertEqual(gate.snapshot()["flagged_duplicate_provider_observation"], 1)
 
     def test_rejects_out_of_order_provider_timestamp(self):
         gate = TopOfBookQualityGate()
         gate.evaluate(self.event(ts=1002), now_monotonic_ns=1_100_000_000)
         accepted, reason = gate.evaluate(self.event(ts=1001), now_monotonic_ns=1_200_000_000)
         self.assertFalse(accepted)
-        self.assertEqual(reason, "OUT_OF_ORDER_PROVIDER_TIMESTAMP")
+        self.assertEqual(reason, "FLAGGED_OUT_OF_ORDER_PROVIDER_TIMESTAMP")
 
     def test_keeps_equal_timestamp_quote_change_but_marks_ambiguity(self):
         gate = TopOfBookQualityGate()
@@ -68,7 +68,25 @@ class TopOfBookQualityGateTests(unittest.TestCase):
             self.event(), now_monotonic_ns=40_000_000_000
         )
         self.assertFalse(accepted)
-        self.assertEqual(reason, "REJECTED_INVALID_RECEIVE_CLOCK")
+        self.assertEqual(reason, "FLAGGED_INVALID_RECEIVE_CLOCK")
+
+    def test_rejects_non_integer_provider_timestamp_without_truncating(self):
+        gate = TopOfBookQualityGate()
+        accepted, reason = gate.evaluate(
+            self.event(ts=1000.5), now_monotonic_ns=1_100_000_000
+        )
+        self.assertFalse(accepted)
+        self.assertEqual(reason, "FLAGGED_INVALID_PROVIDER_TIMESTAMP")
+
+    def test_bounds_provider_timestamp_tracking_state(self):
+        gate = TopOfBookQualityGate()
+        gate.MAX_TRACKED_INSTRUMENTS = 2
+        for symbol in ("BTC/USDT", "ETH/USDT", "SOL/USDT"):
+            event = self.event()
+            event.symbol = symbol
+            gate.evaluate(event, now_monotonic_ns=1_100_000_000)
+        self.assertEqual(len(gate._last_provider), 2)
+        self.assertEqual(gate.snapshot()["provider_tracking_evictions"], 1)
 
 
 if __name__ == "__main__":
