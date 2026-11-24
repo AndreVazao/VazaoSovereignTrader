@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from PC_ENGINE.market_events.binance_book_state import BookSnapshot, BookStatus
 from PC_ENGINE.market_events.l2_quality import assess_l2_book_view
 from PC_ENGINE.market_events.orderbook import OrderBookLevel
 from PC_ENGINE.tools.run_l2_market_data_collector import synchronized_book_payload
@@ -47,6 +48,27 @@ def test_accepts_synchronized_fresh_ordered_book():
     assert result.quality_reason is None
     assert result.bid_levels == 2
     assert result.ask_levels == 2
+
+
+def test_accepts_actual_binance_book_snapshot_contract():
+    view = BookSnapshot(
+        status=BookStatus.SYNCED,
+        update_id=42,
+        bids=(OrderBookLevel(100.0, 2.0), OrderBookLevel(99.0, 1.0)),
+        asks=(OrderBookLevel(101.0, 3.0), OrderBookLevel(102.0, 1.0)),
+        age_ms=12.0,
+        eligible=True,
+        reason=None,
+        observation_time_ns=1_000_000_000,
+    )
+    result = assess_l2_book_view(view)
+    assert result.analysis_eligible is True
+    assert result.quality_status == "VALID"
+
+    payload = synchronized_book_payload("binance", "BTC/USDT", view)
+    assert payload["analysis_eligible"] is True
+    assert payload["quality_status"] == "VALID"
+    assert payload["update_id"] == 42
 
 
 @pytest.mark.parametrize(
