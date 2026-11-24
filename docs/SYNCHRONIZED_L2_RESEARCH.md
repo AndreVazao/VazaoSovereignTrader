@@ -38,3 +38,7 @@ The report is descriptive execution-cost research. It does not create signals, c
 Input is processed incrementally. At most 100,000 sample rows are retained by default; aggregate counters cover all accepted records. Each book is capped at 5,000 levels per side, each JSONL line at 4 MiB, and aggregate market groups at 1,024. The age field is the synchronizer's captured age at persistence time; monotonic timestamps are retained as provenance and are not compared across process clock domains.
 
 This is a deterministic offline research command, not yet a scheduled service. Physical Windows testing and endurance testing on the target low-memory PC remain mandatory before unattended operation.
+
+## Rotated input segments
+
+The report reads each venue's retained `.jsonl.1` backup before its active JSONL file. This preserves capture order and sequence validation across one rotation boundary. Symlinked input files are ignored. Sample retention and line-size limits remain bounded.
