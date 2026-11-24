@@ -86,8 +86,8 @@ def _quality_observation_row(event, *, analysis_eligible: bool, quality_reason: 
         "observation_type": "PUBLIC_TOP_OF_BOOK",
         "analysis_eligible": analysis_eligible,
         "quality_status": "VALID" if analysis_eligible else "FLAGGED",
-        "quality_reason": quality_reason,
-        "timestamp_quality": quality_reason if analysis_eligible else "FLAGGED_" + str(quality_reason),
+        "quality_reason": None if analysis_eligible else quality_reason,
+        "timestamp_quality": quality_reason,
     })
     return row
 
