@@ -1,8 +1,8 @@
 # Connector Worker Sandbox — implementation plan
 
-**Status (2026-11-20):** The explicit runtime-manifest validator and opt-in manifest-backed Bubblewrap command-construction path are implemented. The manifest-backed path has passed real Bubblewrap execution in CI on PR #578 HEAD `27051f98bc0a1992300db6f1cb8b1e2dc730d02e`; Python, PAPER and Windows EXE/installer workflows also passed on that exact SHA. The static probe proves selected host paths are absent, but it is not a packaged Python runtime closure. Worker lifecycle integration, immutable runtime packaging/TOCTOU mitigation, provider egress policy and Windows filesystem/network isolation remain blocked.
-**Date:** 2026-11-21
-**Base:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7` (PR #577 merge commit; includes PR #576)
+**Current status (2026-11-24):** PR #588 is merged on main at `8c36fb7c4316e63293e44de36df1bc383eaadc69`; this merge concerns synchronized L2 data quality and does not change the connector sandbox. The production supervisor still does not launch workers through the manifest-backed Bubblewrap path. Immutable authenticated runtime packaging, TOCTOU closure, provider-specific egress policy and Windows filesystem/network isolation remain blocked. Keep untrusted third-party connector execution disabled. The older PR #578 checkpoint below is historical evidence only.
+**Last reviewed:** 2026-11-24
+**Historical base:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7` (PR #577 merge commit; includes PR #576; not the current main SHA)
 
 ## Current enforced worker controls on main
 
