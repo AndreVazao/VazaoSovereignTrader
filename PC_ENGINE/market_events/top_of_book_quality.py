@@ -100,11 +100,11 @@ class TopOfBookQualityGate:
                 previous_ts, previous_bid, previous_ask = previous
                 if provider_ts < previous_ts:
                     self._counters["flagged_out_of_order_provider_timestamp"] += 1
-                    return False, "OUT_OF_ORDER_PROVIDER_TIMESTAMP"
+                    return False, "FLAGGED_OUT_OF_ORDER_PROVIDER_TIMESTAMP"
                 if provider_ts == previous_ts:
                     if bid == previous_bid and ask == previous_ask:
                         self._counters["flagged_duplicate_provider_observation"] += 1
-                        return False, "DUPLICATE_PROVIDER_OBSERVATION"
+                        return False, "FLAGGED_DUPLICATE_PROVIDER_OBSERVATION"
                     self._counters["same_timestamp_different_quote"] += 1
                     self._last_provider[key] = (provider_ts, bid, ask)
                     self._counters["accepted"] += 1
