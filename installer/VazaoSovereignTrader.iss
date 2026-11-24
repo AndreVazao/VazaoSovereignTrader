@@ -30,6 +30,7 @@ Source: "build\VazaoSovereignTrader-MarketData.exe"; DestDir: "{app}"; Flags: ig
 Source: "build\VazaoSovereignTrader-Radar.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\VazaoSovereignTrader-TopOfBook.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\VazaoSovereignTrader-L2.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\VazaoSovereignTrader-L2Research.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\VazaoSovereignTrader-MarketDataService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\ms-playwright\*"; DestDir: "{app}\ms-playwright"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "build\config\config.example.json"; DestDir: "{app}\config"; Flags: ignoreversion onlyifdoesntexist
@@ -54,6 +55,7 @@ Name: "{app}\scripts"
 Name: "{autodesktop}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{group}\VazaoSovereignTrader"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
 Name: "{group}\Iniciar recolha contínua"; Filename: "{app}\VazaoSovereignTrader-MarketDataService.exe"; WorkingDir: "{app}"
+Name: "{group}\Analisar profundidade L2 (PAPER)"; Filename: "{app}\VazaoSovereignTrader-L2Research.exe"; Parameters: "--data-dir ""{localappdata}\VazaoSovereignTraderData\market-data\radar"" --output ""{localappdata}\VazaoSovereignTraderData\market-data\replay\synchronized_l2_research.json"""; WorkingDir: "{app}"
 Name: "{group}\Parar recolha contínua"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\stop_market_data_service.ps1"""
 Name: "{group}\Pasta de troca - INBOX"; Filename: "{app}\data\operator_exchange\INBOX"
 Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange\OUTBOX"
