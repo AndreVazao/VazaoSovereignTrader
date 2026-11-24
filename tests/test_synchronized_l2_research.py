@@ -94,6 +94,17 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
         self.assertEqual(report["counters"]["valid_books_analyzed"], 2)
         self.assertEqual(report["counters"]["duplicate_or_out_of_order_sequences_ignored"], 2)
 
+    def test_invalid_book_state_resets_sequence_baseline_for_rebootstrap(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / "binance_synchronized_orderbook_views.jsonl"
+            invalid = _row(sequence=11, status="INVALID", analysis_eligible=False, quality_status="FLAGGED")
+            rows = [_row(sequence=10), invalid, _row(sequence=1)]
+            path.write_text("\\n".join(json.dumps(row) for row in rows) + "\\n", encoding="utf-8")
+            report = build_report(root, venues=("binance",))
+        self.assertEqual(report["counters"]["valid_books_analyzed"], 2)
+        self.assertEqual(report["counters"]["duplicate_or_out_of_order_sequences_ignored"], 0)
+
     def test_missing_files_return_empty_report(self):
         with tempfile.TemporaryDirectory() as temp:
             report = build_report(temp)
