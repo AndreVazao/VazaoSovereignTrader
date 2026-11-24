@@ -167,10 +167,6 @@ def analyze_book(
     }
 
 
-def _average(values: list[float]) -> float | None:
-    return math.fsum(values) / len(values) if values else None
-
-
 def build_report(
     data_dir: str | Path,
     *,
