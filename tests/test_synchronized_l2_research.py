@@ -84,6 +84,16 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
         self.assertEqual(len(report["samples"]), 2)
         self.assertEqual(report["summaries"]["binance:BTC/USDT"]["samples"], 4)
 
+    def test_report_rejects_duplicate_or_out_of_order_sequences(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / "binance_synchronized_orderbook_views.jsonl"
+            rows = [_row(sequence=10), _row(sequence=10), _row(sequence=9), _row(sequence=11)]
+            path.write_text("\\n".join(json.dumps(row) for row in rows) + "\\n", encoding="utf-8")
+            report = build_report(root, venues=("binance",))
+        self.assertEqual(report["counters"]["valid_books_analyzed"], 2)
+        self.assertEqual(report["counters"]["duplicate_or_out_of_order_sequences_ignored"], 2)
+
     def test_missing_files_return_empty_report(self):
         with tempfile.TemporaryDirectory() as temp:
             report = build_report(temp)
