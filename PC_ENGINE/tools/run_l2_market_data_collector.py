@@ -15,6 +15,7 @@ from PC_ENGINE.market_events.jsonl_store import append_bounded_jsonl
 from PC_ENGINE.radar.collection_routing import reviewed_stream_venues
 from PC_ENGINE.radar.venue_discovery import VenueDiscoveryRegistry
 from PC_ENGINE.market_events.l2_collectors import L2WebSocketConfig, PublicL2WebSocketCollector, default_l2_configs
+from PC_ENGINE.market_events.l2_quality import assess_l2_book_view
 
 
 SYNCHRONIZED_BOOK_FILENAMES = {
@@ -42,13 +43,35 @@ def build_collector(config: L2WebSocketConfig, on_event, on_book) -> PublicL2Web
     return PublicL2WebSocketCollector(config, on_event, on_book=callback)
 
 
+def _json_safe(value):
+    """Convert non-finite floats to null so flagged evidence remains strict JSON."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def synchronized_book_payload(venue: str, symbol: str, view) -> dict:
     """Serialize a synchronized view with explicit venue/instrument identity."""
-    payload = asdict(view)
+    payload = _json_safe(asdict(view))
     if hasattr(view.status, "value"):
         payload["status"] = view.status.value
     payload["venue"] = venue
     payload["symbol"] = symbol
+    quality = assess_l2_book_view(view)
+    payload.update({
+        "analysis_eligible": quality.analysis_eligible,
+        "quality_status": quality.quality_status,
+        "quality_reason": quality.quality_reason,
+        "quality_bid_levels": quality.bid_levels,
+        "quality_ask_levels": quality.ask_levels,
+        "paper_only": True,
+        "orders_submitted": False,
+        "execution_authorized": False,
+    })
     return payload
 
 
@@ -71,7 +94,14 @@ def main() -> None:
         parser.error("--max-file-mb must be a finite positive number.")
     max_bytes = min(512 * 1024 * 1024, max(1024, int(args.max_file_mb * 1024 * 1024)))
     backups = {path: path.with_suffix(path.suffix + ".1") for path in [output, *synchronized_outputs.values()]}
-    counters = {"events_written": 0, "books_written": 0, "oversized_records_ignored": 0, "write_errors": 0}
+    counters = {
+        "events_written": 0,
+        "books_written": 0,
+        "books_analysis_eligible_seen": 0,
+        "books_quality_flagged_seen": 0,
+        "oversized_records_ignored": 0,
+        "write_errors": 0,
+    }
     counters_lock = threading.Lock()
     stop = threading.Event()
     write_lock = threading.Lock()
@@ -110,6 +140,9 @@ def main() -> None:
         if target is None:
             raise ValueError("unsupported_synchronized_book_venue")
         append_jsonl(target, payload, "books_written")
+        quality_counter = "books_analysis_eligible_seen" if payload["analysis_eligible"] else "books_quality_flagged_seen"
+        with counters_lock:
+            counters[quality_counter] += 1
 
     registry = VenueDiscoveryRegistry(args.candidates)
     available = {
