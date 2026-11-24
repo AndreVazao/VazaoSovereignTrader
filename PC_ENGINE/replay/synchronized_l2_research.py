@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 
+MAX_JSONL_LINE_CHARS = 4 * 1024 * 1024
+
+
 BOOK_FILES = {
     "binance": "binance_synchronized_orderbook_views.jsonl",
     "coinbase": "coinbase_synchronized_orderbook_views.jsonl",
@@ -85,6 +88,14 @@ def analyze_book(
     observation timestamp is retained as provenance and is never compared with
     a monotonic clock from a different process or machine.
     """
+    if (
+        isinstance(quote_notional, bool) or not math.isfinite(quote_notional) or quote_notional <= 0
+        or isinstance(fee_bps, bool) or not math.isfinite(fee_bps) or fee_bps < 0
+        or isinstance(max_age_ms, bool) or not math.isfinite(max_age_ms) or max_age_ms <= 0
+        or not isinstance(max_levels_per_side, int) or isinstance(max_levels_per_side, bool)
+        or not 1 <= max_levels_per_side <= 5000
+    ):
+        raise ValueError("invalid_analysis_configuration")
     if row.get("analysis_eligible") is not True or row.get("quality_status") != "VALID":
         return None
     if (
@@ -170,11 +181,11 @@ def build_report(
     max_records: int = 100000,
     max_levels_per_side: int = 5000,
 ) -> dict[str, Any]:
-    if not math.isfinite(quote_notional) or quote_notional <= 0:
+    if isinstance(quote_notional, bool) or not math.isfinite(quote_notional) or quote_notional <= 0:
         raise ValueError("quote_notional_must_be_finite_and_positive")
-    if not math.isfinite(fee_bps) or fee_bps < 0:
+    if isinstance(fee_bps, bool) or not math.isfinite(fee_bps) or fee_bps < 0:
         raise ValueError("fee_bps_must_be_finite_and_non_negative")
-    if not math.isfinite(max_age_ms) or max_age_ms <= 0:
+    if isinstance(max_age_ms, bool) or not math.isfinite(max_age_ms) or max_age_ms <= 0:
         raise ValueError("max_age_ms_must_be_finite_and_positive")
     if not isinstance(max_records, int) or isinstance(max_records, bool) or not 1 <= max_records <= 1_000_000:
         raise ValueError("max_records_out_of_range")
@@ -189,10 +200,12 @@ def build_report(
     counters = {
         "raw_lines_seen": 0,
         "malformed_json_ignored": 0,
+        "oversized_lines_ignored": 0,
         "non_object_rows_ignored": 0,
         "quality_flagged_ignored": 0,
         "non_paper_rows_ignored": 0,
         "invalid_or_stale_books_ignored": 0,
+        "duplicate_or_out_of_order_sequences_ignored": 0,
         "valid_books_analyzed": 0,
         "records_omitted_by_limit": 0,
         "files_missing": 0,
@@ -204,6 +217,7 @@ def build_report(
         "buy_costs": [], "sell_costs": [], "imbalances": [],
     })
     root = Path(data_dir)
+    last_sequences: dict[tuple[str, str], int] = {}
 
     for venue in venues:
         path = root / BOOK_FILES[venue]
@@ -211,7 +225,18 @@ def build_report(
             counters["files_missing"] += 1
             continue
         with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
+            while True:
+                line = handle.readline(MAX_JSONL_LINE_CHARS + 1)
+                if not line:
+                    break
+                if len(line) > MAX_JSONL_LINE_CHARS:
+                    if not line.endswith("\n"):
+                        while True:
+                            remainder = handle.readline(MAX_JSONL_LINE_CHARS + 1)
+                            if not remainder or remainder.endswith("\n"):
+                                break
+                    counters["oversized_lines_ignored"] += 1
+                    continue
                 if not line.strip():
                     continue
                 counters["raw_lines_seen"] += 1
@@ -240,6 +265,12 @@ def build_report(
                 if sample is None:
                     counters["invalid_or_stale_books_ignored"] += 1
                     continue
+                sequence_key = (sample["venue"], sample["symbol"])
+                previous_sequence = last_sequences.get(sequence_key)
+                if previous_sequence is not None and sample["sequence"] <= previous_sequence:
+                    counters["duplicate_or_out_of_order_sequences_ignored"] += 1
+                    continue
+                last_sequences[sequence_key] = sample["sequence"]
                 counters["valid_books_analyzed"] += 1
                 if len(samples) == max_records:
                     counters["records_omitted_by_limit"] += 1
