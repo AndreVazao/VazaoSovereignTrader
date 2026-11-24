@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-MAX_JSONL_LINE_CHARS = 4 * 1024 * 1024
+MAX_JSONL_LINE_BYTES = 4 * 1024 * 1024
 MAX_MARKET_GROUPS = 1024
 
 
@@ -226,16 +226,16 @@ def build_report(
         if not path.is_file():
             counters["files_missing"] += 1
             continue
-        with path.open("r", encoding="utf-8") as handle:
+        with path.open("rb") as handle:
             while True:
-                line = handle.readline(MAX_JSONL_LINE_CHARS + 1)
+                line = handle.readline(MAX_JSONL_LINE_BYTES + 1)
                 if not line:
                     break
-                if len(line) > MAX_JSONL_LINE_CHARS:
-                    if not line.endswith("\n"):
+                if len(line) > MAX_JSONL_LINE_BYTES:
+                    if not line.endswith(b"\n"):
                         while True:
-                            remainder = handle.readline(MAX_JSONL_LINE_CHARS + 1)
-                            if not remainder or remainder.endswith("\n"):
+                            remainder = handle.readline(MAX_JSONL_LINE_BYTES + 1)
+                            if not remainder or remainder.endswith(b"\n"):
                                 break
                     counters["oversized_lines_ignored"] += 1
                     continue
@@ -243,7 +243,7 @@ def build_report(
                     continue
                 counters["raw_lines_seen"] += 1
                 try:
-                    row = json.loads(line)
+                    row = json.loads(line.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     counters["malformed_json_ignored"] += 1
                     continue
