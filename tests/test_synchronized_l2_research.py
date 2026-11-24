@@ -85,6 +85,43 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
         self.assertEqual(len(report["samples"]), 2)
         self.assertEqual(report["summaries"]["binance:BTC/USDT"]["samples"], 4)
 
+    def test_report_reads_rotated_backup_before_active_and_preserves_sequence_continuity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / "binance_synchronized_orderbook_views.jsonl"
+            backup = path.with_suffix(path.suffix + ".1")
+            backup.write_text(
+                "\\n".join(json.dumps(_row(sequence=value)) for value in (10, 11)) + "\\n",
+                encoding="utf-8",
+            )
+            path.write_text(
+                "\\n".join(json.dumps(_row(sequence=value)) for value in (12, 13)) + "\\n",
+                encoding="utf-8",
+            )
+            report = build_report(root, venues=("binance",))
+        self.assertEqual(report["counters"]["files_read"], 2)
+        self.assertEqual(report["counters"]["backup_files_read"], 1)
+        self.assertEqual(report["counters"]["valid_books_analyzed"], 4)
+        self.assertEqual(report["counters"]["duplicate_or_out_of_order_sequences_ignored"], 0)
+        self.assertEqual([row["sequence"] for row in report["samples"]], [10, 11, 12, 13])
+
+    def test_report_rejects_sequence_repeats_across_rotated_segments(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / "binance_synchronized_orderbook_views.jsonl"
+            backup = path.with_suffix(path.suffix + ".1")
+            backup.write_text(
+                "\\n".join(json.dumps(_row(sequence=value)) for value in (10, 11)) + "\\n",
+                encoding="utf-8",
+            )
+            path.write_text(
+                "\\n".join(json.dumps(_row(sequence=value)) for value in (11, 12)) + "\\n",
+                encoding="utf-8",
+            )
+            report = build_report(root, venues=("binance",))
+        self.assertEqual(report["counters"]["valid_books_analyzed"], 3)
+        self.assertEqual(report["counters"]["duplicate_or_out_of_order_sequences_ignored"], 1)
+
     def test_report_rejects_duplicate_or_out_of_order_sequences(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
