@@ -91,11 +91,11 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
             path = root / "binance_synchronized_orderbook_views.jsonl"
             backup = path.with_suffix(path.suffix + ".1")
             backup.write_text(
-                "\\n".join(json.dumps(_row(sequence=value)) for value in (10, 11)) + "\\n",
+                "\n".join(json.dumps(_row(sequence=value)) for value in (10, 11)) + "\n",
                 encoding="utf-8",
             )
             path.write_text(
-                "\\n".join(json.dumps(_row(sequence=value)) for value in (12, 13)) + "\\n",
+                "\n".join(json.dumps(_row(sequence=value)) for value in (12, 13)) + "\n",
                 encoding="utf-8",
             )
             report = build_report(root, venues=("binance",))
@@ -111,11 +111,11 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
             path = root / "binance_synchronized_orderbook_views.jsonl"
             backup = path.with_suffix(path.suffix + ".1")
             backup.write_text(
-                "\\n".join(json.dumps(_row(sequence=value)) for value in (10, 11)) + "\\n",
+                "\n".join(json.dumps(_row(sequence=value)) for value in (10, 11)) + "\n",
                 encoding="utf-8",
             )
             path.write_text(
-                "\\n".join(json.dumps(_row(sequence=value)) for value in (11, 12)) + "\\n",
+                "\n".join(json.dumps(_row(sequence=value)) for value in (11, 12)) + "\n",
                 encoding="utf-8",
             )
             report = build_report(root, venues=("binance",))
