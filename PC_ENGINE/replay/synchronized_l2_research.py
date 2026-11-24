@@ -10,6 +10,7 @@ from typing import Any
 
 
 MAX_JSONL_LINE_CHARS = 4 * 1024 * 1024
+MAX_MARKET_GROUPS = 1024
 
 
 BOOK_FILES = {
@@ -113,8 +114,8 @@ def analyze_book(
     observation_ns = row.get("observation_time_ns")
     age_ms = _finite(row.get("age_ms"))
     if (
-        not isinstance(venue, str) or not venue.strip()
-        or not isinstance(symbol, str) or not symbol.strip()
+        not isinstance(venue, str) or not venue.strip() or len(venue) > 32 or venue.strip().lower() not in BOOK_FILES
+        or not isinstance(symbol, str) or not symbol.strip() or len(symbol) > 64
         or not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0
         or not isinstance(observation_ns, int) or isinstance(observation_ns, bool) or observation_ns <= 0
         or age_ms is None or age_ms < 0 or age_ms > max_age_ms
@@ -202,6 +203,7 @@ def build_report(
         "non_paper_rows_ignored": 0,
         "invalid_or_stale_books_ignored": 0,
         "duplicate_or_out_of_order_sequences_ignored": 0,
+        "market_groups_limit_ignored": 0,
         "valid_books_analyzed": 0,
         "records_omitted_by_limit": 0,
         "files_missing": 0,
@@ -269,6 +271,13 @@ def build_report(
                 if sample is None:
                     counters["invalid_or_stale_books_ignored"] += 1
                     continue
+                if sample["venue"] != venue:
+                    counters["invalid_or_stale_books_ignored"] += 1
+                    continue
+                key = f'{sample["venue"]}:{sample["symbol"]}'
+                if key not in groups and len(groups) >= MAX_MARKET_GROUPS:
+                    counters["market_groups_limit_ignored"] += 1
+                    continue
                 sequence_key = (sample["venue"], sample["symbol"])
                 previous_sequence = last_sequences.get(sequence_key)
                 if previous_sequence is not None and sample["sequence"] <= previous_sequence:
@@ -279,7 +288,6 @@ def build_report(
                 if len(samples) == max_records:
                     counters["records_omitted_by_limit"] += 1
                 samples.append(sample)
-                key = f'{sample["venue"]}:{sample["symbol"]}'
                 group = groups[key]
                 group["samples"] += 1
                 group["full_buy_fills"] += int(sample["buy"]["full_fill"])
