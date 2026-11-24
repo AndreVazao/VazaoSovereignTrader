@@ -89,7 +89,7 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
             root = Path(temp)
             path = root / "binance_synchronized_orderbook_views.jsonl"
             rows = [_row(sequence=10), _row(sequence=10), _row(sequence=9), _row(sequence=11)]
-            path.write_text("\\n".join(json.dumps(row) for row in rows) + "\\n", encoding="utf-8")
+            path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
             report = build_report(root, venues=("binance",))
         self.assertEqual(report["counters"]["valid_books_analyzed"], 2)
         self.assertEqual(report["counters"]["duplicate_or_out_of_order_sequences_ignored"], 2)
@@ -100,7 +100,7 @@ class SynchronizedL2ResearchTests(unittest.TestCase):
             path = root / "binance_synchronized_orderbook_views.jsonl"
             invalid = _row(sequence=11, status="INVALID", analysis_eligible=False, quality_status="FLAGGED")
             rows = [_row(sequence=10), invalid, _row(sequence=1)]
-            path.write_text("\\n".join(json.dumps(row) for row in rows) + "\\n", encoding="utf-8")
+            path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
             report = build_report(root, venues=("binance",))
         self.assertEqual(report["counters"]["valid_books_analyzed"], 2)
         self.assertEqual(report["counters"]["duplicate_or_out_of_order_sequences_ignored"], 0)
