@@ -32,14 +32,16 @@ def to_synchronized_book_view(
     *,
     now_ns: int,
     max_age_ms: float = 250.0,
+    max_levels_per_side: int = 5000,
 ) -> SynchronizedBookView:
     """Adapt a venue synchronizer view for PAPER edge assessment, fail-closed.
 
-    now_ns and book.observation_time_ns must use the same monotonic clock
-    domain. Freshness is recomputed from the observation timestamp rather
-    than trusting an age captured earlier by a callback.
+    The adapter validates every supplied level before exposing even the
+    best bid/ask. It does not infer instrument equivalence, repair sequence
+    gaps, or authorize execution. now_ns and observation_time_ns must share
+    the same monotonic clock domain.
     """
-    if not isinstance(now_ns, int) or isinstance(now_ns, bool) or now_ns < 0:
+    if not isinstance(now_ns, int) or isinstance(now_ns, bool) or now_ns <= 0:
         raise ValueError("invalid_monotonic_now")
     try:
         max_age = float(max_age_ms)
@@ -47,6 +49,12 @@ def to_synchronized_book_view(
         raise ValueError("max_age_ms_must_be_finite_and_positive") from exc
     if not math.isfinite(max_age) or max_age <= 0:
         raise ValueError("max_age_ms_must_be_finite_and_positive")
+    if (
+        not isinstance(max_levels_per_side, int)
+        or isinstance(max_levels_per_side, bool)
+        or max_levels_per_side < 1
+    ):
+        raise ValueError("max_levels_per_side_must_be_positive_integer")
 
     raw_venue = getattr(book, "venue", mapping.venue)
     raw_symbol = getattr(book, "symbol", mapping.symbol)
@@ -57,12 +65,18 @@ def to_synchronized_book_view(
     status = getattr(raw_status, "value", raw_status)
     raw_eligible = getattr(book, "eligible", False) is True
     observation_ns = getattr(book, "observation_time_ns", None)
+    sequence = getattr(book, "sequence", None)
+    if sequence is None:
+        sequence = getattr(book, "update_id", None)
     if (
         status != "SYNCED"
         or not raw_eligible
+        or not isinstance(sequence, int)
+        or isinstance(sequence, bool)
+        or sequence < 0
         or not isinstance(observation_ns, int)
         or isinstance(observation_ns, bool)
-        or observation_ns < 0
+        or observation_ns <= 0
         or observation_ns > now_ns
     ):
         return _invalid(mapping)
@@ -78,28 +92,50 @@ def to_synchronized_book_view(
             best_bid=None,
             best_ask=None,
             observation_time_ns=observation_ns,
-            sequence=getattr(book, "sequence", getattr(book, "update_id", None)),
+            sequence=sequence,
             price_unit=mapping.price_unit,
         )
 
     bids = getattr(book, "bids", ())
     asks = getattr(book, "asks", ())
-    try:
-        bid_prices = [float(level.price) for level in bids]
-        ask_prices = [float(level.price) for level in asks]
-        bid_quantities = [float(level.quantity) for level in bids]
-        ask_quantities = [float(level.quantity) for level in asks]
-    except (AttributeError, TypeError, ValueError, OverflowError):
-        return _invalid(mapping, age_ms=age_ms, observation_ns=observation_ns)
-    all_prices = bid_prices + ask_prices
-    all_quantities = bid_quantities + ask_quantities
     if (
-        not bid_prices or not ask_prices
-        or any(not math.isfinite(price) or price <= 0 for price in all_prices)
-        or any(not math.isfinite(quantity) or quantity < 0 for quantity in all_quantities)
+        not isinstance(bids, (tuple, list))
+        or not isinstance(asks, (tuple, list))
+        or not bids
+        or not asks
+        or len(bids) > max_levels_per_side
+        or len(asks) > max_levels_per_side
     ):
         return _invalid(mapping, age_ms=age_ms, observation_ns=observation_ns)
-    best_bid, best_ask = max(bid_prices), min(ask_prices)
+
+    def validated_prices(levels, *, descending: bool) -> list[float] | None:
+        values: list[float] = []
+        for level in levels:
+            try:
+                price = float(level.price)
+                quantity = float(level.quantity)
+            except (AttributeError, TypeError, ValueError, OverflowError):
+                return None
+            if (
+                not math.isfinite(price)
+                or price <= 0
+                or not math.isfinite(quantity)
+                or quantity <= 0
+            ):
+                return None
+            values.append(price)
+        if len(values) != len(set(values)):
+            return None
+        if values != sorted(values, reverse=descending):
+            return None
+        return values
+
+    bid_prices = validated_prices(bids, descending=True)
+    ask_prices = validated_prices(asks, descending=False)
+    if bid_prices is None or ask_prices is None:
+        return _invalid(mapping, age_ms=age_ms, observation_ns=observation_ns)
+
+    best_bid, best_ask = bid_prices[0], ask_prices[0]
     if best_bid >= best_ask:
         return _invalid(mapping, age_ms=age_ms, observation_ns=observation_ns)
 
@@ -112,7 +148,7 @@ def to_synchronized_book_view(
         best_bid=best_bid,
         best_ask=best_ask,
         observation_time_ns=observation_ns,
-        sequence=getattr(book, "sequence", getattr(book, "update_id", None)),
+        sequence=sequence,
         price_unit=mapping.price_unit,
     )
 
