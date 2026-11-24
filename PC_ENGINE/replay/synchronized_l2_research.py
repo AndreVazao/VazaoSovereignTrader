@@ -248,6 +248,10 @@ def build_report(
                 if not isinstance(row, dict):
                     counters["non_object_rows_ignored"] += 1
                     continue
+                if row.get("status") != "SYNCED":
+                    raw_venue, raw_symbol = row.get("venue"), row.get("symbol")
+                    if isinstance(raw_venue, str) and isinstance(raw_symbol, str):
+                        last_sequences.pop((raw_venue.strip().lower(), raw_symbol.strip().upper()), None)
                 if row.get("analysis_eligible") is not True or row.get("quality_status") != "VALID":
                     counters["quality_flagged_ignored"] += 1
                     continue
