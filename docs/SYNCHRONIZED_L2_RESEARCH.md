@@ -21,7 +21,7 @@ Every row is independently checked for:
 - `analysis_eligible=true`, `quality_status=VALID`, and PAPER-only provenance flags;
 - synchronized status, valid non-negative sequence, positive observation timestamp and captured age within the configured maximum;
 - finite positive price and quantity at every level, unique prices, correct side ordering, non-crossed best prices and bounded depth;
-- strictly increasing sequence per venue/symbol within each persisted file.
+- strictly increasing sequence per venue/symbol within each synchronized epoch; an explicit invalid-book record resets the baseline for a later rebootstrap.
 
 Flagged, malformed, stale, non-PAPER, duplicate or out-of-order records are excluded and counted. Raw collector evidence remains unchanged.
 
