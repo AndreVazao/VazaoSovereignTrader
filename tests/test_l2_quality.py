@@ -1,12 +1,26 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 
 import pytest
 
 from PC_ENGINE.market_events.l2_quality import assess_l2_book_view
 from PC_ENGINE.market_events.orderbook import OrderBookLevel
 from PC_ENGINE.tools.run_l2_market_data_collector import synchronized_book_payload
+
+
+@dataclass
+class L2BookView:
+    venue: str
+    symbol: str
+    status: str
+    sequence: int | None
+    bids: tuple
+    asks: tuple
+    age_ms: float | None
+    eligible: bool
+    reason: str | None
+    observation_time_ns: int | None
 
 
 def valid_view(**changes):
@@ -23,7 +37,7 @@ def valid_view(**changes):
         "observation_time_ns": 1_000_000_000,
     }
     values.update(changes)
-    return SimpleNamespace(**values)
+    return L2BookView(**values)
 
 
 def test_accepts_synchronized_fresh_ordered_book():
