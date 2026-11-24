@@ -48,6 +48,13 @@ class PublicL2WebSocketCollector:
         self._last_raw_callback_error: str | None = None
         self._ws_errors = 0
         self._last_ws_error: str | None = None
+        self._okx_last_message_monotonic: float | None = None
+        self._okx_ping_sent_monotonic: float | None = None
+        self._okx_application_pings_sent = 0
+        self._okx_application_pongs_received = 0
+        self._okx_application_pings_received = 0
+        self._okx_application_pongs_sent = 0
+        self._okx_heartbeat_timeouts = 0
         if config.venue == "binance" and on_book is not None:
             kwargs = {"on_book": on_book}
             if snapshot_fetcher is not None:
@@ -70,6 +77,11 @@ class PublicL2WebSocketCollector:
                 "last_raw_callback_error": self._last_raw_callback_error,
                 "websocket_errors": self._ws_errors,
                 "last_websocket_error": self._last_ws_error,
+                "okx_application_pings_sent": self._okx_application_pings_sent,
+                "okx_application_pongs_received": self._okx_application_pongs_received,
+                "okx_application_pings_received": self._okx_application_pings_received,
+                "okx_application_pongs_sent": self._okx_application_pongs_sent,
+                "okx_heartbeat_timeouts": self._okx_heartbeat_timeouts,
             }
         if self._sync is not None:
             health["synchronizer"] = self._sync.health()
@@ -326,19 +338,98 @@ class PublicL2WebSocketCollector:
                     self._raw_callback_errors += 1
                     self._last_raw_callback_error = type(exc).__name__
 
+    def _handle_websocket_message(self, ws: websocket.WebSocketApp, message: str) -> None:
+        """Handle OKX text heartbeats before parsing market-data JSON."""
+        if self.config.venue == "okx" and message in {"ping", "pong"}:
+            now = time.monotonic()
+            with self._health_lock:
+                self._okx_last_message_monotonic = now
+                if message == "ping":
+                    self._okx_application_pings_received += 1
+                else:
+                    self._okx_application_pongs_received += 1
+                    self._okx_ping_sent_monotonic = None
+            if message == "ping":
+                try:
+                    ws.send("pong")
+                except Exception as exc:
+                    with self._health_lock:
+                        self._ws_errors += 1
+                        self._last_ws_error = type(exc).__name__
+                    if self._okx_sync is not None:
+                        self._okx_sync.invalidate("heartbeat_response_failed")
+                    ws.close()
+                else:
+                    with self._health_lock:
+                        self._okx_application_pongs_sent += 1
+            return
+
+        if self.config.venue == "okx":
+            with self._health_lock:
+                self._okx_last_message_monotonic = time.monotonic()
+        self.process_message(message)
+
+    def _okx_heartbeat_tick(self, now: float | None = None) -> None:
+        """Send the OKX application ping after 20s idle; reconnect if pong misses 10s."""
+        if self.config.venue != "okx" or not self._connected.is_set():
+            return
+        current = time.monotonic() if now is None else now
+        socket = self._socket
+        action: str | None = None
+        with self._health_lock:
+            if self._okx_ping_sent_monotonic is not None:
+                if current - self._okx_ping_sent_monotonic >= 10.0:
+                    self._okx_heartbeat_timeouts += 1
+                    self._okx_ping_sent_monotonic = None
+                    action = "close"
+            elif self._okx_last_message_monotonic is None:
+                self._okx_last_message_monotonic = current
+            elif current - self._okx_last_message_monotonic >= 20.0:
+                self._okx_ping_sent_monotonic = current
+                self._okx_application_pings_sent += 1
+                action = "ping"
+        if socket is None or action is None:
+            return
+        if action == "close":
+            socket.close()
+            return
+        try:
+            socket.send("ping")
+        except Exception as exc:
+            with self._health_lock:
+                self._ws_errors += 1
+                self._last_ws_error = type(exc).__name__
+            socket.close()
+
+    def _okx_heartbeat_watchdog(self) -> None:
+        while not self._stop.wait(1.0):
+            self._okx_heartbeat_tick()
+
     def run_forever(self) -> None:
         if self._sync is not None:
             self._sync.start()
         retry_seconds = 1.0
+        heartbeat_thread = None
+        if self.config.venue == "okx":
+            heartbeat_thread = threading.Thread(
+                target=self._okx_heartbeat_watchdog,
+                name="vst-okx-ws-heartbeat",
+                daemon=True,
+            )
+            heartbeat_thread.start()
         try:
             while not self._stop.is_set():
                 opened_at: list[float] = []
 
-                def on_message(_ws: websocket.WebSocketApp, message: str) -> None:
-                    self.process_message(message)
+                def on_message(ws: websocket.WebSocketApp, message: str) -> None:
+                    self._handle_websocket_message(ws, message)
 
                 def on_open(ws: websocket.WebSocketApp) -> None:
                     opened_at[:] = [time.monotonic()]
+                    if self.config.venue == "okx":
+                        with self._health_lock:
+                            self._okx_last_message_monotonic = time.monotonic()
+                            self._okx_ping_sent_monotonic = None
                     self._connected.set()
                     product = self.config.symbol.replace("/", "-").upper()
                     if self.config.venue == "binance":
@@ -387,6 +478,8 @@ class PublicL2WebSocketCollector:
         finally:
             if self._sync is not None:
                 self._sync.stop()
+            if heartbeat_thread is not None and heartbeat_thread is not threading.current_thread():
+                heartbeat_thread.join(timeout=2.0)
 
     def stop(self) -> None:
         self._stop.set()
