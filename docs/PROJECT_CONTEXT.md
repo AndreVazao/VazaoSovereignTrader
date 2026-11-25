@@ -1,67 +1,34 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-24 14:50 UTC
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-25 12:17 UTC
 
-**Repository:** `AndreVazao/VazaoSovereignTrader` only.  
-**Verified main:** `8c36fb7c4316e63293e44de36df1bc383eaadc69`.  
-**Latest integration:** PR [#588](https://github.com/AndreVazao/VazaoSovereignTrader/pull/588), merged at 2026-11-24 14:48 UTC.  
-**Active implementation PRs:** none at this checkpoint. A documentation reconciliation branch is being prepared; read live GitHub state before acting.  
-**Release state:** no formal GitHub Release verified. CI artifacts are not physical-PC validation or a formal release.
+**Repository:** AndreVazao/VazaoSovereignTrader only.  
+**Audited main code baseline:** 3a99410cb4ccb9ff43add3c42551f64bdb67d66f.  
+**Latest code integration:** PR #595, merged at 2026-11-25 07:06:36 UTC.  
+**Open PRs:** none at this checkpoint.  
+**Branch inventory:** 52 refs including main; several dated branches remain after squash merges or have diverged. Do not treat a retained branch name as an active delivery line without comparing its head to current main.  
+**Release state:** no formal GitHub Releases. Tag mobile-v0.4.1 points to 8a5a54b45b3a8358c136efc0615b088a305f4ef7, not the audited main SHA.  
+**Current-main CI:** Python tests and Windows EXE/installer both passed on exact SHA 3a99410cb4ccb9ff43add3c42551f64bdb67d66f. Python result: 1,707 passed, 4 skipped, 101 subtests passed. Windows installer lifecycle passed silent install, in-place upgrade, engine launch/health, silent uninstall and Learning Vault marker SHA-256 preservation.  
+**Current-main artifacts:** installer and portable Windows ZIP are attached to Actions run 45565585173.  
+**Global decision:** not complete; physical low-resource PC validation, packaged collector-supervisor lifecycle, production connector sandbox integration, broader Vault backup/restore/isolation, and exact-SHA Android/Linux release evidence remain outstanding.
 
-## Exact merge and validation evidence
+## Current readiness audit
 
-PR #588 added a fail-closed quality gate for synchronized public L2 books, preserved flagged observations for audit, and fixed the Binance `BookSnapshot.update_id` sequence contract.
+The detailed matrix, exact-SHA workflow evidence, artifact links, path-filter applicability, issue #560 assessment, security/governance risks and next gates are maintained in [PRODUCT_READINESS_2026-11-25.md](PRODUCT_READINESS_2026-11-25.md).
 
-The exact PR HEAD `9518e63fdfc848fa844510239d01815fc1880ea5` passed:
-- Python tests — run `45391387938`.
-- Windows EXE and installer — run `45391386836`; both jobs passed, including previous-version install, upgrade, launch, health check, uninstall and Learning Vault preservation.
-- Snyk — success.
-- Vercel preview — success; not a code test.
+## Current operating invariants
 
-PR #588 was squash-merged as `8c36fb7c4316e63293e44de36df1bc383eaadc69`. The `main` branch ref was independently read back and matched this SHA.
+- PAPER-only; no LIVE activation, orders, transfers, withdrawals or financial operations.
+- Initial public market-data collection requires no exchange credentials.
+- Do not configure private exchange credentials or link accounts during the current first-install milestone.
+- Keep third-party connectors disabled until production OS isolation is integrated and independently validated on each supported platform.
+- A green Vercel preview is not a code test. Do not claim an untriggered path-filtered workflow passed on the current SHA.
+- Do not claim physical Windows/Linux/Android validation from GitHub Actions.
+- Main currently reports protected=false and the repository rulesets endpoint returned an empty list. No settings were changed in this audit; repository-owner review is required to enforce branch checks/reviews.
+- Keep one active implementation PR at a time, branch from a freshly verified main SHA, never edit main directly, and merge only after applicable exact-HEAD checks and security gates pass.
 
-## Post-merge main validation — still pending at checkpoint
-
-On exact main SHA `8c36fb7c4316e63293e44de36df1bc383eaadc69`:
-- Python tests run `45418214434` — passed.
-- Windows EXE/installer run `45418215197` — still running; EXE smoke and installer build/lifecycle must finish before declaring main post-merge validation complete.
-- Vercel — success.
-- PAPER and Linux sandbox workflows were not triggered by the changed-path filters. Do not describe them as passing on this SHA.
-
-Recheck these runs before the next merge or release decision.
-
-## Branch protection
-
-The GitHub branch endpoint currently reports `main.protected=false` and `protection.enabled=false`. This is stronger evidence than the earlier inconclusive 403 report: branch protection is not enabled according to the endpoint response at this checkpoint. Rulesets should also be rechecked. Do not claim that required status checks or review protections are enforcing merges. Repository settings need owner review; no settings were changed here.
-
-## L2 quality gate — implemented, consumer integration pending
-
-The collector now persists synchronized views for Binance, Coinbase and OKX with `analysis_eligible`, `quality_status`, `quality_reason`, depth counts and PAPER-only safety metadata. Binance sequence validation accepts `update_id` when the typed `BookSnapshot` does not expose `sequence`.
-
-The quality gate does not repair sequence gaps or recover a snapshot itself. Binance synchronizer currently invalidates the book and schedules a new REST snapshot after a gap/disconnect/overflow, with bounded exponential retry. Coinbase and OKX synchronizers invalidate their local view on sequence errors and connection loss; reconnect/rebootstrap must be validated end-to-end.
-
-A repository code search at this checkpoint found no downstream research consumer reading the persisted `*_synchronized_orderbook_views.jsonl` files. The top-of-book evidence loader is a separate input path. Do not claim L2 depth evidence is already feeding strategy/research. Any future consumer must filter `analysis_eligible=true` and independently recheck freshness at read time.
-
-## Open operational blocker — issue #560
-
-[Issue #560](https://github.com/AndreVazao/VazaoSovereignTrader/issues/560) remains open. It requires bounded CCXT public-request timeouts, cooperative stop checks between venue/symbol requests, adaptive polling/concurrency on constrained hosts, authenticated resource/shutdown diagnostics, and regression tests for slow calls and bounded stop. Acceptance includes a constrained Windows host around 3 GB RAM. CI evidence is not a substitute for the user's physical PC test.
-
-## Documentation corrections in progress
-
-- `docs/BUILD_PC.md` must remain PAPER-only and must not instruct users to grant Spot Trade permissions. Initial public market-data collection requires no exchange credentials or private scopes.
-- This file's older handoff below is historical and must not be treated as current state.
-- `docs/CONNECTOR_WORKER_SANDBOX_PLAN.md` must distinguish the current main implementation from the older PR #578 checkpoint.
-
-## Global safety and validation policy
-
-- Public market data first; no exchange credentials are needed for initial collection.
-- PAPER-only: `allow_real=false`, `auto_promote_real=false`; no live orders, transfers, withdrawals or execution authorization.
-- Keep third-party connector execution disabled until production OS isolation is integrated and independently tested on each platform.
-- Never claim physical Windows/Linux/Android validation from GitHub Actions.
-- Keep one active implementation PR at a time, branch from verified latest `main`, never edit `main` directly, and merge only after applicable checks pass on the exact HEAD.
-- Preserve the 5 GiB aggregate market-data cap and 30-day raw JSONL retention unless a reviewed change explicitly supersedes them.
 
 ---
 
-# HISTORICAL HANDOFF — 2026-11-22 12:52 UTC (superseded by the 2026-11-24 checkpoint above)
+# HISTORICAL HANDOFF — 2026-11-22 12:52 UTC (superseded by the 2026-11-25 checkpoint above)
 
 **Repository:** `AndreVazao/VazaoSovereignTrader` only.  
 **Verified main:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`.  
