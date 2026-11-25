@@ -362,3 +362,26 @@ def test_supervisor_never_reports_stopped_or_releases_lock_with_live_child(tmp_p
     assert all(worker.process is None for worker in service.workers)
     health = json.loads((service.data_dir / "market_data_service_health.json").read_text())
     assert health["status"] == "STOPPED"
+
+
+
+def test_explicit_degraded_shutdown_status_overrides_fresh_worker_heartbeats(tmp_path):
+    import time
+
+    app = create_app(tmp_path)
+    service = PublicMarketDataService(app, tmp_path / "data", popen=FakeProcess)
+    service.start()
+    now_ms = time.time_ns() // 1_000_000
+    for worker in service.workers:
+        worker.health_file.parent.mkdir(parents=True, exist_ok=True)
+        worker.health_file.write_text(json.dumps({"timestamp_ms": now_ms}), encoding="utf-8")
+
+    assert service.snapshot()["all_workers_running"] is True
+    assert service.snapshot()["all_worker_heartbeats_fresh"] is True
+    service.shutdown_reason = "worker_shutdown_timeout"
+    service._write_health("DEGRADED")
+
+    health = json.loads((service.data_dir / "market_data_service_health.json").read_text())
+    assert health["status"] == "DEGRADED"
+    assert health["shutdown_reason"] == "worker_shutdown_timeout"
+    service.stop()
