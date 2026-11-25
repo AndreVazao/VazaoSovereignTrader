@@ -110,14 +110,16 @@ class MarketRadarTests(unittest.TestCase):
 
 
     def test_ccxt_clients_receive_clamped_request_timeout(self) -> None:
+        captured = {}
+        load_markets_calls = []
+
         class Client:
             def __init__(self, options):
                 self.options = options
 
             def load_markets(self):
+                load_markets_calls.append(True)
                 return {}
-
-        captured = {}
 
         def factory(options):
             captured.update(options)
@@ -133,6 +135,7 @@ class MarketRadarTests(unittest.TestCase):
 
         self.assertEqual(captured["timeout"], 60000)
         self.assertTrue(captured["enableRateLimit"])
+        self.assertEqual(load_markets_calls, [], "market metadata must not load synchronously during construction")
     def test_snapshot_uses_shared_client_lock(self) -> None:
         class RecordingLock:
             def __init__(self):
