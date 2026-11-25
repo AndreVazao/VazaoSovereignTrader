@@ -301,3 +301,87 @@ def test_retention_runs_periodically_while_service_is_active(tmp_path):
     assert service._run_retention_if_due() is True
     assert not expired.exists()
     assert service.retention_snapshot["last_run_ts_ms"] is not None
+
+
+
+def test_stop_requests_all_workers_before_waiting_for_any_child(tmp_path):
+    app = create_app(tmp_path)
+    processes = []
+    service_holder = {}
+
+    class VerifyingProcess(FakeProcess):
+        def wait(self, timeout=None):
+            service = service_holder["service"]
+            assert all(worker.stop_file.exists() for worker in service.workers)
+            return super().wait(timeout)
+
+    def popen(command, **kwargs):
+        process = VerifyingProcess(command, **kwargs)
+        processes.append(process)
+        return process
+
+    service = PublicMarketDataService(app, tmp_path / "data", popen=popen)
+    service_holder["service"] = service
+    service.start()
+    service.stop()
+
+    assert len(processes) == 4
+    assert all(process.returncode == 0 for process in processes)
+    assert all(worker.process is None for worker in service.workers)
+    health = json.loads((service.data_dir / "market_data_service_health.json").read_text())
+    assert health["status"] == "STOPPED"
+
+
+def test_supervisor_never_reports_stopped_or_releases_lock_with_live_child(tmp_path, monkeypatch):
+    app = create_app(tmp_path)
+    service = PublicMarketDataService(app, tmp_path / "data", popen=FakeProcess)
+    service.start()
+    live_processes = [worker.process for worker in service.workers]
+    original_stop_worker = service._stop_worker
+
+    def leave_child_running(worker):
+        worker.last_error = "worker_stop_timeout"
+
+    monkeypatch.setattr(service, "_stop_worker", leave_child_running)
+    service.stop()
+
+    assert all(worker.process is not None for worker in service.workers)
+    assert all(process.poll() is None for process in live_processes)
+    assert service._instance_lock_handle is not None
+    assert service.shutdown_reason == "worker_shutdown_timeout"
+    health = json.loads((service.data_dir / "market_data_service_health.json").read_text())
+    assert health["status"] == "DEGRADED"
+    assert health["shutdown_reason"] == "worker_shutdown_timeout"
+
+    # Simulate the children exiting after the timeout, then permit a clean retry.
+    for process in live_processes:
+        process.returncode = 0
+    monkeypatch.setattr(service, "_stop_worker", original_stop_worker)
+    service.stop()
+    assert service._instance_lock_handle is None
+    assert all(worker.process is None for worker in service.workers)
+    health = json.loads((service.data_dir / "market_data_service_health.json").read_text())
+    assert health["status"] == "STOPPED"
+
+
+
+def test_explicit_degraded_shutdown_status_overrides_fresh_worker_heartbeats(tmp_path):
+    import time
+
+    app = create_app(tmp_path)
+    service = PublicMarketDataService(app, tmp_path / "data", popen=FakeProcess)
+    service.start()
+    now_ms = time.time_ns() // 1_000_000
+    for worker in service.workers:
+        worker.health_file.parent.mkdir(parents=True, exist_ok=True)
+        worker.health_file.write_text(json.dumps({"timestamp_ms": now_ms}), encoding="utf-8")
+
+    assert service.snapshot()["all_workers_running"] is True
+    assert service.snapshot()["all_worker_heartbeats_fresh"] is True
+    service.shutdown_reason = "worker_shutdown_timeout"
+    service._write_health("DEGRADED")
+
+    health = json.loads((service.data_dir / "market_data_service_health.json").read_text())
+    assert health["status"] == "DEGRADED"
+    assert health["shutdown_reason"] == "worker_shutdown_timeout"
+    service.stop()
