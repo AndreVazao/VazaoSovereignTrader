@@ -193,6 +193,67 @@ class L2CollectorTests(unittest.TestCase):
         self.assertEqual(health["last_raw_callback_error"], "OSError")
         self.assertNotIn("private path detail", str(health))
 
+    def test_okx_server_text_ping_is_answered_without_parse_error(self) -> None:
+        class FakeSocket:
+            def __init__(self):
+                self.sent = []
+                self.closed = False
+            def send(self, value):
+                self.sent.append(value)
+            def close(self):
+                self.closed = True
+
+        collector = self.collector("okx")
+        socket = FakeSocket()
+        collector._handle_websocket_message(socket, "ping")
+        health = collector.health_snapshot()
+        self.assertEqual(socket.sent, ["pong"])
+        self.assertEqual(health["parse_errors"], 0)
+        self.assertEqual(health["okx_application_pings_received"], 1)
+        self.assertEqual(health["okx_application_pongs_sent"], 1)
+
+    def test_okx_idle_connection_sends_text_ping_and_accepts_pong(self) -> None:
+        class FakeSocket:
+            def __init__(self):
+                self.sent = []
+                self.closed = False
+            def send(self, value):
+                self.sent.append(value)
+            def close(self):
+                self.closed = True
+
+        collector = self.collector("okx")
+        socket = FakeSocket()
+        collector._socket = socket
+        collector._connected.set()
+        collector._okx_last_message_monotonic = 100.0
+        collector._okx_heartbeat_tick(120.1)
+        self.assertEqual(socket.sent, ["ping"])
+        self.assertEqual(collector.health_snapshot()["okx_application_pings_sent"], 1)
+        collector._handle_websocket_message(socket, "pong")
+        self.assertIsNone(collector._okx_ping_sent_monotonic)
+        self.assertEqual(collector.health_snapshot()["okx_application_pongs_received"], 1)
+
+    def test_okx_missing_application_pong_closes_socket_for_reconnect(self) -> None:
+        class FakeSocket:
+            def __init__(self):
+                self.sent = []
+                self.closed = False
+            def send(self, value):
+                self.sent.append(value)
+            def close(self):
+                self.closed = True
+
+        collector = self.collector("okx")
+        socket = FakeSocket()
+        collector._socket = socket
+        collector._connected.set()
+        collector._okx_last_message_monotonic = 100.0
+        collector._okx_heartbeat_tick(120.0)
+        collector._okx_heartbeat_tick(130.1)
+        self.assertTrue(socket.closed)
+        self.assertEqual(collector.health_snapshot()["okx_heartbeat_timeouts"], 1)
+
     def test_okx_snapshot(self) -> None:
         events = self.collector("okx")._parse(json.dumps({
             "arg": {"instId": "BTC-USDT", "channel": "books5"}, "action": "snapshot",
