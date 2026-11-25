@@ -30,6 +30,45 @@ class BoundedJsonlStoreTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), before)
             self.assertFalse(backup.exists())
 
+    def test_recovers_partial_tail_without_corrupting_next_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "events.jsonl"
+            backup = Path(tmp) / "events.jsonl.1"
+            output.write_bytes(b'{"sequence":1}\n{"sequence":')
+            self.assertTrue(append_bounded_jsonl(output, backup, '{"sequence":2}\n', 1024))
+            self.assertEqual(
+                output.read_bytes(),
+                b'{"sequence":1}\n{"sequence":2}\n',
+            )
+
+    def test_recovers_file_containing_only_partial_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "events.jsonl"
+            backup = Path(tmp) / "events.jsonl.1"
+            output.write_bytes(b'{"truncated":')
+            self.assertTrue(append_bounded_jsonl(output, backup, '{"valid":true}\n', 1024))
+            self.assertEqual(output.read_bytes(), b'{"valid":true}\n')
+
+    def test_partial_tail_is_removed_before_rotation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "events.jsonl"
+            backup = Path(tmp) / "events.jsonl.1"
+            output.write_bytes(b"1234\n5678\npartial")
+            self.assertTrue(append_bounded_jsonl(output, backup, "abcd\n", 10))
+            self.assertEqual(output.read_bytes(), b"abcd\n")
+            self.assertEqual(backup.read_bytes(), b"1234\n5678\n")
+
+    def test_complete_trailing_record_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "events.jsonl"
+            backup = Path(tmp) / "events.jsonl.1"
+            output.write_bytes(b'{"sequence":1}\n')
+            self.assertTrue(append_bounded_jsonl(output, backup, '{"sequence":2}\n', 1024))
+            self.assertEqual(
+                output.read_bytes(),
+                b'{"sequence":1}\n{"sequence":2}\n',
+            )
+
     def test_rejects_invalid_record_and_cap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "events.jsonl"
