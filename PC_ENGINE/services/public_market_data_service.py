@@ -353,7 +353,10 @@ class PublicMarketDataService:
 
     def _write_health(self, status: str) -> None:
         payload = self.snapshot()
-        payload["status"] = ("STOPPED" if status == "STOPPED" else ("RUNNING" if payload["all_workers_running"] and payload["all_worker_heartbeats_fresh"] else "DEGRADED"))
+        if status in {"STOPPED", "DEGRADED"}:
+            payload["status"] = status
+        else:
+            payload["status"] = "RUNNING" if payload["all_workers_running"] and payload["all_worker_heartbeats_fresh"] else "DEGRADED"
         target = self.data_dir / "market_data_service_health.json"
         temporary = target.with_suffix(".json.tmp")
         if temporary.is_symlink():
