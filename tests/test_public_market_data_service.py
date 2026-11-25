@@ -252,3 +252,52 @@ def test_retention_deletes_only_expired_jsonl_and_preserves_reports(tmp_path):
     assert recent.exists()
     assert report.exists()
     assert service.retention_snapshot["expired_files_deleted"] == 1
+
+
+def test_retention_deletes_expired_rotated_jsonl_backup(tmp_path):
+    import os
+    import time
+
+    app = create_app(tmp_path)
+    data = tmp_path / "data"
+    radar = data / "radar"
+    radar.mkdir(parents=True)
+    backup = radar / "l2_events.jsonl.1"
+    backup.write_bytes(b'{"old":true}\n')
+    old = time.time() - (31 * 24 * 60 * 60)
+    os.utime(backup, (old, old))
+
+    service = PublicMarketDataService(app, data)
+    service._prune_expired_market_data()
+
+    assert not backup.exists()
+    assert service.retention_snapshot["expired_files_deleted"] == 1
+
+
+def test_retention_runs_periodically_while_service_is_active(tmp_path):
+    import os
+    import time
+
+    app = create_app(tmp_path)
+    data = tmp_path / "data"
+    clock_value = [1000.0]
+    service = PublicMarketDataService(
+        app,
+        data,
+        clock=lambda: clock_value[0],
+        retention_check_interval_seconds=60,
+    )
+
+    assert service._run_retention_if_due(force=True) is True
+    assert service._run_retention_if_due() is False
+
+    expired = data / "radar" / "arrived_after_start.jsonl"
+    expired.parent.mkdir(parents=True, exist_ok=True)
+    expired.write_text('{"old":true}\n', encoding="utf-8")
+    old = time.time() - (31 * 24 * 60 * 60)
+    os.utime(expired, (old, old))
+
+    clock_value[0] += 61
+    assert service._run_retention_if_due() is True
+    assert not expired.exists()
+    assert service.retention_snapshot["last_run_ts_ms"] is not None
