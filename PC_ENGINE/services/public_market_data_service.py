@@ -450,6 +450,12 @@ class PublicMarketDataService:
         for thread in threads:
             thread.join(timeout=max(0.0, deadline - time.monotonic()))
 
+        for worker in self.workers:
+            process = worker.process
+            if process is not None and process.poll() is not None:
+                worker.last_exit_code = process.returncode
+                worker.process = None
+
         still_running = [
             worker.name for worker in self.workers
             if worker.process is not None and worker.process.poll() is None
