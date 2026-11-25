@@ -10,16 +10,26 @@ if (Test-Path -LiteralPath $stopRequest) {
 }
 Set-Content -LiteralPath $stopRequest -Value "stop" -NoNewline -Encoding ascii
 $deadline = (Get-Date).AddSeconds(30)
+$stopped = $false
 while ((Get-Date) -lt $deadline) {
     try {
         if (Test-Path -LiteralPath $healthPath) {
             $health = Get-Content -LiteralPath $healthPath -Raw | ConvertFrom-Json
             if ($health.status -eq "STOPPED") {
+                $stopped = $true
                 Remove-Item -LiteralPath $stopRequest -Force -ErrorAction SilentlyContinue
                 break
             }
+            if ($health.shutdown_reason -eq "worker_shutdown_timeout") {
+                throw "Market-data workers did not stop within the supervisor shutdown budget."
+            }
         }
-    } catch { }
+    } catch {
+        if ($_.Exception.Message -like "*did not stop within the supervisor shutdown budget*") { throw }
+    }
     Start-Sleep -Seconds 1
 }
-Write-Host "Pedido de paragem enviado; aguardado até 30 segundos."
+if (-not $stopped) {
+    throw "Market-data supervisor did not confirm STOPPED within 30 seconds; do not remove worker files."
+}
+Write-Host "Recolha contínua parada e confirmada."
