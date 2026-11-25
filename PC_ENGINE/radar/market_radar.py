@@ -98,10 +98,11 @@ class MarketRadar:
                     "timeout": self.request_timeout_ms,
                 })
                 self.client_locks[name] = Lock()
-                try:
-                    self.clients[name].load_markets()
-                except Exception:
-                    pass
+                # Do not perform network discovery during collector construction.
+                # CCXT lazily loads market metadata on the first public request;
+                # the configured timeout then bounds that work inside the worker,
+                # where cooperative shutdown can observe the stop event immediately
+                # after the in-flight request returns.
             except Exception:
                 continue
 
