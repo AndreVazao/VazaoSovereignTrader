@@ -299,9 +299,16 @@ class PublicMarketDataService:
                         process.kill()
                         process.wait(timeout=2.0)
         except Exception:
-            self._logger.exception("worker restart cleanup failed: %s", worker.name)
+            worker.last_error = "worker_stop_error"
+            self._logger.exception("worker shutdown failed: %s", worker.name)
         finally:
-            worker.process = None
+            # Keep the process handle while the child is still alive. Losing the
+            # handle would make health report a false stop and prevent retrying.
+            if process.poll() is None:
+                worker.last_error = worker.last_error or "worker_stop_timeout"
+            else:
+                worker.last_exit_code = process.returncode
+                worker.process = None
 
     def _worker_snapshot(self, worker: WorkerSpec) -> dict:
         process = worker.process
@@ -346,7 +353,10 @@ class PublicMarketDataService:
 
     def _write_health(self, status: str) -> None:
         payload = self.snapshot()
-        payload["status"] = ("STOPPED" if status == "STOPPED" else ("RUNNING" if payload["all_workers_running"] and payload["all_worker_heartbeats_fresh"] else "DEGRADED"))
+        if status in {"STOPPED", "DEGRADED"}:
+            payload["status"] = status
+        else:
+            payload["status"] = "RUNNING" if payload["all_workers_running"] and payload["all_worker_heartbeats_fresh"] else "DEGRADED"
         target = self.data_dir / "market_data_service_health.json"
         temporary = target.with_suffix(".json.tmp")
         if temporary.is_symlink():
@@ -407,14 +417,67 @@ class PublicMarketDataService:
         self._stop.set()
 
     def stop(self) -> None:
+        """Stop all workers concurrently and never publish STOPPED while one lives."""
         self._stop.set()
         if self._instance_lock_handle is None:
             return
-        for worker in reversed(self.workers):
+
+        active = [
+            worker for worker in reversed(self.workers)
+            if worker.process is not None and worker.process.poll() is None
+        ]
+        # Signal every child before waiting for any one child. This prevents a
+        # slow first worker from delaying the cooperative stop request to others.
+        for worker in active:
+            try:
+                worker.stop_file.parent.mkdir(parents=True, exist_ok=True)
+                if worker.stop_file.is_symlink():
+                    raise OSError("worker_stop_file_symlink_rejected")
+                worker.stop_file.write_text("stop", encoding="ascii")
+            except OSError:
+                worker.last_error = "worker_stop_request_failed"
+                self._logger.exception("worker stop request failed: %s", worker.name)
+
+        threads: list[threading.Thread] = []
+        for worker in active:
+            thread = threading.Thread(
+                target=self._stop_worker,
+                args=(worker,),
+                name=f"vst-stop-{worker.name}",
+                daemon=True,
+            )
+            thread.start()
+            threads.append(thread)
+
+        deadline = time.monotonic() + 12.0
+        for thread in threads:
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+
+        for worker in self.workers:
             process = worker.process
-            if process is None or process.poll() is not None:
-                continue
-            self._stop_worker(worker)
+            if process is not None and process.poll() is not None:
+                worker.last_exit_code = process.returncode
+                worker.process = None
+
+        still_running = [
+            worker.name for worker in self.workers
+            if worker.process is not None and worker.process.poll() is None
+        ]
+        stop_threads_alive = [thread.name for thread in threads if thread.is_alive()]
+        if still_running or stop_threads_alive:
+            self.shutdown_reason = "worker_shutdown_timeout"
+            self._logger.error(
+                "service shutdown incomplete; running_workers=%s stop_threads=%s",
+                still_running, stop_threads_alive,
+            )
+            try:
+                self._write_health("DEGRADED")
+            except OSError:
+                self._logger.exception("degraded shutdown health write failed")
+            # Keep the singleton lock and process references: another supervisor
+            # must not start while any previous worker may still be active.
+            return
+
         try:
             self._write_health("STOPPED")
         except OSError:
