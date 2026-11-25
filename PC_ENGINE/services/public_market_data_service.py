@@ -45,6 +45,7 @@ class PublicMarketDataService:
         popen=subprocess.Popen,
         clock=time.monotonic,
         sleep=time.sleep,
+        retention_check_interval_seconds: int = 3600,
     ):
         self.app_dir = app_dir.resolve()
         self.data_dir = data_dir.resolve()
@@ -54,7 +55,9 @@ class PublicMarketDataService:
         self.health_interval_seconds = max(1.0, float(health_interval_seconds))
         self.max_data_dir_bytes = max(1024 * 1024, min(5 * 1024 * 1024 * 1024, int(max_data_dir_bytes)))
         self.market_data_retention_days = 30
-        self.retention_snapshot = {"scanned_files": 0, "expired_files_deleted": 0, "expired_bytes_deleted": 0, "errors": 0}
+        self.retention_check_interval_seconds = max(60, int(retention_check_interval_seconds))
+        self._last_retention_check_monotonic: float | None = None
+        self.retention_snapshot = {"scanned_files": 0, "expired_files_deleted": 0, "expired_bytes_deleted": 0, "errors": 0, "last_run_ts_ms": None}
         self.shutdown_reason: str | None = None
         self._popen = popen
         self._clock = clock
@@ -152,7 +155,7 @@ class PublicMarketDataService:
         except FileNotFoundError:
             pass
         (self.data_dir / "radar").mkdir(parents=True, exist_ok=True)
-        self._prune_expired_market_data()
+        self._run_retention_if_due(force=True)
         if self._storage_usage_bytes() >= self.max_data_dir_bytes:
             self.shutdown_reason = "storage_limit_reached_before_start"
             self._logger.error("storage budget already exhausted; refusing to start collectors")
@@ -202,7 +205,7 @@ class PublicMarketDataService:
             return False
 
     def _prune_expired_market_data(self) -> None:
-        """Delete only expired JSONL market-data files before workers start; preserve reports/config."""
+        """Delete expired raw JSONL and rotated JSONL backups; preserve reports/config."""
         radar_dir = self.data_dir / "radar"
         cutoff = time.time() - (self.market_data_retention_days * 24 * 60 * 60)
         if not radar_dir.exists():
@@ -213,7 +216,8 @@ class PublicMarketDataService:
                 candidate = Path(root) / name
                 self.retention_snapshot["scanned_files"] += 1
                 try:
-                    if candidate.is_symlink() or not candidate.is_file() or candidate.suffix.lower() != ".jsonl":
+                    raw_name = candidate.name.lower()
+                    if candidate.is_symlink() or not candidate.is_file() or not (raw_name.endswith(".jsonl") or raw_name.endswith(".jsonl.1")):
                         continue
                     stat = candidate.stat()
                     if stat.st_mtime >= cutoff:
@@ -224,6 +228,17 @@ class PublicMarketDataService:
                 except OSError:
                     self.retention_snapshot["errors"] += 1
                     self._logger.exception("retention cleanup failed for %s", candidate)
+
+    def _run_retention_if_due(self, *, force: bool = False) -> bool:
+        """Run age-based cleanup at startup and periodically during collection."""
+        now = self._clock()
+        previous = self._last_retention_check_monotonic
+        if not force and previous is not None and now - previous < self.retention_check_interval_seconds:
+            return False
+        self._prune_expired_market_data()
+        self._last_retention_check_monotonic = now
+        self.retention_snapshot["last_run_ts_ms"] = time.time_ns() // 1_000_000
+        return True
 
     def _storage_usage_bytes(self) -> int:
         total = 0
@@ -322,7 +337,7 @@ class PublicMarketDataService:
             "log_file": str(self.log_path),
             "storage": self._storage_snapshot(),
             "shutdown_reason": self.shutdown_reason,
-            "retention": {**self.retention_snapshot, "raw_jsonl_retention_days": self.market_data_retention_days, "report_policy": "latest_atomic_replacement_no_historical_copies"},
+            "retention": {**self.retention_snapshot, "raw_jsonl_retention_days": self.market_data_retention_days, "check_interval_seconds": self.retention_check_interval_seconds, "report_policy": "latest_atomic_replacement_no_historical_copies"},
             "paper_only": True,
             "private_account_access": False,
             "orders_submitted": False,
@@ -350,6 +365,7 @@ class PublicMarketDataService:
                         self._logger.exception("could not remove stop request")
                     self._stop.set()
                     break
+                self._run_retention_if_due()
                 storage = self._storage_snapshot()
                 if storage["budget_exhausted"]:
                     self.shutdown_reason = "storage_budget_exhausted"
