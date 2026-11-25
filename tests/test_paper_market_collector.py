@@ -389,3 +389,49 @@ def test_degraded_resource_probe_fails_conservatively_without_disabling_market_d
         assert heavy_calls == []
     finally:
         collector.stop()
+
+
+def test_collector_snapshot_exposes_active_stage_and_shutdown_progress(tmp_path: Path):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocked_fetcher(symbol, timeframe, limit):
+        entered.set()
+        release.wait(3)
+        return _ohlcv()
+
+    collector = PaperMarketCollector(
+        settings={
+            "interval_seconds": 2,
+            "polling_exchanges": [],
+            "data_dir": str(tmp_path),
+            "shutdown_timeout_seconds": 1,
+            "confluence": {"data_dir": str(tmp_path), "derivatives": {"enabled": False, "observational_only": True}},
+        },
+        symbols=["BTC/USDT"],
+        ohlcv_fetcher=blocked_fetcher,
+        strategy=FakeStrategy(),
+    )
+    collector.start()
+    assert entered.wait(1)
+    before = collector.snapshot()
+    assert before["progress"]["stage"] == "ohlcv_public_request"
+    assert before["progress"]["symbol"] == "BTC/USDT"
+
+    stopped = collector.stop()
+    assert stopped is False
+    after = collector.snapshot()
+    assert after["shutdown"]["requested"] is True
+    assert after["shutdown"]["worker_alive"] is True
+    assert after["shutdown"]["active_stage"] == "ohlcv_public_request"
+    assert after["progress"]["worker_alive"] is True
+
+    release.set()
+    assert collector.thread is not None
+    collector.thread.join(timeout=2)
+    assert collector.stop() is True
+    final = collector.snapshot()
+    assert final["shutdown"]["worker_alive"] is False
+    assert final["progress"]["stage"] == "idle"
