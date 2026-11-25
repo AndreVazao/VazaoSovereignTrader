@@ -73,6 +73,8 @@ class PaperMarketCollector:
         )
         self.stop_event = threading.Event()
         self.stop_requested_at: float | None = None
+        self._progress_lock = threading.Lock()
+        self._progress = {"stage": "idle", "symbol": None, "updated_at": time.time(), "stage_started_monotonic": time.monotonic()}
         self.polling_exchanges = list(settings.get(
             "polling_exchanges",
             ["binance", "bingx", "okx", "bybit", "coinbase"],
@@ -173,6 +175,24 @@ class PaperMarketCollector:
         self.last_learning_stats = 0
         self.last_outcome_stats = 0
 
+    def _set_progress(self, stage: str, symbol: str | None = None) -> None:
+        now = time.monotonic()
+        with self._progress_lock:
+            self._progress = {
+                "stage": str(stage),
+                "symbol": symbol,
+                "updated_at": time.time(),
+                "stage_started_monotonic": now,
+            }
+
+    def _progress_snapshot(self) -> dict:
+        with self._progress_lock:
+            progress = dict(self._progress)
+        started = progress.pop("stage_started_monotonic", None)
+        progress["stage_elapsed_seconds"] = round(max(0.0, time.monotonic() - started), 3) if started is not None else 0.0
+        progress["worker_alive"] = bool(self.thread and self.thread.is_alive())
+        return progress
+
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
             return
@@ -186,6 +206,7 @@ class PaperMarketCollector:
             )
             self._radar_closed = False
         self.stop_requested_at = None
+        self._set_progress("idle")
         self.stop_event.clear()
         self.thread = threading.Thread(
             target=self._loop,
@@ -219,7 +240,11 @@ class PaperMarketCollector:
                 "timeout_seconds": self.shutdown_timeout_seconds,
                 "request_timeout_ms": self.request_timeout_ms,
                 "radar_closed": self._radar_closed,
+                "elapsed_seconds": round(max(0.0, time.time() - self.stop_requested_at), 3) if self.stop_requested_at is not None and self.stop_event.is_set() else 0.0,
+                "active_stage": self._progress_snapshot().get("stage"),
+                "active_symbol": self._progress_snapshot().get("symbol"),
             },
+            "progress": self._progress_snapshot(),
             "interval_seconds": self.interval_seconds,
             "effective_interval_seconds": self._effective_interval_seconds,
             "adaptive_resources": dict(self._resource_status),
@@ -309,9 +334,11 @@ class PaperMarketCollector:
             self.stop_event.wait(max(0.0, self._effective_interval_seconds - elapsed))
 
     def collect_once(self) -> int:
+        self._set_progress("resource_policy_refresh")
         self._refresh_resource_policy()
         if self.stop_event.is_set():
             return 0
+        self._set_progress("radar_public_snapshot")
         snapshots, _ = self.radar.snapshot(stop_event=self.stop_event)
         if self.stop_event.is_set():
             return 0
@@ -323,9 +350,11 @@ class PaperMarketCollector:
             if self.stop_event.is_set():
                 break
             try:
+                self._set_progress("ohlcv_public_request", symbol)
                 ohlcv = self.ohlcv_fetcher(symbol, self.timeframe, self.candles_limit)
                 if self.stop_event.is_set():
                     break
+                self._set_progress("ohlcv_validation", symbol)
                 quality_cfg = self.settings.get("market_data_quality", {})
                 quality = validate_ohlcv_rows(
                     ohlcv,
@@ -344,6 +373,7 @@ class PaperMarketCollector:
                     continue
                 if quality.valid_rows < 30:
                     continue
+                self._set_progress("paper_state_processing", symbol)
                 ticker_price = prices.get(symbol)
                 if not ticker_price or ticker_price <= 0:
                     ticker_price = float(ohlcv[-1][4])
@@ -379,14 +409,17 @@ class PaperMarketCollector:
             self.last_cycle_ms = int(time.time() * 1000)
             return recorded
 
+        self._set_progress("paper_outcome_resolution")
         self.confluence.resolve_outcomes()
         self.cycles += 1
         if self.cycles % self._effective_learning_interval_cycles == 0:
             if not bool(self._resource_status.get("defer_heavy_jobs", False)):
+                self._set_progress("optional_learning")
                 self._refresh_learning()
                 self._refresh_evidence_ledger()
                 self._refresh_evidence_learning()
         self.last_cycle_ms = int(time.time() * 1000)
+        self._set_progress("idle")
         return recorded
 
     @staticmethod
