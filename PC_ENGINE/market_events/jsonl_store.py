@@ -21,7 +21,7 @@ def _recover_incomplete_tail(target: Path) -> int:
             return 0
 
         handle.seek(-1, 2)
-        if handle.read(1) == b"\\n":
+        if handle.read(1) == b"\n":
             return 0
 
         position = size
@@ -30,7 +30,7 @@ def _recover_incomplete_tail(target: Path) -> int:
             start = max(0, position - chunk_size)
             handle.seek(start)
             chunk = handle.read(position - start)
-            newline = chunk.rfind(b"\\n")
+            newline = chunk.rfind(b"\n")
             if newline >= 0:
                 recovered_size = start + newline + 1
                 handle.truncate(recovered_size)
@@ -57,7 +57,7 @@ def append_bounded_jsonl(
     """
     target = Path(output)
     previous = Path(backup)
-    if not isinstance(encoded_line, str) or not encoded_line.endswith("\\n"):
+    if not isinstance(encoded_line, str) or not encoded_line.endswith("\n"):
         raise ValueError("jsonl_record_must_end_with_newline")
     if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes < 1:
         raise ValueError("max_bytes_must_be_positive_integer")
