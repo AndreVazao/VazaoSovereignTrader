@@ -337,10 +337,12 @@ class PaperMarketCollector:
         self._set_progress("resource_policy_refresh")
         self._refresh_resource_policy()
         if self.stop_event.is_set():
+            self._set_progress("idle")
             return 0
         self._set_progress("radar_public_snapshot")
         snapshots, _ = self.radar.snapshot(stop_event=self.stop_event)
         if self.stop_event.is_set():
+            self._set_progress("idle")
             return 0
         prices = {snap.symbol: snap.price for snap in snapshots}
         pressure = self.radar.pressure(snapshots)
@@ -353,6 +355,7 @@ class PaperMarketCollector:
                 self._set_progress("ohlcv_public_request", symbol)
                 ohlcv = self.ohlcv_fetcher(symbol, self.timeframe, self.candles_limit)
                 if self.stop_event.is_set():
+                    self._set_progress("idle")
                     break
                 self._set_progress("ohlcv_validation", symbol)
                 quality_cfg = self.settings.get("market_data_quality", {})
@@ -407,6 +410,7 @@ class PaperMarketCollector:
 
         if self.stop_event.is_set():
             self.last_cycle_ms = int(time.time() * 1000)
+            self._set_progress("idle")
             return recorded
 
         self._set_progress("paper_outcome_resolution")
