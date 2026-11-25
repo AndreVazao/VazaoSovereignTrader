@@ -28,7 +28,7 @@ The detailed matrix, exact-SHA workflow evidence, artifact links, path-filter ap
 
 ---
 
-# HISTORICAL HANDOFF — 2026-11-22 12:52 UTC (superseded by the 2026-11-24 checkpoint above)
+# HISTORICAL HANDOFF — 2026-11-22 12:52 UTC (superseded by the 2026-11-25 checkpoint above)
 
 **Repository:** `AndreVazao/VazaoSovereignTrader` only.  
 **Verified main:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`.  
