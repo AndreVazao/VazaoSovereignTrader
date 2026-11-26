@@ -99,3 +99,15 @@ The probe verifies:
 - the parent's process-group cleanup reaps the worker and leaves no active child.
 
 This is stronger CI evidence for the existing worker lifecycle, but it does not mean the supervisor launches that worker under Bubblewrap in production. The test explicitly enters Bubblewrap first and then starts the worker from inside that namespace. The missing production integration remains: the trusted parent must construct the strict manifest-backed Bubblewrap argv and launch the worker executable through it before any adapter code can run. No fallback to the legacy unsandboxed multiprocessing path is allowed when strict mode is required.
+
+
+## Trusted-parent Bubblewrap launcher increment — 2026-11-26
+
+A first parent-side launcher is now implemented in `PC_ENGINE/core/linux_connector_launcher.py` and covered by `tests/test_linux_connector_launcher.py`.
+
+- The parent builds the command only through the strict `runtime_manifest` path. It does not accept legacy `runtime_roots` and does not fall back to multiprocessing or unsandboxed execution.
+- The worker bootstrap runs directly under the declared packaged interpreter inside Bubblewrap; the parent sends one bounded JSON request over stdin and accepts one bounded JSON response over stdout.
+- Bubblewrap starts in a dedicated parent process group. The parent enforces an operation deadline, bounds captured stdout, discards stderr, and kills the complete process group on timeout or abnormal cleanup.
+- The strict builder continues to create private bounded `/tmp` and `/work`, clear the environment, mount only manifest entries read-only and deny all network access.
+
+**Scope limit:** this increment is not yet validated until the dedicated Linux workflow passes on its exact HEAD. The launcher is not connected to `ConnectorRegistry` or the production worker supervisor. The runtime manifest is revalidated structurally but is not cryptographically authenticated, and the filesystem validation-to-mount race is not yet closed. The package must remain root-owned and immutable; no third-party connector may be enabled. Provider-specific network egress and Windows filesystem/network isolation remain separate blockers.
