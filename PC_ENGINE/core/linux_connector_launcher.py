@@ -19,7 +19,10 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from PC_ENGINE.core.connector_runtime_manifest import RuntimeManifest
+from PC_ENGINE.core.connector_runtime_manifest import (
+    RuntimeManifest,
+    validate_protected_runtime,
+)
 from PC_ENGINE.core.connector_worker_limits import validate_worker_limits
 from PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
@@ -165,6 +168,11 @@ class LinuxBubblewrapConnectorAdapter:
                 python_home=self._python_home,
                 runtime_library_path=self._runtime_library_path,
                 bwrap_path=self._bwrap_path,
+            )
+            validate_protected_runtime(
+                self._runtime_manifest,
+                service_uid=os.geteuid(),
+                bwrap_binary=argv[0],
             )
         except (SandboxUnavailable, ValueError, OSError):
             raise LinuxSandboxLaunchError("sandbox_configuration_denied") from None
