@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - "PC_ENGINE/core/connector_worker_bootstrap.py"
+      - "PC_ENGINE/core/connector_runtime_probe.py"
+      - "PC_ENGINE/core/linux_connector_launcher.py"
       - "PC_ENGINE/core/connector_worker_sandbox.py"
       - "PC_ENGINE/core/connector_runtime_manifest.py"
       - "scripts/build_connector_python_runtime.py"
@@ -12,6 +14,7 @@ on:
       - "tests/test_connector_worker_bootstrap.py"
       - "tests/test_connector_worker_sandbox.py"
       - "tests/test_connector_runtime_manifest.py"
+      - "tests/test_linux_connector_launcher.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
       - "docs/PYTHON_RUNTIME_CLOSURE_DESIGN.md"
       - ".github/workflows/connector-sandbox-linux.yml"
@@ -20,6 +23,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "PC_ENGINE/core/connector_worker_bootstrap.py"
+      - "PC_ENGINE/core/connector_runtime_probe.py"
+      - "PC_ENGINE/core/linux_connector_launcher.py"
       - "PC_ENGINE/core/connector_worker_sandbox.py"
       - "PC_ENGINE/core/connector_runtime_manifest.py"
       - "scripts/build_connector_python_runtime.py"
@@ -28,6 +33,7 @@ on:
       - "tests/test_connector_worker_bootstrap.py"
       - "tests/test_connector_worker_sandbox.py"
       - "tests/test_connector_runtime_manifest.py"
+      - "tests/test_linux_connector_launcher.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
       - "docs/PYTHON_RUNTIME_CLOSURE_DESIGN.md"
       - ".github/workflows/connector-sandbox-linux.yml"
@@ -69,7 +75,8 @@ jobs:
           stat -c "%n uid=%u mode=%a" /srv/vst-connector
           sudo "$(command -v python)" scripts/build_connector_python_runtime.py \
             --destination /srv/vst-connector/runtime \
-            --executable /srv/vst-connector/bin/python
+            --executable /srv/vst-connector/bin/python \
+            --include-test-probe
           sudo test -x /srv/vst-connector/bin/python
           sudo test -d /srv/vst-connector/runtime/lib/python3.11
 
@@ -85,4 +92,5 @@ jobs:
             tests/test_connector_worker_bootstrap.py \
             tests/test_connector_worker_sandbox.py \
             tests/test_connector_runtime_manifest.py \
-            tests/test_connector_python_runtime.py
+            tests/test_connector_python_runtime.py \
+            tests/test_linux_connector_launcher.py

@@ -137,6 +137,11 @@ def main() -> None:
     parser.add_argument("--destination", type=Path, default=Path("/opt/vst-connector-runtime"))
     parser.add_argument("--executable", type=Path)
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
+    parser.add_argument(
+        "--include-test-probe",
+        action="store_true",
+        help="Include deterministic CI-only adapter probes in the staged runtime.",
+    )
     args = parser.parse_args()
 
     if os.name != "posix" or not sys.platform.startswith("linux"):
@@ -187,14 +192,21 @@ def main() -> None:
         app = stage / "app" / "PC_ENGINE"
         (app / "core").mkdir(parents=True)
         repository = Path(__file__).resolve().parents[1]
-        for relative in (
+        runtime_files = [
             "PC_ENGINE/__init__.py",
             "PC_ENGINE/core/__init__.py",
             "PC_ENGINE/core/isolated_connector_worker.py",
             "PC_ENGINE/core/connector_worker_bootstrap.py",
             "PC_ENGINE/core/connector_worker_limits.py",
-            "tests/fixtures/connector_runtime_probe.py",
-        ):
+        ]
+        if args.include_test_probe:
+            runtime_files.extend([
+                "PC_ENGINE/core/connector_runtime_probe.py",
+                "tests/__init__.py",
+                "tests/fixtures/__init__.py",
+                "tests/fixtures/connector_runtime_probe.py",
+            ])
+        for relative in runtime_files:
             source = repository / relative
             target = stage / "app" / relative
             if source.is_file():

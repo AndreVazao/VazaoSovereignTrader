@@ -103,3 +103,40 @@ def test_factory_reference_is_restricted_to_importable_names():
     for value in ("../module:Factory", "module;os:system", "module:Factory()"):
         with pytest.raises(ValueError, match="invalid_factory_reference"):
             bootstrap._resolve_factory(value)
+
+
+def test_bootstrap_classifies_factory_startup_failure_without_leaking_details(monkeypatch):
+    monkeypatch.setattr(bootstrap, "apply_child_resource_limits", lambda *_: None)
+
+    def fail_factory(_reference):
+        raise RuntimeError("private-provider-url-and-token")
+
+    with pytest.raises(
+        bootstrap.WorkerBootstrapError,
+        match="connector_startup_failed",
+    ) as error:
+        bootstrap.execute_request(
+            _payload(),
+            factory_reference="tests.fake:Factory",
+            factory_resolver=fail_factory,
+        )
+    assert "private-provider-url-and-token" not in str(error.value)
+
+
+def test_bootstrap_classifies_resource_limit_failure_before_factory(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        bootstrap,
+        "apply_child_resource_limits",
+        lambda *_: (_ for _ in ()).throw(OSError("resource failure")),
+    )
+    with pytest.raises(
+        bootstrap.WorkerBootstrapError,
+        match="worker_resource_limits_unavailable",
+    ):
+        bootstrap.execute_request(
+            _payload(),
+            factory_reference="tests.fake:Factory",
+            factory_resolver=lambda _: called.append(True),
+        )
+    assert called == []
