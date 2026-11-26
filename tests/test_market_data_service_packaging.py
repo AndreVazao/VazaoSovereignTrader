@@ -28,8 +28,9 @@ def test_windows_installer_exposes_graceful_start_and_stop():
     assert "stop_market_data_service.ps1" in build
     assert "PUBLIC_MARKET_DATA_SERVICE.md" in build
     assert "PUBLIC_MARKET_DATA_SERVICE.md" in installer
-    assert "StopVstPublicMarketDataService" in installer
-    assert "waituntilterminated" in installer
+    assert "function InitializeUninstall(): Boolean;" in installer
+    assert "ResultCode <> 0" in installer
+    assert "ewWaitUntilTerminated" in installer
 
 
 def test_windows_uninstall_aborts_when_market_data_shutdown_is_not_confirmed():
