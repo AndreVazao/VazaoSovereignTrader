@@ -297,15 +297,15 @@ class PublicMarketDataService:
         except Exception:
             worker.last_error = "worker_stop_error"
             self._logger.exception("worker shutdown failed: %s", worker.name)
-        finally:
-            # Keep the process handle and singleton lock while a child remains
-            # alive. A later stop request can retry without orphaning the worker.
-            if process.poll() is None:
-                worker.last_error = worker.last_error or "worker_stop_timeout"
-                return False
-            worker.last_exit_code = process.returncode
-            worker.process = None
-            return True
+
+        # Keep the process handle and singleton lock while a child remains alive.
+        # A later stop request can retry without orphaning the worker.
+        if process.poll() is None:
+            worker.last_error = worker.last_error or "worker_stop_timeout"
+            return False
+        worker.last_exit_code = process.returncode
+        worker.process = None
+        return True
 
     def _worker_snapshot(self, worker: WorkerSpec) -> dict:
         process = worker.process
