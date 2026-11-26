@@ -20,7 +20,6 @@ from collections.abc import Mapping
 from typing import Any
 
 from PC_ENGINE.core.connector_runtime_manifest import RuntimeManifest
-from PC_ENGINE.core.platform_connectors import READ_ONLY_CAPABILITIES
 from PC_ENGINE.core.connector_worker_limits import validate_worker_limits
 from PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
@@ -112,7 +111,7 @@ class LinuxBubblewrapConnectorAdapter:
     ) -> Mapping[str, object]:
         if not sys.platform.startswith("linux"):
             raise LinuxSandboxLaunchError("linux_sandbox_platform_required")
-        if not isinstance(capability, str) or capability not in READ_ONLY_CAPABILITIES:
+        if capability != "public_market_data.read":
             raise LinuxSandboxLaunchError("capability_not_read_only")
         if not isinstance(request, Mapping):
             raise LinuxSandboxLaunchError("invalid_request")
