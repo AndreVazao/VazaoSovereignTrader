@@ -21,6 +21,7 @@ from PC_ENGINE.core.connector_runtime_manifest import (
     RuntimeMount,
     build_runtime_manifest,
     revalidate_runtime_manifest,
+    validate_protected_runtime,
 )
 
 
@@ -481,4 +482,36 @@ def test_runtime_manifest_rejects_alias_source_covered_by_directory_mount(tmp_pa
             required_mounts=[
                 RuntimeMount(loader, Path("/lib64/loader"), False),
             ],
+        )
+
+
+
+def test_protected_runtime_rejects_root_service_identity(tmp_path):
+    executable = _executable(tmp_path / "python")
+    manifest = build_runtime_manifest(executable)
+    with pytest.raises(
+        RuntimeManifestError,
+        match="sandbox_service_must_not_run_as_root",
+    ):
+        validate_protected_runtime(
+            manifest,
+            service_uid=0,
+            bwrap_binary=executable,
+        )
+
+
+def test_protected_runtime_rejects_runtime_owned_by_service_user(tmp_path):
+    if os.geteuid() == 0:
+        pytest.skip("ownership rejection requires an unprivileged test owner")
+    executable = _executable(tmp_path / "python")
+    bwrap = _executable(tmp_path / "bwrap")
+    manifest = build_runtime_manifest(executable)
+    with pytest.raises(
+        RuntimeManifestError,
+        match="runtime_file_not_root_owned",
+    ):
+        validate_protected_runtime(
+            manifest,
+            service_uid=os.geteuid(),
+            bwrap_binary=bwrap,
         )
