@@ -412,6 +412,18 @@ class PublicMarketDataService:
             return 0
         finally:
             self.stop()
+            # The supervisor process owns the child handles and singleton lock.
+            # Do not exit while any worker is still alive: process exit would
+            # release the OS lock and orphan a child that ignored its stop file.
+            while any(
+                worker.process is not None and worker.process.poll() is None
+                for worker in self.workers
+            ):
+                self._logger.warning(
+                    "supervisor remains alive while workers finish cooperative shutdown"
+                )
+                self._sleep(max(0.1, min(1.0, self.health_interval_seconds)))
+                self.stop()
 
     def request_stop(self) -> None:
         self._stop.set()
