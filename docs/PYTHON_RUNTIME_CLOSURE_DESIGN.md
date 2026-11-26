@@ -113,3 +113,6 @@ A first parent-side launcher is now implemented in `PC_ENGINE/core/linux_connect
 **Exact-HEAD CI evidence:** the dedicated Linux enforcement workflow passed on PR #603 code HEAD `360661f8a2dddd9c8dd1b4e5d6f4c193477dd136` ([run 45825736595](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45825736595)): **85 passed**, including the actual trusted-parent launch of the packaged CPython bootstrap inside Bubblewrap and a timeout/cleanup test. The Python suite and PAPER lifecycle checks are tracked separately on their own exact HEADs.
 
 **Scope limit:** the launcher is not connected to `ConnectorRegistry` or the production worker supervisor. The runtime manifest is revalidated structurally but is not cryptographically authenticated, and the filesystem validation-to-mount race is not yet closed. The package must remain root-owned and immutable; no third-party connector may be enabled. Provider-specific network egress and Windows filesystem/network isolation remain separate blockers.
+
+
+**Repository snapshot:** main remains `cd2b39e7bd454f8178aa9fb29e87acd29fd9fd1a`; PR #603 is the single active implementation PR. Its validated code-bearing commit is `360661f8a2dddd9c8dd1b4e5d6f4c193477dd136`; later commits in this PR update documentation only.
