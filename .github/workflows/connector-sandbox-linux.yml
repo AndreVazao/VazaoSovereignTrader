@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "PC_ENGINE/core/connector_worker_bootstrap.py"
+      - "PC_ENGINE/core/connector_runtime_probe.py"
       - "PC_ENGINE/core/linux_connector_launcher.py"
       - "PC_ENGINE/core/connector_worker_sandbox.py"
       - "PC_ENGINE/core/connector_runtime_manifest.py"
@@ -22,6 +23,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "PC_ENGINE/core/connector_worker_bootstrap.py"
+      - "PC_ENGINE/core/connector_runtime_probe.py"
       - "PC_ENGINE/core/linux_connector_launcher.py"
       - "PC_ENGINE/core/connector_worker_sandbox.py"
       - "PC_ENGINE/core/connector_runtime_manifest.py"
