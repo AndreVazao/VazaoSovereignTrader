@@ -1,6 +1,6 @@
 # Minimal Python Runtime Closure — design and acceptance tests
 
-**Status:** design contract only. No packaged Python runtime or production launcher is implemented by this document.
+**Status:** design contract plus validated implementation increments. The packaged Linux CPython runtime and a trusted-parent Bubblewrap launcher are implemented and CI-tested; production supervisor/registry integration, authenticated inventory and TOCTOU closure remain unimplemented.
 **Scope:** Linux Bubblewrap worker runtime for PR #578. Windows remains separately constrained by Job Objects and is not filesystem/network-isolated.
 
 ## Objective
@@ -110,9 +110,11 @@ A first parent-side launcher is now implemented in `PC_ENGINE/core/linux_connect
 - Bubblewrap starts in a dedicated parent process group. The parent enforces an operation deadline, bounds captured stdout, discards stderr, and kills the complete process group on timeout or abnormal cleanup.
 - The strict builder continues to create private bounded `/tmp` and `/work`, clear the environment, mount only manifest entries read-only and deny all network access.
 
-**Exact-HEAD CI evidence:** the dedicated Linux enforcement workflow passed on PR #603 code HEAD `360661f8a2dddd9c8dd1b4e5d6f4c193477dd136` ([run 45825736595](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45825736595)): **85 passed**, including the actual trusted-parent launch of the packaged CPython bootstrap inside Bubblewrap and a timeout/cleanup test. The Python suite and PAPER lifecycle checks are tracked separately on their own exact HEADs.
+**Exact-HEAD CI evidence:** the dedicated Linux enforcement workflow passed on PR #603 code HEAD `9d7caf0000cc9b3acd6c79da777927ec0519ce11` ([run 45826907713](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907713)): **86 passed**, including the actual trusted-parent launch of the packaged CPython bootstrap inside Bubblewrap and a timeout/cleanup test. The Python suite and PAPER lifecycle checks are tracked separately on their own exact HEADs.
 
 **Scope limit:** the launcher is not connected to `ConnectorRegistry` or the production worker supervisor. The runtime manifest is revalidated structurally but is not cryptographically authenticated, and the filesystem validation-to-mount race is not yet closed. The package must remain root-owned and immutable; no third-party connector may be enabled. Provider-specific network egress and Windows filesystem/network isolation remain separate blockers.
 
 
-**Repository snapshot:** main remains `cd2b39e7bd454f8178aa9fb29e87acd29fd9fd1a`; PR #603 is the single active implementation PR. Its validated code-bearing commit is `360661f8a2dddd9c8dd1b4e5d6f4c193477dd136`; later commits in this PR update documentation only.
+**Exact-HEAD cross-workflow evidence:** the same code-bearing HEAD `9d7caf0000cc9b3acd6c79da777927ec0519ce11` passed Python (**1,726 passed, 5 skipped, 101 subtests**) in [run 45826907675](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907675), PAPER lifecycle (**82 passed**) in [run 45826907551](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907551), and Windows EXE/installer in [run 45826907651](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907651). Snyk did not publish a check on this HEAD; this PR changes no dependency manifests.
+
+**Repository snapshot before this documentation refresh:** main remains `cd2b39e7bd454f8178aa9fb29e87acd29fd9fd1a`; PR #603 is the single active implementation PR. Its validated code-bearing commit is `9d7caf0000cc9b3acd6c79da777927ec0519ce11`. The following commit updates documentation only.
