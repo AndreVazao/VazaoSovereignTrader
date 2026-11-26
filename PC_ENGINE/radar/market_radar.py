@@ -176,13 +176,18 @@ class MarketRadar:
                 if callable(load_markets):
                     client_lock = getattr(self, "client_locks", {}).get(exchange_name)
                     try:
+                        metadata_started = False
                         if client_lock is None:
                             if cancellation is None or not cancellation.is_set():
                                 load_markets()
+                                metadata_started = True
                         else:
                             with client_lock:
                                 if cancellation is None or not cancellation.is_set():
                                     load_markets()
+                                    metadata_started = True
+                        if not metadata_started:
+                            break
                         self.metadata_loaded_venues.add(exchange_name)
                         self.metadata_loads += 1
                         venue_metrics = self.per_venue_metrics.setdefault(
