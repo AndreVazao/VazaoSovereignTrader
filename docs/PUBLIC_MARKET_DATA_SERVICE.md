@@ -14,7 +14,7 @@ The supervisor is independent of the cockpit. It starts only binaries shipped in
 3. Leave the service running; the cockpit can be closed.
 4. To stop it cleanly, select **Parar recolha contínua**.
 
-The uninstaller requests a cooperative service shutdown and waits up to 30 seconds before removing worker binaries. The service is not configured for automatic Windows logon startup in this milestone. Validate it on the target PC before enabling unattended startup.
+The uninstaller requests a cooperative service shutdown and waits up to 30 seconds before removing worker binaries. Each child receives its stop-file request before the supervisor waits; the supervisor allows a 5-second cooperative exit window per child and never calls `terminate()` or `kill()`. If a child remains alive, health stays `DEGRADED`, the child process handle and singleton lock are retained, and the uninstaller aborts rather than deleting binaries under a live process. Retry the stop operation after the worker has recovered; do not force-kill it. The service is not configured for automatic Windows logon startup in this milestone. Validate it on the target PC before enabling unattended startup.
 
 ## Data and health
 Persistent data is stored outside the application directory so an application upgrade does not overwrite it:
