@@ -1,18 +1,20 @@
-# CURRENT AUTHORITATIVE HANDOFF — 2026-11-25 12:17 UTC
+# CURRENT AUTHORITATIVE HANDOFF — 2026-11-26 12:40 UTC
 
 **Repository:** AndreVazao/VazaoSovereignTrader only.  
-**Audited main code baseline:** 3a99410cb4ccb9ff43add3c42551f64bdb67d66f.  
-**Latest code integration:** PR #595, merged at 2026-11-25 07:06:36 UTC.  
-**Open PRs:** none at this checkpoint.  
-**Branch inventory:** 52 refs including main; several dated branches remain after squash merges or have diverged. Do not treat a retained branch name as an active delivery line without comparing its head to current main.  
-**Release state:** no formal GitHub Releases. Tag mobile-v0.4.1 points to 8a5a54b45b3a8358c136efc0615b088a305f4ef7, not the audited main SHA.  
-**Current-main CI:** Python tests and Windows EXE/installer both passed on exact SHA 3a99410cb4ccb9ff43add3c42551f64bdb67d66f. Python result: 1,707 passed, 4 skipped, 101 subtests passed. Windows installer lifecycle passed silent install, in-place upgrade, engine launch/health, silent uninstall and Learning Vault marker SHA-256 preservation.  
-**Current-main artifacts:** installer and portable Windows ZIP are attached to Actions run 45565585173.  
-**Global decision:** not complete; physical low-resource PC validation, packaged collector-supervisor lifecycle, production connector sandbox integration, broader Vault backup/restore/isolation, and exact-SHA Android/Linux release evidence remain outstanding.
+**Verified main SHA:** `10e26cde4eca1d83ac22c34b5d4e32e2f55a4e15`.  
+**Latest code integration:** [PR #601](https://github.com/AndreVazao/VazaoSovereignTrader/pull/601), merged 2026-11-26 12:26:59 UTC.  
+**Other recent code integrations:** [#598](https://github.com/AndreVazao/VazaoSovereignTrader/pull/598), [#599](https://github.com/AndreVazao/VazaoSovereignTrader/pull/599), [#600](https://github.com/AndreVazao/VazaoSovereignTrader/pull/600). [PR #596](https://github.com/AndreVazao/VazaoSovereignTrader/pull/596) is also merged.  
+**Open PRs:** 0 at this checkpoint. There is no active reviewed delivery branch. Do not treat retained branch refs as active work without comparing them with current main.  
+**Branch refs:** 53 including main. The retained `feat/connector-supervisor-launch-contract-2026-11-22` branch is diverged (10 commits ahead / 23 behind main) and must not be reused without a fresh review/rebase plan.  
+**Release state:** no formal GitHub Releases. The only current tag returned is `mobile-v0.4.1` at `8a5a54b45b3a8358c136efc0615b088a305f4ef7`, not current main.  
+**Exact-main CI:** [Python run 45819746452](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746452) passed 1,720 tests, 4 skipped and 101 subtests. [Windows run 45819746055](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746055) passed both EXE and installer jobs. The installer completed silent previous-version install, in-place upgrade, engine health smoke, fail-closed uninstall simulation for a DEGRADED market-data service, successful uninstall and Learning Vault marker SHA-256 preservation.  
+**Exact-main artifacts:** [Portable Windows ZIP, artifact 15117052660](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746055/artifacts/15117052660), 65,941,537 bytes; [Windows installer ZIP, artifact 15116798800](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746055/artifacts/15116798800), 283,472,523 bytes.  
+**Workflow scope:** PAPER smoke, Linux connector sandbox, Android APK and Android emulator workflows were not triggered by the latest merged changes. This is not a failure; their path filters did not match. Their older successful runs are not exact-main evidence. Vercel is informational, not a code test. No Snyk check was found on the exact current-main check set; Snyk passed on PR #601's exact head.  
+**Global decision:** VST is not complete and is not physically validated on the target PC. The Windows package has strong exact-main CI evidence, but target-PC acceptance, production connector sandbox integration, Learning Vault backup/restore/isolation, reproducible OOS research evidence, Linux product packaging and Android release validation remain outstanding.
 
 ## Current readiness audit
 
-The detailed matrix, exact-SHA workflow evidence, artifact links, path-filter applicability, issue #560 assessment, security/governance risks and next gates are maintained in [PRODUCT_READINESS_2026-11-25.md](PRODUCT_READINESS_2026-11-25.md).
+The full matrix, exact-SHA evidence, workflow applicability, artifact references, open issue #560, governance status, residual risks and next gates are maintained in [PRODUCT_READINESS_2026-11-26.md](PRODUCT_READINESS_2026-11-26.md).
 
 ## Current operating invariants
 
