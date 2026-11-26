@@ -6,8 +6,10 @@
 ## Current verification checkpoint — 2026-11-26
 
 **Repository:** `AndreVazao/VazaoSovereignTrader`  
-**Main SHA:** `10e26cde4eca1d83ac22c34b5d4e32e2f55a4e15`  
-**Latest code integration:** [PR #601](https://github.com/AndreVazao/VazaoSovereignTrader/pull/601), merged at 2026-11-26 12:26:59 UTC.
+**Main SHA:** `cd2b39e7bd454f8178aa9fb29e87acd29fd9fd1a` (documentation-only commit after the code baseline).  
+**Last code-bearing main SHA:** `10e26cde4eca1d83ac22c34b5d4e32e2f55a4e15`.  
+**Latest merged code integration:** [PR #601](https://github.com/AndreVazao/VazaoSovereignTrader/pull/601), merged at 2026-11-26 12:26:59 UTC.  
+**Current proposed implementation:** [PR #603](https://github.com/AndreVazao/VazaoSovereignTrader/pull/603), Linux Bubblewrap parent launcher; code-bearing head `360661f8a2dddd9c8dd1b4e5d6f4c193477dd136`.
 
 Exact-main checks:
 - [Python tests #45819746452](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746452) — **PASS**, 1,720 passed, 4 skipped, 101 subtests passed.
@@ -18,7 +20,7 @@ Exact-main checks:
 
 The latest main push changed the public market-data supervisor, installer and related tests. PAPER smoke, Linux connector sandbox, Android APK and Android emulator workflows did not match those paths and were not triggered. This is not a failure; prior workflow passes on other SHAs must not be represented as exact-main validation.
 
-**Production boundary:** first-party public-data workers remain fixed and read-only. Third-party connector execution remains disabled until the manifest-backed Bubblewrap launcher is integrated into the trusted production parent with no unsandboxed fallback, runtime inventory/package authenticity and TOCTOU controls are proven, Linux egress policy is reviewed, and independent Windows filesystem/network isolation is implemented.
+**Production boundary:** first-party public-data workers remain fixed and read-only. PR #603 adds and validates a parent-side manifest-backed Bubblewrap launcher, but it is not yet wired into the production supervisor, `IsolatedConnectorAdapter` or `ConnectorRegistry`. Third-party connector execution remains disabled until that integration, runtime inventory/package authenticity, TOCTOU controls, reviewed Linux egress policy and independent Windows filesystem/network isolation are proven.
 
 **Global decision:** not complete. Physical Windows 10 low-memory PC validation, installed market-data supervisor start/stop/health acceptance, Vault backup/restore and tenant isolation, reproducible OOS research evidence, full Linux product packaging, Android release/device validation and LAN/Tailscale endurance remain outstanding.
 
@@ -56,7 +58,9 @@ PR #578 adds `PC_ENGINE/core/connector_runtime_manifest.py`, which validates exp
 
 **Current builder split:** `build_linux_bwrap_command(..., runtime_manifest=...)` now has a separate opt-in manifest-backed path. It rejects simultaneous legacy `runtime_roots`, revalidates the manifest, requires the command executable to match the manifest, creates only empty destination parents, sets a non-host PATH, creates private `/tmp` and `/work` first, and mounts only explicit entries read-only. It does not add `/usr`, `/lib`, `/bin`, `/etc/ld.so.cache` or the host CA tree. The legacy compatibility path still uses broad read-only host roots and remains unsuitable for untrusted connectors. A real Bubblewrap static-probe test is now included to check denial of `/usr/bin/id`, `/etc/passwd` and an undeclared host marker.
 
-**Critical integration blocker:** the manifest-backed builder path is still not called by `IsolatedConnectorAdapter`, the production worker supervisor, `ConnectorRegistry` or installer. The Linux workflow passed 69 tests on PR #578's exact HEAD `6f0c60ec3ace0091c75d3e06ecf08c459d300d5b` ([run 45025054332](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45025054332)); that run builds and exercises packaged CPython inside Bubblewrap and starts the existing adapter from inside the namespace. It does **not** prove that the trusted production parent launches adapter code through the manifest-backed Bubblewrap command. The inventory is unsigned, immutable installer/runtime ownership and TOCTOU resistance are not proven, provider-specific HTTPS egress is absent, and Windows filesystem/network isolation is absent. Do not load untrusted third-party adapters.
+**Parent-launcher increment — PR #603:** `PC_ENGINE/core/linux_connector_launcher.py` now constructs the strict manifest-backed Bubblewrap command in the trusted parent, launches the packaged CPython bootstrap directly inside the sandbox, sends/receives bounded JSON over stdin/stdout, discards stderr, enforces an operation deadline and kills the launcher process group on timeout. The dedicated Linux workflow passed **85 tests** on exact code-bearing PR head `360661f8a2dddd9c8dd1b4e5d6f4c193477dd136` ([run 45825736595](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45825736595)), including the real parent-launcher integration and timeout cleanup.
+
+**Remaining production integration blocker:** the new launcher is not yet wired into `IsolatedConnectorAdapter`, the production worker supervisor, `ConnectorRegistry` or installer. The registry continues to execute registered adapters in-process. The runtime inventory is unsigned, immutable installer/runtime ownership and TOCTOU resistance are not proven, provider-specific HTTPS egress is absent, and Windows filesystem/network isolation is absent. Do not load untrusted third-party adapters.
 
 ## Required Linux acceptance gates
 
