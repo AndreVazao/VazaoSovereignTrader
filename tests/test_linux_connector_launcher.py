@@ -138,15 +138,15 @@ def test_packaged_runtime_is_launched_by_trusted_parent_inside_bubblewrap():
         cpu_time_limit_seconds=10,
     )
     result = adapter.read(
-        "runtime-probe",
+        "public_market_data.read",
         {"nonce": "trusted-parent-launch", "bounded": True},
         timeout_seconds=4,
     )
-    assert result["capability"] == "runtime-probe"
+    assert result["capability"] == "public_market_data.read"
     assert result["request"]["nonce"] == "trusted-parent-launch"
     assert isinstance(result["worker_pid"], int)
 
     started = time.monotonic()
     with pytest.raises(LinuxSandboxLaunchError, match="sandbox_worker_timeout"):
-        adapter.read("sleep", {"seconds": 5}, timeout_seconds=0.5)
+        adapter.read("public_market_data.read", {"sleep_seconds": 5}, timeout_seconds=0.5)
     assert time.monotonic() - started < 4.0
