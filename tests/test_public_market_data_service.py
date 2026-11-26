@@ -385,3 +385,90 @@ def test_explicit_degraded_shutdown_status_overrides_fresh_worker_heartbeats(tmp
     assert health["status"] == "DEGRADED"
     assert health["shutdown_reason"] == "worker_shutdown_timeout"
     service.stop()
+
+def test_worker_shutdown_timeout_is_cooperative_and_retains_child_handle(tmp_path):
+    app = create_app(tmp_path)
+
+    class UnresponsiveProcess(FakeProcess):
+        def wait(self, timeout=None):
+            raise __import__("subprocess").TimeoutExpired(self.command, timeout)
+
+    processes = []
+
+    def popen(command, **kwargs):
+        process = UnresponsiveProcess(command, **kwargs)
+        processes.append(process)
+        return process
+
+    service = PublicMarketDataService(app, tmp_path / "data", popen=popen)
+    service.start()
+    worker = service.workers[0]
+    process = worker.process
+
+    assert service._stop_worker(worker) is False
+    assert worker.process is process
+    assert process.poll() is None
+    assert process.terminated is False
+    assert process.killed is False
+    assert worker.last_error == "worker_stop_timeout"
+
+    # A later cooperative exit can be observed and the handle safely released.
+    process.returncode = 0
+    assert service._stop_worker(worker) is True
+    assert worker.process is None
+    for other in service.workers:
+        if other.process is not None:
+            other.process.returncode = 0
+    service.stop()
+    assert service._instance_lock_handle is None
+
+def test_run_keeps_supervisor_and_lock_until_unresponsive_child_exits(tmp_path):
+    import subprocess
+
+    app = create_app(tmp_path)
+    processes = []
+
+    class DelayedCooperativeProcess(FakeProcess):
+        def __init__(self, command, **kwargs):
+            super().__init__(command, **kwargs)
+            self.wait_calls = 0
+
+        def wait(self, timeout=None):
+            self.wait_calls += 1
+            if self.wait_calls == 1:
+                raise subprocess.TimeoutExpired(self.command, timeout)
+            self.returncode = 0
+            return self.returncode
+
+    def popen(command, **kwargs):
+        process = DelayedCooperativeProcess(command, **kwargs) if not processes else FakeProcess(command, **kwargs)
+        processes.append(process)
+        return process
+
+    service = None
+
+    def release_child_after_degraded_health(_seconds):
+        assert service._instance_lock_handle is not None
+        health = json.loads(
+            (tmp_path / "data" / "market_data_service_health.json").read_text(encoding="utf-8")
+        )
+        assert health["status"] == "DEGRADED"
+        processes[0].returncode = 0
+
+    service = PublicMarketDataService(
+        app,
+        tmp_path / "data",
+        popen=popen,
+        sleep=release_child_after_degraded_health,
+    )
+    service.request_stop()
+
+    assert service.run() == 0
+    assert service._instance_lock_handle is None
+    assert all(worker.process is None for worker in service.workers)
+    assert all(process.terminated is False and process.killed is False for process in processes)
+    health = json.loads(
+        (tmp_path / "data" / "market_data_service_health.json").read_text(encoding="utf-8")
+    )
+    assert health["status"] == "STOPPED"
+

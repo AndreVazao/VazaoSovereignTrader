@@ -65,7 +65,49 @@ Name: "{group}\Pasta de troca - OUTBOX"; Filename: "{app}\data\operator_exchange
 
 [UninstallRun]
 ; Request a cooperative shutdown before removing worker executables.
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\stop_market_data_service.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "StopVstPublicMarketDataService"
+; Worker shutdown is enforced by InitializeUninstall below, which can abort removal.
 ; Remove only the legacy VST tasks created by older installer versions.
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstEngineTask"
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""VazaoSovereignTrader-MarketData"" /F"; Flags: runhidden; RunOnceId: "RemoveLegacyVstMarketDataTask"
+
+[Code]
+function InitializeUninstall(): Boolean;
+var
+  PowerShellExe: String;
+  StopScript: String;
+  ResultCode: Integer;
+begin
+  Result := True;
+  StopScript := ExpandConstant('{app}\scripts\stop_market_data_service.ps1');
+  PowerShellExe := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+
+  if not FileExists(StopScript) then
+  begin
+    SuppressibleMsgBox('The VST market-data shutdown helper is missing. Uninstall was cancelled to protect any running workers.', mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+
+  if not FileExists(PowerShellExe) then
+  begin
+    SuppressibleMsgBox('Windows PowerShell is unavailable. Uninstall was cancelled because worker shutdown could not be verified.', mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+
+  if not Exec(PowerShellExe,
+    '-NoProfile -ExecutionPolicy Bypass -File "' + StopScript + '"',
+    ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    SuppressibleMsgBox('The VST market-data shutdown helper could not be started. Uninstall was cancelled.', mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+
+  if ResultCode <> 0 then
+  begin
+    SuppressibleMsgBox('The VST market-data supervisor did not confirm STOPPED. Uninstall was cancelled. Retry after all workers have stopped.', mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+end;

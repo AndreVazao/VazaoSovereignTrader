@@ -279,36 +279,33 @@ class PublicMarketDataService:
         except (OSError, ValueError, TypeError, OverflowError, AttributeError, json.JSONDecodeError):
             return None
 
-    def _stop_worker(self, worker: WorkerSpec) -> None:
+    def _stop_worker(self, worker: WorkerSpec) -> bool:
+        """Request cooperative child shutdown; never terminate or kill a worker."""
         process = worker.process
         if process is None:
-            return
+            return True
         try:
             if process.poll() is None:
                 worker.stop_file.parent.mkdir(parents=True, exist_ok=True)
                 if worker.stop_file.is_symlink():
                     raise OSError("worker_stop_file_symlink_rejected")
                 worker.stop_file.write_text("stop", encoding="ascii")
-                try:
-                    process.wait(timeout=5.0)
-                except subprocess.TimeoutExpired:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=2.0)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=2.0)
+                process.wait(timeout=5.0)
+        except subprocess.TimeoutExpired:
+            worker.last_error = "worker_stop_timeout"
+            self._logger.warning("worker did not stop cooperatively within 5s: %s", worker.name)
         except Exception:
             worker.last_error = "worker_stop_error"
             self._logger.exception("worker shutdown failed: %s", worker.name)
-        finally:
-            # Keep the process handle while the child is still alive. Losing the
-            # handle would make health report a false stop and prevent retrying.
-            if process.poll() is None:
-                worker.last_error = worker.last_error or "worker_stop_timeout"
-            else:
-                worker.last_exit_code = process.returncode
-                worker.process = None
+
+        # Keep the process handle and singleton lock while a child remains alive.
+        # A later stop request can retry without orphaning the worker.
+        if process.poll() is None:
+            worker.last_error = worker.last_error or "worker_stop_timeout"
+            return False
+        worker.last_exit_code = process.returncode
+        worker.process = None
+        return True
 
     def _worker_snapshot(self, worker: WorkerSpec) -> dict:
         process = worker.process
@@ -399,7 +396,10 @@ class PublicMarketDataService:
                         worker.last_exit_code = process.returncode if exited else None
                         worker.last_error = ("worker_exited" if exited else ("worker_health_stale" if stale else "worker_start_failed"))
                         self._logger.warning("worker recovery: %s reason=%s", worker.name, worker.last_error)
-                        self._stop_worker(worker)
+                        if not self._stop_worker(worker):
+                            # Never launch a replacement while the previous child
+                            # remains alive; retain its handle for a later retry.
+                            continue
                         delay = min(60.0, 2.0 ** min(len(worker.restarts), 6))
                         if self._stop.wait(delay):
                             break
@@ -412,6 +412,18 @@ class PublicMarketDataService:
             return 0
         finally:
             self.stop()
+            # The supervisor process owns the child handles and singleton lock.
+            # Do not exit while any worker is still alive: process exit would
+            # release the OS lock and orphan a child that ignored its stop file.
+            while any(
+                worker.process is not None and worker.process.poll() is None
+                for worker in self.workers
+            ):
+                self._logger.warning(
+                    "supervisor remains alive while workers finish cooperative shutdown"
+                )
+                self._sleep(max(0.1, min(1.0, self.health_interval_seconds)))
+                self.stop()
 
     def request_stop(self) -> None:
         self._stop.set()
