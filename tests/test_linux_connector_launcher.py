@@ -134,7 +134,7 @@ def test_packaged_runtime_is_launched_by_trusted_parent_inside_bubblewrap():
         python_home=str(runtime_root),
         runtime_library_path=str(runtime_root / "lib"),
         bwrap_path=bwrap,
-        memory_limit_mb=256,
+        memory_limit_mb=384,
         cpu_time_limit_seconds=10,
     )
     result = adapter.read(
