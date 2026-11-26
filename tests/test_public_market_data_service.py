@@ -416,5 +416,9 @@ def test_worker_shutdown_timeout_is_cooperative_and_retains_child_handle(tmp_pat
     process.returncode = 0
     assert service._stop_worker(worker) is True
     assert worker.process is None
+    for other in service.workers:
+        if other.process is not None:
+            other.process.returncode = 0
     service.stop()
+    assert service._instance_lock_handle is None
 
