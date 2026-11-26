@@ -49,6 +49,27 @@ def test_launcher_rejects_non_linux_without_fallback(monkeypatch):
         adapter.read("public_market_data.read", {}, timeout_seconds=1)
 
 
+
+def test_launcher_rejects_non_read_only_capability_before_launch():
+    manifest = RuntimeManifest(
+        executable=Path("/opt/vst-runtime/bin/python"),
+        mounts=(
+            RuntimeMount(
+                Path("/opt/vst-runtime/bin/python"),
+                Path("/opt/vst-runtime/bin/python"),
+                False,
+            ),
+        ),
+    )
+    adapter = _adapter(manifest)
+
+    with pytest.raises(
+        LinuxSandboxLaunchError,
+        match="capability_not_read_only",
+    ):
+        adapter.read("orders.create", {"symbol": "BTC/USDT"}, timeout_seconds=1)
+
+
 def test_launcher_rejects_oversized_request_before_launch(monkeypatch):
     manifest = RuntimeManifest(
         executable=Path("/opt/vst-runtime/bin/python"),
