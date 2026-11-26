@@ -79,8 +79,11 @@ class LinuxBubblewrapConnectorAdapter:
 
     @staticmethod
     def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
-        # Kill the process group even if Bubblewrap itself has exited: a
-        # descendant may still hold stdout open and keep the group alive.
+        # Bubblewrap's --die-with-parent handles namespace descendants after
+        # the launcher exits. Only signal the host process group while its
+        # leader is still alive, avoiding PID/PGID reuse after reaping.
+        if process.poll() is not None:
+            return
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -238,6 +241,8 @@ class LinuxBubblewrapConnectorAdapter:
                 process.wait(timeout=max(0.1, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
                 raise LinuxSandboxLaunchError("sandbox_worker_timeout") from None
+            if process.returncode != 0:
+                raise LinuxSandboxLaunchError("connector_execution_failed")
             if not output:
                 raise LinuxSandboxLaunchError("sandbox_worker_failed")
             try:
