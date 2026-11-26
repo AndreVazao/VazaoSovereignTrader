@@ -49,17 +49,21 @@ def test_launcher_rejects_non_linux_without_fallback(monkeypatch):
         adapter.read("public_market_data.read", {}, timeout_seconds=1)
 
 
-def test_launcher_rejects_oversized_request_before_launch(tmp_path, monkeypatch):
-    executable = tmp_path / "python"
-    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    executable.chmod(0o700)
-    runtime = tmp_path / "runtime"
-    runtime.mkdir()
-    manifest = build_runtime_manifest(executable, required_directories=[runtime])
+def test_launcher_rejects_oversized_request_before_launch(monkeypatch):
+    manifest = RuntimeManifest(
+        executable=Path("/opt/vst-runtime/bin/python"),
+        mounts=(
+            RuntimeMount(
+                Path("/opt/vst-runtime/bin/python"),
+                Path("/opt/vst-runtime/bin/python"),
+                False,
+            ),
+        ),
+    )
     adapter = LinuxBubblewrapConnectorAdapter(
         "tests.fixtures.connector_runtime_probe:adapter_factory",
         runtime_manifest=manifest,
-        python_home=str(runtime),
+        python_home="/opt/vst-runtime",
         max_request_bytes=32,
     )
     monkeypatch.setattr(
@@ -75,24 +79,30 @@ def test_launcher_rejects_oversized_request_before_launch(tmp_path, monkeypatch)
         )
 
 
-def test_launcher_fails_closed_when_bubblewrap_is_unavailable(tmp_path, monkeypatch):
-    if not sys.platform.startswith("linux"):
-        pytest.skip("Linux command construction is platform-specific")
-    executable = tmp_path / "python"
-    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    executable.chmod(0o700)
-    runtime = tmp_path / "runtime"
-    runtime.mkdir()
-    manifest = build_runtime_manifest(executable, required_directories=[runtime])
-    adapter = LinuxBubblewrapConnectorAdapter(
-        "tests.fixtures.connector_runtime_probe:adapter_factory",
-        runtime_manifest=manifest,
-        python_home=str(runtime),
-        bwrap_path=None,
+def test_launcher_fails_closed_when_bubblewrap_is_unavailable(monkeypatch):
+    manifest = RuntimeManifest(
+        executable=Path("/opt/vst-runtime/bin/python"),
+        mounts=(
+            RuntimeMount(
+                Path("/opt/vst-runtime/bin/python"),
+                Path("/opt/vst-runtime/bin/python"),
+                False,
+            ),
+        ),
+    )
+    adapter = _adapter(manifest)
+
+    def deny_launch(*args, **kwargs):
+        from PC_ENGINE.core.connector_worker_sandbox import SandboxUnavailable
+        raise SandboxUnavailable("bwrap_missing")
+
+    monkeypatch.setattr(
+        "PC_ENGINE.core.linux_connector_launcher.build_linux_bwrap_command",
+        deny_launch,
     )
     monkeypatch.setattr(
-        "PC_ENGINE.core.connector_worker_sandbox.shutil.which",
-        lambda _: None,
+        "PC_ENGINE.core.linux_connector_launcher.subprocess.Popen",
+        lambda *args, **kwargs: pytest.fail("sandbox denial attempted fallback"),
     )
 
     with pytest.raises(
