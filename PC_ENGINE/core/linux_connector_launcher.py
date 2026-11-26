@@ -226,7 +226,13 @@ class LinuxBubblewrapConnectorAdapter:
                 raise LinuxSandboxLaunchError("invalid_worker_response") from None
             if not isinstance(envelope, dict) or envelope.get("ok") is not True:
                 error = envelope.get("error") if isinstance(envelope, dict) else None
-                if error in {"response_too_large", "request_too_large"}:
+                if error in {
+                    "response_too_large",
+                    "request_too_large",
+                    "worker_resource_limits_unavailable",
+                    "connector_startup_failed",
+                    "connector_execution_failed",
+                }:
                     raise LinuxSandboxLaunchError(error)
                 raise LinuxSandboxLaunchError("connector_execution_failed")
             data = envelope.get("data")
