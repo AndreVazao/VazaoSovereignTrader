@@ -26,9 +26,10 @@ MAX_RESPONSE_BYTES = 262_144
 class WorkerBootstrapError(RuntimeError):
     """Sanitized failure category for trusted-parent diagnostics."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, reason: str | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.reason = reason
 
 
 _SECRET_ENV_MARKERS = (
@@ -94,13 +95,17 @@ def execute_request(
     # Resource boundaries are established before importing adapter modules.
     try:
         apply_child_resource_limits(memory_limit, cpu_limit)
-    except BaseException:
-        raise WorkerBootstrapError("worker_resource_limits_unavailable") from None
+    except BaseException as exc:
+        raise WorkerBootstrapError(
+            "worker_resource_limits_unavailable", type(exc).__name__
+        ) from None
     try:
         factory = factory_resolver(factory_reference)
         adapter = factory()
-    except BaseException:
-        raise WorkerBootstrapError("connector_startup_failed") from None
+    except BaseException as exc:
+        raise WorkerBootstrapError(
+            "connector_startup_failed", type(exc).__name__
+        ) from None
     try:
         with contextlib.redirect_stdout(sys.stderr):
             result = adapter.read(
@@ -119,7 +124,9 @@ def execute_request(
     except BaseException as exc:
         if isinstance(exc, ValueError) and str(exc) == "response_too_large":
             raise
-        raise WorkerBootstrapError("connector_execution_failed") from None
+        raise WorkerBootstrapError(
+            "connector_execution_failed", type(exc).__name__
+        ) from None
 
 
 def main() -> int:
@@ -138,6 +145,8 @@ def main() -> int:
             )
     except WorkerBootstrapError as exc:
         envelope = {"ok": False, "error": exc.code}
+        if isinstance(exc.reason, str) and exc.reason.isidentifier():
+            envelope["reason"] = exc.reason[:64]
     except BaseException:
         # Do not expose exception messages, tracebacks, provider URLs or secrets.
         envelope = {"ok": False, "error": "connector_execution_failed"}
