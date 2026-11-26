@@ -156,6 +156,20 @@ try {
     if ($degraded.shutdown_reason -ne "worker_shutdown_timeout") {
         throw "Delayed workers did not expose worker_shutdown_timeout."
     }
+
+    # The still-live first supervisor must retain the singleton lock. A
+    # competing supervisor must fail before it can create duplicate workers.
+    $contender = Start-TestSupervisor
+    if (-not $contender.WaitForExit(5000)) {
+        Request-TestStop
+        $contender.WaitForExit(35000) | Out-Null
+        throw "A second supervisor started while the previous workers were still alive."
+    }
+    $contender.Refresh()
+    if ($contender.ExitCode -eq 0) {
+        throw "A competing supervisor unexpectedly acquired the active singleton lock."
+    }
+
     Confirm-Stopped -Process $process -Label "cooperative recovery"
 
     Write-Host "Installed supervisor lifecycle passed: start -> RUNNING -> STOPPED -> restart -> DEGRADED on slow workers -> cooperative recovery -> STOPPED. No exchange access or trading actions were used."
