@@ -112,6 +112,10 @@ A first parent-side launcher is now implemented in `PC_ENGINE/core/linux_connect
 
 **Exact-HEAD CI evidence:** the dedicated Linux enforcement workflow passed on PR #603 code HEAD `9d7caf0000cc9b3acd6c79da777927ec0519ce11` ([run 45826907713](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907713)): **86 passed**, including the actual trusted-parent launch of the packaged CPython bootstrap inside Bubblewrap and a timeout/cleanup test. The Python suite and PAPER lifecycle checks are tracked separately on their own exact HEADs.
 
+
+
+**Protected ownership gate — proposed in PR #604:** immediately before launch, the parent requires a non-root service identity and verifies root ownership plus non-group/world-writable permissions for the Bubblewrap binary, runtime sources, all ancestor directories and every entry under mounted runtime directories. This is intended to prevent unprivileged replacement between structural validation and path-based mounting. It does not defend against privileged root and does not replace cryptographic inventory authentication.
+
 **Scope limit:** the launcher is not connected to `ConnectorRegistry` or the production worker supervisor. The runtime manifest is revalidated structurally but is not cryptographically authenticated, and the filesystem validation-to-mount race is not yet closed. The package must remain root-owned and immutable; no third-party connector may be enabled. Provider-specific network egress and Windows filesystem/network isolation remain separate blockers.
 
 
