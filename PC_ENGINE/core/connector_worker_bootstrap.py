@@ -21,6 +21,16 @@ from PC_ENGINE.core.connector_worker_limits import apply_child_resource_limits
 
 MAX_REQUEST_BYTES = 32_768
 MAX_RESPONSE_BYTES = 262_144
+
+
+class WorkerBootstrapError(RuntimeError):
+    """Sanitized failure category for trusted-parent diagnostics."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 _SECRET_ENV_MARKERS = (
     "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "API_KEY", "APIKEY",
     "ACCESS_KEY", "PRIVATE", "SIGNING_KEY", "BEARER", "CLIENT_SECRET",
@@ -82,23 +92,34 @@ def execute_request(
         raise ValueError("invalid_cpu_limit")
 
     # Resource boundaries are established before importing adapter modules.
-    apply_child_resource_limits(memory_limit, cpu_limit)
-    factory = factory_resolver(factory_reference)
-    adapter = factory()
-    with contextlib.redirect_stdout(sys.stderr):
-        result = adapter.read(
-            capability,
-            request,
-            timeout_seconds=float(timeout),
-        )
-    if not isinstance(result, Mapping):
-        raise ValueError("invalid_adapter_result")
-    encoded = json.dumps(
-        result, ensure_ascii=False, allow_nan=False, separators=(",", ":")
-    ).encode("utf-8")
-    if len(encoded) > MAX_RESPONSE_BYTES:
-        raise ValueError("response_too_large")
-    return {"ok": True, "data": json.loads(encoded.decode("utf-8"))}
+    try:
+        apply_child_resource_limits(memory_limit, cpu_limit)
+    except BaseException:
+        raise WorkerBootstrapError("worker_resource_limits_unavailable") from None
+    try:
+        factory = factory_resolver(factory_reference)
+        adapter = factory()
+    except BaseException:
+        raise WorkerBootstrapError("connector_startup_failed") from None
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            result = adapter.read(
+                capability,
+                request,
+                timeout_seconds=float(timeout),
+            )
+        if not isinstance(result, Mapping):
+            raise ValueError("invalid_adapter_result")
+        encoded = json.dumps(
+            result, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        ).encode("utf-8")
+        if len(encoded) > MAX_RESPONSE_BYTES:
+            raise ValueError("response_too_large")
+        return {"ok": True, "data": json.loads(encoded.decode("utf-8"))}
+    except BaseException as exc:
+        if isinstance(exc, ValueError) and str(exc) == "response_too_large":
+            raise
+        raise WorkerBootstrapError("connector_execution_failed") from None
 
 
 def main() -> int:
@@ -115,6 +136,8 @@ def main() -> int:
                 payload,
                 factory_reference=sys.argv[1],
             )
+    except WorkerBootstrapError as exc:
+        envelope = {"ok": False, "error": exc.code}
     except BaseException:
         # Do not expose exception messages, tracebacks, provider URLs or secrets.
         envelope = {"ok": False, "error": "connector_execution_failed"}
