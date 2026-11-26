@@ -501,6 +501,8 @@ def test_protected_runtime_rejects_root_service_identity(tmp_path):
 
 
 def test_protected_runtime_rejects_runtime_owned_by_service_user(tmp_path):
+    if not hasattr(os, "geteuid"):
+        pytest.skip("root ownership checks are Linux/POSIX-specific")
     if os.geteuid() == 0:
         pytest.skip("ownership rejection requires an unprivileged test owner")
     executable = _executable(tmp_path / "python")
