@@ -50,5 +50,15 @@ The scheduled refresh is part of the existing Market Data executable, so it does
 - Heavy PAPER study remains subject to the existing adaptive resource budget.
 - The supervisor evaluates collector health timestamps, not just process liveness.
 
+## Installed supervisor lifecycle smoke
+
+The Windows installer workflow copies the actual installed supervisor executable into an isolated test directory and starts it against four deterministic local fake workers. It verifies:
+- all four workers start and publish fresh health heartbeats;
+- the supervisor reaches `RUNNING`, accepts a cooperative stop request and exits only after `STOPPED`;
+- the same data-directory singleton lock can be reacquired after shutdown, proving restart works;
+- deliberately slow workers cause `DEGRADED` with `worker_shutdown_timeout`, then recover cooperatively to `STOPPED` without forced termination.
+
+The fake workers do not connect to exchanges, use credentials, access private endpoints or submit orders. This is an installed-supervisor process/lifecycle test, not a real-exchange collector endurance test and not physical-PC acceptance.
+
 ## Validation boundary
 CI validates worker lifecycle, restart limits, health reporting, packaging, and the Windows installer workflow. It does not replace installation and long-running network validation on the owner's PC. Do not enable unattended startup or connect private exchange accounts until that local test is complete.
