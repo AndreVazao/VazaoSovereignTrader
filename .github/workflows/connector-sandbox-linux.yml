@@ -75,7 +75,8 @@ jobs:
           stat -c "%n uid=%u mode=%a" /srv/vst-connector
           sudo "$(command -v python)" scripts/build_connector_python_runtime.py \
             --destination /srv/vst-connector/runtime \
-            --executable /srv/vst-connector/bin/python
+            --executable /srv/vst-connector/bin/python \
+            --include-test-probe
           sudo test -x /srv/vst-connector/bin/python
           sudo test -d /srv/vst-connector/runtime/lib/python3.11
 
