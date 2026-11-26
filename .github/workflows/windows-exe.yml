@@ -329,6 +329,23 @@ jobs:
             Stop-SmokeEngineProcesses
           }
 
+          # An unconfirmed worker shutdown must abort before the uninstaller removes binaries.
+          $marketDataRoot = Join-Path (Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData") "market-data"
+          New-Item -ItemType Directory -Force $marketDataRoot | Out-Null
+          $healthPath = Join-Path $marketDataRoot "market_data_service_health.json"
+          $lockPath = Join-Path $marketDataRoot "service.lock"
+          $stopRequest = Join-Path $marketDataRoot "stop.request"
+          @{ status = "DEGRADED"; shutdown_reason = "worker_shutdown_timeout" } |
+            ConvertTo-Json | Set-Content $healthPath -Encoding utf8
+          Set-Content -LiteralPath $lockPath -Value "test-lock" -NoNewline
+          $blockedUninstall = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          if ($blockedUninstall.ExitCode -eq 0) { throw "Uninstaller proceeded despite unconfirmed market-data shutdown." }
+          if (-not (Test-Path $engine)) { throw "Uninstaller removed the engine after shutdown verification failed." }
+          foreach ($worker in $requiredWorkers) {
+            if (-not (Test-Path (Join-Path $testDir $worker))) { throw "Uninstaller removed worker after shutdown verification failed: $worker" }
+          }
+          Remove-Item -LiteralPath @($healthPath, $lockPath, $stopRequest) -Force -ErrorAction SilentlyContinue
+
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Silent uninstaller failed: $($uninstall.ExitCode)." }
           if (Test-Path $engine) { throw "Engine EXE remained after uninstall." }
