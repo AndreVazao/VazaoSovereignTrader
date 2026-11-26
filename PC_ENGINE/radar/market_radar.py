@@ -183,12 +183,12 @@ class MarketRadar:
                             with client_lock:
                                 if cancellation is None or not cancellation.is_set():
                                     load_markets()
-                        if cancellation is not None and cancellation.is_set():
-                            break
                         self.metadata_loaded_venues.add(exchange_name)
                         self.metadata_loads += 1
                         self.per_venue_metrics.setdefault(exchange_name, {}).setdefault("metadata_loads", 0)
                         self.per_venue_metrics[exchange_name]["metadata_loads"] += 1
+                        if cancellation is not None and cancellation.is_set():
+                            break
                     except Exception:
                         self.metadata_errors += 1
                         self.request_errors += 1
