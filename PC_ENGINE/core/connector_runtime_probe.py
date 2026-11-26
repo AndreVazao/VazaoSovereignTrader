@@ -15,8 +15,8 @@ class RuntimeProbeAdapter:
         *,
         timeout_seconds: float,
     ) -> Mapping[str, object]:
-        if capability == "sleep":
-            time.sleep(float(request.get("seconds", 5)))
+        if "sleep_seconds" in request:
+            time.sleep(float(request.get("sleep_seconds", 5)))
         return {
             "capability": capability,
             "request": dict(request),
