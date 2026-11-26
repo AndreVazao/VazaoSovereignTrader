@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any, Dict, List
 
 import ccxt
@@ -29,6 +30,8 @@ class CcxtExchangeClient(ExchangeClient):
         if key and private:
             params.update({"apiKey": key, "secret": private})
         self.client = exchange_cls(params)
+        self._public_market_lock = threading.Lock()
+        self._public_markets_loaded = bool(getattr(self.client, "markets", None))
         # PAPER startup must remain deterministic and offline. Market metadata is loaded lazily
         # by real/data paths; never block the local control server on exchange discovery.
         if not self.paper:
@@ -36,6 +39,23 @@ class CcxtExchangeClient(ExchangeClient):
                 self.client.load_markets()
             except Exception:
                 pass
+
+    def prepare_public_markets(self, stop_event=None) -> bool:
+        """Load public market metadata as a separate bounded step before collector requests.
+
+        CCXT applies its timeout per HTTP request. Separating metadata discovery from
+        fetch_ohlcv lets the collector observe cancellation before starting the candle
+        request, rather than allowing one high-level call to chain two network requests.
+        """
+        if stop_event is not None and stop_event.is_set():
+            return False
+        with self._public_market_lock:
+            if not self._public_markets_loaded:
+                if stop_event is not None and stop_event.is_set():
+                    return False
+                self.client.load_markets()
+                self._public_markets_loaded = True
+        return stop_event is None or not stop_event.is_set()
 
     def fetch_balance(self) -> Dict[str, Any]:
         if self.paper:
