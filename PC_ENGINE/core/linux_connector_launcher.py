@@ -10,6 +10,7 @@ there is no multiprocessing or unsandboxed fallback.
 
 import json
 import os
+import re
 import selectors
 import signal
 import subprocess
@@ -233,6 +234,9 @@ class LinuxBubblewrapConnectorAdapter:
                     "connector_startup_failed",
                     "connector_execution_failed",
                 }:
+                    reason = envelope.get("reason") if isinstance(envelope, dict) else None
+                    if isinstance(reason, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", reason):
+                        raise LinuxSandboxLaunchError(f"{error}:{reason}")
                     raise LinuxSandboxLaunchError(error)
                 raise LinuxSandboxLaunchError("connector_execution_failed")
             data = envelope.get("data")
