@@ -329,6 +329,12 @@ jobs:
             Stop-SmokeEngineProcesses
           }
 
+          # Exercise the actual installed supervisor EXE with deterministic local
+          # workers. This covers start/stop/restart and DEGRADED recovery without
+          # connecting to exchanges or starting trading functionality.
+          & .\scripts\smoke_windows_installed_market_data_service.ps1 -InstalledAppDir $testDir -PythonExe (Get-Command python).Source
+          if ($LASTEXITCODE -ne 0) { throw "Installed market-data supervisor lifecycle smoke failed." }
+
           # An unconfirmed worker shutdown must abort before the uninstaller removes binaries.
           $marketDataRoot = Join-Path (Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData") "market-data"
           New-Item -ItemType Directory -Force $marketDataRoot | Out-Null
