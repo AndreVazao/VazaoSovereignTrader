@@ -81,9 +81,12 @@ class MarketRadar:
         self.persistence_errors = 0
         self.last_observation_ms: int | None = None
         self.per_venue_metrics = {
-            name: {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0}
+            name: {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0, "metadata_loads": 0, "metadata_errors": 0}
             for name in self.exchanges
         }
+        self.metadata_loaded_venues: set[str] = set()
+        self.metadata_loads = 0
+        self.metadata_errors = 0
         self.request_timeout_ms = max(1000, min(60000, int(request_timeout_ms)))
         self.max_persist_bytes = max(1024, min(512 * 1024 * 1024, int(max_persist_bytes)))
         self.stop_event = stop_event
@@ -153,7 +156,8 @@ class MarketRadar:
         defaults = {
             "request_attempts": 0, "successful_observations": 0, "request_errors": 0,
             "persistence_batches": 0, "persistence_errors": 0, "last_observation_ms": None,
-            "per_venue_metrics": {},
+            "per_venue_metrics": {}, "metadata_loaded_venues": set(),
+            "metadata_loads": 0, "metadata_errors": 0,
         }
         for name, value in defaults.items():
             if not hasattr(self, name):
@@ -161,6 +165,39 @@ class MarketRadar:
         snapshots: list[VenueSnapshot] = []
         cancellation = stop_event if stop_event is not None else getattr(self, "stop_event", None)
         for exchange_name, client in self.clients.items():
+            if cancellation is not None and cancellation.is_set():
+                break
+
+            # CCXT's first fetch_* call can synchronously load market metadata
+            # before making the requested ticker call. Load it as a separate,
+            # bounded operation so shutdown can be observed between requests.
+            if exchange_name not in self.metadata_loaded_venues:
+                load_markets = getattr(client, "load_markets", None)
+                if callable(load_markets):
+                    client_lock = getattr(self, "client_locks", {}).get(exchange_name)
+                    try:
+                        if client_lock is None:
+                            if cancellation is None or not cancellation.is_set():
+                                load_markets()
+                        else:
+                            with client_lock:
+                                if cancellation is None or not cancellation.is_set():
+                                    load_markets()
+                        if cancellation is not None and cancellation.is_set():
+                            break
+                        self.metadata_loaded_venues.add(exchange_name)
+                        self.metadata_loads += 1
+                        self.per_venue_metrics.setdefault(exchange_name, {}).setdefault("metadata_loads", 0)
+                        self.per_venue_metrics[exchange_name]["metadata_loads"] += 1
+                    except Exception:
+                        self.metadata_errors += 1
+                        self.request_errors += 1
+                        venue_metrics = self.per_venue_metrics.setdefault(exchange_name, {})
+                        venue_metrics["metadata_errors"] = venue_metrics.get("metadata_errors", 0) + 1
+                        venue_metrics["errors"] = venue_metrics.get("errors", 0) + 1
+                        # Do not retry metadata discovery once per symbol in this cycle.
+                        continue
+
             if cancellation is not None and cancellation.is_set():
                 break
             for symbol in self.symbols:
@@ -346,6 +383,8 @@ class MarketRadar:
             "request_attempts": self.request_attempts,
             "successful_observations": self.successful_observations,
             "request_errors": self.request_errors,
+            "metadata_loads": self.metadata_loads,
+            "metadata_errors": self.metadata_errors,
             "quality_rejections": self.quality_rejections,
             "persistence_batches": self.persistence_batches,
             "persistence_errors": self.persistence_errors,
