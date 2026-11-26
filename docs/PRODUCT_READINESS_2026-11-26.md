@@ -118,3 +118,17 @@ These ranges are engineering estimates, not measured completion percentages.
 
 **Decision:** VST is not ready to be declared globally complete. The current main SHA and exact-main CI evidence are recorded above; continue product-wide monitoring.
 
+
+
+## Addendum — PR #603 validation checkpoint (2026-11-26 14:30 UTC)
+
+The audited baseline above is historical. At this addendum, main remains `cd2b39e7bd454f8178aa9fb29e87acd29fd9fd1a`; PR #603 is the single active implementation PR. Its code-bearing HEAD `9d7caf0000cc9b3acd6c79da777927ec0519ce11` passed:
+
+- Python: 1,726 passed, 5 skipped, 101 subtests — [run 45826907675](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907675).
+- PAPER lifecycle/safety: 82 passed — [run 45826907551](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907551).
+- Linux Bubblewrap: 86 passed, including trusted-parent launch and timeout cleanup — [run 45826907713](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907713).
+- Windows EXE and installer: both jobs passed; installer exercised previous-version build, upgrade, install, launch, health, fail-closed uninstall and Learning Vault preservation — [run 45826907651](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907651).
+
+The launcher remains a tested component, not a production integration: it is not connected to the supervisor or ConnectorRegistry. Runtime inventory authentication, TOCTOU protection, production package ownership, Linux provider-specific egress, Windows filesystem/network isolation and physical PC acceptance remain blockers. Snyk did not publish an exact-HEAD check; this PR changed no dependency manifests. Vercel success is informational only.
+
+No third-party connectors, private exchange access, credentials, orders or LIVE execution are enabled. VST remains PAPER-only.
