@@ -179,9 +179,12 @@ class LinuxBubblewrapConnectorAdapter:
             )
             assert process.stdin is not None and process.stdout is not None
             try:
-                written = os.write(process.stdin.fileno(), encoded)
-                if written != len(encoded):
-                    raise LinuxSandboxLaunchError("sandbox_worker_input_failed")
+                remaining_input = memoryview(encoded)
+                while remaining_input:
+                    written = os.write(process.stdin.fileno(), remaining_input)
+                    if written <= 0:
+                        raise LinuxSandboxLaunchError("sandbox_worker_input_failed")
+                    remaining_input = remaining_input[written:]
                 process.stdin.close()
             except (BrokenPipeError, OSError):
                 raise LinuxSandboxLaunchError("sandbox_worker_input_failed") from None
