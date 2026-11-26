@@ -420,3 +420,56 @@ def test_snapshot_observes_stop_after_metadata_before_starting_ticker():
     assert client.metadata_calls == 1
     assert client.ticker_calls == 0
     assert radar.collection_metrics()["metadata_loads"] == 1
+
+
+def test_snapshot_does_not_cache_metadata_when_cancelled_while_waiting_for_client_lock():
+    import threading
+
+    stopped = threading.Event()
+
+    class CancellingLock:
+        def __enter__(self):
+            stopped.set()
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Client:
+        def __init__(self):
+            self.metadata_calls = 0
+            self.ticker_calls = 0
+
+        def load_markets(self):
+            self.metadata_calls += 1
+
+        def fetch_ticker(self, _symbol):
+            self.ticker_calls += 1
+            raise AssertionError("no ticker request after cancellation")
+
+    client = Client()
+    radar = MarketRadar.__new__(MarketRadar)
+    radar.clients = {"binance": client}
+    radar.client_locks = {"binance": CancellingLock()}
+    radar.exchanges = ["binance"]
+    radar.symbols = ["BTC/USDT"]
+    radar.previous = {}
+    radar.last_pressure = {}
+    radar.quality_rejections = 0
+    radar.request_attempts = 0
+    radar.successful_observations = 0
+    radar.request_errors = 0
+    radar.persistence_batches = 0
+    radar.persistence_errors = 0
+    radar.last_observation_ms = None
+    radar.per_venue_metrics = {}
+    radar.stop_event = stopped
+    radar._persist = lambda _snapshots, _leads: None
+
+    snapshots, _ = radar.snapshot()
+
+    assert snapshots == []
+    assert client.metadata_calls == 0
+    assert client.ticker_calls == 0
+    assert "binance" not in radar.metadata_loaded_venues
+    assert radar.collection_metrics()["metadata_loads"] == 0
