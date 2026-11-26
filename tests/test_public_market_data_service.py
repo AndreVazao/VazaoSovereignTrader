@@ -385,3 +385,36 @@ def test_explicit_degraded_shutdown_status_overrides_fresh_worker_heartbeats(tmp
     assert health["status"] == "DEGRADED"
     assert health["shutdown_reason"] == "worker_shutdown_timeout"
     service.stop()
+
+def test_worker_shutdown_timeout_is_cooperative_and_retains_child_handle(tmp_path):
+    app = create_app(tmp_path)
+
+    class UnresponsiveProcess(FakeProcess):
+        def wait(self, timeout=None):
+            raise __import__("subprocess").TimeoutExpired(self.command, timeout)
+
+    processes = []
+
+    def popen(command, **kwargs):
+        process = UnresponsiveProcess(command, **kwargs)
+        processes.append(process)
+        return process
+
+    service = PublicMarketDataService(app, tmp_path / "data", popen=popen)
+    service.start()
+    worker = service.workers[0]
+    process = worker.process
+
+    assert service._stop_worker(worker) is False
+    assert worker.process is process
+    assert process.poll() is None
+    assert process.terminated is False
+    assert process.killed is False
+    assert worker.last_error == "worker_stop_timeout"
+
+    # A later cooperative exit can be observed and the handle safely released.
+    process.returncode = 0
+    assert service._stop_worker(worker) is True
+    assert worker.process is None
+    service.stop()
+
