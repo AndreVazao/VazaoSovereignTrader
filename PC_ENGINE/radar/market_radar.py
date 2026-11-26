@@ -185,14 +185,22 @@ class MarketRadar:
                                     load_markets()
                         self.metadata_loaded_venues.add(exchange_name)
                         self.metadata_loads += 1
-                        self.per_venue_metrics.setdefault(exchange_name, {}).setdefault("metadata_loads", 0)
-                        self.per_venue_metrics[exchange_name]["metadata_loads"] += 1
+                        venue_metrics = self.per_venue_metrics.setdefault(
+                            exchange_name,
+                            {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0},
+                        )
+                        venue_metrics.setdefault("metadata_loads", 0)
+                        venue_metrics.setdefault("metadata_errors", 0)
+                        venue_metrics["metadata_loads"] += 1
                         if cancellation is not None and cancellation.is_set():
                             break
                     except Exception:
                         self.metadata_errors += 1
                         self.request_errors += 1
-                        venue_metrics = self.per_venue_metrics.setdefault(exchange_name, {})
+                        venue_metrics = self.per_venue_metrics.setdefault(
+                            exchange_name,
+                            {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0},
+                        )
                         venue_metrics["metadata_errors"] = venue_metrics.get("metadata_errors", 0) + 1
                         venue_metrics["errors"] = venue_metrics.get("errors", 0) + 1
                         # Do not retry metadata discovery once per symbol in this cycle.
@@ -207,6 +215,8 @@ class MarketRadar:
                 venue_metrics = self.per_venue_metrics.setdefault(
                     exchange_name, {"attempts": 0, "successes": 0, "errors": 0, "quality_rejections": 0}
                 )
+                for metric_name in ("attempts", "successes", "errors", "quality_rejections"):
+                    venue_metrics.setdefault(metric_name, 0)
                 self.request_attempts += 1
                 venue_metrics["attempts"] += 1
                 try:
