@@ -21,7 +21,7 @@ from PC_ENGINE.core.linux_connector_launcher import (
 
 def _adapter(manifest: RuntimeManifest) -> LinuxBubblewrapConnectorAdapter:
     return LinuxBubblewrapConnectorAdapter(
-        "tests.fixtures.connector_runtime_probe:adapter_factory",
+        "PC_ENGINE.core.connector_runtime_probe:adapter_factory",
         runtime_manifest=manifest,
         python_home="/opt/vst-runtime",
         bwrap_path="/usr/bin/bwrap",
@@ -61,7 +61,7 @@ def test_launcher_rejects_oversized_request_before_launch(monkeypatch):
         ),
     )
     adapter = LinuxBubblewrapConnectorAdapter(
-        "tests.fixtures.connector_runtime_probe:adapter_factory",
+        "PC_ENGINE.core.connector_runtime_probe:adapter_factory",
         runtime_manifest=manifest,
         python_home="/opt/vst-runtime",
         max_request_bytes=32,
@@ -129,7 +129,7 @@ def test_packaged_runtime_is_launched_by_trusted_parent_inside_bubblewrap():
         required_directories=[runtime_root],
     )
     adapter = LinuxBubblewrapConnectorAdapter(
-        "tests.fixtures.connector_runtime_probe:adapter_factory",
+        "PC_ENGINE.core.connector_runtime_probe:adapter_factory",
         runtime_manifest=manifest,
         python_home=str(runtime_root),
         runtime_library_path=str(runtime_root / "lib"),
