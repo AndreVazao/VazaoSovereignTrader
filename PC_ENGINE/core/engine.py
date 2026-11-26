@@ -410,6 +410,13 @@ class SovereignEngine:
         exchange = self._main_exchange()
         if exchange is None:
             return []
+        collector = getattr(self, "paper_collector", None)
+        stop_event = getattr(collector, "stop_event", None)
+        prepare_markets = getattr(exchange, "prepare_public_markets", None)
+        if callable(prepare_markets) and not prepare_markets(stop_event):
+            return []
+        if stop_event is not None and stop_event.is_set():
+            return []
         return exchange.fetch_ohlcv(symbol, timeframe, limit)
 
     def _load_recovery_state(self) -> None:
