@@ -159,6 +159,93 @@ def _validate_directory_tree(path: Path, *, label: str) -> None:
             raise RuntimeManifestError("runtime_directory_contains_special_file")
 
 
+
+def validate_protected_runtime(
+    manifest: RuntimeManifest,
+    *,
+    service_uid: int,
+    bwrap_binary: str | os.PathLike[str],
+) -> None:
+    """Require a non-root service and a root-owned immutable runtime boundary.
+
+    The engine identity must not be able to replace any runtime path after
+    validation. Every source, its ancestor chain, every entry in mounted
+    directories, and the Bubblewrap executable must be root-owned and not
+    group/world writable. This closes replacement races against the
+    unprivileged service identity; it does not defend against a privileged
+    root attacker.
+    """
+    if isinstance(service_uid, bool) or not isinstance(service_uid, int) or service_uid == 0:
+        raise RuntimeManifestError("sandbox_service_must_not_run_as_root")
+    if not isinstance(manifest, RuntimeManifest):
+        raise RuntimeManifestError("runtime_manifest_required")
+
+    def validate_path(path: Path, *, label: str, directory_tree: bool = False) -> None:
+        canonical = _canonical_path(path, label=label)
+        current = canonical
+        is_target = True
+        while True:
+            try:
+                metadata = current.lstat()
+            except OSError:
+                raise RuntimeManifestError(f"{label}_protection_metadata_unavailable") from None
+            if stat.S_ISLNK(metadata.st_mode):
+                raise RuntimeManifestError(f"{label}_contains_symlink")
+            if metadata.st_uid != 0:
+                raise RuntimeManifestError(f"{label}_not_root_owned")
+            if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+                raise RuntimeManifestError(f"{label}_group_or_world_writable")
+            if is_target and directory_tree:
+                if not stat.S_ISDIR(metadata.st_mode):
+                    raise RuntimeManifestError(f"{label}_must_be_real_directory")
+            elif is_target:
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                    raise RuntimeManifestError(f"{label}_must_be_unaliased_regular_file")
+            elif not stat.S_ISDIR(metadata.st_mode):
+                raise RuntimeManifestError(f"{label}_ancestor_not_real_directory")
+            if current == current.parent:
+                break
+            current = current.parent
+            is_target = False
+
+        if directory_tree:
+            pending = [canonical]
+            while pending:
+                directory = pending.pop()
+                try:
+                    entries = tuple(directory.iterdir())
+                except OSError:
+                    raise RuntimeManifestError(f"{label}_contents_not_accessible") from None
+                for entry in entries:
+                    try:
+                        metadata = entry.lstat()
+                    except OSError:
+                        raise RuntimeManifestError(f"{label}_entry_not_accessible") from None
+                    mode = metadata.st_mode
+                    if stat.S_ISLNK(mode):
+                        raise RuntimeManifestError(f"{label}_contains_symlink")
+                    if metadata.st_uid != 0:
+                        raise RuntimeManifestError(f"{label}_entry_not_root_owned")
+                    if mode & (stat.S_IWGRP | stat.S_IWOTH):
+                        raise RuntimeManifestError(f"{label}_entry_group_or_world_writable")
+                    if stat.S_ISDIR(mode):
+                        pending.append(entry)
+                    elif stat.S_ISREG(mode):
+                        if metadata.st_nlink != 1:
+                            raise RuntimeManifestError(f"{label}_contains_hard_link")
+                    else:
+                        raise RuntimeManifestError(f"{label}_contains_special_file")
+
+    for mount in manifest.mounts:
+        validate_path(
+            mount.source,
+            label="runtime_directory" if mount.is_directory else "runtime_file",
+            directory_tree=mount.is_directory,
+        )
+    validate_path(Path(bwrap_binary), label="bubblewrap_binary")
+
+
+
 def _is_within(path: Path, directory: Path) -> bool:
     return path == directory or directory in path.parents
 

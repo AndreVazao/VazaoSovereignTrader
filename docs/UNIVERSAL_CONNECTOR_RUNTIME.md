@@ -62,6 +62,10 @@ PR #578 adds `PC_ENGINE/core/connector_runtime_manifest.py`, which validates exp
 
 **Cross-platform exact-HEAD evidence:** the same code-bearing HEAD passed Python (**1,726 passed, 5 skipped, 101 subtests**) in [run 45826907675](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907675), PAPER lifecycle (**82 passed**) in [run 45826907551](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907551), and Windows EXE plus installer in [run 45826907651](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45826907651). The installer passed previous-version installation, upgrade build, install/upgrade/launch/health/uninstall and Learning Vault preservation checks. Snyk did not publish an exact-HEAD check; this PR changed no dependency manifests.
 
+
+
+**Protected runtime ownership gate — PR #604:** the Linux parent launcher now rejects a root service identity and requires the Bubblewrap executable, each runtime source, every ancestor directory and every entry under mounted runtime directories to be root-owned and not group/world writable. This prevents replacement by the unprivileged service identity or other unprivileged users while path-based mounts are prepared. It is not protection against a privileged root attacker and does not authenticate a signed inventory. The production supervisor remains disconnected until the complete runtime trust chain and lifecycle gates pass.
+
 **Remaining production integration blocker:** the new launcher is not yet wired into `IsolatedConnectorAdapter`, the production worker supervisor, `ConnectorRegistry` or installer. The registry continues to execute registered adapters in-process. The runtime inventory is unsigned, immutable installer/runtime ownership and TOCTOU resistance are not proven, provider-specific HTTPS egress is absent, and Windows filesystem/network isolation is absent. Do not load untrusted third-party adapters.
 
 ## Required Linux acceptance gates
