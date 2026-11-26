@@ -1,7 +1,26 @@
 # Universal Connector Runtime — VST
 
-**Status date:** 2026-11-21  
+**Status date:** 2026-11-26  
 **Scope:** first-party public market-data adapters and the security boundaries required before any third-party connector execution. This document describes verified implementation, not planned capability.
+
+## Current verification checkpoint — 2026-11-26
+
+**Repository:** `AndreVazao/VazaoSovereignTrader`  
+**Main SHA:** `10e26cde4eca1d83ac22c34b5d4e32e2f55a4e15`  
+**Latest code integration:** [PR #601](https://github.com/AndreVazao/VazaoSovereignTrader/pull/601), merged at 2026-11-26 12:26:59 UTC.
+
+Exact-main checks:
+- [Python tests #45819746452](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746452) — **PASS**, 1,720 passed, 4 skipped, 101 subtests passed.
+- [Windows EXE and installer #45819746055](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746055) — **PASS**, both jobs. EXE smoke includes local `/health`; installer smoke includes silent previous-version install, in-place upgrade, engine health, a fail-closed uninstall attempt when market-data health is DEGRADED, successful uninstall after clearing the simulated state, and Learning Vault marker SHA-256 preservation.
+- [Portable Windows ZIP, artifact 15117052660](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746055/artifacts/15117052660), 65,941,537 bytes.
+- [Windows installer ZIP, artifact 15116798800](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45819746055/artifacts/15116798800), 283,472,523 bytes.
+- Combined commit status exposes only Vercel success; Vercel is informational, not code-test evidence. No Snyk check is present on the exact main SHA. Snyk passed on PR #601's exact head, not this merge SHA.
+
+The latest main push changed the public market-data supervisor, installer and related tests. PAPER smoke, Linux connector sandbox, Android APK and Android emulator workflows did not match those paths and were not triggered. This is not a failure; prior workflow passes on other SHAs must not be represented as exact-main validation.
+
+**Production boundary:** first-party public-data workers remain fixed and read-only. Third-party connector execution remains disabled until the manifest-backed Bubblewrap launcher is integrated into the trusted production parent with no unsandboxed fallback, runtime inventory/package authenticity and TOCTOU controls are proven, Linux egress policy is reviewed, and independent Windows filesystem/network isolation is implemented.
+
+**Global decision:** not complete. Physical Windows 10 low-memory PC validation, installed market-data supervisor start/stop/health acceptance, Vault backup/restore and tenant isolation, reproducible OOS research evidence, full Linux product packaging, Android release/device validation and LAN/Tailscale endurance remain outstanding.
 
 ## Implemented on main
 
@@ -24,9 +43,9 @@ PR #576 is included in main through PR #577 merge commit `05d4e7c9123e29780d26b1
 
 These controls bound resource use and process lifetime; they do not isolate filesystem access or restrict network egress.
 
-## Linux Bubblewrap prototype and active PR #578
+## Linux Bubblewrap foundation — PR #578 merged 2026-11-22
 
-PR #577 is merged. The active security groundwork is PR #578, branch `feat/minimal-python-runtime-closure-2026-11-20`, currently Draft and not merged.
+PR #578 is merged at `ac88989caeff86198339de38e241b3e52560e791`; its explicit runtime-manifest and packaged-CPython foundation is part of main. It is not an active PR. The merge did not complete the production supervisor/launcher integration, authenticate the runtime inventory, implement provider-specific egress or provide Windows filesystem/network isolation.
 
 The merged Bubblewrap prototype provides:
 - user, PID, IPC, UTS and network namespaces; network is denied;
@@ -37,7 +56,7 @@ PR #578 adds `PC_ENGINE/core/connector_runtime_manifest.py`, which validates exp
 
 **Current builder split:** `build_linux_bwrap_command(..., runtime_manifest=...)` now has a separate opt-in manifest-backed path. It rejects simultaneous legacy `runtime_roots`, revalidates the manifest, requires the command executable to match the manifest, creates only empty destination parents, sets a non-host PATH, creates private `/tmp` and `/work` first, and mounts only explicit entries read-only. It does not add `/usr`, `/lib`, `/bin`, `/etc/ld.so.cache` or the host CA tree. The legacy compatibility path still uses broad read-only host roots and remains unsuitable for untrusted connectors. A real Bubblewrap static-probe test is now included to check denial of `/usr/bin/id`, `/etc/passwd` and an undeclared host marker.
 
-**Critical integration blocker:** the manifest-backed builder path is not called by `IsolatedConnectorAdapter`, the worker supervisor, `ConnectorRegistry` or installer. The real static probe is not yet validated by a new CI run on the latest HEAD, and the packaged Python interpreter/shared-library closure has not been tested. Do not load untrusted third-party adapters.
+**Critical integration blocker:** the manifest-backed builder path is still not called by `IsolatedConnectorAdapter`, the production worker supervisor, `ConnectorRegistry` or installer. The Linux workflow passed 69 tests on PR #578's exact HEAD `6f0c60ec3ace0091c75d3e06ecf08c459d300d5b` ([run 45025054332](https://github.com/AndreVazao/VazaoSovereignTrader/actions/runs/45025054332)); that run builds and exercises packaged CPython inside Bubblewrap and starts the existing adapter from inside the namespace. It does **not** prove that the trusted production parent launches adapter code through the manifest-backed Bubblewrap command. The inventory is unsigned, immutable installer/runtime ownership and TOCTOU resistance are not proven, provider-specific HTTPS egress is absent, and Windows filesystem/network isolation is absent. Do not load untrusted third-party adapters.
 
 ## Required Linux acceptance gates
 
@@ -63,7 +82,7 @@ The current registry permits only `READ_ONLY_CAPABILITIES`. It rejects order cre
 - U-Hodler is not connected; no Android virtualization provider is provisioned.
 - Human handoff remains mandatory for MFA, OTP, CAPTCHA, biometrics, consent and financial/security prompts.
 
-## Exact-HEAD verification checkpoint — 2026-11-22 12:52 UTC
+## Historical exact-HEAD verification checkpoint — 2026-11-22 12:52 UTC (superseded by the 2026-11-26 checkpoint)
 
 **Repository:** `AndreVazao/VazaoSovereignTrader`  
 **Main SHA:** `05d4e7c9123e29780d26b12b56fba3f20d5440e7`  
