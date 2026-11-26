@@ -52,7 +52,6 @@ class LinuxBubblewrapConnectorAdapter:
         bwrap_path: str | None = None,
         memory_limit_mb: int = 256,
         cpu_time_limit_seconds: int = 20,
-        startup_grace_seconds: float = 5.0,
         max_request_bytes: int = 32_768,
         max_response_bytes: int = 262_144,
     ) -> None:
@@ -62,8 +61,6 @@ class LinuxBubblewrapConnectorAdapter:
             raise ValueError("runtime_manifest_required")
         if not isinstance(python_home, str) or not python_home.startswith("/"):
             raise ValueError("python_home_must_be_absolute")
-        if not 0.1 <= float(startup_grace_seconds) <= 30:
-            raise ValueError("invalid_startup_grace")
         if not 1 <= max_request_bytes <= 1_048_576:
             raise ValueError("invalid_request_limit")
         if not 1 <= max_response_bytes <= 4_194_304:
@@ -76,14 +73,13 @@ class LinuxBubblewrapConnectorAdapter:
         self._bwrap_path = bwrap_path
         self._memory_limit_mb = memory_limit_mb
         self._cpu_time_limit_seconds = cpu_time_limit_seconds
-        self._startup_grace_seconds = float(startup_grace_seconds)
         self._max_request_bytes = max_request_bytes
         self._max_response_bytes = max_response_bytes
 
     @staticmethod
     def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
-        if process.poll() is not None:
-            return
+        # Kill the process group even if Bubblewrap itself has exited: a
+        # descendant may still hold stdout open and keep the group alive.
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -183,7 +179,9 @@ class LinuxBubblewrapConnectorAdapter:
             )
             assert process.stdin is not None and process.stdout is not None
             try:
-                process.stdin.write(encoded)
+                written = os.write(process.stdin.fileno(), encoded)
+                if written != len(encoded):
+                    raise LinuxSandboxLaunchError("sandbox_worker_input_failed")
                 process.stdin.close()
             except (BrokenPipeError, OSError):
                 raise LinuxSandboxLaunchError("sandbox_worker_input_failed") from None
@@ -191,7 +189,7 @@ class LinuxBubblewrapConnectorAdapter:
             selector = selectors.DefaultSelector()
             selector.register(process.stdout, selectors.EVENT_READ)
             output = bytearray()
-            deadline = time.monotonic() + timeout + self._startup_grace_seconds + 2.0
+            deadline = time.monotonic() + timeout + 2.0
             eof = False
             while not eof or process.poll() is None:
                 remaining = deadline - time.monotonic()
