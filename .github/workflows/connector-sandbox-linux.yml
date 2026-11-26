@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "PC_ENGINE/core/connector_worker_bootstrap.py"
+      - "PC_ENGINE/core/connector_worker_bootstrap.py"\n      - "PC_ENGINE/core/linux_connector_launcher.py"
       - "PC_ENGINE/core/connector_worker_sandbox.py"
       - "PC_ENGINE/core/connector_runtime_manifest.py"
       - "scripts/build_connector_python_runtime.py"
@@ -11,7 +11,7 @@ on:
       - "tests/fixtures/connector_runtime_probe.py"
       - "tests/test_connector_worker_bootstrap.py"
       - "tests/test_connector_worker_sandbox.py"
-      - "tests/test_connector_runtime_manifest.py"
+      - "tests/test_connector_runtime_manifest.py"\n      - "tests/test_linux_connector_launcher.py"
       - "docs/CONNECTOR_WORKER_SANDBOX_PLAN.md"
       - "docs/PYTHON_RUNTIME_CLOSURE_DESIGN.md"
       - ".github/workflows/connector-sandbox-linux.yml"
@@ -85,4 +85,4 @@ jobs:
             tests/test_connector_worker_bootstrap.py \
             tests/test_connector_worker_sandbox.py \
             tests/test_connector_runtime_manifest.py \
-            tests/test_connector_python_runtime.py
+            tests/test_connector_python_runtime.py \\\n            tests/test_linux_connector_launcher.py
