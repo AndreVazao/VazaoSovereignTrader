@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from PC_ENGINE.core.connector_runtime_manifest import RuntimeManifest
+from PC_ENGINE.core.platform_connectors import READ_ONLY_CAPABILITIES
 from PC_ENGINE.core.connector_worker_limits import validate_worker_limits
 from PC_ENGINE.core.connector_worker_sandbox import (
     SandboxUnavailable,
@@ -62,9 +63,9 @@ class LinuxBubblewrapConnectorAdapter:
             raise ValueError("runtime_manifest_required")
         if not isinstance(python_home, str) or not python_home.startswith("/"):
             raise ValueError("python_home_must_be_absolute")
-        if not 1 <= max_request_bytes <= 1_048_576:
+        if not 1 <= max_request_bytes <= 32_768:
             raise ValueError("invalid_request_limit")
-        if not 1 <= max_response_bytes <= 4_194_304:
+        if not 1 <= max_response_bytes <= 262_144:
             raise ValueError("invalid_response_limit")
         validate_worker_limits(memory_limit_mb, cpu_time_limit_seconds)
         self._factory_reference = factory_reference
@@ -111,10 +112,12 @@ class LinuxBubblewrapConnectorAdapter:
     ) -> Mapping[str, object]:
         if not sys.platform.startswith("linux"):
             raise LinuxSandboxLaunchError("linux_sandbox_platform_required")
-        if not isinstance(capability, str) or not capability or len(capability) > 128:
-            raise LinuxSandboxLaunchError("invalid_capability")
+        if not isinstance(capability, str) or capability not in READ_ONLY_CAPABILITIES:
+            raise LinuxSandboxLaunchError("capability_not_read_only")
         if not isinstance(request, Mapping):
             raise LinuxSandboxLaunchError("invalid_request")
+        if isinstance(timeout_seconds, bool):
+            raise LinuxSandboxLaunchError("invalid_timeout")
         try:
             timeout = float(timeout_seconds)
         except (TypeError, ValueError, OverflowError):
@@ -166,6 +169,8 @@ class LinuxBubblewrapConnectorAdapter:
 
         process: subprocess.Popen[bytes] | None = None
         selector: selectors.BaseSelector | None = None
+        input_selector: selectors.BaseSelector | None = None
+        deadline = time.monotonic() + timeout + 2.0
         try:
             process = subprocess.Popen(
                 argv,
@@ -180,20 +185,35 @@ class LinuxBubblewrapConnectorAdapter:
             )
             assert process.stdin is not None and process.stdout is not None
             try:
+                input_fd = process.stdin.fileno()
+                os.set_blocking(input_fd, False)
+                input_selector = selectors.DefaultSelector()
+                input_selector.register(process.stdin, selectors.EVENT_WRITE)
                 remaining_input = memoryview(encoded)
                 while remaining_input:
-                    written = os.write(process.stdin.fileno(), remaining_input)
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise LinuxSandboxLaunchError("sandbox_worker_timeout")
+                    if not input_selector.select(remaining):
+                        raise LinuxSandboxLaunchError("sandbox_worker_timeout")
+                    try:
+                        written = os.write(input_fd, remaining_input)
+                    except BlockingIOError:
+                        continue
                     if written <= 0:
                         raise LinuxSandboxLaunchError("sandbox_worker_input_failed")
                     remaining_input = remaining_input[written:]
                 process.stdin.close()
             except (BrokenPipeError, OSError):
                 raise LinuxSandboxLaunchError("sandbox_worker_input_failed") from None
+            finally:
+                if input_selector is not None:
+                    input_selector.close()
+                    input_selector = None
 
             selector = selectors.DefaultSelector()
             selector.register(process.stdout, selectors.EVENT_READ)
             output = bytearray()
-            deadline = time.monotonic() + timeout + 2.0
             eof = False
             while not eof or process.poll() is None:
                 remaining = deadline - time.monotonic()
@@ -248,6 +268,8 @@ class LinuxBubblewrapConnectorAdapter:
         except (OSError, ValueError, subprocess.SubprocessError):
             raise LinuxSandboxLaunchError("sandbox_launch_failed") from None
         finally:
+            if input_selector is not None:
+                input_selector.close()
             if selector is not None:
                 selector.close()
             if process is not None:
