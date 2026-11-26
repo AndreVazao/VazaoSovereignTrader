@@ -138,7 +138,7 @@ class LinuxBubblewrapConnectorAdapter:
             encoded = json.dumps(
                 payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")
             ).encode("utf-8")
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, RecursionError, OverflowError):
             raise LinuxSandboxLaunchError("invalid_request") from None
         if len(encoded) > self._max_request_bytes:
             raise LinuxSandboxLaunchError("request_too_large")
@@ -241,8 +241,6 @@ class LinuxBubblewrapConnectorAdapter:
                 process.wait(timeout=max(0.1, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
                 raise LinuxSandboxLaunchError("sandbox_worker_timeout") from None
-            if process.returncode != 0:
-                raise LinuxSandboxLaunchError("connector_execution_failed")
             if not output:
                 raise LinuxSandboxLaunchError("sandbox_worker_failed")
             try:
@@ -262,6 +260,8 @@ class LinuxBubblewrapConnectorAdapter:
                     if isinstance(reason, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", reason):
                         raise LinuxSandboxLaunchError(f"{error}:{reason}")
                     raise LinuxSandboxLaunchError(error)
+                raise LinuxSandboxLaunchError("connector_execution_failed")
+            if process.returncode != 0:
                 raise LinuxSandboxLaunchError("connector_execution_failed")
             data = envelope.get("data")
             if not isinstance(data, dict):
