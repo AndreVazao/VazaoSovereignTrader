@@ -77,13 +77,13 @@ function Wait-ServiceStatus {
         }
         $Process.Refresh()
         if ($Process.HasExited) {
-            throw "$Label: supervisor exited early with code $($Process.ExitCode)."
+            throw "${Label}: supervisor exited early with code $($Process.ExitCode)."
         }
         Start-Sleep -Milliseconds 250
     }
     $last = Get-ServiceHealth
     $lastStatus = if ($last) { $last.status } else { "missing" }
-    throw "$Label: timed out waiting for $($Statuses -join '/') (last=$lastStatus)."
+    throw "${Label}: timed out waiting for $($Statuses -join '/') (last=$lastStatus)."
 }
 
 function Start-TestSupervisor {
@@ -115,14 +115,14 @@ function Confirm-Stopped {
     $Process.WaitForExit(5000) | Out-Null
     $Process.Refresh()
     if (-not $Process.HasExited) {
-        throw "$Label: STOPPED health was published but supervisor process remains alive."
+        throw "${Label}: STOPPED health was published but supervisor process remains alive."
     }
     if ($Process.ExitCode -ne 0) {
-        throw "$Label: supervisor exited with code $($Process.ExitCode)."
+        throw "${Label}: supervisor exited with code $($Process.ExitCode)."
     }
     foreach ($worker in $health.workers.PSObject.Properties) {
         if ($worker.Value.running) {
-            throw "$Label: worker '$($worker.Name)' remained marked as running after STOPPED."
+            throw "${Label}: worker '$($worker.Name)' remained marked as running after STOPPED."
         }
     }
 }
