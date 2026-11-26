@@ -171,3 +171,36 @@ def test_packaged_runtime_is_launched_by_trusted_parent_inside_bubblewrap():
     with pytest.raises(LinuxSandboxLaunchError, match="sandbox_worker_timeout"):
         adapter.read("public_market_data.read", {"sleep_seconds": 5}, timeout_seconds=0.5)
     assert time.monotonic() - started < 4.0
+
+
+
+def test_launcher_rejects_root_service_identity_without_fallback(monkeypatch):
+    manifest = RuntimeManifest(
+        executable=Path("/opt/vst-runtime/bin/python"),
+        mounts=(
+            RuntimeMount(
+                Path("/opt/vst-runtime/bin/python"),
+                Path("/opt/vst-runtime/bin/python"),
+                False,
+            ),
+        ),
+    )
+    adapter = _adapter(manifest)
+    monkeypatch.setattr(
+        "PC_ENGINE.core.linux_connector_launcher.os.geteuid",
+        lambda: 0,
+    )
+    monkeypatch.setattr(
+        "PC_ENGINE.core.linux_connector_launcher.build_linux_bwrap_command",
+        lambda *args, **kwargs: ["/usr/bin/bwrap", "--version"],
+    )
+    monkeypatch.setattr(
+        "PC_ENGINE.core.linux_connector_launcher.subprocess.Popen",
+        lambda *args, **kwargs: pytest.fail("root-owned runtime policy must deny before launch"),
+    )
+
+    with pytest.raises(
+        LinuxSandboxLaunchError,
+        match="sandbox_configuration_denied",
+    ):
+        adapter.read("public_market_data.read", {}, timeout_seconds=1)
