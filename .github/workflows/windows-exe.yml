@@ -41,6 +41,7 @@ jobs:
             "scripts/setup_windows.ps1",
             "scripts/ensure_windows_token.ps1",
             "scripts/stop_market_data_service.ps1",
+            "scripts/smoke_windows_installed_market_data_service.ps1",
             "scripts/install_windows_autostart.ps1",
             "scripts/verify_pc_install.ps1",
             "scripts/verify_public_market_data.ps1",
