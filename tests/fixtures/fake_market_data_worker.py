@@ -30,9 +30,10 @@ def main() -> int:
     health_name = HEALTH_FILES.get(worker_name)
     if health_name is None:
         raise SystemExit("unknown_fake_worker_stop_file")
-    health_dir = data_dir / "radar"
-    health_dir.mkdir(parents=True, exist_ok=True)
-    health_path = health_dir / health_name
+    # The supervisor passes its exact health directory as --data-dir
+    # (already <service-data-dir>/radar); do not append another /radar.
+    data_dir.mkdir(parents=True, exist_ok=True)
+    health_path = data_dir / health_name
     temporary_path = health_path.with_suffix(health_path.suffix + ".tmp")
 
     try:
