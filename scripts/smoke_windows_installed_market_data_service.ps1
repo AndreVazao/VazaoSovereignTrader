@@ -51,6 +51,8 @@ foreach ($name in $workerNames) {
 
 $supervisor = Join-Path $appDir "VazaoSovereignTrader-MarketDataService.exe"
 $healthPath = Join-Path $dataDir "market_data_service_health.json"
+$stdoutPath = Join-Path $TestRoot "supervisor.stdout.log"
+$stderrPath = Join-Path $TestRoot "supervisor.stderr.log"
 $controlPath = Join-Path $dataDir "stop.request"
 
 function Get-ServiceHealth {
@@ -77,7 +79,11 @@ function Wait-ServiceStatus {
         }
         $Process.Refresh()
         if ($Process.HasExited) {
-            throw "${Label}: supervisor exited early with code $($Process.ExitCode)."
+            $stdout = if (Test-Path $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw } else { "" }
+            $stderr = if (Test-Path $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw } else { "" }
+            $serviceLog = Join-Path $dataDir "logs\market_data_service.log"
+            $log = if (Test-Path $serviceLog) { Get-Content -LiteralPath $serviceLog -Tail 40 | Out-String } else { "" }
+            throw "${Label}: supervisor exited early with code $($Process.ExitCode). stdout=$stdout stderr=$stderr service_log=$log"
         }
         Start-Sleep -Milliseconds 250
     }
@@ -98,7 +104,7 @@ function Start-TestSupervisor {
     )
     $arguments = '--app-dir "{0}" --data-dir "{1}" --symbols BTC/USDT ETH/USDT --health-interval-seconds 1' -f $appDir, $dataDir
     try {
-        $process = Start-Process -FilePath $supervisor -ArgumentList $arguments -PassThru -WindowStyle Hidden
+        $process = Start-Process -FilePath $supervisor -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
     } finally {
         [Environment]::SetEnvironmentVariable("VST_FAKE_WORKER_IGNORE_STOP_SECONDS", $null, "Process")
     }
