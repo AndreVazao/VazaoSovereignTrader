@@ -31,14 +31,6 @@ $fixture = Join-Path (Split-Path -Parent $PSScriptRoot) "tests\fixtures\fake_mar
 if (-not (Test-Path -LiteralPath $fixture)) {
     throw "Deterministic fake worker fixture is missing."
 }
-& $PythonExe -m PyInstaller --noconfirm --clean --onefile --console --name VSTFakeMarketDataWorker --distpath $distDir --workpath $buildDir --specpath $buildDir $fixture
-if ($LASTEXITCODE -ne 0) {
-    throw "Could not build deterministic fake worker executable."
-}
-$fakeWorker = Join-Path $distDir "VSTFakeMarketDataWorker.exe"
-if (-not (Test-Path -LiteralPath $fakeWorker)) {
-    throw "Fake worker executable was not produced."
-}
 $workerNames = @(
     "VazaoSovereignTrader-MarketData.exe",
     "VazaoSovereignTrader-Radar.exe",
@@ -46,7 +38,22 @@ $workerNames = @(
     "VazaoSovereignTrader-L2.exe"
 )
 foreach ($name in $workerNames) {
-    Copy-Item -LiteralPath $fakeWorker -Destination (Join-Path $appDir $name)
+    # Give each test executable its real installed worker basename. PyInstaller
+    # embeds executable metadata, so copying one differently named binary is
+    # not a reliable way to emulate four distinct worker identities.
+    $workerStem = [System.IO.Path]::GetFileNameWithoutExtension($name)
+    $workerBuildDir = Join-Path $buildDir $workerStem
+    $workerDistDir = Join-Path $distDir $workerStem
+    New-Item -ItemType Directory -Force -Path $workerBuildDir, $workerDistDir | Out-Null
+    & $PythonExe -m PyInstaller --noconfirm --clean --onefile --console --name $workerStem --distpath $workerDistDir --workpath $workerBuildDir --specpath $workerBuildDir $fixture
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not build deterministic fake worker executable: $workerStem"
+    }
+    $workerExe = Join-Path $workerDistDir "$workerStem.exe"
+    if (-not (Test-Path -LiteralPath $workerExe)) {
+        throw "Deterministic fake worker executable was not produced: $workerStem"
+    }
+    Copy-Item -LiteralPath $workerExe -Destination (Join-Path $appDir $name)
 }
 
 $supervisor = Join-Path $appDir "VazaoSovereignTrader-MarketDataService.exe"
@@ -89,7 +96,10 @@ function Wait-ServiceStatus {
     }
     $last = Get-ServiceHealth
     $lastStatus = if ($last) { $last.status } else { "missing" }
-    throw "${Label}: timed out waiting for $($Statuses -join '/') (last=$lastStatus)."
+    $healthDetail = if ($last) { $last | ConvertTo-Json -Depth 12 -Compress } else { "missing" }
+    $serviceLog = Join-Path $dataDir "logs\market_data_service.log"
+    $logTail = if (Test-Path -LiteralPath $serviceLog) { Get-Content -LiteralPath $serviceLog -Tail 80 | Out-String } else { "missing" }
+    throw ($Label + ": timed out waiting for " + ($Statuses -join '/') + " (last=" + $lastStatus + ") health=" + $healthDetail + " service_log=" + $logTail)
 }
 
 function Start-TestSupervisor {
