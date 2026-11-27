@@ -24,13 +24,12 @@ def argument_after(name: str) -> str:
 
 
 def main() -> int:
-    executable_name = Path(sys.executable).stem
-    health_name = HEALTH_FILES.get(executable_name)
-    if health_name is None:
-        raise SystemExit("unknown_fake_worker_executable")
-
     data_dir = Path(argument_after("--data-dir"))
     stop_file = Path(argument_after("--stop-file"))
+    worker_name = stop_file.stem.removeprefix("stop_")
+    health_name = HEALTH_FILES.get(worker_name)
+    if health_name is None:
+        raise SystemExit("unknown_fake_worker_stop_file")
     health_dir = data_dir / "radar"
     health_dir.mkdir(parents=True, exist_ok=True)
     health_path = health_dir / health_name
