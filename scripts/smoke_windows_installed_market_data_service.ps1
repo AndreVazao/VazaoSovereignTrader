@@ -174,7 +174,9 @@ try {
     # The still-live first supervisor must retain the singleton lock. A
     # competing supervisor must fail before it can create duplicate workers.
     $contender = Start-TestSupervisor -PreserveStopRequest
-    if (-not $contender.WaitForExit(5000)) {
+    # PyInstaller one-file startup may spend several seconds extracting before
+    # the supervisor reaches its lock acquisition; allow that cold-start time.
+    if (-not $contender.WaitForExit(30000)) {
         Request-TestStop
         $contender.WaitForExit(35000) | Out-Null
         throw "A second supervisor started while the previous workers were still alive."
