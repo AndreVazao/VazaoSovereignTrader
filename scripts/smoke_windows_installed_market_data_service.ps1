@@ -96,8 +96,13 @@ function Wait-ServiceStatus {
 }
 
 function Start-TestSupervisor {
-    param([double]$IgnoreStopSeconds = 0)
-    if (Test-Path -LiteralPath $controlPath) {
+    param(
+        [double]$IgnoreStopSeconds = 0,
+        [switch]$PreserveStopRequest
+    )
+    # A normal start clears a stale request. A lock-contender test must not
+    # mutate the active supervisor's control channel while it owns the lock.
+    if (-not $PreserveStopRequest -and (Test-Path -LiteralPath $controlPath)) {
         Remove-Item -LiteralPath $controlPath -Force
     }
     [Environment]::SetEnvironmentVariable(
@@ -168,7 +173,7 @@ try {
 
     # The still-live first supervisor must retain the singleton lock. A
     # competing supervisor must fail before it can create duplicate workers.
-    $contender = Start-TestSupervisor
+    $contender = Start-TestSupervisor -PreserveStopRequest
     if (-not $contender.WaitForExit(5000)) {
         Request-TestStop
         $contender.WaitForExit(35000) | Out-Null
