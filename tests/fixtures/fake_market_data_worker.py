@@ -8,10 +8,10 @@ import time
 
 
 HEALTH_FILES = {
-    "VazaoSovereignTrader-Radar": "market_radar_health.json",
-    "VazaoSovereignTrader-TopOfBook": "top_of_book_health.json",
-    "VazaoSovereignTrader-L2": "l2_collector_health.json",
-    "VazaoSovereignTrader-MarketData": "market_data_health.json",
+    "radar_rest": "market_radar_health.json",
+    "top_of_book": "top_of_book_health.json",
+    "order_book_l2": "l2_collector_health.json",
+    "market_data_learning": "market_data_health.json",
 }
 
 
