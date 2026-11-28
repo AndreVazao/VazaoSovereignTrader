@@ -13,6 +13,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
 import logging
+import math
 
 
 @dataclass
@@ -508,8 +509,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--health-interval-seconds", type=float, default=5.0)
     parser.add_argument("--max-data-dir-mb", type=float, default=5120.0)
     args = parser.parse_args(argv)
-    if (args.restart_limit < 1 or args.restart_window_seconds < 60 or not math_is_positive(args.health_interval_seconds) or not math_is_positive(args.max_data_dir_mb) or args.max_data_dir_mb < 1 or args.max_data_dir_mb > 5120):
-        parser.error("restart limits, health interval and storage budget must be positive and at most 5120 MiB")
+    if (
+        args.restart_limit < 1
+        or args.restart_window_seconds < 60
+        or not math.isfinite(args.health_interval_seconds)
+        or not 0 < args.health_interval_seconds < 3600
+        or not math.isfinite(args.max_data_dir_mb)
+        or not 1 <= args.max_data_dir_mb <= 5120
+    ):
+        parser.error("restart limits, health interval and storage budget are outside supported ranges")
     service = PublicMarketDataService(
         Path(args.app_dir), Path(args.data_dir), symbols=args.symbols,
         restart_limit=args.restart_limit,
@@ -524,12 +532,6 @@ def main(argv: list[str] | None = None) -> int:
         signal.signal(signal.SIGTERM, stop)
     return service.run()
 
-
-def math_is_positive(value: float) -> bool:
-    try:
-        return float(value) > 0 and float(value) < 3600
-    except (TypeError, ValueError):
-        return False
 
 
 if __name__ == "__main__":

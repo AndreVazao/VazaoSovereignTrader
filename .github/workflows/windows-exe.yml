@@ -9,6 +9,7 @@ on:
       - "installer/**"
       - "tests/**"
       - "requirements-pc.txt"
+      - "docs/PUBLIC_MARKET_DATA_SERVICE.md"
       - ".github/workflows/windows-exe.yml"
   push:
     branches: [main]
@@ -18,6 +19,7 @@ on:
       - "installer/**"
       - "tests/**"
       - "requirements-pc.txt"
+      - "docs/PUBLIC_MARKET_DATA_SERVICE.md"
       - ".github/workflows/windows-exe.yml"
     tags:
       - "pc-v*"
@@ -41,6 +43,7 @@ jobs:
             "scripts/setup_windows.ps1",
             "scripts/ensure_windows_token.ps1",
             "scripts/stop_market_data_service.ps1",
+            "scripts/smoke_windows_installed_market_data_service.ps1",
             "scripts/install_windows_autostart.ps1",
             "scripts/verify_pc_install.ps1",
             "scripts/verify_public_market_data.ps1",
@@ -328,6 +331,12 @@ jobs:
             }
             Stop-SmokeEngineProcesses
           }
+
+          # Exercise the actual installed supervisor EXE with deterministic local
+          # workers. This covers start/stop/restart and DEGRADED recovery without
+          # connecting to exchanges or starting trading functionality.
+          & .\scripts\smoke_windows_installed_market_data_service.ps1 -InstalledAppDir $testDir -PythonExe (Get-Command python).Source
+          if ($LASTEXITCODE -ne 0) { throw "Installed market-data supervisor lifecycle smoke failed." }
 
           # An unconfirmed worker shutdown must abort before the uninstaller removes binaries.
           $marketDataRoot = Join-Path (Join-Path $env:LOCALAPPDATA "VazaoSovereignTraderData") "market-data"

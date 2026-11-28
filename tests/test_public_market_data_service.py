@@ -472,3 +472,44 @@ def test_run_keeps_supervisor_and_lock_until_unresponsive_child_exits(tmp_path):
     )
     assert health["status"] == "STOPPED"
 
+
+
+def test_cli_accepts_default_five_gib_storage_budget(monkeypatch, tmp_path):
+    import PC_ENGINE.services.public_market_data_service as service_module
+
+    captured = {}
+
+    class StubService:
+        def __init__(self, app_dir, data_dir, **kwargs):
+            captured["app_dir"] = app_dir
+            captured["data_dir"] = data_dir
+            captured.update(kwargs)
+
+        def request_stop(self):
+            pass
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(service_module, "PublicMarketDataService", StubService)
+    monkeypatch.setattr(service_module.signal, "signal", lambda *_args: None)
+
+    assert service_module.main([
+        "--app-dir", str(tmp_path / "app"),
+        "--data-dir", str(tmp_path / "data"),
+    ]) == 0
+    assert captured["max_data_dir_bytes"] == 5 * 1024 * 1024 * 1024
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "5120.1", "0.5"])
+def test_cli_rejects_non_finite_or_out_of_range_storage_budget(monkeypatch, tmp_path, value):
+    import PC_ENGINE.services.public_market_data_service as service_module
+
+    monkeypatch.setattr(service_module.signal, "signal", lambda *_args: None)
+    with pytest.raises(SystemExit) as exc:
+        service_module.main([
+            "--app-dir", str(tmp_path / "app"),
+            "--data-dir", str(tmp_path / "data"),
+            "--max-data-dir-mb", value,
+        ])
+    assert exc.value.code == 2
