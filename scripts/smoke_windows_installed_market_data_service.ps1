@@ -98,7 +98,8 @@ function Wait-ServiceStatus {
 function Start-TestSupervisor {
     param(
         [double]$IgnoreStopSeconds = 0,
-        [switch]$PreserveStopRequest
+        [switch]$PreserveStopRequest,
+        [string]$LogPrefix = "supervisor"
     )
     # A normal start clears a stale request. A lock-contender test must not
     # mutate the active supervisor's control channel while it owns the lock.
@@ -112,7 +113,7 @@ function Start-TestSupervisor {
     )
     $arguments = '--app-dir "{0}" --data-dir "{1}" --symbols BTC/USDT ETH/USDT --health-interval-seconds 1' -f $appDir, $dataDir
     try {
-        $process = Start-Process -FilePath $supervisor -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+        $process = Start-Process -FilePath $supervisor -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $TestRoot "$LogPrefix.stdout.log") -RedirectStandardError (Join-Path $TestRoot "$LogPrefix.stderr.log")
     } finally {
         [Environment]::SetEnvironmentVariable("VST_FAKE_WORKER_IGNORE_STOP_SECONDS", $null, "Process")
     }
@@ -173,13 +174,20 @@ try {
 
     # The still-live first supervisor must retain the singleton lock. A
     # competing supervisor must fail before it can create duplicate workers.
-    $contender = Start-TestSupervisor -PreserveStopRequest
+    $contender = Start-TestSupervisor -PreserveStopRequest -LogPrefix "contender"
     # PyInstaller one-file startup may spend several seconds extracting before
     # the supervisor reaches its lock acquisition; allow that cold-start time.
     if (-not $contender.WaitForExit(30000)) {
+        $contender.Refresh()
+        $contenderHealth = Get-ServiceHealth
+        $contenderStdout = Join-Path $TestRoot "contender.stdout.log"
+        $contenderStderr = Join-Path $TestRoot "contender.stderr.log"
+        $contenderOut = if (Test-Path $contenderStdout) { Get-Content -LiteralPath $contenderStdout -Raw } else { "missing" }
+        $contenderErr = if (Test-Path $contenderStderr) { Get-Content -LiteralPath $contenderStderr -Raw } else { "missing" }
+        $contenderDetail = if ($contenderHealth) { $contenderHealth | ConvertTo-Json -Depth 12 -Compress } else { "missing" }
         Request-TestStop
         $contender.WaitForExit(35000) | Out-Null
-        throw "A second supervisor started while the previous workers were still alive."
+        throw ("Lock contender did not exit within 30s. pid=" + $contender.Id + " still_alive=" + (-not $contender.HasExited) + " health=" + $contenderDetail + " stdout=" + $contenderOut + " stderr=" + $contenderErr)
     }
     $contender.Refresh()
     if ($contender.ExitCode -eq 0) {
