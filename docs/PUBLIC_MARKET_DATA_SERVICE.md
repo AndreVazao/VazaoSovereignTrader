@@ -55,7 +55,7 @@ The scheduled refresh is part of the existing Market Data executable, so it does
 The Windows installer workflow copies the actual installed supervisor executable into an isolated test directory and starts it against four deterministic local fake workers. It verifies:
 - all four workers start and publish fresh health heartbeats;
 - the supervisor reaches `RUNNING`, accepts a cooperative stop request and exits only after `STOPPED`;
-- the same data-directory singleton lock can be reacquired after shutdown, proving restart works, while a competing supervisor is denied during a DEGRADED shutdown;
+- a separate process cannot reacquire the OS singleton lock while the supervisor is DEGRADED; after cooperative recovery reaches STOPPED, the lock is released and the supervisor can restart;
 - deliberately slow workers cause `DEGRADED` with `worker_shutdown_timeout`, then recover cooperatively to `STOPPED` without forced termination.
 
 The fake workers do not connect to exchanges, use credentials, access private endpoints or submit orders. This is an installed-supervisor process/lifecycle test, not a real-exchange collector endurance test and not physical-PC acceptance.
