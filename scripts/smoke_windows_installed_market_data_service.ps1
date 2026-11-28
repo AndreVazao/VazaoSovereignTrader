@@ -174,11 +174,11 @@ try {
     # one-file parent process, whose bootloader lifetime is not the lock contract.
     $lockProbe = @'
 import msvcrt
-import sys
+import os
 from pathlib import Path
 
-path = Path(sys.argv[1])
-expected = sys.argv[2]
+path = Path(os.environ["VST_LOCK_PROBE_PATH"])
+expected = os.environ["VST_LOCK_PROBE_EXPECTED"]
 with path.open("a+b") as handle:
     if handle.seek(0, 2) == 0:
         handle.write(b"0")
@@ -187,23 +187,35 @@ with path.open("a+b") as handle:
     try:
         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
     except OSError:
-        if expected == "locked":
-            raise SystemExit(0)
-        raise SystemExit(1)
+        raise SystemExit(0 if expected == "locked" else 1)
     else:
         msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-        if expected == "unlocked":
-            raise SystemExit(0)
-        raise SystemExit(1)
+        raise SystemExit(0 if expected == "unlocked" else 1)
 '@
-    & $PythonExe -c $lockProbe $lockPath "locked"
-    if ($LASTEXITCODE -ne 0) {
+
+    function Test-ServiceLock {
+        param([ValidateSet("locked", "unlocked")][string]$Expected)
+        $previousPath = [Environment]::GetEnvironmentVariable("VST_LOCK_PROBE_PATH", "Process")
+        $previousExpected = [Environment]::GetEnvironmentVariable("VST_LOCK_PROBE_EXPECTED", "Process")
+        $exitCode = 1
+        try {
+            [Environment]::SetEnvironmentVariable("VST_LOCK_PROBE_PATH", $lockPath, "Process")
+            [Environment]::SetEnvironmentVariable("VST_LOCK_PROBE_EXPECTED", $Expected, "Process")
+            & $PythonExe -c $lockProbe
+            $exitCode = $LASTEXITCODE
+        } finally {
+            [Environment]::SetEnvironmentVariable("VST_LOCK_PROBE_PATH", $previousPath, "Process")
+            [Environment]::SetEnvironmentVariable("VST_LOCK_PROBE_EXPECTED", $previousExpected, "Process")
+        }
+        return $exitCode
+    }
+
+    if ((Test-ServiceLock -Expected "locked") -ne 0) {
         throw "Singleton lock was not retained while workers remained in DEGRADED shutdown."
     }
 
     Confirm-Stopped -Process $process -Label "cooperative recovery"
-    & $PythonExe -c $lockProbe $lockPath "unlocked"
-    if ($LASTEXITCODE -ne 0) {
+    if ((Test-ServiceLock -Expected "unlocked") -ne 0) {
         throw "Singleton lock remained held after cooperative STOPPED recovery."
     }
 
