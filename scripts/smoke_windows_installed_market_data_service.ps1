@@ -51,6 +51,7 @@ foreach ($name in $workerNames) {
 
 $supervisor = Join-Path $appDir "VazaoSovereignTrader-MarketDataService.exe"
 $healthPath = Join-Path $dataDir "market_data_service_health.json"
+$lockPath = Join-Path $dataDir "service.lock"
 $stdoutPath = Join-Path $TestRoot "supervisor.stdout.log"
 $stderrPath = Join-Path $TestRoot "supervisor.stderr.log"
 $controlPath = Join-Path $dataDir "stop.request"
@@ -179,10 +180,9 @@ from pathlib import Path
 
 path = Path(os.environ["VST_LOCK_PROBE_PATH"])
 expected = os.environ["VST_LOCK_PROBE_EXPECTED"]
-with path.open("a+b") as handle:
-    if handle.seek(0, 2) == 0:
-        handle.write(b"0")
-        handle.flush()
+with path.open("r+b") as handle:
+    if handle.seek(0, 2) < 1:
+        raise SystemExit("singleton_lock_file_empty")
     handle.seek(0)
     try:
         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
@@ -192,6 +192,10 @@ with path.open("a+b") as handle:
         msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
         raise SystemExit(0 if expected == "unlocked" else 1)
 '@
+
+    if (-not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "Supervisor singleton lock file was not created: $lockPath"
+    }
 
     function Test-ServiceLock {
         param([ValidateSet("locked", "unlocked")][string]$Expected)
