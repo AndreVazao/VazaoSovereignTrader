@@ -97,13 +97,10 @@ function Wait-ServiceStatus {
 
 function Start-TestSupervisor {
     param(
-        [double]$IgnoreStopSeconds = 0,
-        [switch]$PreserveStopRequest,
-        [string]$LogPrefix = "supervisor"
+        [double]$IgnoreStopSeconds = 0
     )
-    # A normal start clears a stale request. A lock-contender test must not
-    # mutate the active supervisor's control channel while it owns the lock.
-    if (-not $PreserveStopRequest -and (Test-Path -LiteralPath $controlPath)) {
+    # A normal start clears a stale request before a fresh lifecycle.
+    if (Test-Path -LiteralPath $controlPath) {
         Remove-Item -LiteralPath $controlPath -Force
     }
     [Environment]::SetEnvironmentVariable(
@@ -113,7 +110,7 @@ function Start-TestSupervisor {
     )
     $arguments = '--app-dir "{0}" --data-dir "{1}" --symbols BTC/USDT ETH/USDT --health-interval-seconds 1' -f $appDir, $dataDir
     try {
-        $process = Start-Process -FilePath $supervisor -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $TestRoot "$LogPrefix.stdout.log") -RedirectStandardError (Join-Path $TestRoot "$LogPrefix.stderr.log")
+        $process = Start-Process -FilePath $supervisor -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $TestRoot "supervisor.stdout.log") -RedirectStandardError (Join-Path $TestRoot "supervisor.stderr.log")
     } finally {
         [Environment]::SetEnvironmentVariable("VST_FAKE_WORKER_IGNORE_STOP_SECONDS", $null, "Process")
     }
@@ -172,29 +169,43 @@ try {
         throw "Delayed workers did not expose worker_shutdown_timeout."
     }
 
-    # The still-live first supervisor must retain the singleton lock. A
-    # competing supervisor must fail before it can create duplicate workers.
-    $contender = Start-TestSupervisor -PreserveStopRequest -LogPrefix "contender"
-    # PyInstaller one-file startup may spend several seconds extracting before
-    # the supervisor reaches its lock acquisition; allow that cold-start time.
-    if (-not $contender.WaitForExit(30000)) {
-        $contender.Refresh()
-        $contenderHealth = Get-ServiceHealth
-        $contenderStdout = Join-Path $TestRoot "contender.stdout.log"
-        $contenderStderr = Join-Path $TestRoot "contender.stderr.log"
-        $contenderOut = if (Test-Path $contenderStdout) { Get-Content -LiteralPath $contenderStdout -Raw } else { "missing" }
-        $contenderErr = if (Test-Path $contenderStderr) { Get-Content -LiteralPath $contenderStderr -Raw } else { "missing" }
-        $contenderDetail = if ($contenderHealth) { $contenderHealth | ConvertTo-Json -Depth 12 -Compress } else { "missing" }
-        Request-TestStop
-        $contender.WaitForExit(35000) | Out-Null
-        throw ("Lock contender did not exit within 30s. pid=" + $contender.Id + " still_alive=" + (-not $contender.HasExited) + " health=" + $contenderDetail + " stdout=" + $contenderOut + " stderr=" + $contenderErr)
-    }
-    $contender.Refresh()
-    if ($contender.ExitCode -eq 0) {
-        throw "A competing supervisor unexpectedly acquired the active singleton lock."
+    # Probe the Windows byte-range lock from a separate Python process. This
+    # verifies cross-process exclusion without starting a second PyInstaller
+    # one-file parent process, whose bootloader lifetime is not the lock contract.
+    $lockProbe = @'
+import msvcrt
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+expected = sys.argv[2]
+with path.open("a+b") as handle:
+    if handle.seek(0, 2) == 0:
+        handle.write(b"0")
+        handle.flush()
+    handle.seek(0)
+    try:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        if expected == "locked":
+            raise SystemExit(0)
+        raise SystemExit(1)
+    else:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        if expected == "unlocked":
+            raise SystemExit(0)
+        raise SystemExit(1)
+'@
+    & $PythonExe -c $lockProbe $lockPath "locked"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Singleton lock was not retained while workers remained in DEGRADED shutdown."
     }
 
     Confirm-Stopped -Process $process -Label "cooperative recovery"
+    & $PythonExe -c $lockProbe $lockPath "unlocked"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Singleton lock remained held after cooperative STOPPED recovery."
+    }
 
     Write-Host "Installed supervisor lifecycle passed: start -> RUNNING -> STOPPED -> restart -> DEGRADED on slow workers -> cooperative recovery -> STOPPED. No exchange access or trading actions were used."
 } finally {
